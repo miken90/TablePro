@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import "ag-grid-community/styles/ag-grid.css";
+@import "ag-grid-community/styles/ag-theme-alpine.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.select-field {
+  @apply rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100;
+}
+
+.input-field {
+  @apply rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100;
+}
+
+:root {
+  --accent-color: #3b82f6;
+  color-scheme: light dark;
+}
+
+.light {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+/* AG Grid light mode overrides */
+.light .ag-theme-alpine {
+  --ag-background-color: #ffffff;
+  --ag-header-background-color: #f9fafb;
+  --ag-odd-row-background-color: #f9fafb;
+  --ag-row-hover-color: #f3f4f6;
+  --ag-border-color: #e5e7eb;
+  --ag-header-foreground-color: #374151;
+  --ag-foreground-color: #111827;
+  --ag-selected-row-background-color: #dbeafe;
+}
+
+/* AG Grid dark mode overrides */
+.dark .ag-theme-alpine {
+  --ag-background-color: #09090b;
+  --ag-header-background-color: #18181b;
+  --ag-odd-row-background-color: #18181b;
+  --ag-row-hover-color: #27272a;
+  --ag-border-color: #3f3f46;
+  --ag-header-foreground-color: #a1a1aa;
+  --ag-foreground-color: #e4e4e7;
+  --ag-selected-row-background-color: rgba(59, 130, 246, 0.2);
+}

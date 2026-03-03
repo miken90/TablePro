@@ -1,0 +1,35 @@
+{
+  "name": "tablepro-windows",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-shell": "^2",
+    "ag-grid-community": "^35.1.0",
+    "ag-grid-react": "^35.1.0",
+    "lucide-react": "^0.576.0",
+    "monaco-editor": "^0.55.1",
+    "monaco-vim": "^0.4.4",
+    "react": "^19",
+    "react-dom": "^19",
+    "react-resizable-panels": "^4.7.0",
+    "sql-formatter": "^15.7.2",
+    "zustand": "^5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4",
+    "tailwindcss": "^4",
+    "typescript": "^5.7",
+    "vite": "^6"
+  }
+}
