@@ -45,16 +45,16 @@ export function ImportDialog({
       let res: ImportResult;
       if (format === "sql") {
         res = await invoke<ImportResult>("import_sql", {
-          connectionId,
-          filePath,
+          connection_id: connectionId,
+          file_path: filePath,
         });
       } else {
         res = await invoke<ImportResult>("import_csv", {
-          connectionId,
-          filePath,
-          tableName,
-          hasHeaders,
-          dbType: dbType ?? "mysql",
+          connection_id: connectionId,
+          file_path: filePath,
+          table_name: tableName,
+          has_headers: hasHeaders,
+          db_type: dbType ?? "mysql",
         });
       }
       setResult(res);

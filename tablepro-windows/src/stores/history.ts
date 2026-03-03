@@ -45,7 +45,7 @@ export const useHistoryStore = create<HistoryState>((set, _get) => ({
     set({ isLoading: true, searchText: text });
     try {
       const entries = await invoke<HistoryEntry[]>("search_query_history", {
-        searchText: text,
+        search_text: text,
         limit,
         offset: 0,
       });
@@ -80,9 +80,9 @@ export const useHistoryStore = create<HistoryState>((set, _get) => ({
       await invoke("save_query_history", {
         query,
         database,
-        connectionName,
-        executionTimeMs,
-        rowCount,
+        connection_name: connectionName,
+        execution_time_ms: executionTimeMs,
+        row_count: rowCount,
         status,
       });
     } catch {

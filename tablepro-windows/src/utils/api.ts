@@ -94,11 +94,11 @@ export async function saveConnection(conn: DatabaseConnection, password?: string
 }
 
 export async function deleteConnection(connectionId: string): Promise<void> {
-  await invoke("delete_connection", { connectionId });
+  await invoke("delete_connection", { connection_id: connectionId });
 }
 
 export async function getPassword(connectionId: string): Promise<string | null> {
-  return invoke<string | null>("get_password", { connectionId });
+  return invoke<string | null>("get_password", { connection_id: connectionId });
 }
 
 export async function testConnection(conn: DatabaseConnection, password?: string, sshPassword?: string): Promise<boolean> {
@@ -130,7 +130,7 @@ export async function testConnection(conn: DatabaseConnection, password?: string
       color: conn.color === "none" ? null : conn.color,
     },
     password: password ?? null,
-    sshPassword: sshPassword ?? null,
+    ssh_password: sshPassword ?? null,
   });
 }
 
@@ -163,52 +163,52 @@ export async function connectToDatabase(conn: DatabaseConnection, password?: str
       color: conn.color === "none" ? null : conn.color,
     },
     password: password ?? null,
-    sshPassword: sshPassword ?? null,
+    ssh_password: sshPassword ?? null,
   });
 }
 
 export async function disconnectFromDatabase(connectionId: string): Promise<void> {
-  await invoke("disconnect", { connectionId });
+  await invoke("disconnect", { connection_id: connectionId });
 }
 
 export async function executeQuery(connectionId: string, query: string): Promise<QueryResult> {
-  return invoke<QueryResult>("execute_query", { connectionId, query });
+  return invoke<QueryResult>("execute_query", { connection_id: connectionId, query });
 }
 
 export async function fetchTables(connectionId: string): Promise<TableInfo[]> {
-  return invoke<TableInfo[]>("fetch_tables", { connectionId });
+  return invoke<TableInfo[]>("fetch_tables", { connection_id: connectionId });
 }
 
 export async function fetchColumns(connectionId: string, table: string): Promise<ColumnInfo[]> {
-  return invoke<ColumnInfo[]>("fetch_columns", { connectionId, table });
+  return invoke<ColumnInfo[]>("fetch_columns", { connection_id: connectionId, table });
 }
 
 export async function fetchIndexes(connectionId: string, table: string): Promise<IndexInfo[]> {
-  return invoke<IndexInfo[]>("fetch_indexes", { connectionId, table });
+  return invoke<IndexInfo[]>("fetch_indexes", { connection_id: connectionId, table });
 }
 
 export async function fetchForeignKeys(connectionId: string, table: string): Promise<ForeignKeyInfo[]> {
-  return invoke<ForeignKeyInfo[]>("fetch_foreign_keys", { connectionId, table });
+  return invoke<ForeignKeyInfo[]>("fetch_foreign_keys", { connection_id: connectionId, table });
 }
 
 export async function fetchTableDdl(connectionId: string, table: string): Promise<string> {
-  return invoke<string>("fetch_table_ddl", { connectionId, table });
+  return invoke<string>("fetch_table_ddl", { connection_id: connectionId, table });
 }
 
 export async function fetchDatabases(connectionId: string): Promise<string[]> {
-  return invoke<string[]>("fetch_databases", { connectionId });
+  return invoke<string[]>("fetch_databases", { connection_id: connectionId });
 }
 
 export async function fetchSchemas(connectionId: string): Promise<string[]> {
-  return invoke<string[]>("fetch_schemas", { connectionId });
+  return invoke<string[]>("fetch_schemas", { connection_id: connectionId });
 }
 
 export async function fetchRows(connectionId: string, query: string, offset: number, limit: number): Promise<QueryResult> {
-  return invoke<QueryResult>("fetch_rows", { connectionId, query, offset, limit });
+  return invoke<QueryResult>("fetch_rows", { connection_id: connectionId, query, offset, limit });
 }
 
 export async function fetchRowCount(connectionId: string, query: string): Promise<number> {
-  return invoke<number>("fetch_row_count", { connectionId, query });
+  return invoke<number>("fetch_row_count", { connection_id: connectionId, query });
 }
 
 export async function getGroups(): Promise<ConnectionGroup[]> {
@@ -227,5 +227,5 @@ export async function saveGroup(group: ConnectionGroup): Promise<void> {
 }
 
 export async function deleteGroup(groupId: string): Promise<void> {
-  await invoke("delete_group", { groupId });
+  await invoke("delete_group", { group_id: groupId });
 }

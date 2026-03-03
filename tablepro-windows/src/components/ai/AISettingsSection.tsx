@@ -108,15 +108,15 @@ export function AISettingsSection({
         defaultProvider === "ollama" ? `${ollamaHost}/v1` : undefined;
 
       await invoke<string>("ai_chat", {
-        connectionId: null,
+        connection_id: null,
         messages: [{ role: "user", content: "Say hi" }],
         provider: defaultProvider,
-        apiKey: apiKey ?? "",
+        api_key: apiKey ?? "",
         model:
           AI_PROVIDERS.find((p) => p.value === defaultProvider)?.defaultModel ??
           "",
-        baseUrl: baseUrl ?? null,
-        includeSchema: false,
+        base_url: baseUrl ?? null,
+        include_schema: false,
       });
       setTestResult({ success: true, message: "Connection successful" });
     } catch (err) {

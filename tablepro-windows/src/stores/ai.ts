@@ -54,13 +54,13 @@ export const useAIStore = create<AIState>((set, get) => ({
         connectionId != null;
 
       const response = await invoke<string>("ai_chat", {
-        connectionId,
+        connection_id: connectionId,
         messages: updatedMessages,
         provider: selectedProvider,
-        apiKey,
+        api_key: apiKey,
         model: selectedModel,
-        baseUrl: baseUrl ?? null,
-        includeSchema,
+        base_url: baseUrl ?? null,
+        include_schema: includeSchema,
       });
 
       const assistantMessage: ChatMessage = {

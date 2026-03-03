@@ -37,7 +37,7 @@ export function LicenseSettings() {
     setError("");
     try {
       const info = await invoke<LicenseInfo>("activate_license", {
-        licenseKey,
+        license_key: licenseKey,
       });
       setLicense(info);
       setLicenseKey("");

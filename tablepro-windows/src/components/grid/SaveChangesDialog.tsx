@@ -93,7 +93,7 @@ export function SaveChangesDialog({
       const changeSet = buildChangeSet();
       const sql = await invoke<string[]>("generate_change_sql", {
         table,
-        dbType,
+        db_type: dbType,
         changes: changeSet,
       });
       setSqlPreview(sql);
@@ -111,7 +111,7 @@ export function SaveChangesDialog({
       const changeSet = buildChangeSet();
       const sql = await invoke<string[]>("generate_change_sql", {
         table,
-        dbType,
+        db_type: dbType,
         changes: changeSet,
       });
 
@@ -121,7 +121,7 @@ export function SaveChangesDialog({
       }
 
       await invoke("execute_changes", {
-        connectionId,
+        connection_id: connectionId,
         statements: sql,
       });
 

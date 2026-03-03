@@ -64,7 +64,7 @@ export function ExportDialog({
 
     try {
       const path = await invoke<string>("export_data", {
-        connectionId,
+        connection_id: connectionId,
         query,
         options,
       });

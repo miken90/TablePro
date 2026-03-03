@@ -35,7 +35,7 @@ export function FilterPanel({ columns, dbType, onApply }: FilterPanelProps) {
       const valid = conditions.filter((c) => c.column !== "");
       const sql = await invoke<string>("generate_filter_sql", {
         conditions: valid,
-        dbType,
+        db_type: dbType,
       });
       setSqlPreview(sql);
     } catch (e) {
@@ -52,7 +52,7 @@ export function FilterPanel({ columns, dbType, onApply }: FilterPanelProps) {
       const valid = conditions.filter((c) => c.column !== "");
       const sql = await invoke<string>("generate_filter_sql", {
         conditions: valid,
-        dbType,
+        db_type: dbType,
       });
       onApply(sql);
     } catch (e) {
