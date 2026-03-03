@@ -174,3 +174,160 @@ impl SqlStatementGenerator {
         stmts
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use crate::models::DatabaseType;
+
+    #[test]
+    fn generate_updates_single_cell_mysql() {
+        let changes = vec![CellChange {
+            row_index: 0,
+            column: "col".into(),
+            original_value: Some("old".into()),
+            new_value: Some("val".into()),
+        }];
+        let pk_columns = vec!["id".to_string()];
+        let mut pk_values = HashMap::new();
+        pk_values.insert(0, HashMap::from([("id".to_string(), "1".to_string())]));
+
+        let stmts = SqlStatementGenerator::generate_updates(
+            "table", &DatabaseType::Mysql, &changes, &pk_columns, &pk_values,
+        );
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(stmts[0], "UPDATE `table` SET `col` = 'val' WHERE `id` = '1'");
+    }
+
+    #[test]
+    fn generate_updates_multiple_cells_same_row() {
+        let changes = vec![
+            CellChange { row_index: 0, column: "a".into(), original_value: None, new_value: Some("1".into()) },
+            CellChange { row_index: 0, column: "b".into(), original_value: None, new_value: Some("2".into()) },
+        ];
+        let pk_columns = vec!["id".to_string()];
+        let mut pk_values = HashMap::new();
+        pk_values.insert(0, HashMap::from([("id".to_string(), "1".to_string())]));
+
+        let stmts = SqlStatementGenerator::generate_updates(
+            "t", &DatabaseType::Mysql, &changes, &pk_columns, &pk_values,
+        );
+        assert_eq!(stmts.len(), 1);
+        assert!(stmts[0].starts_with("UPDATE `t` SET "));
+        assert!(stmts[0].contains("`a` = '1'"));
+        assert!(stmts[0].contains("`b` = '2'"));
+        assert!(stmts[0].contains("WHERE `id` = '1'"));
+    }
+
+    #[test]
+    fn generate_updates_no_pk_values_returns_empty() {
+        let changes = vec![CellChange {
+            row_index: 0,
+            column: "col".into(),
+            original_value: None,
+            new_value: Some("v".into()),
+        }];
+        let stmts = SqlStatementGenerator::generate_updates(
+            "t", &DatabaseType::Mysql, &changes, &["id".to_string()], &HashMap::new(),
+        );
+        assert!(stmts.is_empty());
+    }
+
+    #[test]
+    fn generate_inserts_single_mysql() {
+        let inserts = vec![RowInsert {
+            values: HashMap::from([("col".to_string(), Some("val".to_string()))]),
+        }];
+        let stmts = SqlStatementGenerator::generate_inserts("table", &DatabaseType::Mysql, &inserts);
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(stmts[0], "INSERT INTO `table` (`col`) VALUES ('val')");
+    }
+
+    #[test]
+    fn generate_inserts_null_value() {
+        let inserts = vec![RowInsert {
+            values: HashMap::from([("col".to_string(), None)]),
+        }];
+        let stmts = SqlStatementGenerator::generate_inserts("t", &DatabaseType::Mysql, &inserts);
+        assert_eq!(stmts.len(), 1);
+        assert!(stmts[0].contains("NULL"));
+    }
+
+    #[test]
+    fn generate_inserts_empty_values_skipped() {
+        let inserts = vec![RowInsert { values: HashMap::new() }];
+        let stmts = SqlStatementGenerator::generate_inserts("t", &DatabaseType::Mysql, &inserts);
+        assert!(stmts.is_empty());
+    }
+
+    #[test]
+    fn generate_deletes_single_mysql() {
+        let deletes = vec![RowDelete {
+            primary_key_values: HashMap::from([("id".to_string(), "1".to_string())]),
+        }];
+        let stmts = SqlStatementGenerator::generate_deletes("table", &DatabaseType::Mysql, &deletes);
+        assert_eq!(stmts.len(), 1);
+        assert_eq!(stmts[0], "DELETE FROM `table` WHERE `id` = '1'");
+    }
+
+    #[test]
+    fn generate_deletes_empty_pk_skipped() {
+        let deletes = vec![RowDelete { primary_key_values: HashMap::new() }];
+        let stmts = SqlStatementGenerator::generate_deletes("t", &DatabaseType::Mysql, &deletes);
+        assert!(stmts.is_empty());
+    }
+
+    #[test]
+    fn generate_all_combines_all_types() {
+        let change_set = ChangeSet {
+            updates: vec![CellChange {
+                row_index: 0, column: "c".into(), original_value: None, new_value: Some("v".into()),
+            }],
+            inserts: vec![RowInsert {
+                values: HashMap::from([("c".to_string(), Some("v".to_string()))]),
+            }],
+            deletes: vec![RowDelete {
+                primary_key_values: HashMap::from([("id".to_string(), "1".to_string())]),
+            }],
+            primary_key_columns: vec!["id".to_string()],
+            primary_key_values: HashMap::from([(0, HashMap::from([("id".to_string(), "1".to_string())]))]),
+        };
+        let stmts = SqlStatementGenerator::generate_all("t", &DatabaseType::Mysql, &change_set);
+        assert_eq!(stmts.len(), 3);
+        assert!(stmts[0].starts_with("UPDATE"));
+        assert!(stmts[1].starts_with("INSERT"));
+        assert!(stmts[2].starts_with("DELETE"));
+    }
+
+    #[test]
+    fn postgresql_uses_double_quotes() {
+        let deletes = vec![RowDelete {
+            primary_key_values: HashMap::from([("id".to_string(), "1".to_string())]),
+        }];
+        let stmts = SqlStatementGenerator::generate_deletes("table", &DatabaseType::Postgresql, &deletes);
+        assert_eq!(stmts[0], r#"DELETE FROM "table" WHERE "id" = '1'"#);
+    }
+
+    #[test]
+    fn value_with_single_quote_escaped() {
+        let changes = vec![CellChange {
+            row_index: 0, column: "c".into(), original_value: None, new_value: Some("it's".into()),
+        }];
+        let pk_columns = vec!["id".to_string()];
+        let pk_values = HashMap::from([(0, HashMap::from([("id".to_string(), "1".to_string())]))]);
+
+        let stmts = SqlStatementGenerator::generate_updates(
+            "t", &DatabaseType::Mysql, &changes, &pk_columns, &pk_values,
+        );
+        assert_eq!(stmts.len(), 1);
+        assert!(stmts[0].contains("it''s") || stmts[0].contains("it\\'s"));
+    }
+
+    #[test]
+    fn format_value_cases() {
+        assert_eq!(format_value(&None, &DatabaseType::Mysql), "NULL");
+        assert_eq!(format_value(&Some("".into()), &DatabaseType::Mysql), "''");
+        assert_eq!(format_value(&Some("hello".into()), &DatabaseType::Mysql), "'hello'");
+    }
+}

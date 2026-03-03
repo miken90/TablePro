@@ -213,3 +213,111 @@ fn parse_csv_line(line: &str) -> Vec<String> {
 
     fields
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // split_sql_statements tests
+
+    #[test]
+    fn split_sql_simple() {
+        assert_eq!(
+            split_sql_statements("SELECT 1; SELECT 2"),
+            vec!["SELECT 1", "SELECT 2"]
+        );
+    }
+
+    #[test]
+    fn split_sql_quoted_semicolon_single() {
+        assert_eq!(
+            split_sql_statements("SELECT 'a;b'"),
+            vec!["SELECT 'a;b'"]
+        );
+    }
+
+    #[test]
+    fn split_sql_quoted_semicolon_double() {
+        assert_eq!(
+            split_sql_statements(r#"SELECT "a;b""#),
+            vec![r#"SELECT "a;b""#]
+        );
+    }
+
+    #[test]
+    fn split_sql_empty_input() {
+        assert!(split_sql_statements("").is_empty());
+    }
+
+    #[test]
+    fn split_sql_no_semicolons() {
+        assert_eq!(split_sql_statements("SELECT 1"), vec!["SELECT 1"]);
+    }
+
+    #[test]
+    fn split_sql_trailing_semicolon() {
+        assert_eq!(split_sql_statements("SELECT 1;"), vec!["SELECT 1"]);
+    }
+
+    #[test]
+    fn split_sql_multiple_empty_statements() {
+        assert!(split_sql_statements(";;;").is_empty());
+    }
+
+    #[test]
+    fn split_sql_mixed_quotes_and_semicolons() {
+        assert_eq!(
+            split_sql_statements("INSERT INTO t VALUES ('a;b'); SELECT \"c;d\""),
+            vec!["INSERT INTO t VALUES ('a;b')", r#"SELECT "c;d""#]
+        );
+    }
+
+    #[test]
+    fn split_sql_escaped_quotes_inside_strings() {
+        assert_eq!(
+            split_sql_statements(r"SELECT 'it\'s'; SELECT 1"),
+            vec![r"SELECT 'it\'s'", "SELECT 1"]
+        );
+    }
+
+    // parse_csv_line tests
+
+    #[test]
+    fn parse_csv_simple() {
+        assert_eq!(parse_csv_line("a,b,c"), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn parse_csv_quoted_field() {
+        assert_eq!(
+            parse_csv_line(r#""hello, world",b"#),
+            vec!["hello, world", "b"]
+        );
+    }
+
+    #[test]
+    fn parse_csv_escaped_quotes() {
+        assert_eq!(
+            parse_csv_line(r#""he said ""hi""",b"#),
+            vec![r#"he said "hi""#, "b"]
+        );
+    }
+
+    #[test]
+    fn parse_csv_empty_fields() {
+        assert_eq!(parse_csv_line(",,"), vec!["", "", ""]);
+    }
+
+    #[test]
+    fn parse_csv_single_field() {
+        assert_eq!(parse_csv_line("abc"), vec!["abc"]);
+    }
+
+    #[test]
+    fn parse_csv_mixed_quoted_unquoted() {
+        assert_eq!(
+            parse_csv_line(r#"plain,"quoted, with comma",another"#),
+            vec!["plain", "quoted, with comma", "another"]
+        );
+    }
+}

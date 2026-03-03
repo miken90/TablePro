@@ -204,3 +204,78 @@ pub fn reset_settings() -> AppSettings {
     let _ = save_settings(&settings);
     settings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_settings() {
+        let s = AppSettings::default();
+
+        // General
+        assert_eq!(s.general.query_timeout_seconds, 60);
+        assert_eq!(s.general.language, "system");
+
+        // Appearance
+        assert_eq!(s.appearance.theme, "system");
+        assert_eq!(s.appearance.accent_color, "blue");
+
+        // Editor
+        assert_eq!(s.editor.font_family, "Consolas");
+        assert_eq!(s.editor.font_size, 13);
+        assert_eq!(s.editor.vim_mode_enabled, false);
+
+        // Data grid
+        assert_eq!(s.data_grid.default_page_size, 1000);
+        assert_eq!(s.data_grid.null_display, "NULL");
+
+        // History
+        assert_eq!(s.history.max_entries, 10_000);
+        assert_eq!(s.history.max_days, 90);
+
+        // Keyboard
+        assert_eq!(s.keyboard.vim_mode, false);
+    }
+
+    #[test]
+    fn test_serde_round_trip() {
+        let original = AppSettings::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let restored: AppSettings = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(original.general.query_timeout_seconds, restored.general.query_timeout_seconds);
+        assert_eq!(original.general.language, restored.general.language);
+        assert_eq!(original.appearance.theme, restored.appearance.theme);
+        assert_eq!(original.appearance.accent_color, restored.appearance.accent_color);
+        assert_eq!(original.editor.font_family, restored.editor.font_family);
+        assert_eq!(original.editor.font_size, restored.editor.font_size);
+        assert_eq!(original.editor.vim_mode_enabled, restored.editor.vim_mode_enabled);
+        assert_eq!(original.data_grid.default_page_size, restored.data_grid.default_page_size);
+        assert_eq!(original.data_grid.null_display, restored.data_grid.null_display);
+        assert_eq!(original.history.max_entries, restored.history.max_entries);
+        assert_eq!(original.history.max_days, restored.history.max_days);
+        assert_eq!(original.keyboard.vim_mode, restored.keyboard.vim_mode);
+        assert_eq!(original.keyboard.custom_shortcuts.len(), restored.keyboard.custom_shortcuts.len());
+        assert_eq!(original.ai.default_provider, restored.ai.default_provider);
+        assert_eq!(original.ai.openai_api_key, restored.ai.openai_api_key);
+    }
+
+    #[test]
+    fn test_default_ai_settings() {
+        let ai = AISettings::default();
+
+        assert_eq!(ai.openai_api_key, "");
+        assert_eq!(ai.anthropic_api_key, "");
+        assert_eq!(ai.gemini_api_key, "");
+        assert_eq!(ai.default_provider, "openai");
+    }
+
+    #[test]
+    fn test_default_keyboard_settings() {
+        let kb = KeyboardSettings::default();
+
+        assert_eq!(kb.vim_mode, false);
+        assert!(kb.custom_shortcuts.is_empty());
+    }
+}

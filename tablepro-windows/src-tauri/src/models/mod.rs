@@ -262,3 +262,207 @@ pub enum DatabaseError {
     #[error("Unsupported operation")]
     UnsupportedOperation,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // DatabaseType::default_port
+
+    #[test]
+    fn default_port_mysql() {
+        assert_eq!(DatabaseType::Mysql.default_port(), 3306);
+    }
+
+    #[test]
+    fn default_port_mariadb() {
+        assert_eq!(DatabaseType::Mariadb.default_port(), 3306);
+    }
+
+    #[test]
+    fn default_port_postgresql() {
+        assert_eq!(DatabaseType::Postgresql.default_port(), 5432);
+    }
+
+    #[test]
+    fn default_port_sqlite() {
+        assert_eq!(DatabaseType::Sqlite.default_port(), 0);
+    }
+
+    #[test]
+    fn default_port_mongodb() {
+        assert_eq!(DatabaseType::Mongodb.default_port(), 27017);
+    }
+
+    // DatabaseType::quote_identifier
+
+    #[test]
+    fn quote_identifier_mysql_simple() {
+        assert_eq!(DatabaseType::Mysql.quote_identifier("users"), "`users`");
+    }
+
+    #[test]
+    fn quote_identifier_mysql_escapes_backtick() {
+        assert_eq!(DatabaseType::Mysql.quote_identifier("col`name"), "`col``name`");
+    }
+
+    #[test]
+    fn quote_identifier_mariadb_uses_backticks() {
+        assert_eq!(DatabaseType::Mariadb.quote_identifier("t"), "`t`");
+    }
+
+    #[test]
+    fn quote_identifier_postgresql_simple() {
+        assert_eq!(DatabaseType::Postgresql.quote_identifier("users"), "\"users\"");
+    }
+
+    #[test]
+    fn quote_identifier_postgresql_escapes_double_quote() {
+        assert_eq!(
+            DatabaseType::Postgresql.quote_identifier("col\"name"),
+            "\"col\"\"name\""
+        );
+    }
+
+    #[test]
+    fn quote_identifier_sqlite_uses_double_quotes() {
+        assert_eq!(DatabaseType::Sqlite.quote_identifier("tbl"), "\"tbl\"");
+    }
+
+    #[test]
+    fn quote_identifier_mongodb_returns_raw() {
+        assert_eq!(DatabaseType::Mongodb.quote_identifier("collection"), "collection");
+    }
+
+    // ConnectionStatus::is_connected
+
+    #[test]
+    fn is_connected_true_for_connected() {
+        assert!(ConnectionStatus::Connected.is_connected());
+    }
+
+    #[test]
+    fn is_connected_false_for_disconnected() {
+        assert!(!ConnectionStatus::Disconnected.is_connected());
+    }
+
+    #[test]
+    fn is_connected_false_for_connecting() {
+        assert!(!ConnectionStatus::Connecting.is_connected());
+    }
+
+    #[test]
+    fn is_connected_false_for_error() {
+        assert!(!ConnectionStatus::Error("timeout".into()).is_connected());
+    }
+
+    // ColumnType::display_name
+
+    #[test]
+    fn display_name_all_variants() {
+        let cases: Vec<(ColumnType, &str)> = vec![
+            (ColumnType::Text(None), "Text"),
+            (ColumnType::Integer(None), "Integer"),
+            (ColumnType::Decimal(None), "Decimal"),
+            (ColumnType::Date(None), "Date"),
+            (ColumnType::Timestamp(None), "Timestamp"),
+            (ColumnType::DateTime(None), "DateTime"),
+            (ColumnType::Boolean(None), "Boolean"),
+            (ColumnType::Blob(None), "Binary"),
+            (ColumnType::Json(None), "JSON"),
+            (ColumnType::Enum { raw_type: None, values: None }, "Enum"),
+            (ColumnType::Set { raw_type: None, values: None }, "Set"),
+        ];
+        for (col_type, expected) in cases {
+            assert_eq!(col_type.display_name(), expected, "failed for {:?}", col_type);
+        }
+    }
+
+    // ColumnType::is_json
+
+    #[test]
+    fn is_json_true_for_json() {
+        assert!(ColumnType::Json(Some("json".into())).is_json());
+    }
+
+    #[test]
+    fn is_json_false_for_text() {
+        assert!(!ColumnType::Text(None).is_json());
+    }
+
+    // ColumnType::is_date
+
+    #[test]
+    fn is_date_true_for_date_variants() {
+        assert!(ColumnType::Date(None).is_date());
+        assert!(ColumnType::Timestamp(None).is_date());
+        assert!(ColumnType::DateTime(None).is_date());
+    }
+
+    #[test]
+    fn is_date_false_for_non_date() {
+        assert!(!ColumnType::Text(None).is_date());
+        assert!(!ColumnType::Integer(None).is_date());
+    }
+
+    // QueryResult::default
+
+    #[test]
+    fn query_result_default() {
+        let qr = QueryResult::default();
+        assert!(qr.columns.is_empty());
+        assert!(qr.column_types.is_empty());
+        assert!(qr.rows.is_empty());
+        assert_eq!(qr.rows_affected, 0);
+        assert_eq!(qr.execution_time_ms, 0.0);
+        assert!(qr.error.is_none());
+        assert!(!qr.is_truncated);
+    }
+
+    // Serde round-trip: DatabaseType
+
+    #[test]
+    fn serde_database_type_roundtrip() {
+        let variants = vec![
+            (DatabaseType::Mysql, "\"mysql\""),
+            (DatabaseType::Mariadb, "\"mariadb\""),
+            (DatabaseType::Postgresql, "\"postgresql\""),
+            (DatabaseType::Sqlite, "\"sqlite\""),
+            (DatabaseType::Mongodb, "\"mongodb\""),
+        ];
+        for (variant, expected_json) in variants {
+            let json = serde_json::to_string(&variant).unwrap();
+            assert_eq!(json, expected_json, "serialize {:?}", variant);
+            let deserialized: DatabaseType = serde_json::from_str(&json).unwrap();
+            assert_eq!(deserialized, variant, "deserialize {}", json);
+        }
+    }
+
+    // Serde round-trip: ConnectionStatus (tagged enum)
+
+    #[test]
+    fn serde_connection_status_connected() {
+        let status = ConnectionStatus::Connected;
+        let json = serde_json::to_string(&status).unwrap();
+        let deserialized: ConnectionStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, status);
+    }
+
+    #[test]
+    fn serde_connection_status_error_with_message() {
+        let status = ConnectionStatus::Error("db down".into());
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"status\":\"Error\""));
+        assert!(json.contains("\"message\":\"db down\""));
+        let deserialized: ConnectionStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, status);
+    }
+
+    #[test]
+    fn serde_connection_status_disconnected() {
+        let status = ConnectionStatus::Disconnected;
+        let json = serde_json::to_string(&status).unwrap();
+        let deserialized: ConnectionStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, status);
+    }
+}

@@ -49,3 +49,51 @@ pub fn create_provider(
         _ => Err(format!("Unknown AI provider: {}", provider)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_provider_openai() {
+        assert!(create_provider("openai", "key", None).is_ok());
+    }
+
+    #[test]
+    fn create_provider_ollama() {
+        assert!(create_provider("ollama", "", None).is_ok());
+    }
+
+    #[test]
+    fn create_provider_anthropic() {
+        assert!(create_provider("anthropic", "key", None).is_ok());
+    }
+
+    #[test]
+    fn create_provider_gemini() {
+        assert!(create_provider("gemini", "key", None).is_ok());
+    }
+
+    #[test]
+    fn create_provider_unknown() {
+        let err = create_provider("unknown", "", None).err().expect("expected Err");
+        assert!(err.contains("Unknown AI provider"));
+    }
+
+    #[test]
+    fn create_provider_openai_custom_base_url() {
+        assert!(create_provider("openai", "key", Some("https://custom.api")).is_ok());
+    }
+
+    #[test]
+    fn chat_message_serde_round_trip() {
+        let msg = ChatMessage {
+            role: "user".to_string(),
+            content: "hello".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let deserialized: ChatMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.role, "user");
+        assert_eq!(deserialized.content, "hello");
+    }
+}
