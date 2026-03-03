@@ -1,48 +1,85 @@
-<p align="center">
-  <img src=".github/assets/logo.png" width="128" height="128" alt="TablePro">
-</p>
+# TablePro
 
-<h1 align="center">TablePro</h1>
+A powerful, native database client for Windows — built with [Tauri v2](https://v2.tauri.app), React 19, and TypeScript.
 
-<p align="center">
-  A fast, native macOS database client with AI-powered SQL assistance.
-</p>
+Supports **PostgreSQL**, **MySQL**, and **SQLite** with SSH tunnel, AI chat, and a full-featured data grid.
 
-<p align="center">
-  <a href="https://docs.tablepro.app">Documentation</a> ·
-  <a href="https://github.com/datlechin/tablepro/releases">Download</a> ·
-  <a href="https://github.com/datlechin/tablepro/issues">Report Bug</a>
-</p>
+## Features
 
-<p align="center">
-  <a href="README.vi.md">Tiếng Việt</a>
-</p>
+- Multi-database: PostgreSQL, MySQL, SQLite
+- SSH tunnel support
+- AI-powered SQL assistant (OpenAI, Anthropic, Gemini, Ollama)
+- Monaco-based SQL editor with Vim mode
+- AG Grid data grid with inline editing & change tracking
+- Export (CSV, JSON, SQL) / Import (SQL, CSV)
+- Query history with full-text search
+- Filter builder with quick search
+- Table structure viewer (columns, indexes, foreign keys, DDL)
+- Auto-update via Tauri updater
+- License management (Keygen)
 
----
+## Tech Stack
 
-<p align="center">
-  <img src=".github/assets/hero-dark.png" alt="TablePro Screenshot" width="800">
-</p>
+| Layer | Technology |
+|-------|-----------|
+| Framework | Tauri v2 |
+| Frontend | React 19, TypeScript, Tailwind CSS v4 |
+| Backend | Rust |
+| SQL Editor | Monaco Editor + monaco-vim |
+| Data Grid | AG Grid |
+| State | Zustand |
+| DB Drivers | tokio-postgres, mysql_async, rusqlite |
+| SSH | ssh2 (libssh2) |
+| Build | Vite, cargo |
 
-## About
+## Development
 
-TablePro is a lightweight alternative to TablePlus, built entirely with Apple-native frameworks. No Electron, no web views — just pure SwiftUI + AppKit for a truly native macOS experience.
+```bash
+cd tablepro-windows
+npm install
+npx tauri dev
+```
 
-## Documentation
+## Build (Windows)
 
-Full documentation is available at [docs.tablepro.app](https://docs.tablepro.app).
+```powershell
+# Option 1: Build script
+.\scripts\build-windows.ps1
 
-## Sponsors
+# Option 2: Manual (from WSL or terminal with MSVC env)
+cd tablepro-windows
+npm run build
+npx tauri build
+```
 
-Thanks to these amazing people for supporting TablePro:
+Output:
+- `src-tauri/target/release/tablepro-windows.exe`
+- `src-tauri/target/release/bundle/msi/TablePro_*.msi`
+- `src-tauri/target/release/bundle/nsis/TablePro_*-setup.exe`
 
-- **[Huy TQ](https://github.com/imhuytq)** — Apple Developer Program sponsor
-- **[Unikorn](https://unikorn.vn?ref=tablepro)**
+## Project Structure
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=datlechin/TablePro&type=Date)](https://star-history.com/#datlechin/TablePro&Date)
+```
+tablepro-windows/
+├── src/                  # React frontend
+│   ├── components/       # UI components
+│   ├── pages/            # Main layout, Welcome, Settings
+│   ├── stores/           # Zustand stores
+│   ├── types/            # TypeScript types
+│   ├── hooks/            # Custom hooks
+│   └── utils/            # API bridge, theme
+├── src-tauri/            # Rust backend
+│   ├── src/
+│   │   ├── commands/     # Tauri commands (IPC)
+│   │   ├── database/     # DB drivers (postgres, mysql, sqlite)
+│   │   ├── services/     # AI, export, import, SSH, license
+│   │   ├── storage/      # Connection, history, settings persistence
+│   │   └── models/       # Shared data models
+│   ├── icons/            # App icons
+│   └── tauri.conf.json   # Tauri config
+└── scripts/              # Build scripts
+```
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
+See [LICENSE](LICENSE).
