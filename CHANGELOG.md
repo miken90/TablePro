@@ -9,7 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection management UI with ConnectionForm (4 tabs: General/SSL/SSH/Advanced), ConnectionListPanel with groups and context menus, color picker
+- Windows: Main layout with 3-panel resizable design (sidebar/editor/results), toolbar, tab bar, database switcher, status bar
+- Windows: SQL editor with Monaco integration, SQL keyword autocomplete, Ctrl+Enter execution, SQL formatting
+- Windows: Data grid with AG Grid, virtual scrolling, custom cell renderers (NULL/Boolean/Date/Blob/JSON), pagination, JSON viewer modal
+- Windows: Table structure view with Columns, Indexes, Foreign Keys, and DDL tabs
+- Windows: Rust connection storage with JSON metadata + keyring for secure password storage
 - Deep link support via `tablepro://` URL scheme for opening connections, tables, queries, and importing connections
+- Windows: Settings & Preferences with 8 panels (General, Appearance, Editor, Data Grid, AI, History, Keyboard, License)
+- Windows: Theme system with dark/light/system mode switching via CSS variables
+- Windows: License activation, validation, and deactivation with periodic re-validation
+- Windows: Auto-update configuration via Tauri updater plugin
 
 ## [0.11.1] - 2026-03-02
 

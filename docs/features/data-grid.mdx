@@ -51,7 +51,7 @@ The data grid header shows:
 
 - Drag column borders to resize
 - Double-click a border to auto-fit column width
-- Column widths are remembered for each table
+- Column widths are remembered for each table and persist across pagination, sorting, and filtering reloads within the tab session
 
 ### Sorting Data
 
@@ -60,6 +60,10 @@ Click a column header to sort:
 - **First click**: Sort ascending (A-Z, 0-9)
 - **Second click**: Sort descending (Z-A, 9-0)
 - **Third click**: Remove sort
+
+#### Multi-column sorting
+
+Hold `Shift` and click additional column headers to add them to the sort list. Each sorted column shows a priority indicator in its header (e.g., 1▲, 2▼). Clicking a column header without `Shift` replaces the entire sort with that single column.
 
 <Tip>
 Sorting is done locally on the loaded data. For server-side sorting, use `ORDER BY` in your query.
@@ -165,6 +169,10 @@ When you edit a cell in a foreign key column, a searchable dropdown popover appe
 - Type in the search field to filter values
 - Single-click a value to highlight it; double-click or press `Enter` to commit the selection
 - The popover auto-detects the best display column from the referenced table
+
+### Foreign Key Navigation
+
+Foreign key columns display a navigation arrow icon in each cell. Click the arrow to open the referenced table, automatically filtered to the row matching the FK value. This lets you quickly jump between related tables without writing queries.
 
 <Tip>
 Foreign key lookups fetch up to 1,000 values from the referenced table. For tables with more values, use the search field to narrow results.
@@ -463,9 +471,11 @@ TablePro supports multiple copy formats:
 | Format | Shortcut | Description |
 |--------|----------|-------------|
 | Tab-separated | `Cmd+C` | Default copy, compatible with spreadsheets |
-| CSV | `Cmd+Shift+C` | Comma-separated values |
+| With headers | `Cmd+Shift+C` | Tab-separated with column headers as the first line |
 | JSON | `Cmd+Option+C` | JSON array of objects |
-| TSV | Available from context menu | Tab-separated with header |
+| CSV | Available from context menu | Comma-separated values |
+
+"Copy with Headers" (`Cmd+Shift+C`) prepends column names as the first TSV line, which is useful when pasting into spreadsheets or sharing data snippets. Also available via the right-click context menu.
 
 The default tab-separated format is compatible with:
 - Excel
@@ -672,6 +682,10 @@ When you make changes (insert, update, delete) in the data grid, the SQL preview
    SELECT * FROM orders WHERE status = 'pending';
    ```
 
+<Tip>
+Quick search and filter rows can be used together — their WHERE conditions are joined with AND, so results must match both criteria. See [Filtering](/features/filtering) for details.
+</Tip>
+
 ### Memory Usage
 
 The data grid loads data in pages to manage memory:
@@ -696,7 +710,7 @@ See [Import & Export](/features/import-export) for detailed export options.
 | Action | Shortcut |
 |--------|----------|
 | Copy selection | `Cmd+C` |
-| Copy as CSV | `Cmd+Shift+C` |
+| Copy with headers | `Cmd+Shift+C` |
 | Copy as JSON | `Cmd+Option+C` |
 | Select all | `Cmd+A` |
 | Delete row | `Delete` |

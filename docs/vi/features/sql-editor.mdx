@@ -414,7 +414,7 @@ Tùy chỉnh trình soạn thảo trong **Settings** > **Editor**:
 |---------|-------------|---------|
 | **Show Line Numbers** | Hiển thị số dòng | Bật |
 | **Highlight Current Line** | Tô sáng nhẹ dòng có con trỏ | Bật |
-| **Word Wrap** | Tự động xuống dòng cho dòng dài | Tắt |
+| **Word Wrap** | Tự động xuống dòng cho dòng dài. Khi tắt, dòng dài sẽ cuộn ngang thay vì tự động xuống dòng. | Tắt |
 
 ### Cài đặt Chỉnh sửa
 
@@ -559,6 +559,10 @@ Khi khám phá dữ liệu, luôn sử dụng `LIMIT` để tránh tải hàng t
 ```sql
 SELECT * FROM large_table LIMIT 100;
 ```
+
+### Xác Nhận Truy Vấn Nguy Hiểm
+
+Khi bạn thực thi câu lệnh `DELETE` hoặc `UPDATE` mà không có mệnh đề `WHERE`, TablePro hiển thị hộp thoại xác nhận tóm tắt các truy vấn bị ảnh hưởng trước khi thực thi. Điều này ngăn ngừa mất dữ liệu do vô tình từ các câu lệnh phá hủy phạm vi rộng.
 
 ### Kiểm tra DELETE/UPDATE với SELECT trước
 

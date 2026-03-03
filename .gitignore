@@ -137,3 +137,13 @@ Sourcery/GeneratedMocks
 # Build artifacts
 build/
 *.xcarchive
+
+.claude/
+.github/
+CLAUDE.md
+
+# bv (beads viewer) local config and caches
+.bv/
+.beads/
+history/
+storage.*

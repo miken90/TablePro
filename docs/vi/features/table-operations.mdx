@@ -7,6 +7,15 @@ description: Chỉnh sửa và quản lý các bảng trong cơ sở dữ liệu
 
 TablePro cung cấp bộ công cụ để chỉnh sửa và quản lý các bảng cơ sở dữ liệu thông qua giao diện trực quan. Thực hiện các thao tác phổ biến như xóa, truncate và sao chép — tất cả mà không cần viết SQL thủ công.
 
+## Tạo Bảng
+
+Tạo bảng mới bằng giao diện trực quan mà không cần viết SQL:
+
+1. Click chuột phải trong sidebar và chọn **Create New Table...**
+2. Hoặc vào **File** > **New Table...**
+3. Định nghĩa các cột, kiểu dữ liệu, ràng buộc và khóa trong trình soạn thảo trực quan
+4. Click **Create** để thực thi câu lệnh `CREATE TABLE` được tạo
+
 ## Các Thao Tác với Bảng
 
 Click chuột phải vào bảng trong sidebar để truy cập các thao tác này.
@@ -283,6 +292,8 @@ Chuyển đổi nhanh giữa các database trên cùng một kết nối:
 4. Double-click hoặc chọn và click **Open** để chuyển
 
 Database switcher hiển thị các database gần đây để truy cập nhanh và hỗ trợ làm mới danh sách database.
+
+Với kết nối PostgreSQL, database switcher cũng cho phép bạn duyệt và chuyển đổi giữa các schema (ví dụ: `public`, `auth`, hoặc schema tùy chỉnh). Chuyển đổi schema hoạt động song song với chuyển đổi database — chọn database trước, sau đó chọn schema để duyệt các bảng và view của nó.
 
 {/* Screenshot: Bộ chuyển đổi database với tìm kiếm và database gần đây */}
 <Frame caption="Bộ chuyển đổi database với tìm kiếm và database gần đây">

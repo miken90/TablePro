@@ -414,7 +414,7 @@ Customize the editor in **Settings** > **Editor**:
 |---------|-------------|---------|
 | **Show Line Numbers** | Display line numbers | On |
 | **Highlight Current Line** | Subtle highlight on cursor line | On |
-| **Word Wrap** | Wrap long lines | Off |
+| **Word Wrap** | Wrap long lines. When disabled, long lines scroll horizontally instead of wrapping. | Off |
 
 ### Editing Settings
 
@@ -559,6 +559,10 @@ When exploring data, always use `LIMIT` to avoid loading millions of rows:
 ```sql
 SELECT * FROM large_table LIMIT 100;
 ```
+
+### Dangerous Query Confirmation
+
+When you execute a `DELETE` or `UPDATE` statement without a `WHERE` clause, TablePro shows a confirmation dialog summarizing the affected queries before execution. This prevents accidental data loss from broad destructive statements.
 
 ### Test DELETE/UPDATE with SELECT First
 

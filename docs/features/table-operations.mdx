@@ -7,6 +7,15 @@ description: Modify and manage database tables
 
 TablePro provides tools for modifying and managing database tables through a visual interface. Perform common operations like drop, truncate, and duplicate — all without writing SQL by hand.
 
+## Create Table
+
+Create a new table visually without writing SQL:
+
+1. Right-click in the sidebar and select **Create New Table...**
+2. Or go to **File** > **New Table...**
+3. Define columns, types, constraints, and keys in the visual editor
+4. Click **Create** to execute the generated `CREATE TABLE` statement
+
 ## Table Operations
 
 Right-click a table in the sidebar to access these operations.
@@ -283,6 +292,8 @@ Quickly switch between databases on the same connection:
 4. Double-click or select and click **Open** to switch
 
 The database switcher shows recent databases for quick access and supports refreshing the database list.
+
+For PostgreSQL connections, the database switcher also lets you browse and switch between schemas (e.g. `public`, `auth`, or custom schemas). Schema switching works alongside database switching — select a database first, then pick a schema to browse its tables and views.
 
 {/* Screenshot: Database switcher with search and recent databases */}
 <Frame caption="Database switcher with search and recent databases">

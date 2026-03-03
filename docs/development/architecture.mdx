@@ -41,6 +41,7 @@ block-beta
     block:native["Native Libraries"]:3
         libmariadb["libmariadb<br>(MySQL)"]
         libpq["libpq<br>(PostgreSQL)"]
+        libmongoc["libmongoc<br>(MongoDB)"]
         SQLite["SQLite<br>(Built-in)"]
     end
 ```
@@ -51,7 +52,7 @@ TablePro uses Swift Package Manager (SPM) for third-party dependencies:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| **CodeEditSourceEditor** | 0.15.2+ | Tree-sitter-powered code editor component for the SQL editor |
+| **CodeEditSourceEditor** | `main` branch | Tree-sitter-powered code editor component for the SQL editor |
 | **Sparkle** | 2.x | Auto-update framework with EdDSA signing |
 
 <Note>
@@ -82,18 +83,34 @@ CodeEditSourceEditor bundles a SwiftLint plugin that requires `-skipPackagePlugi
     </Tree.Folder>
     <Tree.Folder name="Core">
       <Tree.Folder name="Database">
+        <Tree.Folder name="CMariaDB" />
+        <Tree.Folder name="CLibPQ" />
+        <Tree.Folder name="CLibMongoc" />
         <Tree.File name="DatabaseDriver.swift" />
         <Tree.File name="MySQLDriver.swift" />
         <Tree.File name="PostgreSQLDriver.swift" />
         <Tree.File name="SQLiteDriver.swift" />
+        <Tree.File name="MongoDBDriver.swift" />
+        <Tree.File name="ConnectionHealthMonitor.swift" />
       </Tree.Folder>
       <Tree.Folder name="Autocomplete">
         <Tree.File name="CompletionEngine.swift" />
         <Tree.File name="SQLContextAnalyzer.swift" />
         <Tree.File name="SQLKeywords.swift" />
       </Tree.Folder>
+      <Tree.Folder name="MongoDB">
+        <Tree.File name="BsonFlattener.swift" />
+        <Tree.File name="QueryBuilder.swift" />
+        <Tree.File name="StatementGenerator.swift" />
+        <Tree.File name="ShellParser.swift" />
+      </Tree.Folder>
       <Tree.Folder name="SSH">
         <Tree.File name="SSHTunnelManager.swift" />
+      </Tree.Folder>
+      <Tree.Folder name="Storage" />
+      <Tree.Folder name="SchemaTracking" />
+      <Tree.Folder name="Vim">
+        <Tree.File name="VimEngine.swift" />
       </Tree.Folder>
     </Tree.Folder>
     <Tree.Folder name="Extensions" />
@@ -175,6 +192,7 @@ Implementations:
 class MySQLDriver: DatabaseDriver { ... }
 class PostgreSQLDriver: DatabaseDriver { ... }
 class SQLiteDriver: DatabaseDriver { ... }
+class MongoDBDriver: DatabaseDriver { ... }
 ```
 
 ### Actor Isolation
@@ -211,6 +229,8 @@ enum DatabaseDriverFactory {
             return PostgreSQLDriver(connection: connection)
         case .sqlite:
             return SQLiteDriver(connection: connection)
+        case .mongodb:
+            return MongoDBDriver(connection: connection)
         }
     }
 }
@@ -250,6 +270,7 @@ Each driver encapsulates database-specific logic:
 | MySQLDriver | libmariadb | MySQL wire protocol |
 | PostgreSQLDriver | libpq | PostgreSQL protocol |
 | SQLiteDriver | Built-in SQLite3 | File-based |
+| MongoDBDriver | libmongoc (CLibMongoc) | MongoDB wire protocol |
 
 ### Autocomplete Engine
 
@@ -290,6 +311,30 @@ Features:
 - Health monitoring
 - Automatic cleanup
 
+### ConnectionHealthMonitor
+
+Monitors active database connections with a 30-second ping interval. Automatically reconnects on failure using exponential backoff. Runs per-session and cleans up when the session disconnects.
+
+### MainContentCoordinator
+
+Central coordinator for the main content area, split across 14 extension files in `Views/Main/Extensions/`:
+
+`+Alerts`, `+Filtering`, `+FKNavigation`, `+MongoDB`, `+MultiStatement`, `+Navigation`, `+Pagination`, `+QueryAnalysis`, `+Refresh`, `+RowOperations`, `+SidebarSave`, `+SQLPreview`, `+TabSwitch`, `+TableOperations`
+
+When adding coordinator functionality, add a new extension file rather than growing the main file.
+
+### Storage Patterns
+
+| What | How | Location |
+|------|-----|----------|
+| Connection passwords | Keychain | `ConnectionStorage` |
+| User preferences | UserDefaults | `AppSettingsStorage` / `AppSettingsManager` |
+| Query history | SQLite FTS5 | `QueryHistoryStorage` |
+| Tab state | JSON files (App Support) | `TabPersistenceService` / `TabStateStorage` |
+| Filter presets | JSON | `FilterSettingsStorage` |
+| Connection groups | JSON | `GroupStorage` |
+| Connection tags | JSON | `TagStorage` |
+
 ## Data Flow
 
 ### Connection Flow
@@ -303,9 +348,11 @@ flowchart TB
     Manager --> Factory["DatabaseDriverFactory"]
     Factory --> MySQL["MySQL Driver"]
     Factory --> Postgres["Postgres Driver"]
+    Factory --> MongoDB["MongoDB Driver"]
     SSH --> Connected["Connection Established"]
     MySQL --> Connected
     Postgres --> Connected
+    MongoDB --> Connected
 
     subgraph optional ["if SSH enabled"]
         SSH

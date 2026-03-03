@@ -25,7 +25,7 @@ TablePro supports five database systems:
     File-based databases, no server required
   </Card>
   <Card title="MongoDB" icon="leaf">
-    MongoDB 4.4+ with MQL shell queries. Default port: 27017
+    MongoDB 5.0+ with MQL shell queries. Default port: 27017
   </Card>
 </CardGroup>
 
@@ -99,7 +99,7 @@ SSH tunnel URLs use the format `scheme+ssh://ssh_user@ssh_host:ssh_port/db_user:
 | Field | Description |
 |-------|-------------|
 | **Name** | A friendly name to identify this connection |
-| **Type** | Database type: MySQL, MariaDB, PostgreSQL, or SQLite |
+| **Type** | Database type: MySQL, MariaDB, PostgreSQL, SQLite, or MongoDB |
 
 #### Appearance Section
 
@@ -130,12 +130,13 @@ For SQLite, this section shows a file browser instead:
 
 #### Authentication Section
 
-For MySQL, MariaDB, and PostgreSQL:
+For MySQL, MariaDB, PostgreSQL, and MongoDB:
 
 | Field | Description |
 |-------|-------------|
 | **Username** | Database username (default: `root` for MySQL) |
 | **Password** | Database password (stored securely in Keychain) |
+| **Auth Database** | Authentication database (MongoDB only, default: `admin`) |
 
 <Note>
 SQLite databases don't require authentication.

@@ -252,6 +252,8 @@ Quick Search provides instant filtering across all visible columns without build
 
 Quick search is always visible when the filter panel is open. Click the **x** button to clear the search.
 
+When both quick search and filter rows are active, their WHERE conditions are joined with AND — the results must match the search text *and* all applied filters.
+
 <Tip>
 Quick Search is ideal for ad-hoc lookups. For recurring filter patterns, save them as a preset instead.
 </Tip>
@@ -432,6 +434,10 @@ Controls the filter panel behavior when opening a table:
 <Tip>
 The "Restore Last Filter" option remembers filters per table name. If you frequently filter the same table with the same conditions, this saves setup time every session.
 </Tip>
+
+## FK Navigation Filter
+
+Clicking a foreign key arrow in the data grid opens the referenced table with a pre-applied filter matching the FK value. This lets you quickly navigate relationships — for example, clicking an `order.user_id` FK arrow opens the `users` table filtered to that specific user.
 
 ## Keyboard Shortcuts
 

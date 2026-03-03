@@ -25,7 +25,7 @@ TablePro hỗ trợ năm hệ thống cơ sở dữ liệu:
     Cơ sở dữ liệu dựa trên file, không cần máy chủ
   </Card>
   <Card title="MongoDB" icon="leaf">
-    MongoDB 4.4+ với truy vấn MQL shell. Cổng mặc định: 27017
+    MongoDB 5.0+ với truy vấn MQL shell. Cổng mặc định: 27017
   </Card>
 </CardGroup>
 
@@ -99,7 +99,7 @@ URL SSH tunnel sử dụng định dạng `scheme+ssh://ssh_user@ssh_host:ssh_po
 | Trường | Mô tả |
 |-------|-------------|
 | **Name** | Tên thân thiện để xác định kết nối này |
-| **Type** | Loại cơ sở dữ liệu: MySQL, MariaDB, PostgreSQL hoặc SQLite |
+| **Type** | Loại cơ sở dữ liệu: MySQL, MariaDB, PostgreSQL, SQLite hoặc MongoDB |
 
 #### Phần Appearance
 
@@ -130,12 +130,13 @@ Sử dụng màu sắc để phân biệt trực quan giữa các môi trường
 
 #### Phần Authentication
 
-Đối với MySQL, MariaDB và PostgreSQL:
+Đối với MySQL, MariaDB, PostgreSQL và MongoDB:
 
 | Trường | Mô tả |
 |-------|-------------|
 | **Username** | Tên người dùng cơ sở dữ liệu (mặc định: `root` cho MySQL) |
 | **Password** | Mật khẩu cơ sở dữ liệu (được lưu trữ an toàn trong Keychain) |
+| **Auth Database** | Cơ sở dữ liệu xác thực (chỉ MongoDB, mặc định: `admin`) |
 
 <Note>
 Cơ sở dữ liệu SQLite không yêu cầu xác thực.
