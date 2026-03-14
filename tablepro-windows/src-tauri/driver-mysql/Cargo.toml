@@ -1,0 +1,13 @@
+[package]
+name = "driver-mysql"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tablepro-plugin-sdk = { path = "../plugin-sdk" }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+mysql_async = { version = "0.34", default-features = false, features = ["default-rustls"] }
+
+[lib]
+name = "driver_mysql"
+crate-type = ["cdylib"]

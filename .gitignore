@@ -136,5 +136,18 @@ Sourcery/GeneratedMocks
 *.xcfilelists
 
 # Build artifacts
+node_modules/
+tablepro-windows/src-tauri/target/
+dist/
 build/
 *.xcarchive
+plans/
+history/
+.beads/
+.team/
+.cocoindex_code/
+storage.sqlite3
+
+# bv (beads viewer) local config and caches
+.bv/
+repomix*

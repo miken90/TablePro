@@ -1,0 +1,15 @@
+[package]
+name = "driver-postgres"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tablepro-plugin-sdk = { path = "../plugin-sdk" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
+postgres-native-tls = "0.5"
+native-tls = "0.2"
+
+[lib]
+name = "driver_postgres"
+crate-type = ["cdylib"]

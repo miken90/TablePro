@@ -1,0 +1,10 @@
+[package]
+name = "tablepro-plugin-sdk"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[lib]
+name = "tablepro_plugin_sdk"
+crate-type = ["rlib"]

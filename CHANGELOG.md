@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows port: Phase 6 QA & Packaging — Rust unit tests (30+ tests for sql_generator, models, storage, plugin-sdk), TypeScript unit tests via Vitest (30+ tests for Zustand stores, column-type categorization, statement scanner, editor utilities), MSI/NSIS packaging configuration with resources bundling, GitHub Actions Windows CI workflow, portable ZIP build script, About dialog, window position persistence, Ctrl+N new tab and Ctrl+/ toggle comment shortcuts
+
+### Fixed
+
+- Windows: Plugin DLLs not discovered during `tauri dev` — added fallback to scan exe directory for `driver_*.dll` alongside `plugins/` subdirectory
+- Windows: PostgreSQL connection failing with "invalid connection string" when database field is empty — replaced string concatenation with `tokio_postgres::Config` builder API
+- Windows: All IPC commands after connect returning `NotConnected` — frontend now maps SavedConnection IDs to Rust session UUIDs and passes the correct session UUID to all backend commands (query execution, schema fetch, cancel, export, structure view)
+- Windows: White page crash after fetch_tables — Rust model structs (`ColumnInfo`, `QueryResult`, `TableInfo`, `IndexInfo`, `ForeignKeyInfo`) missing `#[serde(rename_all = "camelCase")]`, causing snake_case JSON field names that didn't match camelCase TypeScript types. `result.executionTimeMs.toFixed()` on `undefined` crashed React
+- Windows: Error messages showing `[object Object]` — Tauri IPC errors are plain JSON objects (`{kind, message}`), not `Error` instances. Added `extractErrorMessage()` helper and ErrorBoundary
+- Windows port: Phase 5 complete — Export to CSV, JSON, SQL with progress tracking and format-specific options; Table Structure View with Columns, Indexes, Foreign Keys, and DDL tabs; Settings panel with General, Editor, Appearance, and Connection sections; Quick Switcher (Ctrl+K) for fuzzy table search; Theme system (Light/Dark/System follow) with OS preference detection; Safe mode visual indicator in toolbar with toggle; Sidebar column expansion with type-aware icons and context menu; 6 new keyboard shortcuts: Ctrl+S, Ctrl+Shift+F, F5, Ctrl+,, Ctrl+Shift+E, Ctrl+K; 3 new settings: tabSize, wordWrap, dateFormat
+- Windows port: Phase 4 Data Grid & CRUD — TanStack Virtual+Table grid replacing SimpleGrid (100K row virtual scroll, column resize/sort, row selection with shift/ctrl multi-select), type-aware CellEditor (boolean/json/date/text), Zustand changeStore with full undo/redo stack, visual change indicators (yellow=modified, green=inserted, red=deleted), ChangeToolbar with Save/Discard/Undo/Redo, Pagination component, Rust `sql_generator` (INSERT/UPDATE/DELETE with SQL injection-safe escaping), `data:save_changes` IPC command, column type categorization system
+- Windows port: Phase 3 SQL editor — CodeMirror 6 with SQL syntax highlighting (PostgreSQL/MySQL/MSSQL dialect support), schema-aware autocomplete (context-sensitive completions for tables, columns, functions, keywords based on clause type), Vim mode with ex-commands (:w/:q/:e), SQL formatting (Ctrl+Shift+F), multi-tab editor with per-tab state, keyboard shortcuts (Ctrl+Enter run query, Ctrl+Shift+Enter run all, F5 refresh schema, Ctrl+D select next occurrence)
+- Windows port: Phase 2 driver plugins — PostgreSQL (tokio-postgres + native-tls), MySQL (mysql_async), SQL Server (tiberius) as cdylib DLLs with full schema introspection (tables, columns, indexes, foreign keys, DDL generation, database listing)
+- Windows port: Phase 1 foundation scaffold — Tauri v2 + Rust backend (19 IPC commands, models, storage, connection manager) + React/TypeScript frontend (14 components, 6 Zustand stores, full layout shell with resizable panels)
 - `SettablePlugin` protocol in TableProPluginKit SDK: unified settings pattern for all plugins with automatic persistence via `loadSettings()`/`saveSettings()`, replacing duplicated boilerplate across export/import/driver plugins
 - Plugin UI/capability metadata: each driver plugin now self-declares brand color, connection mode, supported features, column types, URL schemes, and grouping strategy via the `DriverPlugin` protocol
 - Driver plugin settings view support: `DriverPlugin.settingsView()` allows plugins to provide custom settings UI in the Installed Plugins panel
@@ -24,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows: Database switching from sidebar dropdown now works — PostgreSQL requires a new connection per database, so `switch_database` command disconnects and reconnects with the selected database name. Tables auto-refresh after switching. Initially connected database auto-selects on load.
 - Plugin icon rendering now supports custom asset images (e.g., duckdb-icon) alongside SF Symbols in Installed and Browse tabs
 
 ## [0.17.0] - 2026-03-11

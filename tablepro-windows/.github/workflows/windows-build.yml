@@ -1,0 +1,68 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tablepro-windows/src-tauri
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tablepro-windows/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: tablepro-windows
+        run: npm ci
+
+      - name: Rust lint
+        working-directory: tablepro-windows/src-tauri
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Rust tests
+        working-directory: tablepro-windows/src-tauri
+        run: cargo test --workspace
+
+      - name: TypeScript tests
+        working-directory: tablepro-windows
+        run: npx vitest run
+
+      - name: Build frontend
+        working-directory: tablepro-windows
+        run: npm run build
+
+      - name: Build Tauri app
+        working-directory: tablepro-windows
+        run: npx tauri build
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: tablepro-msi
+          path: tablepro-windows/src-tauri/target/release/bundle/msi/*.msi
+
+      - name: Upload NSIS
+        uses: actions/upload-artifact@v4
+        with:
+          name: tablepro-nsis
+          path: tablepro-windows/src-tauri/target/release/bundle/nsis/*.exe
