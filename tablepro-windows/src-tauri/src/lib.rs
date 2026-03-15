@@ -7,6 +7,11 @@ pub mod storage;
 use std::sync::Arc;
 
 use commands::connection::{connect, disconnect, get_connection_status, test_connection};
+use commands::data::save_changes;
+use commands::export::export_to_file;
+use commands::history::{
+    history_clear_all, history_delete_entry, history_fetch_recent, history_record, history_search,
+};
 use commands::query::{cancel_query, execute_query, fetch_count, fetch_rows};
 use commands::schema::{
     fetch_columns, fetch_databases, fetch_ddl, fetch_foreign_keys, fetch_indexes, fetch_tables,
@@ -14,11 +19,9 @@ use commands::schema::{
 };
 use commands::settings::{get_settings, set_settings};
 use commands::storage::{delete_connection, list_connections, save_connection};
-use commands::data::save_changes;
-use commands::export::export_to_file;
 use plugin::PluginManager;
 use services::ConnectionManager;
-use storage::{ConnectionStore, SettingsStore};
+use storage::{ConnectionStore, HistoryStore, SettingsStore};
 use tokio::sync::Mutex;
 
 pub fn run() {
@@ -49,6 +52,9 @@ pub fn run() {
         .manage(Mutex::new(connection_manager))
         .manage(Mutex::new(SettingsStore::new()))
         .manage(Mutex::new(ConnectionStore::new()))
+        .manage(Mutex::new(
+            HistoryStore::new().expect("Failed to init history store"),
+        ))
         .invoke_handler(tauri::generate_handler![
             // connection
             test_connection,
@@ -79,6 +85,12 @@ pub fn run() {
             save_changes,
             // export
             export_to_file,
+            // history
+            history_fetch_recent,
+            history_search,
+            history_clear_all,
+            history_delete_entry,
+            history_record,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

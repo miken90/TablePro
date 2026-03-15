@@ -29,7 +29,7 @@ export const useHistoryStore = create<HistoryState>((set) => ({
   fetchRecent: async () => {
     set({ isLoading: true });
     try {
-      const entries = await invoke<HistoryEntry[]>("history:fetch_recent");
+      const entries = await invoke<HistoryEntry[]>("history_fetch_recent");
       set({ entries, isLoading: false });
     } catch {
       set({ isLoading: false });
@@ -39,7 +39,7 @@ export const useHistoryStore = create<HistoryState>((set) => ({
   search: async (query) => {
     set({ isLoading: true });
     try {
-      const entries = await invoke<HistoryEntry[]>("history:search", { query });
+      const entries = await invoke<HistoryEntry[]>("history_search", { query });
       set({ entries, isLoading: false });
     } catch {
       set({ isLoading: false });
@@ -48,7 +48,7 @@ export const useHistoryStore = create<HistoryState>((set) => ({
 
   clearAll: async () => {
     try {
-      await invoke("history:clear_all");
+      await invoke("history_clear_all");
       set({ entries: [] });
     } catch (err) {
       console.error("Failed to clear history:", err);
@@ -57,7 +57,7 @@ export const useHistoryStore = create<HistoryState>((set) => ({
 
   deleteEntry: async (id) => {
     try {
-      await invoke("history:delete_entry", { id });
+      await invoke("history_delete_entry", { id });
       set((s) => ({ entries: s.entries.filter((e) => e.id !== id) }));
     } catch (err) {
       console.error("Failed to delete history entry:", err);
