@@ -9,10 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: SQLite driver plugin — `driver-sqlite` cdylib crate using rusqlite (bundled), PRAGMA-based schema introspection, WAL mode, query cancel via `sqlite3_interrupt`
+- Windows: Query History backend — rusqlite + FTS5 full-text search stored in `%APPDATA%/TablePro/history.sqlite3`, 5 Tauri IPC commands (fetch_recent, search, clear_all, delete_entry, record)
+- Windows: Tab state persistence — Zustand `persist` middleware saves editor tabs to localStorage across app restarts (100KB/tab cap)
+- Windows: Save changes end-to-end — wired `handleSave` to IPC `save_changes` with proper table/schema context plumbing from Sidebar through MainLayout to ResultPanel
+- Windows: Filter panel (WHERE clause builder) — FilterPanel component with add/remove filter rows, AND/OR logic toggle, quick search across all columns, Rust-side `where_clause` param on `fetch_rows`/`fetch_count` with SQL injection sanity check, Ctrl+Shift+F toggle
+- Windows: Inspector panel (right sidebar) — InspectorPanel showing selected row's column-value pairs with type-aware rendering (NULL, boolean, JSON, long text expand), resizable right panel, Ctrl+Shift+I toggle
+
 - Windows port: Phase 6 QA & Packaging — Rust unit tests (30+ tests for sql_generator, models, storage, plugin-sdk), TypeScript unit tests via Vitest (30+ tests for Zustand stores, column-type categorization, statement scanner, editor utilities), MSI/NSIS packaging configuration with resources bundling, GitHub Actions Windows CI workflow, portable ZIP build script, About dialog, window position persistence, Ctrl+N new tab and Ctrl+/ toggle comment shortcuts
 
 ### Fixed
 
+- Windows: Sidebar single-click on table not loading data — added `onOpenTable` callback that creates tab + executes `SELECT *` immediately; chevron click expands/collapses columns; double-click opens View Structure; "Open Table" context menu item added
+- Windows: Toolbar Run button disabled after programmatic tab creation — `setQueryText()` now called in `handleOpenTable` and `handleQuickSwitcherSelect` so generated SQL is recognized by the Run button
 - Windows: Plugin DLLs not discovered during `tauri dev` — added fallback to scan exe directory for `driver_*.dll` alongside `plugins/` subdirectory
 - Windows: PostgreSQL connection failing with "invalid connection string" when database field is empty — replaced string concatenation with `tokio_postgres::Config` builder API
 - Windows: All IPC commands after connect returning `NotConnected` — frontend now maps SavedConnection IDs to Rust session UUIDs and passes the correct session UUID to all backend commands (query execution, schema fetch, cancel, export, structure view)

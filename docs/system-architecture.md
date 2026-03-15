@@ -115,7 +115,7 @@ let result = try await driver.execute(sql: "SELECT * FROM users")
 ┌────────────────────────────────────────────────────────────┐
 │        React Components (Functional + Hooks)               │
 │  (ConnectionDialog, QueryEditor, DataGrid, Sidebar,        │
-│   QuickSwitcher, HistoryPanel, ExportDialog)              │
+│   QuickSwitcher, HistoryPanel, FilterPanel, InspectorPanel)│
 ├────────────────────────────────────────────────────────────┤
 │              Zustand Stores (Reactive)                     │
 │  (connectionStore, queryStore, schemaStore, changeStore)   │
@@ -366,11 +366,10 @@ pub extern "C" fn plugin_api_version() -> u32 {
 %APPDATA%/TablePro/
 ├── connections.json         # Connection profiles (DPAPI-encrypted passwords)
 ├── settings.json           # User preferences
-├── history.db              # SQLite FTS5 for query history
-└── tabs/
-    ├── {uuid}.json         # Per-tab state (SQL content, position)
-    └── ...
+├── history.sqlite3         # SQLite FTS5 for query history (NEW: P0)
 ```
+
+**Note**: Tab state persisted via localStorage (Zustand persist middleware), auto-rehydrated on app launch.
 
 **Encryption**: DPAPI (`CryptProtectData` / `CryptUnprotectData`) for passwords
 
@@ -606,4 +605,4 @@ Send chunk 2 via separate invoke
 
 ---
 
-**Last Updated**: 2026-03-13 | **Stable Release**: v0.17.0 (macOS) | **Windows Version**: In Progress
+**Last Updated**: 2026-03-15 | **Stable Release**: v0.17.0 (macOS) | **Windows Version**: P0 Feature Parity Complete

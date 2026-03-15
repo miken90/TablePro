@@ -172,6 +172,7 @@ src-tauri/src/
 ├── commands/             # IPC handlers
 │   ├── connection.rs
 │   ├── query.rs
+│   ├── history.rs        # NEW: Query history commands
 │   └── mod.rs
 ├── plugin/               # Plugin system
 │   ├── manager.rs        # DLL discovery/loading
@@ -181,6 +182,7 @@ src-tauri/src/
 ├── storage/              # Persistence
 │   ├── connection-store.rs
 │   ├── settings-store.rs
+│   ├── history-store.rs    # NEW: Query history with FTS5
 │   └── mod.rs
 └── utils/                # Helpers
     ├── password.rs       # DPAPI encryption
@@ -385,10 +387,6 @@ Common ESLint issues:
 ```
 src/
 ├── components/           # React components
-│   ├── layout/
-│   │   ├── sidebar.tsx
-│   │   ├── main-content.tsx
-│   │   └── toolbar.tsx
 │   ├── connection/
 │   │   ├── connection-dialog.tsx
 │   │   ├── connection-list.tsx
@@ -396,11 +394,23 @@ src/
 │   ├── editor/
 │   │   ├── sql-editor.tsx
 │   │   └── query-history.tsx
+│   ├── filter/           # NEW: Filter panel components
+│   │   ├── filter-types.ts
+│   │   ├── filter-panel.tsx
+│   │   ├── filter-row.tsx
+│   │   └── quick-search.tsx
 │   ├── grid/
 │   │   ├── data-grid.tsx
 │   │   ├── grid-cell.tsx
 │   │   └── grid-toolbar.tsx
-│   └── common/
+│   ├── inspector/        # NEW: Inspector panel components
+│   │   ├── inspector-panel.tsx
+│   │   └── field-row.tsx
+│   ├── layout/
+│   │   ├── sidebar.tsx
+│   │   ├── main-content.tsx
+│   │   └── toolbar.tsx
+│   └── shared/
 │       ├── modal.tsx
 │       ├── button.tsx
 │       └── loading-spinner.tsx
@@ -410,7 +420,8 @@ src/
 │   ├── schema-store.ts
 │   ├── change-store.ts
 │   ├── tab-store.ts
-│   └── editor-store.ts
+│   ├── editor-store.ts    # With localStorage persistence
+│   └── history-store.ts
 ├── hooks/                # Custom hooks
 │   ├── useIpc.ts
 │   ├── useDatabase.ts
@@ -420,7 +431,8 @@ src/
 │   ├── connection.ts
 │   ├── query.ts
 │   ├── schema.ts
-│   └── settings.ts
+│   ├── settings.ts
+│   └── history.ts
 ├── types/                # TypeScript interfaces
 │   ├── connection.ts
 │   ├── query.ts
@@ -618,4 +630,4 @@ Before pushing, verify:
 
 ---
 
-**Last Updated**: 2026-03-13 | **Next Review**: v1.0.0 release
+**Last Updated**: 2026-03-15 | **Next Review**: v1.0.0 release

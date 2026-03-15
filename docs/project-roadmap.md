@@ -43,9 +43,9 @@ Stable Release         │ All 6 Phases Done    │ Cloud Sync, Cloud DBs
 - **Users**: 1000+ downloads by v0.17
 - **Test Coverage**: 85%+ on core logic
 
-## Phase 2: Windows Port (v0.18–0.20) ✅ PHASE 6 COMPLETE
+## Phase 2: Windows Port (v0.18–0.20) ✅ PHASE 6 + P0 COMPLETE
 
-**Status**: All 6 development phases complete
+**Status**: All 6 development phases complete + P0 feature parity implemented
 **Timeline**: 2026-03-13 onwards (started v0.18)
 **Target Release**: v1.0.0
 **Platform**: Windows 10+
@@ -59,6 +59,7 @@ Stable Release         │ All 6 Phases Done    │ Cloud Sync, Cloud DBs
 - ✅ **Phase 4: Data Grid & CRUD** (TanStack Virtual+Table, CellEditor, changeStore with undo/redo, sql_generator)
 - ✅ **Phase 5: Settings & UI** (Settings panels, Export dialog, Structure viewer, Quick Switcher, Dark mode, Keyboard shortcuts)
 - ✅ **Phase 6: QA & Packaging** (30+ Rust unit tests, 30+ Vitest tests, MSI/NSIS packaging, GitHub Actions CI)
+- ✅ **P0: Feature Parity** (SQLite driver, Query History backend, Tab state persistence, Filter panel, Inspector panel, Save changes end-to-end, Sidebar click fix)
 
 ### Phase 2 Milestones
 
@@ -196,14 +197,14 @@ Stable Release         │ All 6 Phases Done    │ Cloud Sync, Cloud DBs
 | **SQL Editor** | ✅ v0.17 | ✅ v0.18 | 📋 v0.22 |
 | **Data Grid** | ✅ v0.17 | ✅ v0.18 | 📋 v0.22 |
 | **Connection Mgmt** | ✅ v0.17 | ✅ v0.20 | 📋 v0.22 |
-| **Query History** | ✅ v0.17 | ✅ v0.20 | 📋 v0.22 |
+| **Query History** | ✅ v0.17 | ✅ v0.20 (P0) | 📋 v0.22 |
 | **Change Tracking** | ✅ v0.17 | ✅ v0.20 | 📋 v0.22 |
 | **Export/Import** | ✅ v0.17 | ✅ v0.20 | 📋 v0.22 |
 | **Plugin System** | ✅ v0.17 | ✅ v0.19 | 📋 v0.22 |
 | **PostgreSQL Driver** | ✅ v0.8 | ✅ v0.19 | 📋 v0.22 |
 | **MySQL Driver** | ✅ v0.9 | ✅ v0.19 | 📋 v0.22 |
 | **MSSQL Driver** | ✅ v0.13 | ✅ v0.19 | 📋 v0.22 |
-| **SQLite Driver** | ✅ v0.10 | ✅ v0.18 | 📋 v0.22 |
+| **SQLite Driver** | ✅ v0.10 | ✅ v0.20 (P0) | 📋 v0.22 |
 | **MongoDB Driver** | ✅ v0.11 | 📋 v0.21 | 📋 v0.22 |
 | **Redis Driver** | ✅ v0.12 | 📋 v0.21 | 📋 v0.22 |
 | **Oracle Driver** | ✅ v0.14 | 📋 v0.21 | 📋 v0.22 |
@@ -316,4 +317,4 @@ Before releasing any version:
 
 ---
 
-**Last Updated**: 2026-03-13 | **Current Phase**: Phase 2 (All 6 phases complete) | **Next Release**: v0.20 stabilization
+**Last Updated**: 2026-03-15 | **Current Phase**: Phase 2 (6 phases + P0 complete) | **Next Release**: v0.20 stabilization

@@ -77,7 +77,7 @@ protocol PluginDatabaseDriver: PluginInterface {
 
 ## Windows Codebase (tablepro-windows/)
 
-**Status**: Phase 6 Complete (v0.18 unreleased) | **Architecture**: Tauri v2 + Rust + React | **Files**: ~90 source files, ~12,700 LOC
+**Status**: Phase 6 + P0 Feature Parity Complete (v0.18 unreleased) | **Architecture**: Tauri v2 + Rust + React | **Files**: ~95 source files, ~11,400 LOC
 
 ### Directory Layout
 
@@ -87,38 +87,41 @@ tablepro-windows/
 │   ├── src/
 │   │   ├── main.rs            # App entry, Tauri builder with IPC commands
 │   │   ├── lib.rs             # Library root
-│   │   ├── commands/           # IPC handlers (8 modules: connection, query, schema, data, export, settings, storage, mod)
+│   │   ├── commands/           # IPC handlers (9 modules: connection, query, schema, data, export, settings, storage, history, mod)
 │   │   ├── services/           # ConnectionManager, QueryExecutor, SchemaLoader
 │   │   ├── plugin/             # DLL loading (manager.rs, adapter.rs, driver_trait.rs)
 │   │   ├── models/             # Rust data structures (Connection, QueryResult, etc.)
-│   │   ├── storage/            # ConnectionStore (JSON), SettingsStore (JSON)
+│   │   ├── storage/            # ConnectionStore (JSON), SettingsStore (JSON), HistoryStore (SQLite FTS5)
 │   │   ├── error.rs            # TauriError wrapper for type-safe IPC
 │   │   └── utils/              # Helpers (password encryption, logging)
 │   ├── driver-postgres/        # PostgreSQL plugin (cdylib crate)
 │   ├── driver-mysql/           # MySQL plugin (cdylib crate)
 │   ├── driver-mssql/           # SQL Server plugin (cdylib crate)
+│   ├── driver-sqlite/          # SQLite plugin (cdylib crate)
 │   ├── plugin-sdk/             # FFI types shared between host & plugins
 │   ├── Cargo.toml             # Workspace manifest with all crates
 │   └── gen/                   # Tauri-generated bindings
-├── src/                       # React/TypeScript frontend (~50 components, ~7,246 LOC)
+├── src/                       # React/TypeScript frontend (~55 components, ~8,400 LOC)
 │   ├── components/            # React components (Layout, Connection, Grid, Editor, etc.)
 │   │   ├── connection/        # Connection dialogs
 │   │   ├── editor/            # SQL editor with autocomplete
 │   │   ├── export/            # Export dialog
+│   │   ├── filter/            # Filter panel (WHERE clause builder)
 │   │   ├── grid/              # Data grid with virtual scrolling
 │   │   ├── history/           # Query history panel
+│   │   ├── inspector/         # Inspector panel (selected row details)
 │   │   ├── layout/            # Main layout, sidebar, toolbar
 │   │   ├── settings/          # Settings panels
 │   │   ├── shared/            # Reusable UI components
 │   │   └── structure/         # Table structure viewer
-│   ├── stores/                # Zustand stores (7 stores, ~1,600 LOC total)
+│   ├── stores/                # Zustand stores (7 stores with localStorage persistence, ~1,600 LOC total)
 │   │   ├── connection-store.ts
 │   │   ├── query-store.ts
 │   │   ├── schema-store.ts
 │   │   ├── change-store.ts    # Change tracking with undo/redo
-│   │   ├── tab-store.ts
-│   │   ├── editor-store.ts
-│   │   └── history-store.ts
+│   │   ├── tab-store.ts       # Tab state persistence
+│   │   ├── editor-store.ts    # With localStorage + Zustand persist middleware
+│   │   └── history-store.ts   # Query history tracking
 │   ├── editor/                # SQL editor modules (9 files, ~1,600 LOC)
 │   │   ├── sql-context-analyzer.ts
 │   │   ├── sql-completion-provider.ts
@@ -206,10 +209,11 @@ tablepro-windows/
 
 Each database driver is a separate Rust crate compiled as `cdylib` in the `src-tauri/` workspace:
 
-**Available Drivers** (Phase 2 complete):
-- driver-postgres: PostgreSQL via tokio-postgres (~400 LOC per driver, average)
+**Available Drivers** (Phase 2 complete + P0 parity):
+- driver-postgres: PostgreSQL via tokio-postgres
 - driver-mysql: MySQL via mysql_async
 - driver-mssql: SQL Server via tiberius
+- driver-sqlite: SQLite via rusqlite (bundled)
 
 **Future Drivers** (planned in Phase 3):
 - MongoDB, Redis, Oracle, ClickHouse, DuckDB
@@ -290,9 +294,9 @@ All models are defined separately in each platform's codebase but follow consist
 - **Passwords**: macOS Keychain (automatic decryption)
 
 ### Windows
-- **Connections**: `%APPDATA%/TablePro/connections.json` (encrypted passwords)
-- **Query History**: `%APPDATA%/TablePro/history.db` (SQLite FTS5)
-- **Tab State**: `%APPDATA%/TablePro/tabs/{tabId}.json` (per-tab JSON)
+- **Connections**: `%APPDATA%/TablePro/connections.json` (encrypted passwords via DPAPI)
+- **Query History**: `%APPDATA%/TablePro/history.sqlite3` (SQLite FTS5 full-text search)
+- **Tab State**: localStorage (via Zustand persist middleware, auto-rehydrate on app launch)
 - **Settings**: `%APPDATA%/TablePro/settings.json`
 - **Passwords**: DPAPI-encrypted (CryptProtectData)
 
@@ -329,4 +333,4 @@ All models are defined separately in each platform's codebase but follow consist
 
 ---
 
-**Last Updated**: 2026-03-13 | **Stable Release**: v0.17.0 | **Windows Branch**: In Progress
+**Last Updated**: 2026-03-15 | **Stable Release**: v0.17.0 | **Windows Branch**: P0 Feature Parity Complete

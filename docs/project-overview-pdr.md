@@ -20,7 +20,7 @@ TablePro is a **native database client** that brings professional SQL developmen
 | Platform | Status | Architecture | Toolchain |
 |----------|--------|--------------|-----------|
 | **macOS** | Stable (v0.17.0) | SwiftUI + AppKit hybrid | Xcode, Swift 5.9+ |
-| **Windows** | Phase 6 Complete | Tauri v2 + Rust + React | Rust, Node.js, TypeScript |
+| **Windows** | Phase 6 + P0 Complete | Tauri v2 + Rust + React | Rust, Node.js, TypeScript |
 | **Linux** | Planned | Tauri v2 (Windows approach) | Rust, Node.js, TypeScript |
 
 ## Supported Databases
@@ -54,6 +54,8 @@ Each database has dedicated documentation and driver implementation, with connec
 
 ### Data Exploration
 - Interactive data grid with virtual scrolling (handles millions of rows)
+- **Filter Panel**: WHERE clause builder with Ctrl+Shift+F toggle (P0)
+- **Inspector Panel**: Selected row column-value pairs viewer with Ctrl+Shift+I toggle (P0)
 - Table structure viewer (columns, indexes, keys, constraints)
 - Filter presets with save/load
 - Column sorting, type indicators
@@ -85,14 +87,14 @@ Each database has dedicated documentation and driver implementation, with connec
 - **Storage**: UserDefaults (settings), Core Data / custom JSON (history, tabs)
 - **Password Storage**: macOS Keychain
 
-### Windows (In Progress → Phase 6 Complete)
+### Windows (In Progress → Phase 6 + P0 Complete)
 - **Desktop Framework**: Tauri v2 (Chromium + native window)
 - **Backend**: Rust with tokio async runtime
 - **Frontend**: React 18 + TypeScript with Zustand (state management)
 - **Plugin System**: C-ABI FFI with libloading (DLL plugins)
 - **Storage**: DPAPI for passwords, JSON files, SQLite for history
 - **IPC**: Typed Tauri commands with TauriError handling
-- **Status**: All 6 development phases complete (foundation, drivers, editor, grid/CRUD, settings/UI, QA/packaging)
+- **Status**: All 6 development phases complete + P0 feature parity (foundation, drivers, editor, grid/CRUD, settings/UI, QA/packaging, P0 features)
 
 ### Shared Patterns
 - **Connection Pooling**: Reuse active connections for performance
@@ -189,7 +191,7 @@ TablePro supports extensible plugins for drivers, export formats, and import han
 | Phase | Status | Timeline | Scope |
 |-------|--------|----------|-------|
 | **Phase 1: macOS Foundation** | ✅ Complete | v0.1–0.17 | Native SwiftUI client, plugin system, 11 drivers, features |
-| **Phase 2: Windows Port** | ✅ Phase 6 Complete | v0.18–0.20 | Tauri v2 port, feature parity, Windows-native polish |
+| **Phase 2: Windows Port** | ✅ Phase 6 + P0 Complete | v0.18–0.20 | Tauri v2 port, feature parity, P0 features (SQLite, History, Filter, Inspector) |
 | **Phase 3: Platform Parity** | 📋 Planned | v0.21+ | Full feature alignment, AI assistant on Windows, Linux support |
 | **Phase 4: Cloud & Expansion** | 📋 Planned | Future | BigQuery, Snowflake, cloud sync, collaborative features |
 
@@ -210,4 +212,4 @@ TablePro supports extensible plugins for drivers, export formats, and import han
 
 ---
 
-**Last Updated**: 2026-03-13 | **Version**: 0.17.0 | **Next Review**: Phase 2 completion (v0.20)
+**Last Updated**: 2026-03-15 | **Version**: 0.17.0 | **Next Review**: Phase 2 completion (v0.20)
