@@ -18,9 +18,10 @@ import type { ColumnInfo } from "../../types/query";
 
 interface SidebarProps {
   onViewStructure?: (tableName: string, schema?: string | null) => void;
+  onOpenTable?: (tableName: string, schema?: string | null) => void;
 }
 
-export function Sidebar({ onViewStructure }: SidebarProps) {
+export function Sidebar({ onViewStructure, onOpenTable }: SidebarProps) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const sessionIds = useConnectionStore((s) => s.sessionIds);
   const connections = useConnectionStore((s) => s.connections);
@@ -117,6 +118,7 @@ export function Sidebar({ onViewStructure }: SidebarProps) {
             onToggle={() => toggleTable(table.name)}
             sessionId={sessionId ?? null}
             onViewStructure={onViewStructure}
+            onOpenTable={onOpenTable}
           />
         ))}
       </div>
@@ -155,9 +157,10 @@ interface TableNodeProps {
   onToggle: () => void;
   sessionId: string | null;
   onViewStructure?: (tableName: string, schema?: string | null) => void;
+  onOpenTable?: (tableName: string, schema?: string | null) => void;
 }
 
-function TableNode({ table, expanded, onToggle, sessionId, onViewStructure }: TableNodeProps) {
+function TableNode({ table, expanded, onToggle, sessionId, onViewStructure, onOpenTable }: TableNodeProps) {
   const { fetchColumns, columnsByTable } = useSchemaStore();
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const contextRef = useRef<HTMLDivElement>(null);
@@ -207,20 +210,27 @@ function TableNode({ table, expanded, onToggle, sessionId, onViewStructure }: Ta
     setContextMenu(null);
   };
 
+  const handleOpenTable = () => {
+    onOpenTable?.(table.name, table.schema);
+    setContextMenu(null);
+  };
+
   return (
     <>
       <div>
         <div
-          onClick={onToggle}
+          onClick={() => onOpenTable?.(table.name, table.schema)}
           onContextMenu={handleContextMenu}
           onDoubleClick={() => onViewStructure?.(table.name, table.schema)}
           className="flex cursor-pointer items-center gap-1 px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
-          {expanded ? (
-            <ChevronDown size={12} className="text-zinc-400" />
-          ) : (
-            <ChevronRight size={12} className="text-zinc-400" />
-          )}
+          <span onClick={(e) => { e.stopPropagation(); onToggle(); }} className="shrink-0">
+            {expanded ? (
+              <ChevronDown size={12} className="text-zinc-400" />
+            ) : (
+              <ChevronRight size={12} className="text-zinc-400" />
+            )}
+          </span>
           <Table2 size={12} className="text-blue-500" />
           <span className="truncate text-zinc-700 dark:text-zinc-300">{table.name}</span>
           {table.rowCountEstimate != null && (
@@ -262,6 +272,13 @@ function TableNode({ table, expanded, onToggle, sessionId, onViewStructure }: Ta
           style={{ top: contextMenu.y, left: contextMenu.x }}
           className="fixed z-50 min-w-[160px] overflow-hidden rounded border border-zinc-200 bg-white py-0.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
         >
+          <button
+            onClick={handleOpenTable}
+            className="w-full px-3 py-1.5 text-left text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          >
+            Open Table
+          </button>
+          <div className="my-0.5 border-t border-zinc-100 dark:border-zinc-700" />
           <button
             onClick={handleCopyName}
             className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-700"
