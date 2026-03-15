@@ -22,11 +22,22 @@ export const getConnectionStatus = (sessionId: string): Promise<ConnectionStatus
 export const executeQuery = (sessionId: string, sql: string, params?: string[]): Promise<QueryResult> =>
   invoke("execute_query", { sessionId, sql, params });
 
-export const fetchRows = (sessionId: string, table: string, offset: number, limit: number): Promise<QueryResult> =>
-  invoke("fetch_rows", { sessionId, table, offset, limit });
+export const fetchRows = (sessionId: string, table: string, schema: string | null, offset: number, limit: number): Promise<QueryResult> =>
+  invoke("fetch_rows", { sessionId, table, schema, offset, limit });
+
+export const fetchRowsFiltered = (
+  sessionId: string, table: string, schema: string | null,
+  offset: number, limit: number, whereClause: string | null,
+): Promise<QueryResult> =>
+  invoke("fetch_rows", { sessionId, table, schema, whereClause, offset, limit });
 
 export const fetchCount = (sessionId: string, table: string): Promise<number> =>
   invoke("fetch_count", { sessionId, table });
+
+export const fetchCountFiltered = (
+  sessionId: string, table: string, schema: string | null, whereClause: string | null,
+): Promise<number> =>
+  invoke("fetch_count", { sessionId, table, schema, whereClause });
 
 export const cancelQuery = (sessionId: string): Promise<void> =>
   invoke("cancel_query", { sessionId });

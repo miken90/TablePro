@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { useQueryStore } from '../../stores/queryStore';
 import { useChangeStore } from '../../stores/changeStore';
+import { saveChanges } from '../../ipc/commands';
+import type { SavePayload, RowChangePayload, CellChangePayload } from '../../ipc/commands';
 import { DataGrid } from './data-grid';
 import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
@@ -10,15 +12,25 @@ import { Database, Download } from 'lucide-react';
 
 type ActiveTab = 'results' | 'messages';
 
-export function ResultPanel() {
+interface ResultPanelProps {
+  tableName?: string;
+  schema?: string | null;
+  sessionId?: string;
+  activeWhereClause?: string;
+  onRowSelect?: (rowIndex: number | null) => void;
+}
+
+export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, onRowSelect: onRowSelectProp }: ResultPanelProps) {
   const { result, error, isExecuting, activeConnectionId, queryText } = useQueryStore();
-  const { hasChanges, getChanges } = useChangeStore();
+  const { hasChanges, getChanges, clear: clearChanges } = useChangeStore();
   const [activeTab, setActiveTab] = useState<ActiveTab>('results');
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [lastSelectedRow, setLastSelectedRow] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [showExport, setShowExport] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const tabCls = (tab: ActiveTab) =>
     `px-3 py-1 text-xs cursor-pointer border-b-2 ${
@@ -35,11 +47,14 @@ export function ResultPanel() {
           next.clear();
           next.add(rowIdx);
           setLastSelectedRow(rowIdx);
+          onRowSelectProp?.(rowIdx);
         } else if (mode === 'toggle') {
           if (next.has(rowIdx)) {
             next.delete(rowIdx);
+            onRowSelectProp?.(null);
           } else {
             next.add(rowIdx);
+            onRowSelectProp?.(rowIdx);
           }
           setLastSelectedRow(rowIdx);
         } else if (mode === 'range') {
@@ -49,20 +64,70 @@ export function ResultPanel() {
           for (let i = from; i <= to; i++) {
             next.add(i);
           }
+          // For range select, show the last row in inspector
+          onRowSelectProp?.(rowIdx);
         }
         return next;
       });
     },
-    [lastSelectedRow]
+    [lastSelectedRow, onRowSelectProp]
   );
 
   const handleCellDoubleClick = useCallback((_rowIdx: number, _colIdx: number) => {
     // Cell editing handled by parent / future integration
   }, []);
 
-  const handleSave = useCallback(() => {
-    console.log('Save changes:', getChanges());
-  }, [getChanges]);
+  const handleSave = useCallback(async () => {
+    if (!tableName || !sessionId) return;
+
+    const changes = getChanges();
+    if (changes.size === 0) return;
+
+    const columns = result?.columns.map(c => c.name) ?? [];
+    const primaryKeys = result?.columns.filter(c => c.isPrimaryKey).map(c => c.name) ?? [];
+
+    const rowChanges: RowChangePayload[] = [];
+    for (const [rowIdx, change] of changes) {
+      const originalRow = result?.rows[rowIdx] ?? [];
+      const cellChanges: CellChangePayload[] = change.cellChanges.map(cc => ({
+        columnName: cc.columnName,
+        oldValue: cc.oldValue ?? null,
+        newValue: cc.newValue ?? null,
+      }));
+
+      let changeType: 'Insert' | 'Update' | 'Delete';
+      if (change.type === 'insert') changeType = 'Insert';
+      else if (change.type === 'delete') changeType = 'Delete';
+      else changeType = 'Update';
+
+      rowChanges.push({
+        changeType,
+        originalRow,
+        cellChanges,
+      });
+    }
+
+    const payload: SavePayload = {
+      table: tableName,
+      schema: schema ?? null,
+      columns,
+      primaryKeys,
+      changes: rowChanges,
+    };
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await saveChanges(sessionId, payload);
+      clearChanges();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveError(msg);
+      console.error('Failed to save changes:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [tableName, schema, sessionId, getChanges, result, clearChanges]);
 
   const handlePageChange = useCallback((p: number) => {
     setPage(p);
@@ -92,8 +157,28 @@ export function ResultPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Change toolbar — shown above tab bar when there are unsaved changes */}
-      {hasChanges && <ChangeToolbar onSave={handleSave} />}
+      {/* Save error banner */}
+      {saveError && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-700 text-xs text-red-700 dark:text-red-300">
+          <span className="flex-1">Save failed: {saveError}</span>
+          <button
+            onClick={() => setSaveError(null)}
+            className="text-red-500 hover:text-red-700 dark:hover:text-red-200"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Change toolbar — only when editing a table (not raw queries) */}
+      {hasChanges && tableName && <ChangeToolbar onSave={handleSave} />}
+
+      {/* Saving indicator */}
+      {isSaving && (
+        <div className="px-3 py-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-700">
+          Saving changes...
+        </div>
+      )}
 
       {/* Tab bar */}
       <div className="flex items-center border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
@@ -132,7 +217,7 @@ export function ResultPanel() {
       <div className="flex-1 overflow-hidden flex flex-col">
         {isExecuting && (
           <div className="flex h-full items-center justify-center text-xs text-zinc-500">
-            Executing…
+            Executing...
           </div>
         )}
 
