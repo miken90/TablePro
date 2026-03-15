@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "plugin-sdk", "driver-postgres", "driver-mysql", "driver-mssql"]
+members = [".", "plugin-sdk", "driver-postgres", "driver-mysql", "driver-mssql", "driver-sqlite"]
 resolver = "2"
 
 [package]
@@ -31,6 +31,7 @@ tablepro-plugin-sdk = { path = "plugin-sdk" }
 libloading = "0.8"
 async-trait = "0.1"
 tauri-plugin-dialog = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [profile.release]
 opt-level = 3
