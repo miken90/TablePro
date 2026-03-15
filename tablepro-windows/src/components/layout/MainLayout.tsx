@@ -41,6 +41,7 @@ export function MainLayout() {
   const activeTabId = useEditorStore((s) => s.activeTabId);
   const addTab = useEditorStore((s) => s.addTab);
   const updateTabContent = useEditorStore((s) => s.updateTabContent);
+  const tables = useSchemaStore((s) => s.tables);
   const fetchColumns = useSchemaStore((s) => s.fetchColumns);
 
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
@@ -87,6 +88,16 @@ export function MainLayout() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  // Eagerly fetch columns for all tables (powers SQL autocomplete)
+  useEffect(() => {
+    if (!selectedConnectionId || tables.length === 0) return;
+    const sid = getSessionId(selectedConnectionId);
+    if (!sid) return;
+    for (const t of tables) {
+      fetchColumns(sid, t.name).catch(() => {});
+    }
+  }, [selectedConnectionId, getSessionId, tables, fetchColumns]);
 
   // Fetch columns when active table changes (for filter panel)
   useEffect(() => {
@@ -217,7 +228,7 @@ export function MainLayout() {
   const inspectorColumns = result?.columns ?? [];
 
   const sessionId = selectedConnectionId ? getSessionId(selectedConnectionId) : undefined;
-  const showEditor = !!selectedConnectionId && !!activeTabId;
+  const isConnected = !!selectedConnectionId;
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-white dark:bg-zinc-900">
@@ -247,7 +258,7 @@ export function MainLayout() {
               schema={structureTarget.schema ?? undefined}
               onClose={() => setStructureTarget(null)}
             />
-          ) : !showEditor ? (
+          ) : !isConnected ? (
             <WelcomeView />
           ) : (
             <>
@@ -281,7 +292,7 @@ export function MainLayout() {
           )}
         </div>
 
-        {inspectorVisible && showEditor && (
+        {inspectorVisible && isConnected && (
           <>
             <div
               className="w-1 cursor-col-resize bg-zinc-200 hover:bg-blue-400 dark:bg-zinc-700 dark:hover:bg-blue-500"

@@ -6,6 +6,20 @@ import { extractErrorMessage } from "../../ipc/error";
 const DB_TYPES = ["postgres", "mysql", "mssql", "sqlite"];
 const SSL_MODES = ["disable", "prefer", "require", "verify-ca", "verify-full"];
 
+const DEFAULT_PORTS: Record<string, number> = {
+  postgres: 5432,
+  mysql: 3306,
+  mssql: 1433,
+  sqlite: 0,
+};
+
+const DB_PLACEHOLDERS: Record<string, { user: string; database: string }> = {
+  postgres: { user: "postgres", database: "postgres" },
+  mysql: { user: "root", database: "" },
+  mssql: { user: "sa", database: "master" },
+  sqlite: { user: "", database: "/path/to/database.db" },
+};
+
 interface ConnectionFormProps {
   initial?: SavedConnection;
   onClose: () => void;
@@ -31,7 +45,13 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
   const [error, setError] = useState<string | null>(null);
 
   const updateConfig = (partial: Partial<ConnectionConfig>) =>
-    setConfig((c) => ({ ...c, ...partial }));
+    setConfig((c) => {
+      const next = { ...c, ...partial };
+      if (partial.dbType && partial.dbType !== c.dbType && !initial) {
+        next.port = DEFAULT_PORTS[partial.dbType] ?? 5432;
+      }
+      return next;
+    });
 
   const handleTest = async () => {
     setIsTesting(true);
@@ -74,6 +94,9 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
     }
   };
 
+  const isSqlite = config.dbType === "sqlite";
+  const placeholders = DB_PLACEHOLDERS[config.dbType] ?? { user: "", database: "" };
+
   return (
     <div className="flex flex-col gap-3 p-4">
       <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
@@ -90,44 +113,52 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
         </select>
       </Field>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="col-span-2">
-          <Field label="Host">
-            <input value={config.host} onChange={(e) => updateConfig({ host: e.target.value })} className={inputCls} />
-          </Field>
-        </div>
-        <Field label="Port">
-          <input
-            type="number"
-            value={config.port}
-            onChange={(e) => updateConfig({ port: Number(e.target.value) })}
-            className={inputCls}
-          />
+      {isSqlite ? (
+        <Field label="Database File">
+          <input value={config.database} onChange={(e) => updateConfig({ database: e.target.value })} placeholder={placeholders.database} className={inputCls} />
         </Field>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <Field label="Host">
+                <input value={config.host} onChange={(e) => updateConfig({ host: e.target.value })} className={inputCls} />
+              </Field>
+            </div>
+            <Field label="Port">
+              <input
+                type="number"
+                value={config.port}
+                onChange={(e) => updateConfig({ port: Number(e.target.value) })}
+                className={inputCls}
+              />
+            </Field>
+          </div>
 
-      <Field label="Database">
-        <input value={config.database} onChange={(e) => updateConfig({ database: e.target.value })} className={inputCls} />
-      </Field>
+          <Field label="Database">
+            <input value={config.database} onChange={(e) => updateConfig({ database: e.target.value })} placeholder={placeholders.database} className={inputCls} />
+          </Field>
 
-      <Field label="User">
-        <input value={config.user} onChange={(e) => updateConfig({ user: e.target.value })} className={inputCls} />
-      </Field>
+          <Field label="User">
+            <input value={config.user} onChange={(e) => updateConfig({ user: e.target.value })} placeholder={placeholders.user} className={inputCls} />
+          </Field>
 
-      <Field label="Password">
-        <input
-          type="password"
-          value={config.password}
-          onChange={(e) => updateConfig({ password: e.target.value })}
-          className={inputCls}
-        />
-      </Field>
+          <Field label="Password">
+            <input
+              type="password"
+              value={config.password}
+              onChange={(e) => updateConfig({ password: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
 
-      <Field label="SSL Mode">
-        <select value={config.sslMode} onChange={(e) => updateConfig({ sslMode: e.target.value })} className={inputCls}>
-          {SSL_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </Field>
+          <Field label="SSL Mode">
+            <select value={config.sslMode} onChange={(e) => updateConfig({ sslMode: e.target.value })} className={inputCls}>
+              {SSL_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+        </>
+      )}
 
       {testResult && (
         <p className="rounded bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-900/20 dark:text-green-400">

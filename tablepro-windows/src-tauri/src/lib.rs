@@ -51,7 +51,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(connection_manager))
         .manage(Mutex::new(SettingsStore::new()))
-        .manage(Mutex::new(ConnectionStore::new()))
+        .manage(Mutex::new({
+            let mut store = ConnectionStore::new();
+            if let Err(e) = store.load() {
+                tracing::warn!("Failed to load saved connections: {e}");
+            }
+            store
+        }))
         .manage(Mutex::new(
             HistoryStore::new().expect("Failed to init history store"),
         ))

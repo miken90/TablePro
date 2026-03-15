@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows: Saved connections lost on app restart — `ConnectionStore.load()` was never called at startup; connections.json was written but never read back
+- Windows: Connection form always defaulting to port 5432 — port now auto-updates when switching database type (PostgreSQL 5432, MySQL 3306, MSSQL 1433); SQLite hides host/port/user fields; placeholder hints added
+- Windows: SQL editor inaccessible without clicking a table first — editor area now shows immediately on connection with auto-created blank tab
+- Windows: SQL autocomplete missing table/column names — columns now eagerly prefetched for all tables after schema loads, populating the completion store
+- Windows: No way to disconnect and return to connection page — added disconnect button (Unplug icon) in Toolbar; clears editor tabs and schema on disconnect
+- Windows: SQL editor showing blank white screen — CodeMirror EditorView was created with empty deps `[]` causing it to miss initial `activeTabId`; separated mount from tab-switching effects
 - Windows: Sidebar single-click on table not loading data — added `onOpenTable` callback that creates tab + executes `SELECT *` immediately; chevron click expands/collapses columns; double-click opens View Structure; "Open Table" context menu item added
 - Windows: Toolbar Run button disabled after programmatic tab creation — `setQueryText()` now called in `handleOpenTable` and `handleQuickSwitcherSelect` so generated SQL is recognized by the Run button
 - Windows: Plugin DLLs not discovered during `tauri dev` — added fallback to scan exe directory for `driver_*.dll` alongside `plugins/` subdirectory

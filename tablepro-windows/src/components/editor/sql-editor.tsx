@@ -53,12 +53,12 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
-  // Init default tab
+  // Init default tab (only when connected)
   useEffect(() => {
-    if (tabs.length === 0) {
+    if (tabs.length === 0 && selectedConnectionId) {
       addTab();
     }
-  }, [tabs.length, addTab]);
+  }, [tabs.length, addTab, selectedConnectionId]);
 
   // Build the extension list (stable between renders)
   const buildExtensions = useCallback(
@@ -145,37 +145,43 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
     [dialect, settings.editorFont, settings.editorFontSize, settings.vimMode, updateTabContent, setQueryText, execute, selectedConnectionId],
   );
 
-  // Mount EditorView
+  // Create EditorView once, then handle tab switching via setState
   useEffect(() => {
-    if (!containerRef.current || !activeTabId) return;
+    if (!containerRef.current) return;
 
-    const initialContent = activeTab?.content ?? "";
-    const savedState = stateMapRef.current.get(activeTabId);
-
-    const startState = savedState ?? EditorState.create({
-      doc: initialContent,
-      extensions: buildExtensions(activeTabId),
-    });
+    const tabId = useEditorStore.getState().activeTabId;
+    const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
+    const initialState = tabId
+      ? EditorState.create({
+          doc: tab?.content ?? "",
+          extensions: buildExtensions(tabId),
+        })
+      : EditorState.create({
+          doc: "",
+          extensions: buildExtensions("__init__"),
+        });
 
     const view = new EditorView({
-      state: startState,
+      state: initialState,
       parent: containerRef.current,
     });
-
     viewRef.current = view;
+    if (tabId) {
+      stateMapRef.current.set(tabId, initialState);
+    }
 
     return () => {
-      // Save state before unmounting
-      if (activeTabId) {
-        stateMapRef.current.set(activeTabId, view.state);
+      const currentTabId = useEditorStore.getState().activeTabId;
+      if (currentTabId) {
+        stateMapRef.current.set(currentTabId, view.state);
       }
       view.destroy();
       viewRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle tab switching
+  // Set editor state when active tab changes (or first becomes available)
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !activeTabId) return;
@@ -192,7 +198,6 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
       view.setState(newState);
       stateMapRef.current.set(activeTabId, newState);
     }
-  // buildExtensions is memoized; activeTabId drives tab switching
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId]);
 

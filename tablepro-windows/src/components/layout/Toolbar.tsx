@@ -1,7 +1,9 @@
-import { Play, Square, Settings } from "lucide-react";
+import { Play, Square, Settings, Unplug } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useSchemaStore } from "../../stores/schemaStore";
+import { useEditorStore } from "../../stores/editorStore";
 
 interface ToolbarProps {
   onToggleSidebar: () => void;
@@ -13,9 +15,11 @@ export function Toolbar({ onToggleSidebar, onOpenSettings }: ToolbarProps) {
   const connections = useConnectionStore((s) => s.connections);
   const getStatus = useConnectionStore((s) => s.getStatus);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
+  const disconnect = useConnectionStore((s) => s.disconnect);
   const { isExecuting, queryText, execute, cancel } = useQueryStore();
   const safeMode = useSettingsStore((s) => s.settings.safeMode);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
+  const clearSchema = useSchemaStore((s) => s.clearSchema);
 
   const connection = selectedConnectionId ? connections.get(selectedConnectionId) : null;
   const status = selectedConnectionId ? getStatus(selectedConnectionId) : "disconnected";
@@ -45,6 +49,14 @@ export function Toolbar({ onToggleSidebar, onOpenSettings }: ToolbarProps) {
     void saveSettings({ safeMode: !safeMode });
   };
 
+  const handleDisconnect = async () => {
+    if (!selectedConnectionId) return;
+    await disconnect(selectedConnectionId);
+    clearSchema();
+    // Clear editor tabs so user returns to WelcomeView cleanly
+    useEditorStore.setState({ tabs: [], activeTabId: null });
+  };
+
   return (
     <div className="flex h-9 items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-2 dark:border-zinc-700 dark:bg-zinc-900">
       {/* Sidebar toggle */}
@@ -67,6 +79,15 @@ export function Toolbar({ onToggleSidebar, onOpenSettings }: ToolbarProps) {
         <span className="max-w-[140px] truncate">
           {connection ? `${connection.name} · ${connection.config.database}` : "Not connected"}
         </span>
+        {selectedConnectionId && (
+          <button
+            onClick={() => void handleDisconnect()}
+            className="ml-1 rounded p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-red-600 dark:hover:bg-zinc-700 dark:hover:text-red-400"
+            title="Disconnect"
+          >
+            <Unplug size={12} />
+          </button>
+        )}
       </div>
 
       {/* Safe mode badge */}
