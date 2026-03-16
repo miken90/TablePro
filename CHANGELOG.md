@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Windows: SQLite driver plugin — `driver-sqlite` cdylib crate using rusqlite (bundled), PRAGMA-based schema introspection, WAL mode, query cancel via `sqlite3_interrupt`
 - Windows: Query History backend — rusqlite + FTS5 full-text search stored in `%APPDATA%/TablePro/history.sqlite3`, 5 Tauri IPC commands (fetch_recent, search, clear_all, delete_entry, record)
+- Windows: Query History panel — right sidebar (Ctrl+H or clock icon) showing executed queries with search, relative timestamps, status indicators; click to load query into editor
 - Windows: Tab state persistence — Zustand `persist` middleware saves editor tabs to localStorage across app restarts (100KB/tab cap)
 - Windows: Save changes end-to-end — wired `handleSave` to IPC `save_changes` with proper table/schema context plumbing from Sidebar through MainLayout to ResultPanel
 - Windows: Filter panel (WHERE clause builder) — FilterPanel component with add/remove filter rows, AND/OR logic toggle, quick search across all columns, Rust-side `where_clause` param on `fetch_rows`/`fetch_count` with SQL injection sanity check, Ctrl+Shift+F toggle
@@ -20,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows: Grid header not scrolling horizontally with data — synced header scrollLeft with body scroll via onScroll handler
+- Windows: Server-side pagination and sorting — table browse now uses `fetch_rows` with LIMIT/OFFSET/ORDER BY instead of loading all rows into memory; page and sort changes re-query the database
+- Windows: DevTools accessible in release builds — moved `devtools` cargo feature behind optional flag, disabled right-click context menu and F12/Ctrl+Shift+I in production
+- Windows: History not recording executed queries — added `historyRecord` IPC call after query execution (success and error)
+- Windows: Table records not editable — double-click on a cell now opens inline editor; blur/Enter commits change via changeStore with undo/redo; Escape cancels edit
+- Windows: Non-text column values (integers, booleans, floats, JSON) showing as NULL in PostgreSQL — switched `execute()` from `client.query()` to `simple_query()` which returns all values as text, bypassing broken typed extractors through the FFI pipeline
+- Windows: `fetch_count` always returning 0 — concurrent `Promise.all` IPC calls caused mutex contention; changed to sequential fetch and cast `COUNT(*)` to text
+- Windows: NULL values indistinguishable from empty strings in MySQL and MSSQL — NULL cells now emit `FfiString::null()` instead of `string_to_ffi("")` so the FFI adapter correctly maps them to `None`
 - Windows: Saved connections lost on app restart — `ConnectionStore.load()` was never called at startup; connections.json was written but never read back
 - Windows: Connection form always defaulting to port 5432 — port now auto-updates when switching database type (PostgreSQL 5432, MySQL 3306, MSSQL 1433); SQLite hides host/port/user fields; placeholder hints added
 - Windows: SQL editor inaccessible without clicking a table first — editor area now shows immediately on connection with auto-created blank tab
