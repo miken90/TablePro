@@ -27,9 +27,10 @@ export const fetchRows = (sessionId: string, table: string, schema: string | nul
 
 export const fetchRowsFiltered = (
   sessionId: string, table: string, schema: string | null,
-  offset: number, limit: number, whereClause: string | null,
+  offset: number, limit: number,
+  whereClause: string | null, orderBy: string | null,
 ): Promise<QueryResult> =>
-  invoke("fetch_rows", { sessionId, table, schema, whereClause, offset, limit });
+  invoke("fetch_rows", { sessionId, table, schema, whereClause, orderBy, offset, limit });
 
 export const fetchCount = (sessionId: string, table: string): Promise<number> =>
   invoke("fetch_count", { sessionId, table });
@@ -41,6 +42,15 @@ export const fetchCountFiltered = (
 
 export const cancelQuery = (sessionId: string): Promise<void> =>
   invoke("cancel_query", { sessionId });
+
+export const historyRecord = (
+  query: string,
+  database: string | null,
+  executionTimeMs: number,
+  rowCount: number,
+  status: string,
+): Promise<void> =>
+  invoke("history_record", { query, database, executionTimeMs, rowCount, status });
 
 // Schema commands
 export const fetchTables = (sessionId: string): Promise<TableInfo[]> =>

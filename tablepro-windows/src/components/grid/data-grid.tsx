@@ -1,10 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  createColumnHelper,
-} from '@tanstack/react-table';
+import React, { useRef, useCallback } from 'react';
 import type { SortingState } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { QueryResult } from '../../types/query';
@@ -14,7 +8,12 @@ import { useSettingsStore } from '../../stores/settingsStore';
 
 interface DataGridProps {
   result: QueryResult;
+  pageOffset?: number;
+  sorting?: SortingState;
+  onSortChange?: (colName: string) => void;
   onCellDoubleClick?: (rowIdx: number, colIdx: number) => void;
+  onCellCommit?: (rowIdx: number, colIdx: number, newValue: string | null) => void;
+  onCellCancel?: () => void;
   selectedRows?: Set<number>;
   onRowSelect?: (rowIdx: number, mode: 'single' | 'range' | 'toggle') => void;
   changedRows?: Map<number, 'modified' | 'inserted' | 'deleted'>;
@@ -22,49 +21,30 @@ interface DataGridProps {
   cellOverrideValues?: Map<string, string | null>;
 }
 
-const columnHelper = createColumnHelper<(string | null)[]>();
-
 const DEFAULT_COL_WIDTH = 120;
 const MIN_COL_WIDTH = 80;
 const ROW_HEIGHT = 28;
 
 export function DataGrid({
   result,
+  pageOffset = 0,
+  sorting = [],
+  onSortChange,
   onCellDoubleClick,
+  onCellCommit,
+  onCellCancel,
   selectedRows = new Set(),
   onRowSelect,
   changedRows,
+  editingCell,
   cellOverrideValues,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
   const parentRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
 
-  // Reset sorting when result changes
-  useEffect(() => {
-    setSorting([]);
-  }, [result]);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const columns: any[] = result.columns.map((col, idx) =>
-    columnHelper.accessor(row => row[idx], {
-      id: col.name,
-      header: col.name,
-      enableSorting: true,
-    })
-  );
-
-  const table = useReactTable({
-    data: result.rows,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    state: { sorting },
-    onSortingChange: setSorting,
-  });
-
-  const rows = table.getRowModel().rows;
+  const rows = result.rows;
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -72,15 +52,6 @@ export function DataGrid({
     estimateSize: () => ROW_HEIGHT,
     overscan: 5,
   });
-
-  const handleSortChange = useCallback((colName: string) => {
-    setSorting(prev => {
-      const existing = prev.find(s => s.id === colName);
-      if (!existing) return [{ id: colName, desc: false }];
-      if (!existing.desc) return [{ id: colName, desc: true }];
-      return [];
-    });
-  }, []);
 
   // Column resize state
   const resizeRef = useRef<{ colName: string; startX: number; startWidth: number } | null>(null);
@@ -121,21 +92,28 @@ export function DataGrid({
     resolvedWidths[col.name] = columnWidths[col.name] ?? DEFAULT_COL_WIDTH;
   }
 
+  // Sync header horizontal scroll with body
+  const handleBodyScroll = useCallback(() => {
+    if (parentRef.current && headerRef.current) {
+      headerRef.current.scrollLeft = parentRef.current.scrollLeft;
+    }
+  }, []);
+
   return (
     <div className="relative h-full overflow-hidden flex flex-col">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-10 flex-shrink-0">
+      {/* Header (scroll synced with body) */}
+      <div ref={headerRef} className="flex-shrink-0 overflow-hidden">
         <GridHeader
           columns={result.columns}
           columnWidths={resolvedWidths}
           sorting={sorting}
-          onSortChange={handleSortChange}
+          onSortChange={onSortChange ?? (() => {})}
           onResizeStart={handleResizeStart}
         />
       </div>
 
       {/* Scrollable body */}
-      <div ref={parentRef} className="flex-1 overflow-auto">
+      <div ref={parentRef} className="flex-1 overflow-auto" onScroll={handleBodyScroll}>
         <div
           style={{
             height: virtualizer.getTotalSize(),
@@ -143,22 +121,25 @@ export function DataGrid({
           }}
         >
           {virtualizer.getVirtualItems().map(virtualRow => {
-            const row = rows[virtualRow.index];
-            const originalIdx = row.index;
+            const localIdx = virtualRow.index;
+            const absoluteIdx = pageOffset + localIdx;
             return (
               <GridRow
                 key={virtualRow.index}
-                rowIndex={originalIdx}
-                row={result.rows[originalIdx]}
+                rowIndex={absoluteIdx}
+                row={rows[localIdx]}
                 columns={result.columns}
                 columnWidths={resolvedWidths}
-                isSelected={selectedRows.has(originalIdx)}
-                changeType={changedRows?.get(originalIdx)}
+                isSelected={selectedRows.has(absoluteIdx)}
+                changeType={changedRows?.get(absoluteIdx)}
                 cellOverrideValues={cellOverrideValues}
+                editingCell={editingCell?.rowIdx === absoluteIdx ? editingCell : null}
                 nullDisplay={nullDisplay}
                 virtualTop={virtualRow.start}
-                onRowClick={(e) => handleRowClick(e, originalIdx)}
-                onCellDoubleClick={(colIdx) => onCellDoubleClick?.(originalIdx, colIdx)}
+                onRowClick={(e) => handleRowClick(e, absoluteIdx)}
+                onCellDoubleClick={(colIdx) => onCellDoubleClick?.(absoluteIdx, colIdx)}
+                onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(absoluteIdx, colIdx, val) : undefined}
+                onCellCancel={onCellCancel}
               />
             );
           })}

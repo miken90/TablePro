@@ -35,11 +35,13 @@ pub async fn execute_query(
 
 /// Fetch a paginated slice of rows from a table.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn fetch_rows(
     session_id: String,
     table: String,
     schema: Option<String>,
     where_clause: Option<String>,
+    order_by: Option<String>,
     offset: u64,
     limit: u64,
     manager: State<'_, Mutex<ConnectionManager>>,
@@ -61,7 +63,12 @@ pub async fn fetch_rows(
         _ => String::new(),
     };
 
-    let sql = format!("SELECT * FROM {qualified}{where_part} LIMIT {limit} OFFSET {offset}");
+    let order_part = match &order_by {
+        Some(o) if !o.trim().is_empty() => format!(" ORDER BY {o}"),
+        _ => String::new(),
+    };
+
+    let sql = format!("SELECT * FROM {qualified}{where_part}{order_part} LIMIT {limit} OFFSET {offset}");
     driver.execute(&sql).await
 }
 
@@ -155,5 +162,15 @@ mod tests {
     #[test]
     fn test_validate_where_clause_truncate() {
         assert!(validate_where_clause("TRUNCATE TABLE users").is_err());
+    }
+
+    #[test]
+    fn test_validate_where_clause_empty_string() {
+        assert!(validate_where_clause("").is_ok());
+    }
+
+    #[test]
+    fn test_validate_where_clause_whitespace_only() {
+        assert!(validate_where_clause("   ").is_ok());
     }
 }

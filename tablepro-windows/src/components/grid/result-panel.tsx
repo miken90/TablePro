@@ -1,8 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import type { SortingState } from '@tanstack/react-table';
 import { useQueryStore } from '../../stores/queryStore';
 import { useChangeStore } from '../../stores/changeStore';
-import { saveChanges } from '../../ipc/commands';
+import { fetchRowsFiltered, fetchCountFiltered, saveChanges } from '../../ipc/commands';
 import type { SavePayload, RowChangePayload, CellChangePayload } from '../../ipc/commands';
+import type { QueryResult } from '../../types/query';
 import { DataGrid } from './data-grid';
 import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
@@ -20,17 +22,101 @@ interface ResultPanelProps {
   onRowSelect?: (rowIndex: number | null) => void;
 }
 
+function buildOrderByClause(sorting: SortingState): string | null {
+  if (sorting.length === 0) return null;
+  return sorting.map(s => `"${s.id}" ${s.desc ? 'DESC' : 'ASC'}`).join(', ');
+}
+
 export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, onRowSelect: onRowSelectProp }: ResultPanelProps) {
-  const { result, error, isExecuting, activeConnectionId, queryText } = useQueryStore();
-  const { hasChanges, getChanges, clear: clearChanges } = useChangeStore();
+  const { result: queryResult, error: queryError, isExecuting, activeConnectionId, queryText } = useQueryStore();
+  const { hasChanges, getChanges, clear: clearChanges, recordCellChange } = useChangeStore();
   const [activeTab, setActiveTab] = useState<ActiveTab>('results');
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [lastSelectedRow, setLastSelectedRow] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [showExport, setShowExport] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<{ rowIdx: number; colIdx: number } | null>(null);
+
+  // Server-side table data (when browsing a table)
+  const [tableResult, setTableResult] = useState<QueryResult | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [isFetching, setIsFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const fetchSeqRef = useRef(0);
+
+  // Are we in "table browse" mode vs "raw query" mode?
+  const isTableMode = !!tableName && !!sessionId;
+
+  // Fetch table data (server-side paging + sorting)
+  const fetchTableData = useCallback(async (
+    sid: string, tbl: string, sch: string | null,
+    pg: number, ps: number, where: string | null, sort: SortingState,
+  ) => {
+    const seq = ++fetchSeqRef.current;
+    setIsFetching(true);
+    setFetchError(null);
+    try {
+      const offset = (pg - 1) * ps;
+      const orderBy = buildOrderByClause(sort);
+      const rows = await fetchRowsFiltered(sid, tbl, sch, offset, ps, where || null, orderBy);
+      if (seq !== fetchSeqRef.current) return;
+      let count = 0;
+      try {
+        count = await fetchCountFiltered(sid, tbl, sch, where || null);
+      } catch {
+        // Count fetch failed — show rows without total
+      }
+      if (seq !== fetchSeqRef.current) return;
+      setTableResult(rows);
+      setTotalCount(typeof count === 'number' ? count : 0);
+    } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
+      setFetchError(err instanceof Error ? err.message : String(err));
+      setTableResult(null);
+      setTotalCount(0);
+    } finally {
+      if (seq === fetchSeqRef.current) setIsFetching(false);
+    }
+  }, []);
+
+  // Re-fetch when table context, page, sort, or filter changes
+  useEffect(() => {
+    if (!isTableMode) {
+      setTableResult(null);
+      setTotalCount(0);
+      return;
+    }
+    fetchTableData(sessionId!, tableName!, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
+  }, [isTableMode, sessionId, tableName, schema, page, pageSize, activeWhereClause, sorting, fetchTableData]);
+
+  // Reset page/sort when table or filter changes
+  const prevTableRef = useRef(tableName);
+  const prevFilterRef = useRef(activeWhereClause);
+  useEffect(() => {
+    if (prevTableRef.current !== tableName) {
+      setPage(1);
+      setSorting([]);
+      setSelectedRows(new Set());
+      setEditingCell(null);
+      prevTableRef.current = tableName;
+    }
+    if (prevFilterRef.current !== activeWhereClause) {
+      setPage(1);
+      setSelectedRows(new Set());
+      setEditingCell(null);
+      prevFilterRef.current = activeWhereClause;
+    }
+  }, [tableName, activeWhereClause]);
+
+  // Pick which result + total to display
+  const result = isTableMode ? tableResult : queryResult;
+  const error = isTableMode ? fetchError : queryError;
+  const total = isTableMode ? totalCount : (queryResult?.rows.length ?? 0);
+  const loading = isTableMode ? isFetching : isExecuting;
 
   const tabCls = (tab: ActiveTab) =>
     `px-3 py-1 text-xs cursor-pointer border-b-2 ${
@@ -61,10 +147,7 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
           const anchor = lastSelectedRow ?? rowIdx;
           const from = Math.min(anchor, rowIdx);
           const to = Math.max(anchor, rowIdx);
-          for (let i = from; i <= to; i++) {
-            next.add(i);
-          }
-          // For range select, show the last row in inspector
+          for (let i = from; i <= to; i++) next.add(i);
           onRowSelectProp?.(rowIdx);
         }
         return next;
@@ -73,22 +156,46 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
     [lastSelectedRow, onRowSelectProp]
   );
 
-  const handleCellDoubleClick = useCallback((_rowIdx: number, _colIdx: number) => {
-    // Cell editing handled by parent / future integration
+  const handleCellDoubleClick = useCallback((rowIdx: number, colIdx: number) => {
+    if (!tableName) return;
+    setEditingCell({ rowIdx, colIdx });
+  }, [tableName]);
+
+  const handleCellCommit = useCallback((rowIdx: number, colIdx: number, newValue: string | null) => {
+    if (!result) return;
+    const col = result.columns[colIdx];
+    // In table mode, rowIdx is the local index within the current page
+    const oldValue = result.rows[rowIdx]?.[colIdx] ?? null;
+    if (oldValue === newValue) {
+      setEditingCell(null);
+      return;
+    }
+    recordCellChange({
+      rowIndex: rowIdx,
+      columnIndex: colIdx,
+      columnName: col.name,
+      oldValue,
+      newValue,
+    });
+    setEditingCell(null);
+  }, [result, recordCellChange]);
+
+  const handleCellCancel = useCallback(() => {
+    setEditingCell(null);
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!tableName || !sessionId) return;
+    if (!tableName || !sessionId || !result) return;
 
     const changes = getChanges();
     if (changes.size === 0) return;
 
-    const columns = result?.columns.map(c => c.name) ?? [];
-    const primaryKeys = result?.columns.filter(c => c.isPrimaryKey).map(c => c.name) ?? [];
+    const columns = result.columns.map(c => c.name);
+    const primaryKeys = result.columns.filter(c => c.isPrimaryKey).map(c => c.name);
 
     const rowChanges: RowChangePayload[] = [];
     for (const [rowIdx, change] of changes) {
-      const originalRow = result?.rows[rowIdx] ?? [];
+      const originalRow = result.rows[rowIdx] ?? [];
       const cellChanges: CellChangePayload[] = change.cellChanges.map(cc => ({
         columnName: cc.columnName,
         oldValue: cc.oldValue ?? null,
@@ -100,11 +207,7 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
       else if (change.type === 'delete') changeType = 'Delete';
       else changeType = 'Update';
 
-      rowChanges.push({
-        changeType,
-        originalRow,
-        cellChanges,
-      });
+      rowChanges.push({ changeType, originalRow, cellChanges });
     }
 
     const payload: SavePayload = {
@@ -120,19 +223,32 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
     try {
       await saveChanges(sessionId, payload);
       clearChanges();
+      // Refresh current page after save
+      fetchTableData(sessionId, tableName, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setSaveError(msg);
-      console.error('Failed to save changes:', err);
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
     }
-  }, [tableName, schema, sessionId, getChanges, result, clearChanges]);
+  }, [tableName, schema, sessionId, getChanges, result, clearChanges, fetchTableData, page, pageSize, activeWhereClause, sorting]);
+
+  const handleSortChange = useCallback((colName: string) => {
+    setSorting(prev => {
+      const existing = prev.find(s => s.id === colName);
+      if (!existing) return [{ id: colName, desc: false }];
+      if (!existing.desc) return [{ id: colName, desc: true }];
+      return [];
+    });
+    setPage(1);
+    setSelectedRows(new Set());
+    setEditingCell(null);
+  }, []);
 
   const handlePageChange = useCallback((p: number) => {
     setPage(p);
     setSelectedRows(new Set());
     setLastSelectedRow(null);
+    setEditingCell(null);
   }, []);
 
   const handlePageSizeChange = useCallback((s: number) => {
@@ -140,20 +256,27 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
     setPage(1);
     setSelectedRows(new Set());
     setLastSelectedRow(null);
+    setEditingCell(null);
   }, []);
 
-  // Build change map for DataGrid (modified/inserted/deleted)
+  // Build change map and cell override values for DataGrid
   const changeMap = new Map<number, 'modified' | 'inserted' | 'deleted'>();
+  const cellOverrides = new Map<string, string | null>();
   if (result) {
     const changes = getChanges();
     for (const [rowIdx, rowChange] of changes) {
       if (rowChange.type === 'update') changeMap.set(rowIdx, 'modified');
       else if (rowChange.type === 'insert') changeMap.set(rowIdx, 'inserted');
       else if (rowChange.type === 'delete') changeMap.set(rowIdx, 'deleted');
+      for (const cc of rowChange.cellChanges) {
+        cellOverrides.set(`${rowIdx}:${cc.columnIndex}`, cc.newValue);
+      }
     }
   }
 
-  const totalRows = result?.rows.length ?? 0;
+  // For table mode, pageOffset is 0 since rows are already from server for this page
+  // Row indices in DataGrid are local (0..pageSize)
+  const pageOffset = 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -170,10 +293,8 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
         </div>
       )}
 
-      {/* Change toolbar — only when editing a table (not raw queries) */}
       {hasChanges && tableName && <ChangeToolbar onSave={handleSave} />}
 
-      {/* Saving indicator */}
       {isSaving && (
         <div className="px-3 py-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-700">
           Saving changes...
@@ -186,7 +307,7 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
           Results
           {result && (
             <span className="ml-1.5 rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-700">
-              {result.rows.length}
+              {isTableMode ? total.toLocaleString() : result.rows.length}
             </span>
           )}
         </button>
@@ -215,22 +336,29 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
 
       {/* Content */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        {isExecuting && (
+        {loading && (
           <div className="flex h-full items-center justify-center text-xs text-zinc-500">
-            Executing...
+            {isTableMode ? 'Loading...' : 'Executing...'}
           </div>
         )}
 
-        {!isExecuting && activeTab === 'results' && (
+        {!loading && activeTab === 'results' && (
           <>
             <div className="flex-1 overflow-hidden">
               {result ? (
                 <DataGrid
                   result={result}
+                  pageOffset={pageOffset}
+                  sorting={sorting}
+                  onSortChange={handleSortChange}
                   selectedRows={selectedRows}
                   onRowSelect={handleRowSelect}
                   changedRows={changeMap}
+                  cellOverrideValues={cellOverrides}
+                  editingCell={editingCell}
                   onCellDoubleClick={handleCellDoubleClick}
+                  onCellCommit={handleCellCommit}
+                  onCellCancel={handleCellCancel}
                 />
               ) : (
                 <EmptyState icon={<Database size={24} />} message="Run a query to see results" />
@@ -239,18 +367,18 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
 
             {result && (
               <Pagination
-                total={totalRows}
+                total={total}
                 page={page}
                 pageSize={pageSize}
                 onPageChange={handlePageChange}
                 onPageSizeChange={handlePageSizeChange}
-                isLoading={isExecuting}
+                isLoading={loading}
               />
             )}
           </>
         )}
 
-        {!isExecuting && activeTab === 'messages' && (
+        {!loading && activeTab === 'messages' && (
           <div className="h-full overflow-y-auto p-3">
             {error ? (
               <pre className="font-mono text-xs text-red-600 dark:text-red-400">{error}</pre>
