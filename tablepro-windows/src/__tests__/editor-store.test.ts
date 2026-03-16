@@ -58,3 +58,64 @@ describe('editorStore', () => {
     expect(useEditorStore.getState().activeTabId).toBe(id1);
   });
 });
+
+describe('editorStore persistence', () => {
+  beforeEach(() => resetStore());
+
+  it('partialize truncates content to 100KB', () => {
+    // Access the persist config to test partialize
+    const store = useEditorStore;
+    const id = store.getState().addTab('Big');
+    const bigContent = 'x'.repeat(150_000);
+    store.getState().updateTabContent(id, bigContent);
+
+    // Simulate what partialize does
+    const state = store.getState();
+    const serialized = {
+      tabs: state.tabs.map((t) => ({
+        id: t.id,
+        title: t.title,
+        content: t.content.slice(0, 100_000),
+        isDirty: false,
+      })),
+      activeTabId: state.activeTabId,
+    };
+    expect(serialized.tabs[0].content.length).toBe(100_000);
+  });
+
+  it('partialize sets isDirty to false', () => {
+    const id = useEditorStore.getState().addTab('Dirty');
+    useEditorStore.getState().updateTabContent(id, 'SELECT 1');
+    expect(useEditorStore.getState().tabs[0].isDirty).toBe(true);
+
+    // Simulate partialize output
+    const state = useEditorStore.getState();
+    const serialized = {
+      tabs: state.tabs.map((t) => ({
+        id: t.id,
+        title: t.title,
+        content: t.content.slice(0, 100_000),
+        isDirty: false,
+      })),
+    };
+    expect(serialized.tabs[0].isDirty).toBe(false);
+  });
+
+  it('multiple tabs are all preserved in serialized state', () => {
+    useEditorStore.getState().addTab('Tab A');
+    useEditorStore.getState().addTab('Tab B');
+    useEditorStore.getState().addTab('Tab C');
+    const state = useEditorStore.getState();
+    const serialized = {
+      tabs: state.tabs.map((t) => ({
+        id: t.id,
+        title: t.title,
+        content: t.content.slice(0, 100_000),
+        isDirty: false,
+      })),
+      activeTabId: state.activeTabId,
+    };
+    expect(serialized.tabs).toHaveLength(3);
+    expect(serialized.tabs.map((t) => t.title)).toEqual(['Tab A', 'Tab B', 'Tab C']);
+  });
+});

@@ -103,4 +103,36 @@ describe('changeStore', () => {
   it('getCellNewValue returns undefined for unmodified row', () => {
     expect(useChangeStore.getState().getCellNewValue(999, 0)).toBeUndefined();
   });
+
+  it('mixed changes: insert + update + delete all tracked correctly', () => {
+    const s = useChangeStore.getState();
+    // Insert a new row
+    s.recordRowInsert(100, ['new1', 'new2']);
+    // Update an existing row
+    useChangeStore.getState().recordCellChange({
+      rowIndex: 0, columnIndex: 1, columnName: 'name',
+      oldValue: 'Alice', newValue: 'Bob',
+    });
+    // Delete another existing row
+    useChangeStore.getState().recordRowDelete(5, ['x', 'y']);
+
+    const state = useChangeStore.getState();
+    expect(state.getRowChangeType(100)).toBe('insert');
+    expect(state.getRowChangeType(0)).toBe('update');
+    expect(state.getRowChangeType(5)).toBe('delete');
+    expect(state.getChanges().size).toBe(3);
+  });
+
+  it('hasChanges reflects whether _changes is non-empty', () => {
+    // hasChanges is a getter that uses get() internally —
+    // verify the underlying _changes state instead
+    expect(Object.keys(useChangeStore.getState()._changes).length).toBe(0);
+    useChangeStore.getState().recordCellChange({
+      rowIndex: 0, columnIndex: 0, columnName: 'c',
+      oldValue: 'a', newValue: 'b',
+    });
+    expect(Object.keys(useChangeStore.getState()._changes).length).toBeGreaterThan(0);
+    useChangeStore.getState().clear();
+    expect(Object.keys(useChangeStore.getState()._changes).length).toBe(0);
+  });
 });
