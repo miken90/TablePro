@@ -12,13 +12,16 @@ use commands::export::export_to_file;
 use commands::history::{
     history_clear_all, history_delete_entry, history_fetch_recent, history_record, history_search,
 };
+use commands::import::{import_preview, import_sql_file};
 use commands::query::{cancel_query, execute_query, fetch_count, fetch_rows};
 use commands::schema::{
-    fetch_columns, fetch_databases, fetch_ddl, fetch_foreign_keys, fetch_indexes, fetch_tables,
-    switch_database,
+    fetch_columns, fetch_databases, fetch_ddl, fetch_foreign_keys, fetch_indexes, fetch_schemas,
+    fetch_tables, switch_database,
 };
 use commands::settings::{get_settings, set_settings};
-use commands::storage::{delete_connection, list_connections, save_connection};
+use commands::storage::{
+    delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
+};
 use plugin::PluginManager;
 use services::ConnectionManager;
 use storage::{ConnectionStore, HistoryStore, SettingsStore};
@@ -56,6 +59,9 @@ pub fn run() {
             if let Err(e) = store.load() {
                 tracing::warn!("Failed to load saved connections: {e}");
             }
+            if let Err(e) = store.load_groups() {
+                tracing::warn!("Failed to load connection groups: {e}");
+            }
             store
         }))
         .manage(Mutex::new(
@@ -80,6 +86,7 @@ pub fn run() {
             fetch_databases,
             fetch_ddl,
             switch_database,
+            fetch_schemas,
             // settings
             get_settings,
             set_settings,
@@ -87,10 +94,17 @@ pub fn run() {
             list_connections,
             save_connection,
             delete_connection,
+            // groups
+            list_groups,
+            save_group,
+            delete_group,
             // data mutation
             save_changes,
             // export
             export_to_file,
+            // import
+            import_preview,
+            import_sql_file,
             // history
             history_fetch_recent,
             history_search,

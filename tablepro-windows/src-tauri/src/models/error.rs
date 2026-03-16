@@ -12,6 +12,7 @@ pub enum AppError {
     NotFound(String),
     NotConnected,
     PluginError(String),
+    Other(String),
 }
 
 impl fmt::Display for AppError {
@@ -23,6 +24,7 @@ impl fmt::Display for AppError {
             AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
             AppError::NotConnected => write!(f, "Not connected"),
             AppError::PluginError(msg) => write!(f, "Plugin error: {msg}"),
+            AppError::Other(msg) => write!(f, "{msg}"),
         }
     }
 }

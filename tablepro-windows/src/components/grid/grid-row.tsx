@@ -1,5 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
 import type { ColumnInfo } from '../../types/query';
+import type { FkRef } from '../../stores/schemaStore';
 
 interface GridRowProps {
   rowIndex: number;
@@ -12,10 +14,12 @@ interface GridRowProps {
   editingCell?: { rowIdx: number; colIdx: number } | null;
   nullDisplay: string;
   virtualTop: number;
+  fkColumns?: Record<string, FkRef>;
   onRowClick: (e: React.MouseEvent) => void;
   onCellDoubleClick?: (colIdx: number) => void;
   onCellCommit?: (colIdx: number, newValue: string | null) => void;
   onCellCancel?: () => void;
+  onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
 }
 
 function getRowClassName(
@@ -50,10 +54,12 @@ export function GridRow({
   editingCell,
   nullDisplay,
   virtualTop,
+  fkColumns,
   onRowClick,
   onCellDoubleClick,
   onCellCommit,
   onCellCancel,
+  onFkNavigate,
 }: GridRowProps) {
   return (
     <div
@@ -70,7 +76,7 @@ export function GridRow({
       {columns.map((col, colIdx) => {
         const overrideKey = `${rowIndex}:${colIdx}`;
         const hasOverride = cellOverrideValues?.has(overrideKey);
-        const cellValue = hasOverride ? cellOverrideValues!.get(overrideKey) : row[colIdx];
+        const cellValue = hasOverride ? (cellOverrideValues!.get(overrideKey) ?? null) : row[colIdx];
         const width = columnWidths[col.name] ?? 120;
         const isEditing = editingCell?.colIdx === colIdx;
 
@@ -90,7 +96,22 @@ export function GridRow({
             ) : cellValue === null ? (
               <span className="italic text-zinc-400 dark:text-zinc-600">{nullDisplay}</span>
             ) : (
-              <span className="truncate text-zinc-800 dark:text-zinc-200">{cellValue}</span>
+              <span className="flex items-center gap-1 min-w-0 w-full">
+                <span className="truncate text-zinc-800 dark:text-zinc-200 flex-1">{cellValue}</span>
+                {fkColumns?.[col.name] && (
+                  <button
+                    className="flex-shrink-0 text-blue-400 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 focus:outline-none"
+                    title={`Navigate to ${fkColumns[col.name].refTable}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const fk = fkColumns[col.name];
+                      onFkNavigate?.(fk.refTable, fk.refColumn, fk.refSchema, cellValue);
+                    }}
+                  >
+                    <ExternalLink size={10} />
+                  </button>
+                )}
+              </span>
             )}
           </div>
         );

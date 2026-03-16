@@ -2,6 +2,8 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { SortingState } from '@tanstack/react-table';
 import { useQueryStore } from '../../stores/queryStore';
 import { useChangeStore } from '../../stores/changeStore';
+import { useSchemaStore } from '../../stores/schemaStore';
+import { useEditorStore } from '../../stores/editorStore';
 import { fetchRowsFiltered, fetchCountFiltered, saveChanges } from '../../ipc/commands';
 import type { SavePayload, RowChangePayload, CellChangePayload } from '../../ipc/commands';
 import type { QueryResult } from '../../types/query';
@@ -30,6 +32,7 @@ function buildOrderByClause(sorting: SortingState): string | null {
 export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, onRowSelect: onRowSelectProp }: ResultPanelProps) {
   const { result: queryResult, error: queryError, isExecuting, activeConnectionId, queryText } = useQueryStore();
   const { hasChanges, getChanges, clear: clearChanges, recordCellChange } = useChangeStore();
+  const { fkMap, fetchForeignKeysForTable } = useSchemaStore();
   const [activeTab, setActiveTab] = useState<ActiveTab>('results');
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [lastSelectedRow, setLastSelectedRow] = useState<number | null>(null);
@@ -111,6 +114,29 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
       prevFilterRef.current = activeWhereClause;
     }
   }, [tableName, activeWhereClause]);
+
+  // Fetch FK metadata when table changes
+  useEffect(() => {
+    if (!isTableMode || !tableName || !sessionId) return;
+    fetchForeignKeysForTable(sessionId, tableName, schema ?? undefined);
+  }, [isTableMode, sessionId, tableName, schema, fetchForeignKeysForTable]);
+
+  // Get current table's FK column map
+  const currentFkColumns = tableName ? fkMap[tableName] : undefined;
+
+  // FK navigation: open a new editor tab with the FK query pre-filled
+  const handleFkNavigate = useCallback((
+    refTable: string,
+    refColumn: string,
+    refSchema: string | undefined,
+    value: string,
+  ) => {
+    const escaped = value.replace(/'/g, "''");
+    const qualifiedTable = refSchema ? `"${refSchema}"."${refTable}"` : `"${refTable}"`;
+    const sql = `SELECT * FROM ${qualifiedTable} WHERE "${refColumn}" = '${escaped}'`;
+    const tabId = useEditorStore.getState().addTab(refTable);
+    useEditorStore.getState().updateTabContent(tabId, sql);
+  }, []);
 
   // Pick which result + total to display
   const result = isTableMode ? tableResult : queryResult;
@@ -359,6 +385,8 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
                   onCellDoubleClick={handleCellDoubleClick}
                   onCellCommit={handleCellCommit}
                   onCellCancel={handleCellCancel}
+                  fkColumns={currentFkColumns}
+                  onFkNavigate={handleFkNavigate}
                 />
               ) : (
                 <EmptyState icon={<Database size={24} />} message="Run a query to see results" />

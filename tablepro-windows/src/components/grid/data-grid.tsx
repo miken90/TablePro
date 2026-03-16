@@ -2,6 +2,7 @@ import React, { useRef, useCallback } from 'react';
 import type { SortingState } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { QueryResult } from '../../types/query';
+import type { FkRef } from '../../stores/schemaStore';
 import { GridHeader } from './grid-header';
 import { GridRow } from './grid-row';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -19,6 +20,8 @@ interface DataGridProps {
   changedRows?: Map<number, 'modified' | 'inserted' | 'deleted'>;
   editingCell?: { rowIdx: number; colIdx: number } | null;
   cellOverrideValues?: Map<string, string | null>;
+  fkColumns?: Record<string, FkRef>;
+  onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
 }
 
 const DEFAULT_COL_WIDTH = 120;
@@ -38,6 +41,8 @@ export function DataGrid({
   changedRows,
   editingCell,
   cellOverrideValues,
+  fkColumns,
+  onFkNavigate,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
   const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
@@ -136,10 +141,12 @@ export function DataGrid({
                 editingCell={editingCell?.rowIdx === absoluteIdx ? editingCell : null}
                 nullDisplay={nullDisplay}
                 virtualTop={virtualRow.start}
+                fkColumns={fkColumns}
                 onRowClick={(e) => handleRowClick(e, absoluteIdx)}
                 onCellDoubleClick={(colIdx) => onCellDoubleClick?.(absoluteIdx, colIdx)}
                 onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(absoluteIdx, colIdx, val) : undefined}
                 onCellCancel={onCellCancel}
+                onFkNavigate={onFkNavigate}
               />
             );
           })}

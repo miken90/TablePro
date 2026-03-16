@@ -1,13 +1,15 @@
-// Placeholder for Tauri event listeners
-// Will be expanded in Phase 3 with query progress, connection state events, etc.
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-// Example usage pattern (not yet wired):
-// import { listen } from "@tauri-apps/api/event";
-//
-// export const onQueryProgress = (handler: (progress: number) => void) =>
-//   listen<number>("query:progress", (e) => handler(e.payload));
-//
-// export const onConnectionStateChange = (handler: (state: string) => void) =>
-//   listen<string>("connection:state_change", (e) => handler(e.payload));
+// ---------------------------------------------------------------------------
+// Import progress
+// ---------------------------------------------------------------------------
 
-export {};
+export interface ImportProgress {
+  current: number;
+  total: number;
+}
+
+export const onImportProgress = (
+  handler: (progress: ImportProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<ImportProgress>("import_progress", (e) => handler(e.payload));

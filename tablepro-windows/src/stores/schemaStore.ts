@@ -1,30 +1,47 @@
+import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import type { TableInfo } from "../types/schema";
 import type { ColumnInfo } from "../types/query";
 import * as commands from "../ipc/commands";
 import { extractErrorMessage } from "../ipc/error";
 
+export interface FkRef {
+  refTable: string;
+  refColumn: string;
+  refSchema?: string;
+}
+
 interface SchemaState {
   tables: TableInfo[];
   columnsByTable: Map<string, ColumnInfo[]>;
+  // FK metadata: tableName → { columnName → FkRef }
+  fkMap: Record<string, Record<string, FkRef>>;
   databases: string[];
   selectedDatabase: string | null;
+  schemas: string[];
+  currentSchema: string | null;
   isLoading: boolean;
   error: string | null;
 
   // Actions
   fetchDatabases: (sessionId: string) => Promise<void>;
   fetchSchema: (sessionId: string) => Promise<void>;
+  fetchSchemas: (sessionId: string) => Promise<void>;
   fetchColumns: (sessionId: string, tableName: string, schema?: string) => Promise<ColumnInfo[]>;
+  fetchForeignKeysForTable: (sessionId: string, table: string, schema?: string) => Promise<void>;
   selectDatabase: (sessionId: string, db: string | null) => Promise<void>;
+  setCurrentSchema: (schema: string | null) => void;
   clearSchema: () => void;
 }
 
 export const useSchemaStore = create<SchemaState>((set, get) => ({
   tables: [],
   columnsByTable: new Map(),
+  fkMap: {},
   databases: [],
   selectedDatabase: null,
+  schemas: [],
+  currentSchema: null,
   isLoading: false,
   error: null,
 
@@ -48,6 +65,16 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     }
   },
 
+  fetchSchemas: async (sessionId) => {
+    try {
+      const schemas = await invoke<string[]>("fetch_schemas", { sessionId });
+      set({ schemas });
+    } catch {
+      // Non-PostgreSQL drivers will fail silently — schemas stay empty
+      set({ schemas: [] });
+    }
+  },
+
   fetchColumns: async (sessionId, tableName, schema) => {
     const existing = get().columnsByTable.get(tableName);
     if (existing) return existing;
@@ -60,22 +87,55 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     return cols;
   },
 
+  fetchForeignKeysForTable: async (sessionId, table, schema) => {
+    // Skip if already cached
+    if (get().fkMap[table]) return;
+    try {
+      const fks = await commands.fetchForeignKeys(sessionId, table, schema);
+      const tableMap: Record<string, FkRef> = {};
+      for (const fk of fks) {
+        tableMap[fk.column] = {
+          refTable: fk.referencedTable,
+          refColumn: fk.referencedColumn,
+          refSchema: schema,
+        };
+      }
+      set((s) => ({ fkMap: { ...s.fkMap, [table]: tableMap } }));
+    } catch {
+      // Non-fatal: FK metadata not available for this driver/table
+    }
+  },
+
   selectDatabase: async (sessionId, db) => {
     if (!db) {
-      set({ selectedDatabase: null, tables: [], columnsByTable: new Map() });
+      set({ selectedDatabase: null, tables: [], columnsByTable: new Map(), schemas: [], currentSchema: null });
       return;
     }
-    set({ isLoading: true, error: null, tables: [], columnsByTable: new Map() });
+    set({ isLoading: true, error: null, tables: [], columnsByTable: new Map(), schemas: [], currentSchema: null });
     try {
       await commands.switchDatabase(sessionId, db);
       set({ selectedDatabase: db });
       const tables = await commands.fetchTables(sessionId);
       set({ tables, isLoading: false });
+      // Fetch schemas after switching database (fire-and-forget)
+      get().fetchSchemas(sessionId);
     } catch (err) {
       set({ error: extractErrorMessage(err), isLoading: false });
     }
   },
 
+  setCurrentSchema: (schema) => {
+    set({ currentSchema: schema, columnsByTable: new Map() });
+  },
+
   clearSchema: () =>
-    set({ tables: [], columnsByTable: new Map(), databases: [], selectedDatabase: null }),
+    set({
+      tables: [],
+      columnsByTable: new Map(),
+      fkMap: {},
+      databases: [],
+      selectedDatabase: null,
+      schemas: [],
+      currentSchema: null,
+    }),
 }));

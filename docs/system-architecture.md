@@ -115,7 +115,8 @@ let result = try await driver.execute(sql: "SELECT * FROM users")
 ┌────────────────────────────────────────────────────────────┐
 │        React Components (Functional + Hooks)               │
 │  (ConnectionDialog, QueryEditor, DataGrid, Sidebar,        │
-│   QuickSwitcher, HistoryPanel, FilterPanel, InspectorPanel)│
+│   QuickSwitcher, HistoryPanel, FilterPanel, InspectorPanel,│
+│   CellInput)                                                │
 ├────────────────────────────────────────────────────────────┤
 │              Zustand Stores (Reactive)                     │
 │  (connectionStore, queryStore, schemaStore, changeStore)   │
@@ -185,6 +186,8 @@ Zustand subscribers notified
     ↓
 Components re-render with new data
 ```
+
+**Note on IPC Sequencing**: Data fetching (table browse) uses sequential `await` calls instead of `Promise.all` to avoid tokio Mutex deadlocks in the plugin FFI layer. This ensures safe concurrent access to shared connection pooling and driver state across IPC boundaries.
 
 ### IPC Command Flow
 
@@ -446,27 +449,31 @@ When query executes:
 ### Windows
 
 ```
-1. User edits cell in DataGrid
+1. User double-clicks cell in DataGrid
    ↓
-2. GridCell component calls changeStore.recordChange()
+2. CellInput component opens inline editor
    ↓
-3. Zustand store updates (addChange action)
+3. User edits and presses Enter OR clicks outside cell
    ↓
-4. UI shows change indicator (yellow background)
+4. changeStore.recordCellChange() records the change
    ↓
-5. User clicks Save button
+5. Zustand store updates (addChange action)
    ↓
-6. changeStore.generateSQL() produces INSERT/UPDATE/DELETE
+6. UI shows change indicator (yellow background)
    ↓
-7. IPC invoke('save_changes', { changes })
+7. User clicks Save button
    ↓
-8. Rust command wraps in transaction, executes
+8. changeStore.generateSQL() produces INSERT/UPDATE/DELETE
    ↓
-9. Result sent back via IPC
+9. IPC invoke('save_changes', { changes })
    ↓
-10. On success: store.clearChanges() + refresh grid
-   ↓
-11. On error: error toast, changes preserved
+10. Rust command wraps in transaction, executes
+    ↓
+11. Result sent back via IPC
+    ↓
+12. On success: store.clearChanges() + refresh grid
+    ↓
+13. On error: error toast, changes preserved
 ```
 
 ## Error Handling Strategy
@@ -605,4 +612,4 @@ Send chunk 2 via separate invoke
 
 ---
 
-**Last Updated**: 2026-03-15 | **Stable Release**: v0.17.0 (macOS) | **Windows Version**: P0 Feature Parity Complete
+**Last Updated**: 2026-03-16 | **Stable Release**: v0.17.0 (macOS) | **Windows Version**: P0 Feature Parity Complete

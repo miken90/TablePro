@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: SSH tunnel support — `russh`-based (pure Rust, no C deps) SSH tunneling with password and private key authentication, local port forwarding, `SshTunnelManager` for lifecycle management, integrated into `connection_manager` connect/disconnect/test flows, SSH section in ConnectionForm with host/port/username/auth method fields
+- Windows: Import SQL — full-featured `.sql` and `.sql.gz` file import with statement scanner (handles strings, dollar-quoted blocks, comments), preview mode (statement count, file size, first statements), sequential execution with Tauri progress events, transaction wrap and FK-check-disable options, `flate2` gzip decompression, Import dialog with file picker and progress bar (Ctrl+Shift+M shortcut)
+- Windows: XLSX export — `rust_xlsxwriter` integration in `export.rs` with type-aware cell writing (numbers, booleans, text), 1M row cap
+- Windows: Keyboard shortcuts + Help dialog — `ShortcutsHelp.tsx` overlay (F1/Ctrl+?) listing 21 shortcuts in 5 groups (Editor, Tabs, Data Grid, Navigation, General); new shortcuts: Ctrl+I (insert row), Ctrl+Tab/Ctrl+Shift+Tab (tab switching), Ctrl+Shift+M (import SQL), F1 (help)
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+- Windows: Safe mode 6 levels — Silent (0), Alert (1), Alert Full (2), Safe Mode (3), Safe Mode Full (4), Read-Only (5); regex-based destructive query detection in `queryStore`; `SafeModeConfirmDialog` for levels 1-4; Read-Only blocks all writes at level 5; cycling badge in Toolbar; settings dropdown replaces boolean toggle
+- Windows: PostgreSQL schema switching — `fetch_schemas` Tauri command, schema state in `schemaStore`, quick-switcher schema section (Ctrl+K), sidebar schema dropdown with table filtering
+- Windows: FK navigation arrows — FK metadata map in `schemaStore`, ExternalLink icons in grid cells for FK columns, click opens new editor tab with pre-filled `SELECT * FROM referenced_table WHERE pk = value` query
+
 - Windows: SQLite driver plugin — `driver-sqlite` cdylib crate using rusqlite (bundled), PRAGMA-based schema introspection, WAL mode, query cancel via `sqlite3_interrupt`
 - Windows: Query History backend — rusqlite + FTS5 full-text search stored in `%APPDATA%/TablePro/history.sqlite3`, 5 Tauri IPC commands (fetch_recent, search, clear_all, delete_entry, record)
 - Windows: Query History panel — right sidebar (Ctrl+H or clock icon) showing executed queries with search, relative timestamps, status indicators; click to load query into editor
@@ -69,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+
 - DuckDB database support — connect to `.duckdb` files, query CSV/Parquet/JSON files via SQL, schema navigation, and DuckDB extension management
 - MongoDB configurable auth database (`authSource`) — authenticate against any database instead of hardcoded `admin`
 
@@ -94,6 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardized parameter binding across all database drivers with improved default escaping (type-aware numeric handling, NUL byte stripping, NULL literal support)
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - Open SQLite database files directly from Finder by double-clicking `.sqlite`, `.sqlite3`, `.db3`, `.s3db`, `.sl3`, and `.sqlitedb` files (#262)
 - Export plugin options (CSV, XLSX, JSON, SQL, MQL) now persist across app restarts
@@ -133,6 +146,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+
 - Direct `.tableplugin` bundle installation via file picker, Finder double-click, and drag-and-drop
 - Plugin capability enforcement — registration now gated on declared capabilities, with validation warnings for mismatches
 - Plugin dependency declarations — plugins can declare required dependencies via `TableProPlugin.dependencies`, validated at load time
@@ -166,6 +181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.15.0] - 2026-03-08
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - Oracle Database support via OCI (Oracle Call Interface)
 - Add database URL scheme support — open connections directly from terminal with `open "mysql://user@host/db" -a TablePro` (supports MySQL, PostgreSQL, SQLite, MongoDB, Redis, MSSQL, Oracle)
@@ -205,11 +222,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+
 - Add database and schema switching for PostgreSQL connections via ⌘K
 
 ## [0.14.0] - 2026-03-05
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - Microsoft SQL Server (MSSQL) database support via FreeTDS
 - Support for editing and deleting rows in tables without a primary key
@@ -231,6 +252,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+
 - Redis database support with key-value browsing, database-level sidebar (db0–db15), TTL management, and interactive CLI
 - TablePlus-compatible database URL handling: `open -a TablePro "postgresql://user@host/db"` with support for schema switching, table opening, filters, color, and environment tags
 
@@ -242,6 +265,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.12.0] - 2026-03-03
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - Amazon Redshift database support
 - Deep link support via `tablepro://` URL scheme for opening connections, tables, queries, and importing connections
@@ -266,6 +291,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+
 - Environment color indicator: subtle toolbar tint based on connection color for at-a-glance environment identification
 - Import database connections from SSH tunnel URLs (e.g., `mysql+ssh://`, `postgresql+ssh://`)
 - Connection groups for organizing database connections into folders with colored headers
@@ -285,6 +312,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.0] - 2026-03-01
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - Support for multiple independent database connections in separate windows with per-window session isolation
 - MongoDB database support
@@ -313,6 +342,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.0] - 2026-02-28
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - Vim keybindings for SQL editor (Normal/Insert/Visual modes, motions, operators, :w/:q commands) with toggle in Editor Settings
 - `^` and `_` motions (first non-blank character) in Vim normal, visual, and operator-pending modes
@@ -422,6 +453,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.7.0] - 2026-02-25
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - Quick search and filter rows can now be combined — when both are active, their WHERE conditions are joined with AND
 - Foreign key columns now show a navigation arrow icon in each cell — click to open the referenced table filtered by the FK value
@@ -551,6 +584,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+
 - Inline AI suggestions (ghost text) in the SQL editor — auto-triggers on typing pause, Tab to accept, Escape to dismiss
 - Schema-aware inline suggestions — AI now uses actual table/column names from the connected database (cached with 30s TTL, respects `includeSchema` and `maxSchemaTables` settings)
 - AI feature highlight row on onboarding features page
@@ -597,6 +632,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Design tokens:** replaced hardcoded `Color.secondary.opacity(0.6)` with system `Color(nsColor: .tertiaryLabelColor)` in `DesignConstants` and `ToolbarDesignTokens` for proper semantic color
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - AI chat panel shows "Set Up AI Provider" empty state when no AI provider is configured, with a button to open Settings
 - AI chat panel — right-side panel for AI-assisted SQL queries with multi-provider support (Claude, OpenAI, OpenRouter, Ollama, custom endpoints)
@@ -675,6 +712,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+
 - SQL Preview button (eye icon) in toolbar to review all pending SQL statements before committing changes (⌘⇧P)
 - Multi-column sorting: Shift+click column headers to add columns to the sort list; regular click replaces with single sort. Sort priority indicators (1▲, 2▼) are shown in column headers when multiple columns are sorted
 - "Copy with Headers" feature (Shift+Cmd+C) to copy selected rows with column headers as the first TSV line, also available via context menu in the data grid
@@ -713,6 +752,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
+
 - AI chat panel — right-side panel for AI-assisted SQL queries with multi-provider support (Claude, OpenAI, OpenRouter, Ollama, custom endpoints)
 - AI provider settings — configure multiple AI providers in Settings > AI with API key management (Keychain), endpoint configuration, model selection, and connection testing
 - AI feature routing — map AI features (Chat, Explain Query, Fix Error, Inline Suggestions) to specific providers and models
@@ -748,6 +789,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-02-11
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - AI chat panel — right-side panel for AI-assisted SQL queries with multi-provider support (Claude, OpenAI, OpenRouter, Ollama, custom endpoints)
 - AI provider settings — configure multiple AI providers in Settings > AI with API key management (Keychain), endpoint configuration, model selection, and connection testing
@@ -786,6 +829,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-02-09
 
 ### Added
+
+- Windows: Connection groups (sidebar folders) — `ConnectionGroup` struct with id/name/color/order/collapsed, persisted to `groups.json` in `%APPDATA%/TablePro/`; 3 new Tauri IPC commands (`list_groups`, `save_group`, `delete_group`); collapsible group sections with colored left border in WelcomeView; group assignment dropdown in ConnectionForm; deleting a group ungroups its connections
 
 - AI chat panel — right-side panel for AI-assisted SQL queries with multi-provider support (Claude, OpenAI, OpenRouter, Ollama, custom endpoints)
 - AI provider settings — configure multiple AI providers in Settings > AI with API key management (Keychain), endpoint configuration, model selection, and connection testing

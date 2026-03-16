@@ -10,6 +10,7 @@ import {
   Calendar,
   ToggleLeft,
   Binary,
+  Database,
 } from "lucide-react";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useConnectionStore } from "../../stores/connectionStore";
@@ -25,8 +26,19 @@ export function Sidebar({ onViewStructure, onOpenTable }: SidebarProps) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const sessionIds = useConnectionStore((s) => s.sessionIds);
   const connections = useConnectionStore((s) => s.connections);
-  const { tables, databases, selectedDatabase, isLoading, fetchDatabases, fetchSchema, selectDatabase } =
-    useSchemaStore();
+  const {
+    tables,
+    databases,
+    selectedDatabase,
+    schemas,
+    currentSchema,
+    isLoading,
+    fetchDatabases,
+    fetchSchema,
+    fetchSchemas,
+    selectDatabase,
+    setCurrentSchema,
+  } = useSchemaStore();
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
 
@@ -41,14 +53,19 @@ export function Sidebar({ onViewStructure, onOpenTable }: SidebarProps) {
     }
   }, [sessionId, fetchDatabases]);
 
-  // Auto-select the initially connected database and load its tables
+  // Auto-select the initially connected database and load its tables + schemas
   useEffect(() => {
     if (sessionId && databases.length > 0 && !selectedDatabase && configDatabase) {
-      // Already connected to this database — just set selection and fetch tables
       useSchemaStore.setState({ selectedDatabase: configDatabase });
       fetchSchema(sessionId);
+      fetchSchemas(sessionId);
     }
-  }, [sessionId, databases, selectedDatabase, configDatabase, fetchSchema]);
+  }, [sessionId, databases, selectedDatabase, configDatabase, fetchSchema, fetchSchemas]);
+
+  // When schema changes, clear expanded tables
+  useEffect(() => {
+    setExpandedTables(new Set());
+  }, [currentSchema]);
 
   const toggleTable = (name: string) => {
     setExpandedTables((prev) => {
@@ -59,9 +76,12 @@ export function Sidebar({ onViewStructure, onOpenTable }: SidebarProps) {
     });
   };
 
-  const filteredTables = filter
-    ? tables.filter((t) => t.name.toLowerCase().includes(filter.toLowerCase()))
-    : tables;
+  // Filter by text search AND by currentSchema
+  const filteredTables = tables.filter((t) => {
+    const matchesFilter = !filter || t.name.toLowerCase().includes(filter.toLowerCase());
+    const matchesSchema = !currentSchema || t.schema === currentSchema;
+    return matchesFilter && matchesSchema;
+  });
 
   return (
     <div className="flex h-full flex-col border-r border-zinc-200 bg-zinc-50 text-sm dark:border-zinc-700 dark:bg-zinc-900">
@@ -99,6 +119,27 @@ export function Sidebar({ onViewStructure, onOpenTable }: SidebarProps) {
         </div>
       )}
 
+      {/* Schema selector — only shown for PostgreSQL (when schemas are available) */}
+      {schemas.length > 0 && (
+        <div className="border-b border-zinc-200 p-2 dark:border-zinc-700">
+          <div className="flex items-center gap-1.5">
+            <Database size={11} className="shrink-0 text-indigo-400" />
+            <select
+              value={currentSchema ?? ""}
+              onChange={(e) => setCurrentSchema(e.target.value || null)}
+              className="flex-1 rounded border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+            >
+              <option value="">All schemas</option>
+              {schemas.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       {/* Tree */}
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
@@ -112,7 +153,7 @@ export function Sidebar({ onViewStructure, onOpenTable }: SidebarProps) {
         )}
         {filteredTables.map((table) => (
           <TableNode
-            key={table.name}
+            key={`${table.schema ?? ""}.${table.name}`}
             table={table}
             expanded={expandedTables.has(table.name)}
             onToggle={() => toggleTable(table.name)}

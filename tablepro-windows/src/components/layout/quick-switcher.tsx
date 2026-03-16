@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, X } from "lucide-react";
+import { Search, X, Database } from "lucide-react";
 import { useSchemaStore } from "../../stores/schemaStore";
 
 interface QuickSwitcherProps {
@@ -27,14 +27,40 @@ function highlightMatch(text: string, query: string): React.ReactNode {
 
 export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherProps) {
   const tables = useSchemaStore((s) => s.tables);
+  const schemas = useSchemaStore((s) => s.schemas);
+  const currentSchema = useSchemaStore((s) => s.currentSchema);
+  const setCurrentSchema = useSchemaStore((s) => s.setCurrentSchema);
+
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const filtered = query
+  const hasSchemas = schemas.length > 0;
+
+  const filteredTables = query
     ? tables.filter((t) => t.name.toLowerCase().includes(query.toLowerCase()))
     : tables;
+
+  const filteredSchemas = query
+    ? schemas.filter((s) => s.toLowerCase().includes(query.toLowerCase()))
+    : schemas;
+
+  // Build a unified item list for keyboard navigation.
+  // Schema items come first (when schemas available and no active filter hides them),
+  // preceded by an "All schemas" option that clears the current schema filter.
+  type Item =
+    | { kind: "schema"; schema: string }
+    | { kind: "all-schemas" }
+    | { kind: "table"; idx: number };
+
+  const items: Item[] = [];
+
+  if (hasSchemas) {
+    items.push({ kind: "all-schemas" });
+    filteredSchemas.forEach((s) => items.push({ kind: "schema", schema: s }));
+  }
+  filteredTables.forEach((_, idx) => items.push({ kind: "table", idx }));
 
   useEffect(() => {
     if (open) {
@@ -48,15 +74,26 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
     setCursor(0);
   }, [query]);
 
-  const select = useCallback(
-    (idx: number) => {
-      const table = filtered[idx];
-      if (table) {
-        onSelectTable(table.name, table.schema);
+  const selectItem = useCallback(
+    (itemIdx: number) => {
+      const item = items[itemIdx];
+      if (!item) return;
+
+      if (item.kind === "all-schemas") {
+        setCurrentSchema(null);
         onClose();
+      } else if (item.kind === "schema") {
+        setCurrentSchema(item.schema);
+        onClose();
+      } else {
+        const table = filteredTables[item.idx];
+        if (table) {
+          onSelectTable(table.name, table.schema);
+          onClose();
+        }
       }
     },
-    [filtered, onSelectTable, onClose]
+    [items, filteredTables, setCurrentSchema, onSelectTable, onClose]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -64,13 +101,13 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
       onClose();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setCursor((c) => Math.min(c + 1, filtered.length - 1));
+      setCursor((c) => Math.min(c + 1, items.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setCursor((c) => Math.max(c - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      select(cursor);
+      selectItem(cursor);
     }
   };
 
@@ -81,6 +118,8 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
   }, [cursor]);
 
   if (!open) return null;
+
+  const totalCount = filteredTables.length;
 
   return (
     <div
@@ -100,7 +139,7 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search tables…"
+            placeholder="Search tables or schemas…"
             className="flex-1 bg-transparent text-sm text-zinc-800 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
           />
           {query && (
@@ -114,38 +153,124 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
         </div>
 
         {/* Results list */}
-        <div ref={listRef} className="max-h-[320px] overflow-y-auto py-1">
-          {filtered.length === 0 ? (
+        <div ref={listRef} className="max-h-[360px] overflow-y-auto py-1">
+          {items.length === 0 ? (
             <div className="px-3 py-4 text-center text-xs text-zinc-400">
-              {query ? "No tables match" : "No tables available"}
+              {query ? "No matches" : "No tables available"}
             </div>
           ) : (
-            filtered.map((table, idx) => (
-              <div
-                key={table.name}
-                data-idx={idx}
-                onClick={() => select(idx)}
-                onMouseEnter={() => setCursor(idx)}
-                className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs ${
-                  idx === cursor
-                    ? "bg-blue-500 text-white"
-                    : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                }`}
-              >
-                <span className="flex-1 font-medium">
-                  {highlightMatch(table.name, query)}
-                </span>
-                {table.schema && (
-                  <span
-                    className={`text-[10px] ${
-                      idx === cursor ? "text-blue-200" : "text-zinc-400"
+            <>
+              {/* Schema section */}
+              {hasSchemas && (
+                <>
+                  <div className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    Schemas
+                  </div>
+
+                  {/* All schemas option */}
+                  {(() => {
+                    const itemIdx = 0;
+                    const isActive = cursor === itemIdx;
+                    return (
+                      <div
+                        data-idx={itemIdx}
+                        onClick={() => selectItem(itemIdx)}
+                        onMouseEnter={() => setCursor(itemIdx)}
+                        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs ${
+                          isActive
+                            ? "bg-blue-500 text-white"
+                            : "text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        <Database
+                          size={11}
+                          className={isActive ? "text-blue-200" : "text-zinc-400"}
+                        />
+                        <span className="flex-1 italic">All schemas</span>
+                        {currentSchema === null && (
+                          <span
+                            className={`text-[10px] ${isActive ? "text-blue-200" : "text-zinc-400"}`}
+                          >
+                            active
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {filteredSchemas.map((schema, si) => {
+                    const itemIdx = 1 + si;
+                    const isActive = cursor === itemIdx;
+                    return (
+                      <div
+                        key={schema}
+                        data-idx={itemIdx}
+                        onClick={() => selectItem(itemIdx)}
+                        onMouseEnter={() => setCursor(itemIdx)}
+                        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs ${
+                          isActive
+                            ? "bg-blue-500 text-white"
+                            : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        <Database
+                          size={11}
+                          className={isActive ? "text-blue-200" : "text-indigo-400"}
+                        />
+                        <span className="flex-1 font-medium">
+                          {highlightMatch(schema, query)}
+                        </span>
+                        {currentSchema === schema && (
+                          <span
+                            className={`text-[10px] ${isActive ? "text-blue-200" : "text-zinc-400"}`}
+                          >
+                            active
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {filteredTables.length > 0 && (
+                    <div className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                      Tables
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Table items */}
+              {filteredTables.map((table, idx) => {
+                const itemIdx = hasSchemas ? 1 + filteredSchemas.length + idx : idx;
+                const isActive = cursor === itemIdx;
+                return (
+                  <div
+                    key={table.name}
+                    data-idx={itemIdx}
+                    onClick={() => selectItem(itemIdx)}
+                    onMouseEnter={() => setCursor(itemIdx)}
+                    className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs ${
+                      isActive
+                        ? "bg-blue-500 text-white"
+                        : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
                     }`}
                   >
-                    {table.schema}
-                  </span>
-                )}
-              </div>
-            ))
+                    <span className="flex-1 font-medium">
+                      {highlightMatch(table.name, query)}
+                    </span>
+                    {table.schema && (
+                      <span
+                        className={`text-[10px] ${
+                          isActive ? "text-blue-200" : "text-zinc-400"
+                        }`}
+                      >
+                        {table.schema}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
 
@@ -160,9 +285,12 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
           <span className="text-[10px] text-zinc-400">
             <kbd className="rounded bg-zinc-100 px-1 py-0.5 font-mono dark:bg-zinc-700">Esc</kbd> close
           </span>
-          {filtered.length > 0 && (
+          {totalCount > 0 && (
             <span className="ml-auto text-[10px] text-zinc-400">
-              {filtered.length} table{filtered.length !== 1 ? "s" : ""}
+              {totalCount} table{totalCount !== 1 ? "s" : ""}
+              {currentSchema != null && (
+                <span className="ml-1 text-indigo-400">· {currentSchema}</span>
+              )}
             </span>
           )}
         </div>

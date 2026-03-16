@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ConnectionConfig, SavedConnection, ConnectionStatus } from "../types/connection";
+import type { ConnectionConfig, ConnectionGroup, SavedConnection, ConnectionStatus } from "../types/connection";
 import type { QueryResult } from "../types/query";
 import type { TableInfo, IndexInfo, ForeignKeyInfo } from "../types/schema";
 import type { ColumnInfo } from "../types/query";
@@ -74,6 +74,31 @@ export const switchDatabase = (sessionId: string, database: string): Promise<voi
 export const fetchDdl = (sessionId: string, table: string, schema?: string): Promise<string> =>
   invoke("fetch_ddl", { sessionId, table, schema });
 
+// Schema commands (PostgreSQL)
+export const fetchSchemas = (sessionId: string): Promise<string[]> =>
+  invoke("fetch_schemas", { sessionId });
+
+// Import commands
+export interface ImportPreview {
+  statementCount: number;
+  fileSizeBytes: number;
+  firstStatements: string[];
+}
+export interface ImportOptions {
+  wrapInTransaction: boolean;
+  disableFkChecks: boolean;
+}
+export interface ImportResultData {
+  statementsExecuted: number;
+  durationMs: number;
+}
+export const importPreview = (path: string): Promise<ImportPreview> =>
+  invoke("import_preview", { path });
+export const importSqlFile = (
+  sessionId: string, path: string, options: ImportOptions,
+): Promise<ImportResultData> =>
+  invoke("import_sql_file", { sessionId, path, options });
+
 // Settings commands
 export const getSettings = (): Promise<AppSettings> =>
   invoke("get_settings");
@@ -90,6 +115,16 @@ export const saveConnection = (connection: SavedConnection): Promise<void> =>
 
 export const deleteConnection = (id: string): Promise<void> =>
   invoke("delete_connection", { id });
+
+// Connection group commands
+export const listGroups = (): Promise<ConnectionGroup[]> =>
+  invoke("list_groups");
+
+export const saveGroup = (group: ConnectionGroup): Promise<void> =>
+  invoke("save_group", { group });
+
+export const deleteGroup = (id: string): Promise<void> =>
+  invoke("delete_group", { id });
 
 // Data mutation types
 export interface CellChangePayload {

@@ -32,6 +32,10 @@ libloading = "0.8"
 async-trait = "0.1"
 tauri-plugin-dialog = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
+rust_xlsxwriter = "0.79"
+flate2 = "1"
+russh = "0.45"
+russh-keys = "0.45"
 
 [features]
 devtools = ["tauri/devtools"]

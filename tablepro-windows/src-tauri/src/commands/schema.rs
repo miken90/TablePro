@@ -95,3 +95,27 @@ pub async fn switch_database(
     tracing::info!(session_id = %session_id, database = %database, "switch_database");
     mgr.switch_database(&session_id, &database).await
 }
+
+/// Return available schemas for the connected PostgreSQL database.
+/// Returns an empty list for non-PostgreSQL drivers that don't expose schemas.
+#[tauri::command]
+pub async fn fetch_schemas(
+    session_id: String,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<Vec<String>, AppError> {
+    let mgr = manager.lock().await;
+    let driver = mgr.get_driver(&session_id)?;
+    tracing::info!(session_id = %session_id, "fetch_schemas");
+    let result = driver
+        .execute(
+            "SELECT schema_name FROM information_schema.schemata \
+             WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') \
+             ORDER BY schema_name",
+        )
+        .await?;
+    Ok(result
+        .rows
+        .iter()
+        .filter_map(|r| r.first().and_then(|v| v.clone()))
+        .collect())
+}

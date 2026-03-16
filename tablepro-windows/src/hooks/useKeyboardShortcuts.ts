@@ -16,6 +16,9 @@ interface ShortcutHandlers {
   onQuickSwitcher?: () => void;
   onToggleComment?: () => void;
   onAbout?: () => void;
+  onInsertRow?: () => void;
+  onImportSql?: () => void;
+  onShowHelp?: () => void;
 }
 
 export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
@@ -121,6 +124,38 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
       if (ctrl && e.key === "/") {
         e.preventDefault();
         handlers?.onToggleComment?.();
+      }
+
+      // Ctrl+I — insert new row
+      if (ctrl && e.key === "i" && !e.shiftKey) {
+        e.preventDefault();
+        handlers?.onInsertRow?.();
+      }
+
+      // Ctrl+Tab — next tab / Ctrl+Shift+Tab — previous tab
+      if (ctrl && e.key === "Tab") {
+        e.preventDefault();
+        const idx = tabs.findIndex((t) => t.id === activeTabId);
+        const setActiveTab = useEditorStore.getState().setActiveTab;
+        if (e.shiftKey) {
+          const prev = idx > 0 ? idx - 1 : tabs.length - 1;
+          if (tabs[prev]) setActiveTab(tabs[prev].id);
+        } else {
+          const next = idx < tabs.length - 1 ? idx + 1 : 0;
+          if (tabs[next]) setActiveTab(tabs[next].id);
+        }
+      }
+
+      // Ctrl+Shift+M — import SQL (placeholder for Phase 4)
+      if (ctrl && e.shiftKey && e.key === "M") {
+        e.preventDefault();
+        handlers?.onImportSql?.();
+      }
+
+      // F1 — show keyboard shortcuts help
+      if (e.key === "F1") {
+        e.preventDefault();
+        handlers?.onShowHelp?.();
       }
     };
 

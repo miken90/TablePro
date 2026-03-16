@@ -77,7 +77,7 @@ protocol PluginDatabaseDriver: PluginInterface {
 
 ## Windows Codebase (tablepro-windows/)
 
-**Status**: Phase 6 + P0 Feature Parity Complete (v0.18 unreleased) | **Architecture**: Tauri v2 + Rust + React | **Files**: ~95 source files, ~11,400 LOC
+**Status**: Phase 6 + P0 Feature Parity Complete (v0.18 unreleased) | **Architecture**: Tauri v2 + Rust + React | **Files**: ~100 source files, ~11,800 LOC
 
 ### Directory Layout
 
@@ -134,7 +134,7 @@ tablepro-windows/
 │   ├── App.tsx                # Root component
 │   ├── main.tsx               # Vite entry point
 │   └── styles/                # Tailwind CSS
-├── __tests__/                 # Test suite (4 test files, ~284 LOC)
+├── __tests__/                 # Test suite (5 test files, ~350 LOC)
 ├── package.json               # Node.js dependencies (React, Zustand, TailwindCSS, @tauri-apps/api)
 ├── vite.config.ts             # Vite bundler config
 ├── tsconfig.json              # Strict TypeScript settings
@@ -210,9 +210,9 @@ tablepro-windows/
 Each database driver is a separate Rust crate compiled as `cdylib` in the `src-tauri/` workspace:
 
 **Available Drivers** (Phase 2 complete + P0 parity):
-- driver-postgres: PostgreSQL via tokio-postgres
-- driver-mysql: MySQL via mysql_async
-- driver-mssql: SQL Server via tiberius
+- driver-postgres: PostgreSQL via simple_query() protocol for simplicity and correctness
+- driver-mysql: MySQL via mysql_async (NULL values now emit FfiString::null())
+- driver-mssql: SQL Server via tiberius (NULL values now emit FfiString::null())
 - driver-sqlite: SQLite via rusqlite (bundled)
 
 **Future Drivers** (planned in Phase 3):
@@ -326,11 +326,11 @@ All models are defined separately in each platform's codebase but follow consist
 
 | Layer | Tool | Coverage | Status |
 |-------|------|----------|--------|
-| **Unit (Rust)** | cargo test | Database models, SQL generation, utils | 30+ tests |
-| **Unit (TS)** | Vitest | React components, stores, IPC layer | 30+ tests |
+| **Unit (Rust)** | cargo test | Database models, SQL generation, utils, change tracking | 67 tests |
+| **Unit (TS)** | Vitest | React components, stores, IPC layer, editor logic | 84 tests |
 | **Integration** | Tauri E2E | IPC round-trips, plugin loading | Included |
 | **E2E** | Playwright | User workflows (edit, execute, export) | Ready for Phase 3 |
 
 ---
 
-**Last Updated**: 2026-03-15 | **Stable Release**: v0.17.0 | **Windows Branch**: P0 Feature Parity Complete
+**Last Updated**: 2026-03-16 | **Stable Release**: v0.17.0 | **Windows Branch**: P0 Feature Parity Complete

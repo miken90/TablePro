@@ -1,5 +1,14 @@
 import { useSettingsStore } from "../../stores/settingsStore";
-import { SettingRow, SettingSection, NumberInput, Toggle } from "./settings-form";
+import { SettingRow, SettingSection, NumberInput, Select } from "./settings-form";
+
+const SAFE_MODE_OPTIONS = [
+  { value: 0, label: "0 – Off: no checks" },
+  { value: 1, label: "1 – Silent: log to console only" },
+  { value: 2, label: "2 – Alert: confirm DELETE/DROP/TRUNCATE" },
+  { value: 3, label: "3 – Alert+: confirm all DML + DDL" },
+  { value: 4, label: "4 – Safe: confirm + type table name" },
+  { value: 5, label: "5 – Read-Only: block all writes" },
+];
 
 export function SettingsConnection() {
   const { settings, saveSettings } = useSettingsStore();
@@ -19,11 +28,12 @@ export function SettingsConnection() {
 
       <SettingRow
         label="Safe mode"
-        description="Warn before running destructive queries (DELETE, DROP, TRUNCATE)"
+        description="Controls query confirmation before destructive or write operations"
       >
-        <Toggle
-          checked={settings.safeMode}
-          onChange={(v) => void saveSettings({ safeMode: v })}
+        <Select
+          value={settings.safeModeLevel}
+          onChange={(v) => void saveSettings({ safeModeLevel: Number(v) })}
+          options={SAFE_MODE_OPTIONS}
         />
       </SettingRow>
     </div>

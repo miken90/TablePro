@@ -6,7 +6,8 @@ export interface AppSettings {
   theme: string;
   nullDisplay: string;
   defaultTimeoutSecs: number;
-  safeMode: boolean;
+  /** 0=Off, 1=Silent, 2=Alert, 3=AlertFull, 4=SafeMode, 5=ReadOnly */
+  safeModeLevel: number;
   tabSize: number;
   wordWrap: boolean;
   dateFormat: string;
@@ -20,7 +21,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
   nullDisplay: "NULL",
   defaultTimeoutSecs: 30,
-  safeMode: false,
+  safeModeLevel: 2,
   tabSize: 4,
   wordWrap: false,
   dateFormat: "iso",

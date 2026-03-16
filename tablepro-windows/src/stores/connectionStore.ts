@@ -1,27 +1,32 @@
 import { create } from "zustand";
-import type { SavedConnection, ConnectionStatus } from "../types/connection";
+import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
 
 interface ConnectionState {
   connections: Map<string, SavedConnection>;
+  groups: Map<string, ConnectionGroup>;
   selectedConnectionId: string | null;
   connectionStatuses: Map<string, ConnectionStatus>;
   sessionIds: Map<string, string>; // SavedConnection id → Rust session UUID
 
   // Actions
   loadConnections: () => Promise<void>;
+  loadGroups: () => Promise<void>;
   selectConnection: (id: string | null) => void;
   connect: (id: string, config: ConnectionConfig) => Promise<void>;
   disconnect: (id: string) => Promise<void>;
   saveConnection: (connection: SavedConnection) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
+  saveGroup: (group: ConnectionGroup) => Promise<void>;
+  deleteGroup: (id: string) => Promise<void>;
   getStatus: (id: string) => ConnectionStatus;
   getSessionId: (id: string) => string | undefined;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   connections: new Map(),
+  groups: new Map(),
   selectedConnectionId: null,
   connectionStatuses: new Map(),
   sessionIds: new Map(),
@@ -30,6 +35,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     const list = await commands.listConnections();
     const map = new Map(list.map((c) => [c.id, c]));
     set({ connections: map });
+  },
+
+  loadGroups: async () => {
+    const list = await commands.listGroups();
+    const map = new Map(list.map((g) => [g.id, g]));
+    set({ groups: map });
   },
 
   selectConnection: (id) => set({ selectedConnectionId: id }),
@@ -92,6 +103,31 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       const connections = new Map(s.connections);
       connections.delete(id);
       return { connections };
+    });
+  },
+
+  saveGroup: async (group) => {
+    await commands.saveGroup(group);
+    set((s) => {
+      const groups = new Map(s.groups);
+      groups.set(group.id, group);
+      return { groups };
+    });
+  },
+
+  deleteGroup: async (id) => {
+    await commands.deleteGroup(id);
+    set((s) => {
+      const groups = new Map(s.groups);
+      groups.delete(id);
+      // Clear groupId from affected connections in local state
+      const connections = new Map(s.connections);
+      for (const [connId, conn] of connections) {
+        if (conn.groupId === id) {
+          connections.set(connId, { ...conn, groupId: undefined });
+        }
+      }
+      return { groups, connections };
     });
   },
 

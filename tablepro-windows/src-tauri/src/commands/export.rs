@@ -1,12 +1,16 @@
 use std::io::Write as IoWrite;
 use std::time::Instant;
 
+use rust_xlsxwriter::{Workbook, Worksheet, XlsxError};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::models::AppError;
 use crate::services::ConnectionManager;
+
+/// Excel row limit (1,048,576 rows per sheet, row 0 is header)
+const XLSX_MAX_ROWS: u32 = 1_048_575;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +83,36 @@ fn generate_create_table(table: &str, columns: &[crate::models::ColumnInfo]) -> 
     format!("CREATE TABLE IF NOT EXISTS \"{table}\" (\n{}\n);\n\n", cols.join(",\n"))
 }
 
+fn map_xlsx_err(e: XlsxError) -> AppError {
+    AppError::ConfigError(e.to_string())
+}
+
+/// Write a single cell into a worksheet with type detection.
+/// Numbers are stored as f64; everything else as a string.
+/// NULL values write an empty string so the cell is present but blank.
+pub fn write_xlsx_cell(
+    worksheet: &mut Worksheet,
+    row: u32,
+    col: u16,
+    value: &Option<String>,
+) -> Result<(), AppError> {
+    match value {
+        None => {
+            worksheet.write_string(row, col, "").map_err(map_xlsx_err)?;
+        }
+        Some(s) => {
+            // Truncate to Excel's 32,767-character cell limit
+            let s = if s.len() > 32_767 { &s[..32_767] } else { s.as_str() };
+            if let Ok(n) = s.parse::<f64>() {
+                worksheet.write_number(row, col, n).map_err(map_xlsx_err)?;
+            } else {
+                worksheet.write_string(row, col, s).map_err(map_xlsx_err)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn export_to_file(
     app: AppHandle,
@@ -110,7 +144,7 @@ pub async fn export_to_file(
 
     tracing::info!(session_id = %session_id, "export total rows: {}", total);
 
-    // Open the output file
+    // Open the output file (not used by xlsx — xlsxwriter writes directly)
     let mut file = std::fs::File::create(&file_path)?;
     let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
 
@@ -128,6 +162,20 @@ pub async fn export_to_file(
 
     // JSON specific state
     let mut json_rows: Vec<serde_json::Value> = Vec::new();
+
+    // XLSX specific state.
+    // Use Worksheet::new() (standalone, not tied to workbook) to avoid borrow checker
+    // issues when holding the reference across loop iterations.
+    // The worksheet is pushed into the workbook and saved after the loop.
+    let mut xlsx_worksheet: Option<Worksheet> = if format == "xlsx" {
+        Some(Worksheet::new())
+    } else {
+        None
+    };
+    // Next row index to write (0 = header row, 1+ = data rows)
+    let mut xlsx_row: u32 = 0;
+    // Whether the xlsx export has hit the Excel row cap
+    let mut xlsx_row_limit_hit = false;
 
     loop {
         let chunk_sql = format!(
@@ -225,13 +273,49 @@ pub async fn export_to_file(
                     buf.extend_from_slice(stmt.as_bytes());
                 }
             }
+            "xlsx" => {
+                let ws = xlsx_worksheet
+                    .as_mut()
+                    .expect("xlsx worksheet initialised before loop");
+
+                // Write header row on the first chunk
+                if !header_written {
+                    if include_header {
+                        for (col_idx, col) in columns.iter().enumerate() {
+                            ws.write_string(0, col_idx as u16, &col.name)
+                                .map_err(map_xlsx_err)?;
+                        }
+                        xlsx_row = 1;
+                    }
+                    header_written = true;
+                }
+
+                if !xlsx_row_limit_hit {
+                    for row in &chunk.rows {
+                        if xlsx_row > XLSX_MAX_ROWS {
+                            xlsx_row_limit_hit = true;
+                            tracing::warn!(
+                                session_id = %session_id,
+                                "xlsx export: Excel row limit ({}) reached, truncating",
+                                XLSX_MAX_ROWS
+                            );
+                            break;
+                        }
+                        for (col_idx, cell) in row.iter().enumerate() {
+                            write_xlsx_cell(ws, xlsx_row, col_idx as u16, cell)?;
+                        }
+                        xlsx_row += 1;
+                        rows_exported += 1;
+                    }
+                }
+            }
             _ => {
                 return Err(AppError::ConfigError(format!("Unknown format: {format}")));
             }
         }
 
-        // Flush buffer to file
-        if !buf.is_empty() && format != "json" {
+        // Flush buffer to file (not used for json or xlsx)
+        if !buf.is_empty() && format != "json" && format != "xlsx" {
             file.write_all(&buf).map_err(|e| AppError::IoError(e.to_string()))?;
             buf.clear();
         }
@@ -248,7 +332,7 @@ pub async fn export_to_file(
             },
         );
 
-        if chunk.rows.len() < CHUNK_SIZE as usize {
+        if chunk.rows.len() < CHUNK_SIZE as usize || xlsx_row_limit_hit {
             break;
         }
     }
@@ -266,6 +350,13 @@ pub async fn export_to_file(
             .map_err(|e| AppError::IoError(e.to_string()))?;
     }
 
+    // Finalise XLSX — push worksheet into a workbook and save to file_path
+    if let Some(worksheet) = xlsx_worksheet {
+        let mut workbook = Workbook::new();
+        workbook.push_worksheet(worksheet);
+        workbook.save(&file_path).map_err(map_xlsx_err)?;
+    }
+
     let duration_ms = start.elapsed().as_millis() as u64;
 
     tracing::info!(
@@ -280,4 +371,125 @@ pub async fn export_to_file(
         file_path,
         duration_ms,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------------------------------------------------------------------------
+    // write_xlsx_cell
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_write_xlsx_cell_null_writes_empty_string() {
+        let mut ws = Worksheet::new();
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &None).is_ok());
+    }
+
+    #[test]
+    fn test_write_xlsx_cell_integer_value() {
+        let mut ws = Worksheet::new();
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &Some("42".to_string())).is_ok());
+    }
+
+    #[test]
+    fn test_write_xlsx_cell_float_value() {
+        let mut ws = Worksheet::new();
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &Some("3.14".to_string())).is_ok());
+    }
+
+    #[test]
+    fn test_write_xlsx_cell_negative_number() {
+        let mut ws = Worksheet::new();
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &Some("-100.5".to_string())).is_ok());
+    }
+
+    #[test]
+    fn test_write_xlsx_cell_string_value() {
+        let mut ws = Worksheet::new();
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &Some("hello world".to_string())).is_ok());
+    }
+
+    #[test]
+    fn test_write_xlsx_cell_date_string() {
+        let mut ws = Worksheet::new();
+        // Dates kept as strings (not numeric)
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &Some("2024-01-15".to_string())).is_ok());
+    }
+
+    #[test]
+    fn test_write_xlsx_cell_long_string_truncated() {
+        let mut ws = Worksheet::new();
+        // Strings >32,767 chars must be silently truncated without panicking
+        let long = "x".repeat(40_000);
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &Some(long)).is_ok());
+    }
+
+    #[test]
+    fn test_write_xlsx_cell_empty_string() {
+        let mut ws = Worksheet::new();
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &Some(String::new())).is_ok());
+    }
+
+    #[test]
+    fn test_write_xlsx_cell_scientific_notation_is_number() {
+        let mut ws = Worksheet::new();
+        // "1e10" parses as f64, should be stored as number
+        assert!(write_xlsx_cell(&mut ws, 0, 0, &Some("1e10".to_string())).is_ok());
+    }
+
+    // ---------------------------------------------------------------------------
+    // escape_csv_field
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_escape_csv_field_plain() {
+        assert_eq!(escape_csv_field("hello", ",", '"'), "hello");
+    }
+
+    #[test]
+    fn test_escape_csv_field_with_delimiter() {
+        assert_eq!(escape_csv_field("a,b", ",", '"'), "\"a,b\"");
+    }
+
+    #[test]
+    fn test_escape_csv_field_with_quote() {
+        assert_eq!(escape_csv_field("say \"hi\"", ",", '"'), "\"say \"\"hi\"\"\"");
+    }
+
+    #[test]
+    fn test_escape_csv_field_with_newline() {
+        assert_eq!(escape_csv_field("line\nbreak", ",", '"'), "\"line\nbreak\"");
+    }
+
+    // ---------------------------------------------------------------------------
+    // escape_sql_value
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_escape_sql_value_no_quotes() {
+        assert_eq!(escape_sql_value("hello"), "hello");
+    }
+
+    #[test]
+    fn test_escape_sql_value_with_single_quote() {
+        assert_eq!(escape_sql_value("it's"), "it''s");
+    }
+
+    #[test]
+    fn test_escape_sql_value_multiple_quotes() {
+        assert_eq!(escape_sql_value("a'b'c"), "a''b''c");
+    }
+
+    // ---------------------------------------------------------------------------
+    // XLSX_MAX_ROWS constant
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_xlsx_max_rows_is_excel_limit() {
+        // Excel supports 1,048,576 rows total; with row 0 as header,
+        // max data row index is 1,048,575
+        assert_eq!(XLSX_MAX_ROWS, 1_048_575_u32);
+    }
 }

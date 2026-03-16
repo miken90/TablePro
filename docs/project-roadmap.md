@@ -58,8 +58,8 @@ Stable Release         │ All 6 Phases Done    │ Cloud Sync, Cloud DBs
 - ✅ **Phase 3: SQL Editor** (CodeMirror 6, schema-aware autocomplete, Vim mode, SQL formatting, multi-tab)
 - ✅ **Phase 4: Data Grid & CRUD** (TanStack Virtual+Table, CellEditor, changeStore with undo/redo, sql_generator)
 - ✅ **Phase 5: Settings & UI** (Settings panels, Export dialog, Structure viewer, Quick Switcher, Dark mode, Keyboard shortcuts)
-- ✅ **Phase 6: QA & Packaging** (30+ Rust unit tests, 30+ Vitest tests, MSI/NSIS packaging, GitHub Actions CI)
-- ✅ **P0: Feature Parity** (SQLite driver, Query History backend, Tab state persistence, Filter panel, Inspector panel, Save changes end-to-end, Sidebar click fix)
+- ✅ **Phase 6: QA & Packaging** (67 Rust unit tests, 84 Vitest tests, MSI/NSIS packaging, GitHub Actions CI)
+- ✅ **P0: Feature Parity** (SQLite driver, Query History backend, Tab state persistence, Filter panel, Inspector panel, Save changes end-to-end, Sidebar click fix, History panel UI, Inline cell editing, Server-side pagination, PostgreSQL simple_query migration, NULL handling fixes)
 
 ### Phase 2 Milestones
 
@@ -247,7 +247,7 @@ Each agent works in isolation using git worktrees to avoid conflicts.
 |---------|------------|-------------------|-----------|
 | v0.18 | 50+ | 20+ | 5+ |
 | v0.19 | 100+ | 50+ | 15+ |
-| v0.20 | 150+ | 100+ | 30+ |
+| v0.20 | 151 tests (67 Rust + 84 Vitest) | Integration coverage | 30+ |
 | v1.0 | 200+ | 150+ | 50+ |
 
 ## Release Checklist (per version)
@@ -317,4 +317,4 @@ Before releasing any version:
 
 ---
 
-**Last Updated**: 2026-03-15 | **Current Phase**: Phase 2 (6 phases + P0 complete) | **Next Release**: v0.20 stabilization
+**Last Updated**: 2026-03-16 | **Current Phase**: Phase 2 (6 phases + P0 complete) | **Next Release**: v0.20 stabilization

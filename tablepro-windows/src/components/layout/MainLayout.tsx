@@ -11,6 +11,7 @@ import { SettingsView } from "../settings/settings-view";
 import { FilterPanel } from "../filter/filter-panel";
 import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
+import { ShortcutsHelp } from "../shared/ShortcutsHelp";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -59,6 +60,7 @@ export function MainLayout() {
   const [inspectorWidth, setInspectorWidth] = useState(INSPECTOR_DEFAULT);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const setQueryText = useQueryStore((s) => s.setQueryText);
 
@@ -88,6 +90,10 @@ export function MainLayout() {
       if ((e.ctrlKey || e.metaKey) && e.key === "h") {
         e.preventDefault();
         setHistoryVisible((v) => !v);
+      }
+      if (e.key === "F1") {
+        e.preventDefault();
+        setHelpOpen(true);
       }
     };
     window.addEventListener("keydown", handler);
@@ -340,6 +346,8 @@ export function MainLayout() {
       />
 
       {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
+
+      <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }
