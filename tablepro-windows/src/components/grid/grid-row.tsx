@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import type { ColumnInfo } from '../../types/query';
 
 interface GridRowProps {
@@ -9,10 +9,13 @@ interface GridRowProps {
   isSelected: boolean;
   changeType?: 'modified' | 'inserted' | 'deleted';
   cellOverrideValues?: Map<string, string | null>;
+  editingCell?: { rowIdx: number; colIdx: number } | null;
   nullDisplay: string;
   virtualTop: number;
   onRowClick: (e: React.MouseEvent) => void;
   onCellDoubleClick?: (colIdx: number) => void;
+  onCellCommit?: (colIdx: number, newValue: string | null) => void;
+  onCellCancel?: () => void;
 }
 
 function getRowClassName(
@@ -44,10 +47,13 @@ export function GridRow({
   isSelected,
   changeType,
   cellOverrideValues,
+  editingCell,
   nullDisplay,
   virtualTop,
   onRowClick,
   onCellDoubleClick,
+  onCellCommit,
+  onCellCancel,
 }: GridRowProps) {
   return (
     <div
@@ -66,6 +72,7 @@ export function GridRow({
         const hasOverride = cellOverrideValues?.has(overrideKey);
         const cellValue = hasOverride ? cellOverrideValues!.get(overrideKey) : row[colIdx];
         const width = columnWidths[col.name] ?? 120;
+        const isEditing = editingCell?.colIdx === colIdx;
 
         return (
           <div
@@ -74,7 +81,13 @@ export function GridRow({
             style={{ width, height: 28 }}
             onDoubleClick={() => onCellDoubleClick?.(colIdx)}
           >
-            {cellValue === null ? (
+            {isEditing ? (
+              <CellInput
+                initialValue={cellValue}
+                onCommit={(val) => onCellCommit?.(colIdx, val)}
+                onCancel={() => onCellCancel?.()}
+              />
+            ) : cellValue === null ? (
               <span className="italic text-zinc-400 dark:text-zinc-600">{nullDisplay}</span>
             ) : (
               <span className="truncate text-zinc-800 dark:text-zinc-200">{cellValue}</span>
@@ -83,5 +96,44 @@ export function GridRow({
         );
       })}
     </div>
+  );
+}
+
+function CellInput({
+  initialValue,
+  onCommit,
+  onCancel,
+}: {
+  initialValue: string | null | undefined;
+  onCommit: (value: string | null) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initialValue ?? '');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const commit = () => {
+    onCommit(value === '' ? null : value);
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      className="w-full h-full bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 text-xs outline-none border border-blue-500 rounded-sm px-1"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        e.stopPropagation();
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+    />
   );
 }
