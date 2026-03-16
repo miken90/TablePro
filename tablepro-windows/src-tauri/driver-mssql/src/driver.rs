@@ -170,7 +170,7 @@ pub fn build_query_result(
         .flat_map(|row| {
             row.into_iter().map(|cell| match cell {
                 Some(s) => string_to_ffi(s),
-                None => string_to_ffi(String::new()),
+                None => FfiString::null(),
             })
         })
         .collect();

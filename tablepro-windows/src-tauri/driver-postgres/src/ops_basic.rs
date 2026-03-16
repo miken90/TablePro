@@ -1,5 +1,6 @@
 use crate::driver::PostgresDriver;
 use crate::ffi_helpers::{ok_result, err_result, build_query_result, err_query_result, string_to_ffi};
+use tokio_postgres::SimpleQueryMessage;
 use tablepro_plugin_sdk::{
     DriverHandle, FfiStr, FfiResult, FfiQueryResult,
     FfiString, FfiTableList, FfiTableInfo,
@@ -68,32 +69,45 @@ pub unsafe fn execute(handle: *mut DriverHandle, sql: FfiStr) -> FfiQueryResult 
         Some(ref c) => c as *const tokio_postgres::Client,
     };
     driver.runtime.block_on(async {
-        match (*client).query(&sql_str as &str, &[]).await {
+        match (*client).simple_query(&sql_str).await {
             Err(e) => err_query_result(e.to_string()),
-            Ok(rows) => {
-                if rows.is_empty() {
-                    let affected = match (*client).execute(&sql_str as &str, &[]).await {
-                        Ok(n) => n as i64,
-                        Err(_) => 0,
-                    };
-                    return build_query_result(vec![], vec![], affected);
+            Ok(messages) => {
+                let mut columns: Vec<(String, String, bool, bool)> = vec![];
+                let mut data_rows: Vec<Vec<Option<String>>> = vec![];
+                let mut affected: i64 = 0;
+                let mut has_columns = false;
+
+                for msg in &messages {
+                    match msg {
+                        SimpleQueryMessage::RowDescription(cols) => {
+                            if !has_columns {
+                                columns = cols.iter()
+                                    .map(|c| (c.name().to_string(), "text".to_string(), true, false))
+                                    .collect();
+                                has_columns = true;
+                            }
+                        }
+                        SimpleQueryMessage::Row(row) => {
+                            let col_count = if has_columns { columns.len() } else { row.len() };
+                            if !has_columns {
+                                columns = (0..col_count)
+                                    .map(|i| (row.columns()[i].name().to_string(), "text".to_string(), true, false))
+                                    .collect();
+                                has_columns = true;
+                            }
+                            let cells: Vec<Option<String>> = (0..col_count)
+                                .map(|i| row.get(i).map(|s| s.to_string()))
+                                .collect();
+                            data_rows.push(cells);
+                        }
+                        SimpleQueryMessage::CommandComplete(n) => {
+                            affected = *n as i64;
+                        }
+                        _ => {}
+                    }
                 }
-                let first = &rows[0];
-                let columns: Vec<(String, String, bool, bool)> = first
-                    .columns()
-                    .iter()
-                    .map(|c| (c.name().to_string(), c.type_().name().to_string(), true, false))
-                    .collect();
-                let col_count = columns.len();
-                let data_rows: Vec<Vec<Option<String>>> = rows
-                    .iter()
-                    .map(|row| {
-                        (0..col_count)
-                            .map(|i| row.try_get::<_, Option<String>>(i).ok().flatten())
-                            .collect()
-                    })
-                    .collect();
-                build_query_result(columns, data_rows, 0)
+
+                build_query_result(columns, data_rows, affected)
             }
         }
     })

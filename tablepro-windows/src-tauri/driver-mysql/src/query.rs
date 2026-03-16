@@ -57,7 +57,10 @@ async fn run_query(
     for row in &raw_rows {
         for i in 0..column_count {
             let val: Option<String> = row.get_opt(i).and_then(|r| r.ok()).unwrap_or(None);
-            cells.push(string_to_ffi(val.unwrap_or_default()));
+            cells.push(match val {
+                Some(s) => string_to_ffi(s),
+                None => FfiString::null(),
+            });
         }
     }
 
