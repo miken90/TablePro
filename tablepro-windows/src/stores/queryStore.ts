@@ -31,14 +31,21 @@ export const useQueryStore = create<QueryState>((set) => ({
 
   execute: async (sessionId, sql, params) => {
     set({ isExecuting: true, error: null, result: null, activeConnectionId: sessionId });
+    const startMs = Date.now();
     try {
       const result = await commands.executeQuery(sessionId, sql, params);
       set({ result, isExecuting: false });
+
+      // Record to query history (fire-and-forget — don't block UI on failure)
+      const elapsedMs = Date.now() - startMs;
+      commands.historyRecord(sql, null, elapsedMs, result.rows.length, 'success').catch(() => {});
     } catch (err) {
+      const elapsedMs = Date.now() - startMs;
       set({
         error: extractErrorMessage(err),
         isExecuting: false,
       });
+      commands.historyRecord(sql, null, elapsedMs, 0, 'error').catch(() => {});
     }
   },
 

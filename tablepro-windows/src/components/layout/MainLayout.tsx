@@ -10,6 +10,7 @@ import { TableStructureView } from "../structure/table-structure-view";
 import { SettingsView } from "../settings/settings-view";
 import { FilterPanel } from "../filter/filter-panel";
 import { InspectorPanel } from "../inspector/inspector-panel";
+import { HistoryPanel } from "../history/HistoryPanel";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -57,8 +58,8 @@ export function MainLayout() {
   const [inspectorVisible, setInspectorVisible] = useState(false);
   const [inspectorWidth, setInspectorWidth] = useState(INSPECTOR_DEFAULT);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+  const [historyVisible, setHistoryVisible] = useState(false);
 
-  const execute = useQueryStore((s) => s.execute);
   const setQueryText = useQueryStore((s) => s.setQueryText);
 
   const result = useQueryStore((s) => s.result);
@@ -83,6 +84,10 @@ export function MainLayout() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "I") {
         e.preventDefault();
         setInspectorVisible((v) => !v);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "h") {
+        e.preventDefault();
+        setHistoryVisible((v) => !v);
       }
     };
     window.addEventListener("keydown", handler);
@@ -165,15 +170,13 @@ export function MainLayout() {
       const qualifiedName = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
       const sqlText = `SELECT * FROM ${qualifiedName};`;
       if (selectedConnectionId) {
-        const sessionId = getSessionId(selectedConnectionId);
         const tabId = addTab(`${tableName}`);
         updateTabContent(tabId, sqlText);
         setQueryText(sqlText);
         setActiveTableContext({ tableName, schema });
-        if (sessionId) void execute(sessionId, sqlText);
       }
     },
-    [selectedConnectionId, getSessionId, addTab, updateTabContent, setQueryText, execute]
+    [selectedConnectionId, addTab, updateTabContent, setQueryText]
   );
 
   const handleOpenTable = useCallback(
@@ -181,16 +184,14 @@ export function MainLayout() {
       const qualifiedName = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
       const sqlText = `SELECT * FROM ${qualifiedName};`;
       if (selectedConnectionId) {
-        const sessionId = getSessionId(selectedConnectionId);
         const tabId = addTab(`${tableName}`);
         updateTabContent(tabId, sqlText);
         setQueryText(sqlText);
         setActiveTableContext({ tableName, schema });
         setStructureTarget(null);
-        if (sessionId) void execute(sessionId, sqlText);
       }
     },
-    [selectedConnectionId, getSessionId, addTab, updateTabContent, setQueryText, execute]
+    [selectedConnectionId, addTab, updateTabContent, setQueryText]
   );
 
   const handleFilterApply = useCallback((clause: string) => {
@@ -224,6 +225,16 @@ export function MainLayout() {
     setSelectedRowIndex(rowIndex);
   }, []);
 
+  const handleHistorySelect = useCallback((query: string) => {
+    if (activeTabId) {
+      updateTabContent(activeTabId, query);
+    } else {
+      const tabId = addTab('Query');
+      updateTabContent(tabId, query);
+    }
+    setQueryText(query);
+  }, [activeTabId, addTab, updateTabContent, setQueryText]);
+
   const selectedRow = result && selectedRowIndex !== null ? result.rows[selectedRowIndex] ?? null : null;
   const inspectorColumns = result?.columns ?? [];
 
@@ -235,6 +246,7 @@ export function MainLayout() {
       <Toolbar
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onToggleHistory={() => setHistoryVisible((v) => !v)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -303,6 +315,18 @@ export function MainLayout() {
                 columns={inspectorColumns}
                 row={selectedRow}
                 onClose={() => setInspectorVisible(false)}
+              />
+            </div>
+          </>
+        )}
+
+        {historyVisible && isConnected && (
+          <>
+            <div className="w-px bg-zinc-200 dark:bg-zinc-700" />
+            <div style={{ width: 320 }} className="flex-shrink-0 overflow-hidden">
+              <HistoryPanel
+                onSelectQuery={handleHistorySelect}
+                onClose={() => setHistoryVisible(false)}
               />
             </div>
           </>

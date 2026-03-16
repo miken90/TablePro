@@ -1,4 +1,4 @@
-import { Play, Square, Settings, Unplug } from "lucide-react";
+import { Play, Square, Settings, Unplug, Clock } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -8,9 +8,10 @@ import { useEditorStore } from "../../stores/editorStore";
 interface ToolbarProps {
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
+  onToggleHistory?: () => void;
 }
 
-export function Toolbar({ onToggleSidebar, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory }: ToolbarProps) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const connections = useConnectionStore((s) => s.connections);
   const getStatus = useConnectionStore((s) => s.getStatus);
@@ -124,6 +125,14 @@ export function Toolbar({ onToggleSidebar, onOpenSettings }: ToolbarProps) {
           Stop
         </button>
       )}
+
+      <button
+        onClick={onToggleHistory}
+        className="rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+        title="Query History (Ctrl+H)"
+      >
+        <Clock size={15} />
+      </button>
 
       <button
         onClick={onOpenSettings}

@@ -36,6 +36,15 @@ impl HistoryStore {
         Ok(store)
     }
 
+    /// Create an in-memory store (for testing).
+    #[cfg(test)]
+    pub fn new_in_memory() -> Result<Self, String> {
+        let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
+        let store = Self { conn };
+        store.create_tables()?;
+        Ok(store)
+    }
+
     fn db_path() -> Result<PathBuf, AppError> {
         let base = dirs::data_dir()
             .ok_or_else(|| AppError::IoError("Cannot resolve data directory".into()))?;
@@ -52,7 +61,7 @@ impl HistoryStore {
                     execution_time_ms INTEGER NOT NULL,
                     row_count INTEGER NOT NULL DEFAULT 0,
                     status TEXT NOT NULL DEFAULT 'success',
-                    timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+                    timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
                 );
                 CREATE VIRTUAL TABLE IF NOT EXISTS history_fts
                     USING fts5(query, content=history, content_rowid=id);
@@ -78,8 +87,8 @@ impl HistoryStore {
     ) -> Result<(), String> {
         self.conn
             .execute(
-                "INSERT INTO history (query, database, execution_time_ms, row_count, status)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO history (query, database, execution_time_ms, row_count, status, timestamp)
+                 VALUES (?1, ?2, ?3, ?4, ?5, datetime('now', 'localtime'))",
                 rusqlite::params![query, database, execution_time_ms, row_count, status],
             )
             .map_err(|e| e.to_string())?;
@@ -173,5 +182,141 @@ impl HistoryStore {
             return Err(format!("History entry {id} not found"));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_store() -> HistoryStore {
+        HistoryStore::new_in_memory().expect("in-memory store")
+    }
+
+    #[test]
+    fn insert_and_fetch_recent_round_trip() {
+        let store = make_store();
+        store
+            .insert("SELECT 1", Some("testdb"), 42, 1, "success")
+            .unwrap();
+        let entries = store.fetch_recent(10).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].query, "SELECT 1");
+        assert_eq!(entries[0].database.as_deref(), Some("testdb"));
+        assert_eq!(entries[0].execution_time_ms, 42);
+        assert_eq!(entries[0].row_count, 1);
+        assert_eq!(entries[0].status, "success");
+    }
+
+    #[test]
+    fn fetch_recent_returns_newest_first() {
+        let store = make_store();
+        store.insert("SELECT 1", None, 10, 1, "success").unwrap();
+        store.insert("SELECT 2", None, 20, 2, "success").unwrap();
+        store.insert("SELECT 3", None, 30, 3, "success").unwrap();
+        let entries = store.fetch_recent(10).unwrap();
+        assert_eq!(entries[0].query, "SELECT 3");
+        assert_eq!(entries[1].query, "SELECT 2");
+        assert_eq!(entries[2].query, "SELECT 1");
+    }
+
+    #[test]
+    fn fetch_recent_respects_limit() {
+        let store = make_store();
+        for i in 0..5 {
+            store
+                .insert(&format!("SELECT {i}"), None, 10, 1, "success")
+                .unwrap();
+        }
+        let entries = store.fetch_recent(2).unwrap();
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn search_returns_fts5_matches() {
+        let store = make_store();
+        store
+            .insert("SELECT * FROM users", None, 10, 5, "success")
+            .unwrap();
+        store
+            .insert("SELECT * FROM orders", None, 20, 3, "success")
+            .unwrap();
+        let results = store.search("users").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].query, "SELECT * FROM users");
+    }
+
+    #[test]
+    fn search_empty_term_falls_back_to_fetch_recent() {
+        let store = make_store();
+        store.insert("SELECT 1", None, 10, 1, "success").unwrap();
+        store.insert("SELECT 2", None, 20, 2, "success").unwrap();
+        let results = store.search("").unwrap();
+        assert_eq!(results.len(), 2);
+        // Should be newest first (same as fetch_recent)
+        assert_eq!(results[0].query, "SELECT 2");
+    }
+
+    #[test]
+    fn search_handles_fts5_special_characters() {
+        let store = make_store();
+        store
+            .insert("SELECT \"col\" FROM t", None, 10, 1, "success")
+            .unwrap();
+        // Should not crash on quotes
+        let results = store.search("\"col\"");
+        assert!(results.is_ok());
+    }
+
+    #[test]
+    fn delete_entry_removes_specific_entry() {
+        let store = make_store();
+        store.insert("SELECT 1", None, 10, 1, "success").unwrap();
+        store.insert("SELECT 2", None, 20, 2, "success").unwrap();
+        let entries = store.fetch_recent(10).unwrap();
+        let id_to_delete = entries[0].id; // newest (SELECT 2)
+        store.delete_entry(id_to_delete).unwrap();
+        let remaining = store.fetch_recent(10).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].query, "SELECT 1");
+    }
+
+    #[test]
+    fn delete_entry_nonexistent_id_returns_error() {
+        let store = make_store();
+        let result = store.delete_entry(999);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn clear_all_removes_all_entries() {
+        let store = make_store();
+        store.insert("SELECT 1", None, 10, 1, "success").unwrap();
+        store.insert("SELECT 2", None, 20, 2, "success").unwrap();
+        store.insert("SELECT 3", None, 30, 3, "success").unwrap();
+        store.clear_all().unwrap();
+        let entries = store.fetch_recent(100).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn fts5_index_stays_in_sync_after_delete() {
+        let store = make_store();
+        store
+            .insert("SELECT * FROM users WHERE id = 1", None, 10, 1, "success")
+            .unwrap();
+        store
+            .insert("SELECT * FROM orders", None, 20, 3, "success")
+            .unwrap();
+        let entries = store.fetch_recent(10).unwrap();
+        let users_entry = entries.iter().find(|e| e.query.contains("users")).unwrap();
+        store.delete_entry(users_entry.id).unwrap();
+        // Search for deleted entry should return nothing
+        let results = store.search("users").unwrap();
+        assert!(results.is_empty());
+        // Other entry still searchable
+        let results = store.search("orders").unwrap();
+        assert_eq!(results.len(), 1);
     }
 }
