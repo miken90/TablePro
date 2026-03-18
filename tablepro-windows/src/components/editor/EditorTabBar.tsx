@@ -1,7 +1,11 @@
 import { Plus, X } from "lucide-react";
 import { useEditorStore } from "../../stores/editorStore";
 
-export function EditorTabBar() {
+interface EditorTabBarProps {
+  onTabActivate?: () => void;
+}
+
+export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
   const tabs = useEditorStore((s) => s.tabs);
   const activeTabId = useEditorStore((s) => s.activeTabId);
   const addTab = useEditorStore((s) => s.addTab);
@@ -14,7 +18,7 @@ export function EditorTabBar() {
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => { setActiveTab(tab.id); onTabActivate?.(); }}
             className={`flex min-w-0 max-w-[160px] cursor-pointer items-center gap-1.5 border-r border-zinc-200 px-3 py-1 text-xs dark:border-zinc-700 ${
               tab.id === activeTabId
                 ? "bg-white text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
@@ -40,7 +44,7 @@ export function EditorTabBar() {
 
       {/* New tab button */}
       <button
-        onClick={() => addTab()}
+        onClick={() => { addTab(); onTabActivate?.(); }}
         className="flex h-full items-center px-2 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700"
         title="New tab"
       >

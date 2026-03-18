@@ -52,13 +52,12 @@ pub async fn import_sql_file(
         "import_sql_file"
     );
 
-    // We need to lock the manager only to borrow the driver. The borrow must
-    // not span across await points (the driver execute calls), so we hold the
-    // lock for the entire import. This matches how export_to_file works.
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
 
-    let result = import_service::execute(&path, &options, driver, |current, total| {
+    let result = import_service::execute(&path, &options, driver.as_ref(), |current, total| {
         let _ = app.emit("import_progress", ImportProgress { current, total });
     })
     .await?;

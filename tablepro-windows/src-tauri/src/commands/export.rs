@@ -130,8 +130,10 @@ pub async fn export_to_file(
     // Step 1: get total count
     let total = {
         let count_sql = format!("SELECT COUNT(*) FROM ({sql}) AS _export_count");
-        let mgr = manager.lock().await;
-        let driver = mgr.get_driver(&session_id)?;
+        let driver = {
+            let mgr = manager.lock().await;
+            mgr.get_driver(&session_id)?
+        };
         let result = driver.execute(&count_sql).await?;
         result
             .rows
@@ -183,8 +185,10 @@ pub async fn export_to_file(
         );
 
         let chunk = {
-            let mgr = manager.lock().await;
-            let driver = mgr.get_driver(&session_id)?;
+            let driver = {
+                let mgr = manager.lock().await;
+                mgr.get_driver(&session_id)?
+            };
             driver.execute(&chunk_sql).await?
         };
 

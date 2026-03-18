@@ -4,6 +4,7 @@ import { useQueryStore } from '../../stores/queryStore';
 import { useChangeStore } from '../../stores/changeStore';
 import { useSchemaStore } from '../../stores/schemaStore';
 import { useEditorStore } from '../../stores/editorStore';
+import { useQueryLogStore } from '../../stores/queryLogStore';
 import { fetchRowsFiltered, fetchCountFiltered, saveChanges } from '../../ipc/commands';
 import type { SavePayload, RowChangePayload, CellChangePayload } from '../../ipc/commands';
 import type { QueryResult } from '../../types/query';
@@ -12,7 +13,7 @@ import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
 import { EmptyState } from '../shared/EmptyState';
 import { ExportDialog } from '../export/export-dialog';
-import { Database, Download } from 'lucide-react';
+import { Database, Download, Code2 } from 'lucide-react';
 
 type ActiveTab = 'results' | 'messages';
 
@@ -22,6 +23,7 @@ interface ResultPanelProps {
   sessionId?: string;
   activeWhereClause?: string;
   onRowSelect?: (rowIndex: number | null) => void;
+  onOpenQueryEditor?: () => void;
 }
 
 function buildOrderByClause(sorting: SortingState): string | null {
@@ -29,10 +31,11 @@ function buildOrderByClause(sorting: SortingState): string | null {
   return sorting.map(s => `"${s.id}" ${s.desc ? 'DESC' : 'ASC'}`).join(', ');
 }
 
-export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, onRowSelect: onRowSelectProp }: ResultPanelProps) {
+export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, onRowSelect: onRowSelectProp, onOpenQueryEditor }: ResultPanelProps) {
   const { result: queryResult, error: queryError, isExecuting, activeConnectionId, queryText } = useQueryStore();
   const { hasChanges, getChanges, clear: clearChanges, recordCellChange } = useChangeStore();
   const { fkMap, fetchForeignKeysForTable } = useSchemaStore();
+  const logEntries = useQueryLogStore((s) => s.entries);
   const [activeTab, setActiveTab] = useState<ActiveTab>('results');
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [lastSelectedRow, setLastSelectedRow] = useState<number | null>(null);
@@ -62,9 +65,23 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
     const seq = ++fetchSeqRef.current;
     setIsFetching(true);
     setFetchError(null);
+    const offset = (pg - 1) * ps;
+    const orderBy = buildOrderByClause(sort);
+
+    // Build the SQL for logging purposes
+    const qualifiedTable = sch ? `"${sch}"."${tbl}"` : `"${tbl}"`;
+    const wherePart = where ? ` WHERE ${where}` : '';
+    const orderPart = orderBy ? ` ORDER BY ${orderBy}` : '';
+    const logSql = `SELECT * FROM ${qualifiedTable}${wherePart}${orderPart} LIMIT ${ps} OFFSET ${offset}`;
+    const logId = useQueryLogStore.getState().add({
+      sql: logSql,
+      source: 'table-browse',
+      status: 'running',
+      timestamp: Date.now(),
+    });
+    const startMs = Date.now();
+
     try {
-      const offset = (pg - 1) * ps;
-      const orderBy = buildOrderByClause(sort);
       const rows = await fetchRowsFiltered(sid, tbl, sch, offset, ps, where || null, orderBy);
       if (seq !== fetchSeqRef.current) return;
       let count = 0;
@@ -76,11 +93,22 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
       if (seq !== fetchSeqRef.current) return;
       setTableResult(rows);
       setTotalCount(typeof count === 'number' ? count : 0);
+      useQueryLogStore.getState().update(logId, {
+        status: 'success',
+        durationMs: Date.now() - startMs,
+        rowCount: rows.rows.length,
+      });
     } catch (err) {
       if (seq !== fetchSeqRef.current) return;
-      setFetchError(err instanceof Error ? err.message : String(err));
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setFetchError(errorMsg);
       setTableResult(null);
       setTotalCount(0);
+      useQueryLogStore.getState().update(logId, {
+        status: 'error',
+        durationMs: Date.now() - startMs,
+        error: errorMsg,
+      });
     } finally {
       if (seq === fetchSeqRef.current) setIsFetching(false);
     }
@@ -342,22 +370,34 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
           {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />}
         </button>
 
-        {result && (
-          <div className="ml-auto flex items-center gap-2 px-3">
+        <div className="ml-auto flex items-center gap-2 px-3">
+          {onOpenQueryEditor && (
             <button
-              onClick={() => setShowExport(true)}
+              onClick={onOpenQueryEditor}
               className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-              title="Export results"
+              title="Open SQL Query Editor"
             >
-              <Download size={10} />
-              Export
+              <Code2 size={10} />
+              Query Editor
             </button>
-            <span className="text-[10px] text-zinc-400">
-              {result.affectedRows > 0 && `${result.affectedRows} rows affected · `}
-              {result.executionTimeMs.toFixed(1)}ms
-            </span>
-          </div>
-        )}
+          )}
+          {result && (
+            <>
+              <button
+                onClick={() => setShowExport(true)}
+                className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                title="Export results"
+              >
+                <Download size={10} />
+                Export
+              </button>
+              <span className="text-[10px] text-zinc-400">
+                {result.affectedRows > 0 && `${result.affectedRows} rows affected · `}
+                {result.executionTimeMs.toFixed(1)}ms
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -407,16 +447,44 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
         )}
 
         {!loading && activeTab === 'messages' && (
-          <div className="h-full overflow-y-auto p-3">
-            {error ? (
-              <pre className="font-mono text-xs text-red-600 dark:text-red-400">{error}</pre>
-            ) : result ? (
-              <p className="text-xs text-green-600 dark:text-green-400">
-                Query completed. {result.affectedRows} row(s) affected in{' '}
-                {result.executionTimeMs.toFixed(1)}ms.
-              </p>
+          <div className="h-full overflow-y-auto font-mono text-xs">
+            {logEntries.length === 0 ? (
+              <p className="p-3 text-zinc-500">No queries executed yet.</p>
             ) : (
-              <p className="text-xs text-zinc-500">No messages</p>
+              logEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className={`border-b border-zinc-100 dark:border-zinc-800 px-3 py-2 ${
+                    entry.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`text-[10px] font-semibold uppercase tracking-wide ${
+                      entry.status === 'running' ? 'text-blue-500' :
+                      entry.status === 'error'   ? 'text-red-500' :
+                                                   'text-green-600 dark:text-green-400'
+                    }`}>
+                      {entry.status === 'running' ? '⏳' : entry.status === 'error' ? '✗' : '✓'}
+                      {' '}{entry.source}
+                    </span>
+                    {entry.durationMs !== undefined && (
+                      <span className="text-[10px] text-zinc-400">{entry.durationMs.toFixed(0)}ms</span>
+                    )}
+                    {entry.rowCount !== undefined && (
+                      <span className="text-[10px] text-zinc-400">{entry.rowCount} rows</span>
+                    )}
+                    <span className="ml-auto text-[10px] text-zinc-400">
+                      {new Date(entry.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all text-zinc-700 dark:text-zinc-300">
+                    {entry.sql}
+                  </pre>
+                  {entry.error && (
+                    <p className="mt-1 text-red-600 dark:text-red-400">{entry.error}</p>
+                  )}
+                </div>
+              ))
             )}
           </div>
         )}

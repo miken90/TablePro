@@ -10,9 +10,10 @@ pub async fn fetch_tables(
     session_id: String,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<Vec<TableInfo>, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
-    tracing::info!(session_id = %session_id, "fetch_tables");
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     driver.fetch_tables().await
 }
 
@@ -24,9 +25,10 @@ pub async fn fetch_columns(
     schema: Option<String>,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
-    tracing::info!(session_id = %session_id, "fetch_columns {schema:?}.{table}");
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     driver.fetch_columns(&table, schema.as_deref()).await
 }
 
@@ -38,9 +40,10 @@ pub async fn fetch_indexes(
     schema: Option<String>,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<Vec<IndexInfo>, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
-    tracing::info!(session_id = %session_id, "fetch_indexes {schema:?}.{table}");
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     driver.fetch_indexes(&table, schema.as_deref()).await
 }
 
@@ -52,9 +55,10 @@ pub async fn fetch_foreign_keys(
     schema: Option<String>,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<Vec<ForeignKeyInfo>, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
-    tracing::info!(session_id = %session_id, "fetch_foreign_keys {schema:?}.{table}");
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     driver.fetch_foreign_keys(&table, schema.as_deref()).await
 }
 
@@ -64,9 +68,10 @@ pub async fn fetch_databases(
     session_id: String,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<Vec<String>, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
-    tracing::info!(session_id = %session_id, "fetch_databases");
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     driver.fetch_databases().await
 }
 
@@ -78,9 +83,10 @@ pub async fn fetch_ddl(
     schema: Option<String>,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<String, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
-    tracing::info!(session_id = %session_id, "fetch_ddl {schema:?}.{table}");
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     driver.fetch_ddl(&table, schema.as_deref()).await
 }
 
@@ -103,9 +109,10 @@ pub async fn fetch_schemas(
     session_id: String,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<Vec<String>, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
-    tracing::info!(session_id = %session_id, "fetch_schemas");
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     let result = driver
         .execute(
             "SELECT schema_name FROM information_schema.schemata \

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: SQL activity log — `queryLogStore` tracks all executed queries (editor + table-browse) with source, duration, row count, and timestamps; displayed in Messages tab of ResultPanel
+- Windows: Table browse mode — clicking a table in the sidebar now shows a dedicated full-height data grid view (no editor split); "Query Editor" button in table toolbar to switch back; Run button in toolbar automatically switches back to query editor mode and shows results
+
+### Fixed
+
+- Windows: Reduced backend crash risk during shutdown and startup — `ConnectionManager` now drops active drivers before releasing plugin manager state, and query history initialization falls back to in-memory storage instead of panicking when the on-disk database cannot open
+- Windows: Avoided a post-connect metadata prefetch burst that could overwhelm Tauri IPC/plugin calls and destabilize dev runtime on large schemas; column metadata now stays demand-driven instead of loading every table up front
+- Windows: Added renderer crash instrumentation so uncaught frontend errors, unhandled promise rejections, and startup beacons are written to `%APPDATA%/TablePro/renderer-errors.log` for future crash triage
+- Windows: Run button now correctly shows query results even when previously in table-browse mode (was silently discarding `queryResult` when `isTableMode` was active)
+- Windows: Inline edit Ctrl+S shortcut — pressing Ctrl+S now triggers Save Changes when unsaved edits exist in table-browse mode
+
 - Windows: SSH tunnel support — `russh`-based (pure Rust, no C deps) SSH tunneling with password and private key authentication, local port forwarding, `SshTunnelManager` for lifecycle management, integrated into `connection_manager` connect/disconnect/test flows, SSH section in ConnectionForm with host/port/username/auth method fields
 - Windows: Import SQL — full-featured `.sql` and `.sql.gz` file import with statement scanner (handles strings, dollar-quoted blocks, comments), preview mode (statement count, file size, first statements), sequential execution with Tauri progress events, transaction wrap and FK-check-disable options, `flate2` gzip decompression, Import dialog with file picker and progress bar (Ctrl+Shift+M shortcut)
 - Windows: XLSX export — `rust_xlsxwriter` integration in `export.rs` with type-aware cell writing (numbers, booleans, text), 1M row cap
@@ -30,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows: App crash on launch or after connecting — Vite dev server (`http://localhost:1420`) destabilized WebView2 renderer; `tauri dev` now builds frontend to `dist/` and serves from embedded files instead of the dev server
 - Windows: Grid header not scrolling horizontally with data — synced header scrollLeft with body scroll via onScroll handler
 - Windows: Server-side pagination and sorting — table browse now uses `fetch_rows` with LIMIT/OFFSET/ORDER BY instead of loading all rows into memory; page and sort changes re-query the database
 - Windows: DevTools accessible in release builds — moved `devtools` cargo feature behind optional flag, disabled right-click context menu and F12/Ctrl+Shift+I in production

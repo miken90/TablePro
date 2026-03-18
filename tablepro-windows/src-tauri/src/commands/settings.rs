@@ -1,3 +1,6 @@
+use std::fs::OpenOptions;
+use std::io::Write;
+
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -22,4 +25,16 @@ pub async fn set_settings(
     let mut store = store.lock().await;
     store.set(settings);
     store.save()
+}
+
+/// Append a renderer-side error to a log file under the app data directory.
+#[tauri::command]
+pub async fn log_renderer_error(message: String) -> Result<(), AppError> {
+    let base = dirs::data_dir()
+        .ok_or_else(|| AppError::IoError("Cannot resolve data directory".into()))?
+        .join("TablePro");
+    std::fs::create_dir_all(&base)?;
+    let path = base.join("renderer-errors.log");
+    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+    writeln!(file, "{message}").map_err(|e| AppError::IoError(e.to_string()))
 }

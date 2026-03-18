@@ -189,6 +189,12 @@ Components re-render with new data
 
 **Note on IPC Sequencing**: Data fetching (table browse) uses sequential `await` calls instead of `Promise.all` to avoid tokio Mutex deadlocks in the plugin FFI layer. This ensures safe concurrent access to shared connection pooling and driver state across IPC boundaries.
 
+**Note on plugin lifetime**: Active driver instances must be dropped before the host releases plugin manager state. On Windows, each `PluginDriverAdapter` owns a plugin-created handle whose destructor still depends on the loaded DLL and vtable remaining valid during shutdown.
+
+**Note on metadata loading**: Schema metadata should be fetched on demand. Avoid firing column-introspection requests for every table immediately after connect or database switch — large schemas can flood Tauri IPC and plugin calls, which makes dev runtime instability much harder to diagnose.
+
+**Note on crash triage**: If `tauri dev` crashes without new Rust log lines, check `%APPDATA%/TablePro/renderer-errors.log` first. That usually means the renderer/WebView layer hit an uncaught exception or unhandled rejection before backend diagnostics could help.
+
 ### IPC Command Flow
 
 ```rust

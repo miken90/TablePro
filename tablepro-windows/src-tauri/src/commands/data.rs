@@ -21,8 +21,10 @@ pub async fn save_changes(
     payload: SavePayload,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<SaveResult, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
 
     let statements = generate_statements(&payload);
     let mut total_affected = 0i64;

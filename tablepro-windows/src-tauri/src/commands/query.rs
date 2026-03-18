@@ -27,8 +27,10 @@ pub async fn execute_query(
     _params: Option<Vec<String>>,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<QueryResult, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     tracing::info!(session_id = %session_id, "execute_query: {}", &sql);
     driver.execute(&sql).await
 }
@@ -46,8 +48,10 @@ pub async fn fetch_rows(
     limit: u64,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<QueryResult, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     tracing::info!(session_id = %session_id, "fetch_rows {table} offset={offset} limit={limit}");
 
     let qualified = match &schema {
@@ -81,8 +85,10 @@ pub async fn fetch_count(
     where_clause: Option<String>,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<i64, AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     tracing::info!(session_id = %session_id, "fetch_count {table}");
 
     let qualified = match &schema {
@@ -116,8 +122,10 @@ pub async fn cancel_query(
     session_id: String,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<(), AppError> {
-    let mgr = manager.lock().await;
-    let driver = mgr.get_driver(&session_id)?;
+    let driver = {
+        let mgr = manager.lock().await;
+        mgr.get_driver(&session_id)?
+    };
     tracing::info!(session_id = %session_id, "cancel_query");
     driver.cancel_query()
 }

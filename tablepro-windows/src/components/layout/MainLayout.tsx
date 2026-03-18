@@ -32,6 +32,8 @@ interface StructureTarget {
   schema?: string | null;
 }
 
+type ViewMode = 'query' | 'table-browse';
+
 interface TableContext {
   tableName: string;
   schema?: string | null;
@@ -52,6 +54,7 @@ export function MainLayout() {
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [structureTarget, setStructureTarget] = useState<StructureTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('query');
   const [activeTableContext, setActiveTableContext] = useState<TableContext | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [activeWhereClause, setActiveWhereClause] = useState("");
@@ -63,8 +66,6 @@ export function MainLayout() {
   const [helpOpen, setHelpOpen] = useState(false);
 
   const setQueryText = useQueryStore((s) => s.setQueryText);
-
-  const result = useQueryStore((s) => s.result);
 
   useTheme();
 
@@ -99,16 +100,6 @@ export function MainLayout() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
-
-  // Eagerly fetch columns for all tables (powers SQL autocomplete)
-  useEffect(() => {
-    if (!selectedConnectionId || tables.length === 0) return;
-    const sid = getSessionId(selectedConnectionId);
-    if (!sid) return;
-    for (const t of tables) {
-      fetchColumns(sid, t.name).catch(() => {});
-    }
-  }, [selectedConnectionId, getSessionId, tables, fetchColumns]);
 
   // Fetch columns when active table changes (for filter panel)
   useEffect(() => {
@@ -173,32 +164,32 @@ export function MainLayout() {
 
   const handleQuickSwitcherSelect = useCallback(
     (tableName: string, schema?: string | null) => {
-      const qualifiedName = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
-      const sqlText = `SELECT * FROM ${qualifiedName};`;
       if (selectedConnectionId) {
-        const tabId = addTab(`${tableName}`);
-        updateTabContent(tabId, sqlText);
-        setQueryText(sqlText);
         setActiveTableContext({ tableName, schema });
+        setViewMode('table-browse');
+        setStructureTarget(null);
+        setActiveWhereClause("");
       }
     },
-    [selectedConnectionId, addTab, updateTabContent, setQueryText]
+    [selectedConnectionId]
   );
 
   const handleOpenTable = useCallback(
     (tableName: string, schema?: string | null) => {
-      const qualifiedName = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
-      const sqlText = `SELECT * FROM ${qualifiedName};`;
       if (selectedConnectionId) {
-        const tabId = addTab(`${tableName}`);
-        updateTabContent(tabId, sqlText);
-        setQueryText(sqlText);
         setActiveTableContext({ tableName, schema });
+        setViewMode('table-browse');
         setStructureTarget(null);
+        setActiveWhereClause("");
       }
     },
-    [selectedConnectionId, addTab, updateTabContent, setQueryText]
+    [selectedConnectionId]
   );
+
+  const handleSwitchToQueryMode = useCallback(() => {
+    setViewMode('query');
+    setActiveTableContext(null);
+  }, []);
 
   const handleFilterApply = useCallback((clause: string) => {
     setActiveWhereClause(clause);
@@ -239,10 +230,14 @@ export function MainLayout() {
       updateTabContent(tabId, query);
     }
     setQueryText(query);
+    setViewMode('query');
+    setActiveTableContext(null);
   }, [activeTabId, addTab, updateTabContent, setQueryText]);
 
-  const selectedRow = result && selectedRowIndex !== null ? result.rows[selectedRowIndex] ?? null : null;
-  const inspectorColumns = result?.columns ?? [];
+  const queryResult = useQueryStore((s) => s.result);
+  const inspectorResult = viewMode === 'table-browse' ? null : queryResult;
+  const selectedRow = inspectorResult && selectedRowIndex !== null ? inspectorResult.rows[selectedRowIndex] ?? null : null;
+  const inspectorColumns = inspectorResult?.columns ?? [];
 
   const sessionId = selectedConnectionId ? getSessionId(selectedConnectionId) : undefined;
   const isConnected = !!selectedConnectionId;
@@ -253,6 +248,7 @@ export function MainLayout() {
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         onOpenSettings={() => setSettingsOpen(true)}
         onToggleHistory={() => setHistoryVisible((v) => !v)}
+        onRunQuery={handleSwitchToQueryMode}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -278,7 +274,29 @@ export function MainLayout() {
             />
           ) : !isConnected ? (
             <WelcomeView />
+          ) : viewMode === 'table-browse' && activeTableContext ? (
+            /* ── Table Browse Mode: full-height data grid, no editor ── */
+            <>
+              {filterVisible && (
+                <FilterPanel
+                  columns={filterColumns}
+                  onApply={handleFilterApply}
+                  onClear={handleFilterClear}
+                />
+              )}
+              <div className="flex-1 overflow-hidden">
+                <ResultPanel
+                  tableName={activeTableContext.tableName}
+                  schema={activeTableContext.schema}
+                  sessionId={sessionId}
+                  activeWhereClause={activeWhereClause}
+                  onRowSelect={handleRowSelect}
+                  onOpenQueryEditor={handleSwitchToQueryMode}
+                />
+              </div>
+            </>
           ) : (
+            /* ── Query Editor Mode: editor on top, results below ── */
             <>
               <EditorTabBar />
               {filterVisible && (
@@ -298,10 +316,7 @@ export function MainLayout() {
                 />
                 <div className="flex-1 overflow-hidden">
                   <ResultPanel
-                    tableName={activeTableContext?.tableName}
-                    schema={activeTableContext?.schema}
                     sessionId={sessionId}
-                    activeWhereClause={activeWhereClause}
                     onRowSelect={handleRowSelect}
                   />
                 </div>

@@ -94,6 +94,17 @@ CodeMirror 6 with `@codemirror/lang-sql`, `@replit/codemirror-vim`, custom autoc
 
 Rust: `tracing` crate with structured logging. Never `println!()` in production code.
 
+## Crash Triage Memory (MANDATORY READ)
+
+Before debugging recurring crashes, read `memory.md` at repo root first.
+
+Priority order for this project:
+1. Determine if crash is dev-only vs release exe vs installer
+2. Check `%APPDATA%/TablePro/renderer-errors.log`
+3. Check `src-tauri/target/debug/stdout.log` and `stderr.log`
+4. If logs are silent, inspect Windows Event Log + `%LOCALAPPDATA%/CrashDumps`
+5. Only then deep-dive plugin/IPC internals
+
 ## Semantic Code Search (cocoindex-code)
 
 Use the `cocoindex-code` MCP server's `code_search` tool for semantic code search when:

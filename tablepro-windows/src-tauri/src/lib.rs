@@ -18,7 +18,7 @@ use commands::schema::{
     fetch_columns, fetch_databases, fetch_ddl, fetch_foreign_keys, fetch_indexes, fetch_schemas,
     fetch_tables, switch_database,
 };
-use commands::settings::{get_settings, set_settings};
+use commands::settings::{get_settings, log_renderer_error, set_settings};
 use commands::storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
@@ -27,7 +27,28 @@ use services::ConnectionManager;
 use storage::{ConnectionStore, HistoryStore, SettingsStore};
 use tokio::sync::Mutex;
 
+fn build_history_store() -> HistoryStore {
+    match HistoryStore::new() {
+        Ok(store) => store,
+        Err(error) => {
+            tracing::error!("Failed to init history store: {error}. Falling back to in-memory history.");
+            HistoryStore::new_in_memory_fallback()
+        }
+    }
+}
+
 pub fn run() {
+    // Install a panic hook that logs to stderr + a file before aborting.
+    std::panic::set_hook(Box::new(|info| {
+        let bt = std::backtrace::Backtrace::force_capture();
+        let msg = format!("PANIC: {info}\nBacktrace:\n{bt}");
+        eprintln!("{msg}");
+        if let Ok(exe) = std::env::current_exe() {
+            let crash_log = exe.with_file_name("crash.log");
+            let _ = std::fs::write(&crash_log, &msg);
+        }
+    }));
+
     // Initialise structured logging — respects RUST_LOG env var.
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -64,9 +85,7 @@ pub fn run() {
             }
             store
         }))
-        .manage(Mutex::new(
-            HistoryStore::new().expect("Failed to init history store"),
-        ))
+        .manage(Mutex::new(build_history_store()))
         .invoke_handler(tauri::generate_handler![
             // connection
             test_connection,
@@ -90,6 +109,7 @@ pub fn run() {
             // settings
             get_settings,
             set_settings,
+            log_renderer_error,
             // storage
             list_connections,
             save_connection,
@@ -114,4 +134,7 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    // If we get here, the app exited normally (window closed, etc.)
+    tracing::info!("TablePro exiting normally");
 }

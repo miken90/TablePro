@@ -36,13 +36,20 @@ impl HistoryStore {
         Ok(store)
     }
 
-    /// Create an in-memory store (for testing).
-    #[cfg(test)]
+    /// Create an in-memory store.
     pub fn new_in_memory() -> Result<Self, String> {
         let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
         let store = Self { conn };
         store.create_tables()?;
         Ok(store)
+    }
+
+    /// Best-effort fallback used when the on-disk history DB cannot be opened.
+    pub fn new_in_memory_fallback() -> Self {
+        match Self::new_in_memory() {
+            Ok(store) => store,
+            Err(error) => panic!("Failed to init in-memory history store fallback: {error}"),
+        }
     }
 
     fn db_path() -> Result<PathBuf, AppError> {

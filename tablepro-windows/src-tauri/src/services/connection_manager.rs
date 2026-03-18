@@ -9,7 +9,7 @@ use crate::services::ssh_tunnel::SshTunnelManager;
 
 /// A live connection session holding its driver and current status.
 struct ActiveConnection {
-    driver: Box<dyn DatabaseDriver>,
+    driver: Arc<dyn DatabaseDriver>,
     config: ConnectionConfig,
     status: ConnectionStatus,
 }
@@ -19,9 +19,10 @@ struct ActiveConnection {
 /// Holds a shared reference to the PluginManager to create drivers on demand.
 /// SSH tunnels are tracked in a parallel `SshTunnelManager` keyed by session ID.
 pub struct ConnectionManager {
-    plugin_manager: Arc<PluginManager>,
+    // Drop active connections before releasing plugin DLL/vtable state.
     connections: HashMap<String, ActiveConnection>,
     ssh_tunnels: SshTunnelManager,
+    plugin_manager: Arc<PluginManager>,
 }
 
 impl ConnectionManager {
@@ -31,6 +32,26 @@ impl ConnectionManager {
             connections: HashMap::new(),
             ssh_tunnels: SshTunnelManager::new(),
         }
+    }
+
+    pub fn plugin_manager(&self) -> Arc<PluginManager> {
+        Arc::clone(&self.plugin_manager)
+    }
+
+    pub fn insert_connection(
+        &mut self,
+        session_id: String,
+        driver: Arc<dyn DatabaseDriver>,
+        config: ConnectionConfig,
+    ) {
+        self.connections.insert(
+            session_id,
+            ActiveConnection {
+                driver,
+                config,
+                status: ConnectionStatus::Connected,
+            },
+        );
     }
 
     /// Open a new session and return its UUID.
@@ -57,20 +78,14 @@ impl ConnectionManager {
             (Uuid::new_v4().to_string(), config.clone())
         };
 
-        let driver = self.plugin_manager.create_driver(&connect_config.db_type, &connect_config)?;
+        let driver: Arc<dyn DatabaseDriver> =
+            Arc::from(self.plugin_manager.create_driver(&connect_config.db_type, &connect_config)?);
         driver.connect().await.map_err(|e| {
             tracing::error!(db_type = %connect_config.db_type, "connect failed: {e}");
             e
         })?;
 
-        self.connections.insert(
-            session_id.clone(),
-            ActiveConnection {
-                driver,
-                config: connect_config.clone(),
-                status: ConnectionStatus::Connected,
-            },
-        );
+        self.insert_connection(session_id.clone(), driver, connect_config.clone());
         tracing::info!(session_id = %session_id, db_type = %connect_config.db_type, ssh = config.ssh_enabled, "Session opened");
         Ok(session_id)
     }
@@ -112,14 +127,16 @@ impl ConnectionManager {
             test_cfg.host = "127.0.0.1".to_string();
             test_cfg.port = local_port;
 
-            let driver = self.plugin_manager.create_driver(&test_cfg.db_type, &test_cfg)?;
+            let driver: Arc<dyn DatabaseDriver> =
+                Arc::from(self.plugin_manager.create_driver(&test_cfg.db_type, &test_cfg)?);
             driver.connect().await?;
             let ping = driver.ping().await;
             driver.disconnect();
             temp_mgr.close_tunnel("__test__");
             ping
         } else {
-            let driver = self.plugin_manager.create_driver(&config.db_type, config)?;
+            let driver: Arc<dyn DatabaseDriver> =
+                Arc::from(self.plugin_manager.create_driver(&config.db_type, config)?);
             driver.connect().await?;
             let ping = driver.ping().await;
             driver.disconnect();
@@ -128,10 +145,10 @@ impl ConnectionManager {
     }
 
     /// Borrow the driver for a session (for query/schema calls).
-    pub fn get_driver(&self, id: &str) -> Result<&dyn DatabaseDriver, AppError> {
+    pub fn get_driver(&self, id: &str) -> Result<Arc<dyn DatabaseDriver>, AppError> {
         self.connections
             .get(id)
-            .map(|c| c.driver.as_ref())
+            .map(|c| Arc::clone(&c.driver))
             .ok_or(AppError::NotConnected)
     }
 
@@ -162,9 +179,10 @@ impl ConnectionManager {
         let mut new_config = conn.config.clone();
         new_config.database = database.to_string();
 
-        let new_driver = self
-            .plugin_manager
-            .create_driver(&new_config.db_type, &new_config)?;
+        let new_driver: Arc<dyn DatabaseDriver> = Arc::from(
+            self.plugin_manager
+                .create_driver(&new_config.db_type, &new_config)?,
+        );
         new_driver.connect().await.map_err(|e| {
             tracing::error!(session_id = %id, database, "switch_database connect failed: {e}");
             e

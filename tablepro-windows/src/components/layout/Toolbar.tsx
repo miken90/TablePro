@@ -10,6 +10,7 @@ interface ToolbarProps {
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
   onToggleHistory?: () => void;
+  onRunQuery?: () => void;
 }
 
 /** Quick-cycle levels: Off → Alert → Read-Only → Off */
@@ -36,7 +37,7 @@ const LEVEL_COLORS: Record<number, string> = {
   5: "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-400 dark:hover:bg-red-900/60",
 };
 
-export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory }: ToolbarProps) {
+export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRunQuery }: ToolbarProps) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const connections = useConnectionStore((s) => s.connections);
   const getStatus = useConnectionStore((s) => s.getStatus);
@@ -61,6 +62,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory }: To
     if (!selectedConnectionId || !queryText.trim()) return;
     const sessionId = getSessionId(selectedConnectionId);
     if (!sessionId) return;
+    onRunQuery?.();
     void execute(sessionId, queryText, undefined, safeModeLevel);
   };
 

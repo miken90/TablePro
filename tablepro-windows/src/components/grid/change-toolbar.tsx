@@ -22,10 +22,14 @@ export function ChangeToolbar({ onSave }: ChangeToolbarProps) {
         e.preventDefault();
         redo();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        onSave();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo]);
+  }, [undo, redo, onSave]);
 
   if (!hasChanges) return null;
 
@@ -64,6 +68,7 @@ export function ChangeToolbar({ onSave }: ChangeToolbarProps) {
           type="button"
           onClick={onSave}
           className="bg-green-600 text-white hover:bg-green-700 px-2 py-0.5 rounded text-xs"
+          title="Save changes (Ctrl+S)"
         >
           Save Changes
         </button>

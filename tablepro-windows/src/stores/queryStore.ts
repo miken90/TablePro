@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { QueryResult } from "../types/query";
 import * as commands from "../ipc/commands";
 import { extractErrorMessage } from "../ipc/error";
+import { useQueryLogStore } from "./queryLogStore";
 
 // --- Safe mode helpers ---
 
@@ -87,17 +88,33 @@ async function runQuery(
 ): Promise<void> {
   set({ isExecuting: true, error: null, result: null, activeConnectionId: sessionId });
   const startMs = Date.now();
+  const logId = useQueryLogStore.getState().add({
+    sql,
+    source: "editor",
+    status: "running",
+    timestamp: startMs,
+  });
   try {
     const result = await commands.executeQuery(sessionId, sql, params);
-    set({ result, isExecuting: false });
-
     const elapsedMs = Date.now() - startMs;
+    set({ result, isExecuting: false });
+    useQueryLogStore.getState().update(logId, {
+      status: "success",
+      durationMs: elapsedMs,
+      rowCount: result.rows.length,
+    });
     commands.historyRecord(sql, null, elapsedMs, result.rows.length, "success").catch(() => {});
   } catch (err) {
     const elapsedMs = Date.now() - startMs;
+    const errorMsg = extractErrorMessage(err);
     set({
-      error: extractErrorMessage(err),
+      error: errorMsg,
       isExecuting: false,
+    });
+    useQueryLogStore.getState().update(logId, {
+      status: "error",
+      durationMs: elapsedMs,
+      error: errorMsg,
     });
     commands.historyRecord(sql, null, elapsedMs, 0, "error").catch(() => {});
   }

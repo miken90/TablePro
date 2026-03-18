@@ -57,8 +57,7 @@ export function Sidebar({ onViewStructure, onOpenTable }: SidebarProps) {
   useEffect(() => {
     if (sessionId && databases.length > 0 && !selectedDatabase && configDatabase) {
       useSchemaStore.setState({ selectedDatabase: configDatabase });
-      fetchSchema(sessionId);
-      fetchSchemas(sessionId);
+      fetchSchema(sessionId).then(() => fetchSchemas(sessionId));
     }
   }, [sessionId, databases, selectedDatabase, configDatabase, fetchSchema, fetchSchemas]);
 

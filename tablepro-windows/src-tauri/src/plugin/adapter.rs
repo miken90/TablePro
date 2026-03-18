@@ -182,16 +182,20 @@ impl DatabaseDriver for PluginDriverAdapter {
         let vtable = self.vtable();
         let handle = self.handle;
         let sql = FfiStr::from(query);
+        tracing::debug!(type_id = %self.type_id, "FFI: execute enter");
         let ffi = catch_unwind(|| unsafe { (vtable.execute)(handle, sql) })
             .map_err(|_| AppError::PluginError("panic in execute".to_string()))?;
+        tracing::debug!(type_id = %self.type_id, "FFI: execute returned");
         convert_query_result(vtable, ffi)
     }
 
     async fn fetch_tables(&self) -> Result<Vec<TableInfo>, AppError> {
         let vtable = self.vtable();
         let handle = self.handle;
+        tracing::debug!(type_id = %self.type_id, "FFI: fetch_tables enter");
         let ffi = catch_unwind(|| unsafe { (vtable.fetch_tables)(handle) })
             .map_err(|_| AppError::PluginError("panic in fetch_tables".to_string()))?;
+        tracing::debug!(type_id = %self.type_id, "FFI: fetch_tables returned");
 
         if !ffi.error.is_null() {
             let msg = unsafe { ffi.error.to_string_copy() };
@@ -327,8 +331,10 @@ impl DatabaseDriver for PluginDriverAdapter {
     async fn fetch_databases(&self) -> Result<Vec<String>, AppError> {
         let vtable = self.vtable();
         let handle = self.handle;
+        tracing::debug!(type_id = %self.type_id, "FFI: fetch_databases enter");
         let ffi = catch_unwind(|| unsafe { (vtable.fetch_databases)(handle) })
             .map_err(|_| AppError::PluginError("panic in fetch_databases".to_string()))?;
+        tracing::debug!(type_id = %self.type_id, "FFI: fetch_databases returned");
 
         if !ffi.error.is_null() {
             let msg = unsafe { ffi.error.to_string_copy() };
