@@ -28,7 +28,11 @@ struct ImportProgress {
 #[tauri::command]
 pub async fn import_preview(path: String) -> Result<ImportPreview, AppError> {
     tracing::info!(path = %path, "import_preview");
-    import_service::preview(&path)
+
+    let preview_path = path.clone();
+    tokio::task::spawn_blocking(move || import_service::preview(&preview_path))
+        .await
+        .map_err(|e| AppError::IoError(format!("Import preview task join error: {e}")))?
 }
 
 /// Execute all SQL statements in the file against an active session.

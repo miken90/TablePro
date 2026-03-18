@@ -83,6 +83,45 @@ impl HistoryStore {
             .map_err(|e| e.to_string())
     }
 
+    fn run_blocking_db<T, F>(&self, op: F) -> Result<T, String>
+    where
+        F: FnOnce(&Self) -> Result<T, String>,
+    {
+        match tokio::runtime::Handle::try_current() {
+            Ok(_) => tokio::task::block_in_place(|| op(self)),
+            Err(_) => op(self),
+        }
+    }
+
+    pub fn insert_for_async(
+        &self,
+        query: &str,
+        database: Option<&str>,
+        execution_time_ms: i64,
+        row_count: i64,
+        status: &str,
+    ) -> Result<(), String> {
+        self.run_blocking_db(|store| {
+            store.insert(query, database, execution_time_ms, row_count, status)
+        })
+    }
+
+    pub fn fetch_recent_for_async(&self, limit: u32) -> Result<Vec<HistoryEntry>, String> {
+        self.run_blocking_db(|store| store.fetch_recent(limit))
+    }
+
+    pub fn search_for_async(&self, term: &str) -> Result<Vec<HistoryEntry>, String> {
+        self.run_blocking_db(|store| store.search(term))
+    }
+
+    pub fn clear_all_for_async(&self) -> Result<(), String> {
+        self.run_blocking_db(|store| store.clear_all())
+    }
+
+    pub fn delete_entry_for_async(&self, id: i64) -> Result<(), String> {
+        self.run_blocking_db(|store| store.delete_entry(id))
+    }
+
     /// Record a new history entry.
     pub fn insert(
         &self,

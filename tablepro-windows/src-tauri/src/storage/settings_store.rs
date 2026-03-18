@@ -72,6 +72,23 @@ impl SettingsStore {
         Ok(base.join("TablePro").join("settings.json"))
     }
 
+    fn run_blocking_io<T, F>(op: F) -> Result<T, AppError>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T, AppError> + Send + 'static,
+    {
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => tokio::task::block_in_place(|| {
+                handle.block_on(async move {
+                    tokio::task::spawn_blocking(op)
+                        .await
+                        .map_err(|e| AppError::IoError(format!("Blocking task join error: {e}")))?
+                })
+            }),
+            Err(_) => op(),
+        }
+    }
+
     /// Load settings from disk; falls back to defaults on any error.
     pub fn load(&mut self) -> Result<(), AppError> {
         let path = Self::settings_path()?;
@@ -79,7 +96,12 @@ impl SettingsStore {
             self.settings = AppSettings::default();
             return Ok(());
         }
-        let data = std::fs::read_to_string(&path)?;
+
+        let data = Self::run_blocking_io({
+            let path = path.clone();
+            move || Ok(std::fs::read_to_string(&path)?)
+        })?;
+
         self.settings = serde_json::from_str(&data)?;
         tracing::info!("Settings loaded from {}", path.display());
         Ok(())
@@ -88,12 +110,18 @@ impl SettingsStore {
     /// Persist current settings to disk.
     pub fn save(&self) -> Result<(), AppError> {
         let path = Self::settings_path()?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
+        let log_path = path.clone();
         let data = serde_json::to_string_pretty(&self.settings)?;
-        std::fs::write(&path, data)?;
-        tracing::info!("Settings saved to {}", path.display());
+
+        Self::run_blocking_io(move || {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, data)?;
+            Ok(())
+        })?;
+
+        tracing::info!("Settings saved to {}", log_path.display());
         Ok(())
     }
 
@@ -162,7 +190,6 @@ mod tests {
 
     #[test]
     fn test_settings_serde_with_missing_fields_uses_defaults() {
-        // Simulate a JSON from an older version missing new fields
         let json = r#"{
             "pageSize": 200,
             "editorFont": "Consolas",
@@ -173,16 +200,15 @@ mod tests {
             "defaultTimeoutSecs": 60
         }"#;
         let d: AppSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(d.safe_mode_level, 2); // default
-        assert_eq!(d.tab_size, 4); // default
-        assert!(!d.word_wrap); // default
-        assert_eq!(d.date_format, "iso"); // default
-        assert_eq!(d.page_size, 200); // from JSON
+        assert_eq!(d.safe_mode_level, 2);
+        assert_eq!(d.tab_size, 4);
+        assert!(!d.word_wrap);
+        assert_eq!(d.date_format, "iso");
+        assert_eq!(d.page_size, 200);
     }
 
     #[test]
     fn test_safe_mode_level_range() {
-        // All valid levels 0-5 should serialize/deserialize correctly
         for level in 0u32..=5 {
             let mut s = AppSettings::default();
             s.safe_mode_level = level;

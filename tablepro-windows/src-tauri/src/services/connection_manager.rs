@@ -78,8 +78,10 @@ impl ConnectionManager {
             (Uuid::new_v4().to_string(), config.clone())
         };
 
-        let driver: Arc<dyn DatabaseDriver> =
-            Arc::from(self.plugin_manager.create_driver(&connect_config.db_type, &connect_config)?);
+        let driver: Arc<dyn DatabaseDriver> = Arc::from(
+            self.plugin_manager
+                .create_driver(&connect_config.db_type, &connect_config)?,
+        );
         driver.connect().await.map_err(|e| {
             tracing::error!(db_type = %connect_config.db_type, "connect failed: {e}");
             e
@@ -127,8 +129,10 @@ impl ConnectionManager {
             test_cfg.host = "127.0.0.1".to_string();
             test_cfg.port = local_port;
 
-            let driver: Arc<dyn DatabaseDriver> =
-                Arc::from(self.plugin_manager.create_driver(&test_cfg.db_type, &test_cfg)?);
+            let driver: Arc<dyn DatabaseDriver> = Arc::from(
+                self.plugin_manager
+                    .create_driver(&test_cfg.db_type, &test_cfg)?,
+            );
             driver.connect().await?;
             let ping = driver.ping().await;
             driver.disconnect();
@@ -166,15 +170,8 @@ impl ConnectionManager {
     /// This disconnects the current driver, creates a fresh one with the
     /// updated database name, and replaces it in-place — keeping the same
     /// session ID so the frontend mapping stays valid.
-    pub async fn switch_database(
-        &mut self,
-        id: &str,
-        database: &str,
-    ) -> Result<(), AppError> {
-        let conn = self
-            .connections
-            .get(id)
-            .ok_or(AppError::NotConnected)?;
+    pub async fn switch_database(&mut self, id: &str, database: &str) -> Result<(), AppError> {
+        let conn = self.connections.get(id).ok_or(AppError::NotConnected)?;
 
         let mut new_config = conn.config.clone();
         new_config.database = database.to_string();
