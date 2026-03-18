@@ -38,9 +38,26 @@ TablePro/
 src-tauri/src/
 ├── lib.rs                   # Tauri setup, state injection, command registration
 ├── main.rs                  # Entry point
-├── commands/                # IPC commands (connection/query/schema/data/...)
-├── services/                # ConnectionManager, SQL generation, SSH tunnel manager
-├── plugin/                  # PluginManager, PluginDriverAdapter, trait boundary
+├── commands/                # 12 files — export (3), import, query, connection, ...
+│   ├── export.rs            # Export orchestration + helpers
+│   ├── export_formats.rs    # CSV/JSON/SQL format generators
+│   └── export_writers.rs    # File write + XLSX writer
+├── services/                # 12 files — modularized by domain
+│   ├── import_service.rs    # Import types + preview/execute
+│   ├── import_parser.rs     # In-memory SQL statement scanner
+│   ├── import_streamer.rs   # BufReader-based streaming parser
+│   ├── sql_generator.rs     # SQL generation orchestrator
+│   ├── sql_generator_ops.rs # INSERT/UPDATE/DELETE builders
+│   ├── sql_quoting.rs       # Per-driver identifier quoting
+│   ├── ssh_tunnel.rs        # SSH tunnel manager
+│   ├── ssh_tunnel_core.rs   # Active tunnel connection logic
+│   ├── ssh_config.rs        # SSH config types + builders
+│   ├── credential_store.rs  # DPAPI encrypt/decrypt for passwords
+│   └── connection_manager.rs # Session registry
+├── plugin/                  # 6 files — adapter split into FFI helpers
+│   ├── adapter.rs           # Core PluginDriverAdapter
+│   ├── adapter_ffi_helpers.rs # FFI conversion utilities
+│   └── adapter_ffi_list_converters.rs # List/schema FFI converters
 ├── storage/                 # ConnectionStore, SettingsStore, HistoryStore
 └── models/                  # Shared app/domain models and AppError
 ```

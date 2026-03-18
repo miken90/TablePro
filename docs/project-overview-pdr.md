@@ -88,7 +88,7 @@ Current storage reality in source code:
 - Query history is SQLite at `data_dir/TablePro/history.sqlite3`
 - Editor tabs persist in frontend localStorage (`zustand/persist`)
 
-**Important current-state note:** saved connection JSON currently includes plaintext password fields from `ConnectionConfig`. Do not claim at-rest DPAPI password encryption in Windows docs until implemented in `connection_store` path.
+Saved connection secrets (`password`, `ssh_password`, `ssh_key_passphrase`) are encrypted at rest using Windows DPAPI via `services/credential_store.rs` and stored as `dpapi:`-prefixed payloads in `connections.json`. Legacy plaintext values are auto-migrated on load.
 
 ### Observability
 
@@ -112,7 +112,7 @@ Host-side plugin loading must continue to use:
 | Plugin ABI (`tablepro_plugin_init`) | Implemented | `plugin/manager.rs` |
 | History SQLite + FTS | Implemented | `storage/history_store.rs` |
 | Frontend tab persistence | Implemented | `stores/editorStore.ts` |
-| Password-at-rest encryption for saved connections | Not implemented | `storage/connection_store.rs` writes JSON directly |
+| Password-at-rest encryption for saved connections | Implemented | `services/credential_store.rs` with DPAPI, auto-migration for legacy plaintext |
 
 ## Constraints and decisions
 
@@ -123,7 +123,7 @@ Host-side plugin loading must continue to use:
 ## Requirement change log
 
 - **2026-03-18**: Updated to session-based query model, current plugin ABI, and current storage behavior.
-- **2026-03-18**: Removed outdated DPAPI-at-rest claim for saved connection JSON.
+- **2026-03-18**: DPAPI credential encryption implemented in `credential_store.rs`, per-driver SQL quoting, async I/O migration, import/export streaming, code modularization completed.
 
 ---
 

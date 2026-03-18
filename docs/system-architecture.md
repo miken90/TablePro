@@ -43,6 +43,15 @@ Managed state includes:
 
 Command registration includes connection, query, schema, storage, history, import/export, settings, and save-changes flows.
 
+### 3.3 Async I/O patterns
+
+All file I/O and SQLite operations are wrapped with `tokio::task::spawn_blocking` or `block_in_place` to avoid blocking the async runtime:
+
+- `commands/export.rs` — file creation and write via `spawn_blocking`
+- `commands/import.rs` — file preview via `spawn_blocking`
+- `storage/connection_store.rs`, `storage/settings_store.rs` — `run_blocking_io` wrapper
+- `storage/history_store.rs` — `run_blocking_db` using `block_in_place`
+
 ### 3.2 Session-oriented backend flow
 
 Connection lifecycle is session-based:
@@ -87,7 +96,7 @@ For each connection, host creates a driver via:
 - `PluginManager::create_driver(type_id, config)`
 - `PluginDriverAdapter::new(vtable, config, type_id)`
 
-`PluginDriverAdapter`:
+`PluginDriverAdapter` (split into `adapter.rs` + `adapter_ffi_helpers.rs` + `adapter_ffi_list_converters.rs`):
 
 - owns plugin `DriverHandle`
 - implements `DatabaseDriver` trait
@@ -167,9 +176,13 @@ Editor tabs are persisted in browser storage via Zustand middleware key:
 
 - `tablepro-editor-tabs`
 
-### 7.4 Security reality note
+### 7.4 Credential security
 
-Current `ConnectionStore` serializes `SavedConnection` as JSON directly. Stored `ConnectionConfig.password` is not encrypted at rest in current implementation.
+Connection secrets (`password`, `ssh_password`, `ssh_key_passphrase`) are encrypted at rest using Windows DPAPI via `services/credential_store.rs`:
+
+- Save path: passwords are encrypted and stored with `dpapi:` prefix in `connections.json`
+- Load path: `dpapi:`-prefixed values are decrypted; legacy plaintext values are auto-migrated on next save
+- Dependencies: `windows-dpapi` crate + `base64` for encoding
 
 ## 8. Error handling and observability
 

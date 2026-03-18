@@ -27,10 +27,13 @@ Current module layout:
 src-tauri/src/
 ├── lib.rs
 ├── main.rs
-├── commands/
+├── commands/          # export.rs, export_formats.rs, export_writers.rs, import.rs, ...
 ├── models/
-├── plugin/
-├── services/
+├── plugin/            # adapter.rs, adapter_ffi_helpers.rs, adapter_ffi_list_converters.rs, ...
+├── services/          # import_service.rs, import_parser.rs, import_streamer.rs,
+│                      # sql_generator.rs, sql_generator_ops.rs, sql_quoting.rs,
+│                      # ssh_tunnel.rs, ssh_tunnel_core.rs, ssh_config.rs,
+│                      # credential_store.rs, connection_manager.rs
 └── storage/
 ```
 
@@ -81,6 +84,13 @@ Notes:
 
 - Use `tokio` async patterns end-to-end
 - Keep mutex lock scope minimal; clone/get required state, then release lock before long awaits
+- Wrap **all** blocking file I/O and SQLite calls in `tokio::task::spawn_blocking` or `block_in_place`
+- Never call `std::fs::*` directly on Tauri async command handlers
+
+### 5.3 SQL identifier quoting
+
+- Use `services/sql_quoting::quote_identifier(name, driver_type)` for all dynamic identifiers
+- Per-driver quoting: PostgreSQL `"…"`, MySQL `` `…` ``, MSSQL `[…]`
 
 ### 5.3 Logging
 
@@ -119,10 +129,11 @@ Notes:
 
 Security claims in docs must match implementation.
 
-Current implementation reality to preserve in docs until changed:
+Current implementation reality:
 
-- `connections.json` stores serialized saved connection data directly
-- Do not claim at-rest encryption for saved connection passwords today
+- Connection secrets are encrypted at rest using Windows DPAPI (`services/credential_store.rs`)
+- Encrypted values stored with `dpapi:` prefix in `connections.json`
+- Legacy plaintext values are auto-migrated to encrypted format on save
 
 ### 7.2 Secret hygiene
 

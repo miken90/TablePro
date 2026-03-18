@@ -41,7 +41,7 @@ No active implementation changes are planned in this repository under `TablePro/
 
 ### Remaining stabilization targets before broad release claims
 
-- Security hardening for credential persistence (current saved connection JSON is plaintext)
+- ~~Security hardening for credential persistence~~ ✅ done (DPAPI encryption in `credential_store.rs`)
 - Additional release QA and packaging validation against current behavior
 - Documentation parity checks as backend/frontend continue to evolve
 
@@ -59,7 +59,7 @@ No active implementation changes are planned in this repository under `TablePro/
 | Milestone | Target outcome | Status |
 |---|---|---|
 | 3.1 | Parity gap inventory + closure plan | Planned |
-| 3.2 | Security/storage hardening pass | Planned |
+| 3.2 | Security/storage hardening pass | ✅ Complete (DPAPI, SQL quoting, async I/O, modularization) |
 | 3.3 | Linux packaging prototype | Planned |
 | 3.4 | v1.0 readiness review | Planned |
 
