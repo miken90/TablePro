@@ -1,21 +1,10 @@
-import { useEffect, useRef, useCallback } from "react";
-import { EditorView, lineNumbers, highlightActiveLineGutter, drawSelection, rectangularSelection, crosshairCursor, highlightActiveLine, keymap, placeholder } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
-import { sql, PostgreSQL, MySQL, MSSQL, StandardSQL } from "@codemirror/lang-sql";
-import { history, historyKeymap, defaultKeymap, indentWithTab } from "@codemirror/commands";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
-import { indentOnInput, bracketMatching } from "@codemirror/language";
+import { useEffect, useRef, useCallback, useState } from "react";
+import type { EditorState } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import { useEditorStore } from "../../stores/editorStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { createEditorTheme, createEditorFontTheme } from "./editor-theme";
-import { sqlCompletionSource } from "../../editor/sql-completion-source";
-import { createVimExtension } from "../../editor/vim-mode";
-import { createKeybindings } from "../../editor/keybindings";
-import { formatEditorContent } from "../../editor/sql-formatter";
-import { statementAtCursor, allStatements } from "../../editor/statement-scanner";
 import { useSchemaStore } from "../../stores/schemaStore";
 
 type SqlDialect = "postgresql" | "mysql" | "mssql" | "standard";
@@ -24,16 +13,75 @@ interface SqlEditorProps {
   dialect?: SqlDialect;
 }
 
-function resolveDialect(dialect: SqlDialect | undefined) {
+async function loadEditorRuntime() {
+  const [
+    viewMod,
+    stateMod,
+    sqlMod,
+    commandsMod,
+    searchMod,
+    autocompleteMod,
+    languageMod,
+    themeMod,
+    completionMod,
+    vimModeMod,
+    keybindingsMod,
+    formatterMod,
+    scannerMod,
+  ] = await Promise.all([
+    import("@codemirror/view"),
+    import("@codemirror/state"),
+    import("@codemirror/lang-sql"),
+    import("@codemirror/commands"),
+    import("@codemirror/search"),
+    import("@codemirror/autocomplete"),
+    import("@codemirror/language"),
+    import("./editor-theme"),
+    import("../../editor/sql-completion-source"),
+    import("../../editor/vim-mode"),
+    import("../../editor/keybindings"),
+    import("../../editor/sql-formatter"),
+    import("../../editor/statement-scanner"),
+  ]);
+
+  return {
+    ...viewMod,
+    ...stateMod,
+    ...sqlMod,
+    ...commandsMod,
+    ...searchMod,
+    ...autocompleteMod,
+    ...languageMod,
+    ...themeMod,
+    ...completionMod,
+    ...vimModeMod,
+    ...keybindingsMod,
+    ...formatterMod,
+    ...scannerMod,
+  };
+}
+
+type EditorRuntime = Awaited<ReturnType<typeof loadEditorRuntime>>;
+
+let runtimePromise: Promise<EditorRuntime> | null = null;
+
+function getEditorRuntime() {
+  if (!runtimePromise) {
+    runtimePromise = loadEditorRuntime();
+  }
+  return runtimePromise;
+}
+
+function resolveDialect(runtime: EditorRuntime, dialect: SqlDialect | undefined) {
   switch (dialect) {
     case "postgresql":
-      return PostgreSQL;
+      return runtime.PostgreSQL;
     case "mysql":
-      return MySQL;
+      return runtime.MySQL;
     case "mssql":
-      return MSSQL;
+      return runtime.MSSQL;
     default:
-      return StandardSQL;
+      return runtime.StandardSQL;
   }
 }
 
@@ -42,12 +90,14 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
   const viewRef = useRef<EditorView | null>(null);
   // Map from tabId → saved EditorState
   const stateMapRef = useRef<Map<string, EditorState>>(new Map());
+  const [editorRuntime, setEditorRuntime] = useState<EditorRuntime | null>(null);
 
   const tabs = useEditorStore((s) => s.tabs);
   const activeTabId = useEditorStore((s) => s.activeTabId);
   const updateTabContent = useEditorStore((s) => s.updateTabContent);
   const addTab = useEditorStore((s) => s.addTab);
-  const { execute, setQueryText } = useQueryStore();
+  const execute = useQueryStore((s) => s.execute);
+  const setQueryText = useQueryStore((s) => s.setQueryText);
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const settings = useSettingsStore((s) => s.settings);
 
@@ -62,8 +112,8 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
   // Build the extension list (stable between renders)
   const buildExtensions = useCallback(
-    (tabId: string) => {
-      const updateListener = EditorView.updateListener.of((update) => {
+    (tabId: string, runtime: EditorRuntime) => {
+      const updateListener = runtime.EditorView.updateListener.of((update) => {
         if (!update.docChanged) return;
         const content = update.state.doc.toString();
         updateTabContent(tabId, content);
@@ -72,26 +122,26 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
       const extensions = [
         // Language
-        sql({ dialect: resolveDialect(dialect) }),
+        runtime.sql({ dialect: resolveDialect(runtime, dialect) }),
         // Theme
-        createEditorTheme(),
-        createEditorFontTheme(settings.editorFont, settings.editorFontSize),
+        runtime.createEditorTheme(),
+        runtime.createEditorFontTheme(settings.editorFont, settings.editorFontSize),
         // Editor features
-        lineNumbers(),
-        highlightActiveLineGutter(),
-        highlightActiveLine(),
-        highlightSelectionMatches(),
-        drawSelection(),
-        rectangularSelection(),
-        crosshairCursor(),
-        bracketMatching(),
-        closeBrackets(),
-        indentOnInput(),
-        history(),
+        runtime.lineNumbers(),
+        runtime.highlightActiveLineGutter(),
+        runtime.highlightActiveLine(),
+        runtime.highlightSelectionMatches(),
+        runtime.drawSelection(),
+        runtime.rectangularSelection(),
+        runtime.crosshairCursor(),
+        runtime.bracketMatching(),
+        runtime.closeBrackets(),
+        runtime.indentOnInput(),
+        runtime.history(),
         // Autocomplete with schema-aware SQL source
-        autocompletion({ override: [sqlCompletionSource] }),
+        runtime.autocompletion({ override: [runtime.sqlCompletionSource] }),
         // App keybindings (run query, format, etc.)
-        createKeybindings({
+        runtime.createKeybindings({
           runQuery: (view) => {
             const connId = useConnectionStore.getState().selectedConnectionId;
             if (!connId) return false;
@@ -99,7 +149,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
             if (!sessionId) return false;
             const text = view.state.doc.toString();
             const cursor = view.state.selection.main.head;
-            const stmt = statementAtCursor(text, cursor);
+            const stmt = runtime.statementAtCursor(text, cursor);
             if (stmt.trim()) void execute(sessionId, stmt);
             return true;
           },
@@ -108,12 +158,12 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
             if (!connId) return false;
             const sessionId = useConnectionStore.getState().getSessionId(connId);
             if (!sessionId) return false;
-            const stmts = allStatements(view.state.doc.toString());
+            const stmts = runtime.allStatements(view.state.doc.toString());
             const combined = stmts.join(";\n");
             if (combined.trim()) void execute(sessionId, combined);
             return true;
           },
-          formatSql: (view) => formatEditorContent(view, dialect),
+          formatSql: (view) => runtime.formatEditorContent(view, dialect),
           refreshSchema: () => {
             const connId = useConnectionStore.getState().selectedConnectionId;
             if (!connId) return;
@@ -122,59 +172,76 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
           },
         }),
         // Keymaps
-        keymap.of([
-          ...closeBracketsKeymap,
-          ...defaultKeymap,
-          ...historyKeymap,
-          ...searchKeymap,
-          ...completionKeymap,
-          indentWithTab,
+        runtime.keymap.of([
+          ...runtime.closeBracketsKeymap,
+          ...runtime.defaultKeymap,
+          ...runtime.historyKeymap,
+          ...runtime.searchKeymap,
+          ...runtime.completionKeymap,
+          runtime.indentWithTab,
         ]),
         // Placeholder hint
-        placeholder("-- Write SQL here\n-- Ctrl+Enter to execute"),
+        runtime.placeholder("-- Write SQL here\n-- Ctrl+Enter to execute"),
         // Change listener
         updateListener,
       ];
 
       if (settings.vimMode) {
-        extensions.unshift(createVimExtension());
+        extensions.unshift(runtime.createVimExtension());
       }
 
       return extensions;
     },
-    [dialect, settings.editorFont, settings.editorFontSize, settings.vimMode, updateTabContent, setQueryText, execute, selectedConnectionId],
+    [dialect, settings.editorFont, settings.editorFontSize, settings.vimMode, updateTabContent, setQueryText, execute],
   );
 
-  // Create EditorView once, then handle tab switching via setState
+  // Create EditorView once after runtime lazy-load completes
   useEffect(() => {
-    if (!containerRef.current) return;
+    let cancelled = false;
 
-    const tabId = useEditorStore.getState().activeTabId;
-    const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
-    const initialState = tabId
-      ? EditorState.create({
-          doc: tab?.content ?? "",
-          extensions: buildExtensions(tabId),
-        })
-      : EditorState.create({
-          doc: "",
-          extensions: buildExtensions("__init__"),
-        });
+    async function initializeEditor() {
+      if (!containerRef.current) return;
 
-    const view = new EditorView({
-      state: initialState,
-      parent: containerRef.current,
-    });
-    viewRef.current = view;
-    if (tabId) {
-      stateMapRef.current.set(tabId, initialState);
+      const runtime = await getEditorRuntime();
+      if (cancelled || !containerRef.current) return;
+
+      setEditorRuntime(runtime);
+
+      const tabId = useEditorStore.getState().activeTabId;
+      const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
+      const initialState = tabId
+        ? runtime.EditorState.create({
+            doc: tab?.content ?? "",
+            extensions: buildExtensions(tabId, runtime),
+          })
+        : runtime.EditorState.create({
+            doc: "",
+            extensions: buildExtensions("__init__", runtime),
+          });
+
+      const view = new runtime.EditorView({
+        state: initialState,
+        parent: containerRef.current,
+      });
+
+      viewRef.current = view;
+      if (tabId) {
+        stateMapRef.current.set(tabId, initialState);
+      }
     }
 
+    void initializeEditor();
+
     return () => {
+      cancelled = true;
+      const view = viewRef.current;
+      if (!view) return;
+
       const currentTabId = useEditorStore.getState().activeTabId;
       if (currentTabId) {
-        stateMapRef.current.set(currentTabId, view.state);
+        stateMapRef.current.set(currentTabId, view.state as EditorState);
       }
+
       view.destroy();
       viewRef.current = null;
     };
@@ -184,39 +251,40 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
   // Set editor state when active tab changes (or first becomes available)
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || !activeTabId) return;
+    const runtime = editorRuntime;
+    if (!view || !runtime || !activeTabId) return;
 
     const saved = stateMapRef.current.get(activeTabId);
     if (saved) {
       view.setState(saved);
     } else {
       const content = activeTab?.content ?? "";
-      const newState = EditorState.create({
+      const newState = runtime.EditorState.create({
         doc: content,
-        extensions: buildExtensions(activeTabId),
+        extensions: buildExtensions(activeTabId, runtime),
       });
       view.setState(newState);
       stateMapRef.current.set(activeTabId, newState);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTabId]);
+  }, [activeTabId, editorRuntime]);
 
   // Update font/vim settings without full remount
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || !activeTabId) return;
+    const runtime = editorRuntime;
+    if (!view || !runtime || !activeTabId) return;
 
-    // Reconfigure by rebuilding state with new extensions but preserving doc
     const doc = view.state.doc;
-    const newState = EditorState.create({
+    const newState = runtime.EditorState.create({
       doc,
-      extensions: buildExtensions(activeTabId),
+      extensions: buildExtensions(activeTabId, runtime),
     });
-    // Save old selection and cursor if possible
+
     view.setState(newState);
-    stateMapRef.current.set(activeTabId, view.state);
+    stateMapRef.current.set(activeTabId, view.state as EditorState);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.editorFont, settings.editorFontSize, settings.vimMode, dialect]);
+  }, [editorRuntime, settings.editorFont, settings.editorFontSize, settings.vimMode, dialect]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">

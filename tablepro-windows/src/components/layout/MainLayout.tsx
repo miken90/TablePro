@@ -45,7 +45,6 @@ export function MainLayout() {
   const activeTabId = useEditorStore((s) => s.activeTabId);
   const addTab = useEditorStore((s) => s.addTab);
   const updateTabContent = useEditorStore((s) => s.updateTabContent);
-  const tables = useSchemaStore((s) => s.tables);
   const fetchColumns = useSchemaStore((s) => s.fetchColumns);
 
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
