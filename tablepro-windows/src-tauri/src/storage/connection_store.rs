@@ -2,6 +2,9 @@ use std::path::PathBuf;
 
 use crate::models::{AppError, ConnectionGroup, SavedConnection};
 
+#[path = "../services/credential_store.rs"]
+mod credential_store;
+
 /// Persists saved connections and groups to `%APPDATA%/TablePro/`.
 pub struct ConnectionStore {
     connections: Vec<SavedConnection>,
@@ -28,6 +31,52 @@ impl ConnectionStore {
         Ok(base.join("TablePro").join("groups.json"))
     }
 
+    fn run_blocking_io<T, F>(op: F) -> Result<T, AppError>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T, AppError> + Send + 'static,
+    {
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => tokio::task::block_in_place(|| {
+                handle.block_on(async move {
+                    tokio::task::spawn_blocking(op)
+                        .await
+                        .map_err(|e| AppError::IoError(format!("Blocking task join error: {e}")))?
+                })
+            }),
+            Err(_) => op(),
+        }
+    }
+
+    fn decrypt_connection_credentials(conn: &mut SavedConnection) -> Result<bool, AppError> {
+        let mut needs_migration = false;
+
+        needs_migration |= Self::decrypt_field(&mut conn.config.password)?;
+        needs_migration |= Self::decrypt_field(&mut conn.config.ssh_password)?;
+        needs_migration |= Self::decrypt_field(&mut conn.config.ssh_key_passphrase)?;
+
+        Ok(needs_migration)
+    }
+
+    fn decrypt_field(value: &mut String) -> Result<bool, AppError> {
+        if value.is_empty() {
+            return Ok(false);
+        }
+
+        let is_encrypted = credential_store::is_encrypted(value);
+        *value = credential_store::decrypt_secret(value)?;
+
+        Ok(!is_encrypted)
+    }
+
+    fn encrypt_connection_credentials(conn: &mut SavedConnection) -> Result<(), AppError> {
+        conn.config.password = credential_store::encrypt_secret(&conn.config.password)?;
+        conn.config.ssh_password = credential_store::encrypt_secret(&conn.config.ssh_password)?;
+        conn.config.ssh_key_passphrase =
+            credential_store::encrypt_secret(&conn.config.ssh_key_passphrase)?;
+        Ok(())
+    }
+
     /// Load connections from disk; starts empty on any error.
     pub fn load(&mut self) -> Result<(), AppError> {
         let path = Self::connections_path()?;
@@ -35,20 +84,48 @@ impl ConnectionStore {
             self.connections = vec![];
             return Ok(());
         }
-        let data = std::fs::read_to_string(&path)?;
-        self.connections = serde_json::from_str(&data)?;
+
+        let data = Self::run_blocking_io({
+            let path = path.clone();
+            move || Ok(std::fs::read_to_string(&path)?)
+        })?;
+
+        let mut connections: Vec<SavedConnection> = serde_json::from_str(&data)?;
+        let mut needs_migration = false;
+
+        for conn in &mut connections {
+            needs_migration |= Self::decrypt_connection_credentials(conn)?;
+        }
+
+        self.connections = connections;
         tracing::info!("Loaded {} connections from disk", self.connections.len());
+
+        if needs_migration {
+            tracing::info!("Detected legacy plaintext credentials; migrating to DPAPI format");
+            if let Err(error) = self.persist() {
+                tracing::warn!("Failed to auto-migrate legacy credentials: {error}");
+            }
+        }
+
         Ok(())
     }
 
     fn persist(&self) -> Result<(), AppError> {
         let path = Self::connections_path()?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+        let mut to_persist = self.connections.clone();
+        for conn in &mut to_persist {
+            Self::encrypt_connection_credentials(conn)?;
         }
-        let data = serde_json::to_string_pretty(&self.connections)?;
-        std::fs::write(&path, data)?;
-        Ok(())
+
+        let data = serde_json::to_string_pretty(&to_persist)?;
+
+        Self::run_blocking_io(move || {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, data)?;
+            Ok(())
+        })
     }
 
     /// Load groups from disk; starts empty if file not present.
@@ -58,7 +135,12 @@ impl ConnectionStore {
             self.groups = vec![];
             return Ok(());
         }
-        let data = std::fs::read_to_string(&path)?;
+
+        let data = Self::run_blocking_io({
+            let path = path.clone();
+            move || Ok(std::fs::read_to_string(&path)?)
+        })?;
+
         self.groups = serde_json::from_str(&data)?;
         tracing::info!("Loaded {} connection groups from disk", self.groups.len());
         Ok(())
@@ -66,12 +148,15 @@ impl ConnectionStore {
 
     fn persist_groups(&self) -> Result<(), AppError> {
         let path = Self::groups_path()?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let data = serde_json::to_string_pretty(&self.groups)?;
-        std::fs::write(&path, data)?;
-        Ok(())
+
+        Self::run_blocking_io(move || {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, data)?;
+            Ok(())
+        })
     }
 
     pub fn list(&self) -> Vec<SavedConnection> {
@@ -125,18 +210,20 @@ impl ConnectionStore {
         if self.groups.len() == before {
             return Err(AppError::NotFound(format!("Group {id} not found")));
         }
-        // Clear group_id from affected connections
+
         let mut connections_changed = false;
-        for conn in self.connections.iter_mut() {
+        for conn in &mut self.connections {
             if conn.group_id.as_deref() == Some(id) {
                 conn.group_id = None;
                 connections_changed = true;
             }
         }
+
         self.persist_groups()?;
         if connections_changed {
             self.persist()?;
         }
+
         Ok(())
     }
 }
@@ -209,7 +296,6 @@ mod tests {
     #[test]
     fn test_delete_group_clears_connection_group_id() {
         let mut store = ConnectionStore::new();
-        // Manually populate without disk I/O
         store
             .connections
             .push(make_connection("conn-1", Some("g1")));
@@ -222,12 +308,9 @@ mod tests {
         store.groups.push(make_group("g1", "Group 1"));
         store.groups.push(make_group("g2", "Group 2"));
 
-        // Delete g1 — connections in g1 become ungrouped
-        // (persist calls will fail without real filesystem, skip that check)
-        // We test the in-memory state mutation logic
         let id = "g1";
         store.groups.retain(|g| g.id != id);
-        for conn in store.connections.iter_mut() {
+        for conn in &mut store.connections {
             if conn.group_id.as_deref() == Some(id) {
                 conn.group_id = None;
             }
@@ -246,7 +329,6 @@ mod tests {
         let mut store = ConnectionStore::new();
         store.groups.push(make_group("g1", "Original Name"));
 
-        // Simulate save_group upsert
         let updated = ConnectionGroup {
             id: "g1".to_string(),
             name: "Updated Name".to_string(),
@@ -271,7 +353,6 @@ mod tests {
         store.groups.push(make_group("g1", "Group 1"));
         let before = store.groups.len();
         store.groups.retain(|g| g.id != "nonexistent");
-        // Length unchanged → would be NotFound error in real method
         assert_eq!(store.groups.len(), before);
     }
 }
