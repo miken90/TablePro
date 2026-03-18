@@ -1,42 +1,67 @@
-> **Customize this file**: Tailor this template to your project by noting specific contribution types you're looking for, adding a Code of Conduct, or adjusting the writing guidelines to match your style.
+# Contributing to docs in TablePro
 
-# Contribute to the documentation
+Thanks for helping improve TablePro documentation.
 
-Thank you for your interest in contributing to our documentation! This guide will help you get started.
+This guide is specific to this repository’s current docs setup.
 
-## How to contribute
+## What you can edit
 
-### Option 1: Edit directly on GitHub
+You can contribute to:
 
-1. Navigate to the page you want to edit
-2. Click the "Edit this file" button (the pencil icon)
-3. Make your changes and submit a pull request
+- Mintlify docs content under `docs/` (`*.mdx`, localized docs, guides)
+- Engineering markdown docs under `docs/*.md` (architecture, standards, roadmap, PDR)
 
-### Option 2: Local development
+## Basic contribution flow
 
-1. Fork and clone this repository
-2. Install the Mintlify CLI: `npm i -g mint`
-3. Create a branch for your changes
-4. Make changes
-5. Navigate to the docs directory and run `mint dev`
-6. Preview your changes at `http://localhost:3000`
-7. Commit your changes and submit a pull request
+1. Fork and clone the repository
+2. Create a feature branch
+3. Make your docs changes in `docs/`
+4. Validate links and doc consistency
+5. Open a pull request
 
-For more details on local development, see our [development guide](development.mdx).
+## Local preview
 
-## Writing guidelines
+```bash
+mint dev
+```
 
-- **Use active voice**: "Run the command" not "The command should be run"
-- **Address the reader directly**: Use "you" instead of "the user"
-- **Keep sentences concise**: Aim for one idea per sentence
-- **Lead with the goal**: Start instructions with what the user wants to accomplish
-- **Use consistent terminology**: Don't alternate between synonyms for the same concept
-- **Include examples**: Show, don't just tell
+Preview at `http://localhost:3000`.
 
-## Contributor License Agreement (CLA)
+## Validation before PR
 
-All contributors must sign the Contributor License Agreement (CLA) before their contributions can be merged. This is required to ensure that contributions can be distributed under the project's AGPLv3 license.
+Run:
 
-When you open your first pull request, the CLA bot will automatically comment with instructions to sign the agreement. The process is quick: you only need to sign once, and it covers all future contributions to the project.
+```bash
+mint broken-links
+node $HOME/.claude/scripts/validate-docs.cjs docs/
+```
 
-Pull requests from contributors who have not signed the CLA will not be merged.
+If a command reports issues, fix them before opening PR.
+
+## Writing rules for this project
+
+- Use direct, technical language
+- Keep claims aligned with code in `tablepro-windows/`
+- If behavior is not implemented yet, label it **planned**
+- Do not claim credential encryption at rest for saved Windows connections unless implementation changes
+- Use valid relative links only
+
+## High-value doc update targets
+
+When code changes in these areas, update docs accordingly:
+
+- Plugin loading and ABI (`src-tauri/src/plugin/*`)
+- Query command signatures (`src-tauri/src/commands/query.rs`)
+- Storage and history behavior (`src-tauri/src/storage/*`, frontend stores)
+- Session handling (`src-tauri/src/services/connection_manager.rs`, `src/stores/connectionStore.ts`)
+
+## PR expectations
+
+- Keep changes scoped
+- Include evidence-backed updates
+- Mention any uncertainty explicitly
+- Ensure no broken links in edited docs
+
+## CLA
+
+Contributions require the project CLA as described in root `README.md` / `CLA.md`.

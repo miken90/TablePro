@@ -1,621 +1,199 @@
 # TablePro System Architecture
 
-## High-Level Architecture
+## 1. Scope and source of truth
 
-TablePro operates as a **dual-platform database client** with platform-specific implementations but shared architectural patterns.
+This document describes architecture reflected in current repository code, with emphasis on the active Windows implementation under `tablepro-windows/`.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    USER INTERFACES                              │
-├─────────────────────────────────────────────────────────────────┤
-│  macOS (SwiftUI + AppKit)  │  Windows (Tauri v2 + Chromium)     │
-├─────────────────────────────────────────────────────────────────┤
-│        DATABASE DRIVERS (Plugin System)                         │
-│  PostgreSQL | MySQL | MSSQL | SQLite | MongoDB | Redis | ...   │
-├─────────────────────────────────────────────────────────────────┤
-│       CONNECTION POOLING & MANAGEMENT                           │
-├─────────────────────────────────────────────────────────────────┤
-│              EXTERNAL DATABASES                                 │
-│  Remote instances via direct connection or SSH tunnel           │
-└─────────────────────────────────────────────────────────────────┘
-```
+Primary verified sources:
 
-## macOS Architecture
+- `tablepro-windows/src-tauri/src/lib.rs`
+- `tablepro-windows/src-tauri/src/plugin/manager.rs`
+- `tablepro-windows/src-tauri/src/plugin/adapter.rs`
+- `tablepro-windows/src-tauri/src/services/connection_manager.rs`
+- `tablepro-windows/src-tauri/src/commands/query.rs`
+- Frontend stores/components under `tablepro-windows/src/`
 
-### Layers
+## 2. High-level system view
 
-```
-┌─────────────────────────────────────────────────────────┐
-│               SwiftUI Views & AppKit                    │
-│  (ContentView, EditorView, DataGridView, Settings)      │
-├─────────────────────────────────────────────────────────┤
-│            ViewModels (@Observable)                     │
-│  (SidebarViewModel, EditorViewModel, GridViewModel)     │
-├─────────────────────────────────────────────────────────┤
-│           Services (async/await)                        │
-│  (DatabaseService, QueryExecutor, SchemaLoader)         │
-├─────────────────────────────────────────────────────────┤
-│        DatabaseDriver Protocol (Polymorphic)            │
-├─────────────────────────────────────────────────────────┤
-│           Plugin System (PluginManager)                 │
-│  .tableplugin bundles, code signature verification      │
-├─────────────────────────────────────────────────────────┤
-│    Native Database Drivers (PostgreSQL, MySQL, etc.)    │
-├─────────────────────────────────────────────────────────┤
-│          External: Remote Databases                     │
-└─────────────────────────────────────────────────────────┘
+```text
+React (frontend UI)
+  -> Typed IPC wrappers (`src/ipc/commands.ts`)
+  -> Tauri invoke boundary
+Rust backend (`src-tauri/src/commands/*`)
+  -> ConnectionManager (session registry)
+  -> DatabaseDriver trait objects
+  -> PluginDriverAdapter (FFI bridge)
+Plugin DLLs (driver crates)
+  -> Native DB protocols
+External databases
 ```
 
-### Data Flow
-
-```
-User Action (edit cell, execute query)
-    ↓
-SwiftUI View triggers action
-    ↓
-@Observable ViewModel updates state
-    ↓
-Service method called (async)
-    ↓
-DatabaseDriver protocol method (polymorphic)
-    ↓
-Plugin-provided driver implementation (SwiftUI DLL or Bundle)
-    ↓
-Native database protocol (SQL, MongoDB BSON, Redis protocol)
-    ↓
-Remote Database
-    ↓
-Results streamed back
-    ↓
-Service parses results into QueryResult
-    ↓
-ViewModel updates @State (observable)
-    ↓
-SwiftUI re-renders with new data
-```
-
-### Key Components
-
-| Component | Responsibility |
-|-----------|-----------------|
-| **Views** | UI rendering, user input capture |
-| **ViewModels** | State management (@Observable), business logic orchestration |
-| **Services** | Data access layer, query execution, schema loading |
-| **DatabaseDriver** | Protocol for polymorphic database access |
-| **PluginManager** | Load .tableplugin bundles, verify signatures, instantiate drivers |
-| **Storage** | UserDefaults (settings), Keychain (passwords), custom JSON (tabs) |
-
-### Plugin Loading (macOS)
-
-```swift
-// 1. Discover plugins
-let pluginPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-  .appendingPathComponent("TablePro/Plugins")
-let bundles = FileManager.default.contentsOfDirectory(
-  atPath: pluginPath.path
-).filter { $0.hasSuffix(".tableplugin") }
-
-// 2. Load bundle & verify signature
-let bundle = Bundle(path: pluginPath.appendingPathComponent(bundleName).path)!
-// Signature verification happens automatically via OS
-
-// 3. Instantiate driver
-let driverClass = bundle.principalClass as! PluginDatabaseDriver.Type
-let driver = driverClass.init()
-
-// 4. Use polymorphic interface
-let result = try await driver.execute(sql: "SELECT * FROM users")
-```
-
-## Windows Architecture
-
-### Layers
-
-```
-┌────────────────────────────────────────────────────────────┐
-│        React Components (Functional + Hooks)               │
-│  (ConnectionDialog, QueryEditor, DataGrid, Sidebar,        │
-│   QuickSwitcher, HistoryPanel, FilterPanel, InspectorPanel,│
-│   CellInput)                                                │
-├────────────────────────────────────────────────────────────┤
-│              Zustand Stores (Reactive)                     │
-│  (connectionStore, queryStore, schemaStore, changeStore)   │
-├────────────────────────────────────────────────────────────┤
-│              IPC Layer (Type-Safe)                         │
-│  Typed wrappers around Tauri commands                     │
-├────────────────────────────────────────────────────────────┤
-│         Tauri IPC (JSON Messages)                         │
-├─────────────────────────────────────────────────────────────┤
-│         Rust Backend (tokio async)                         │
-├─────────────────────────────────────────────────────────────┤
-│        IPC Commands (Handler Layer)                       │
-│  (execute_query, get_schema, save_connection, etc.)       │
-├─────────────────────────────────────────────────────────────┤
-│         Services (Business Logic)                         │
-│  (ConnectionManager, QueryExecutor, SchemaLoader)         │
-├─────────────────────────────────────────────────────────────┤
-│      DatabaseDriver Trait (async)                        │
-├─────────────────────────────────────────────────────────────┤
-│          Plugin System (C ABI FFI)                        │
-│  libloading, DLL plugins, PluginVTable vtable            │
-├─────────────────────────────────────────────────────────────┤
-│  Native Database Drivers (DLL: postgres, mysql, mssql)     │
-├─────────────────────────────────────────────────────────────┤
-│          External: Remote Databases                        │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow
-
-```
-User clicks "Execute Query"
-    ↓
-React component calls store action
-    ↓
-Zustand store updates state + calls IPC API
-    ↓
-IPC wrapper invoke("execute_query", { sql })
-    ↓
-Tauri serializes to JSON, sends to Rust backend
-    ↓
-Rust command handler receives JSON
-    ↓
-Service::execute_query(sql: &str) async
-    ↓
-DatabaseDriver::execute() trait method (async)
-    ↓
-PluginManager::load_driver() loads .dll if needed
-    ↓
-C ABI FFI: Call PluginVTable::execute() function pointer
-    ↓
-Plugin DLL executes SQL via native driver (PostgreSQL, MySQL, etc.)
-    ↓
-Results streamed back from database
-    ↓
-Plugin returns FfiQueryResult (C struct)
-    ↓
-Adapter converts FfiQueryResult → Rust QueryResult
-    ↓
-Service serializes QueryResult to JSON
-    ↓
-Tauri sends JSON back to frontend
-    ↓
-React receives data, updates Zustand store
-    ↓
-Zustand subscribers notified
-    ↓
-Components re-render with new data
-```
-
-**Note on IPC Sequencing**: Data fetching (table browse) uses sequential `await` calls instead of `Promise.all` to avoid tokio Mutex deadlocks in the plugin FFI layer. This ensures safe concurrent access to shared connection pooling and driver state across IPC boundaries.
-
-**Note on plugin lifetime**: Active driver instances must be dropped before the host releases plugin manager state. On Windows, each `PluginDriverAdapter` owns a plugin-created handle whose destructor still depends on the loaded DLL and vtable remaining valid during shutdown.
-
-**Note on metadata loading**: Schema metadata should be fetched on demand. Avoid firing column-introspection requests for every table immediately after connect or database switch — large schemas can flood Tauri IPC and plugin calls, which makes dev runtime instability much harder to diagnose.
-
-**Note on crash triage**: If `tauri dev` crashes without new Rust log lines, check `%APPDATA%/TablePro/renderer-errors.log` first. That usually means the renderer/WebView layer hit an uncaught exception or unhandled rejection before backend diagnostics could help.
-
-### IPC Command Flow
-
-```rust
-// src/commands/query.rs
-#[tauri::command]
-async fn execute_query(
-  sql: String,
-  connection_id: String,
-  state: State<'_, AppState>,
-) -> Result<QueryResult, TauriError> {
-  // 1. Validate input
-  validate_sql(&sql)?;
-  
-  // 2. Get connection from store
-  let connection = state.connections.get(&connection_id)?;
-  
-  // 3. Get or create driver via plugin system
-  let driver = state.plugin_manager.get_driver(connection.db_type)?;
-  
-  // 4. Execute query
-  let result = driver.execute(&sql).await?;
-  
-  // 5. Return JSON-serialized result
-  Ok(result)
-}
-```
-
-### Plugin Loading (Windows)
-
-```rust
-// src/plugin/manager.rs
-pub struct PluginManager {
-  loaded_plugins: HashMap<String, Box<dyn DatabaseDriver>>,
-}
-
-impl PluginManager {
-  pub fn load_plugin(&mut self, db_type: &str) -> Result<&dyn DatabaseDriver> {
-    // 1. Check if already loaded
-    if let Some(driver) = self.loaded_plugins.get(db_type) {
-      return Ok(driver.as_ref());
-    }
-    
-    // 2. Find .dll file
-    let dll_path = format!("{}/driver-{}.dll", self.plugins_dir, db_type);
-    
-    // 3. Load via libloading
-    let lib = unsafe { libloading::Library::new(&dll_path)? };
-    
-    // 4. Call plugin_new() entry point (C ABI function pointer)
-    let plugin_vtable: libloading::Symbol<extern "C" fn() -> *const PluginVTable> =
-      unsafe { lib.get(b"plugin_new")? };
-    
-    // 5. Instantiate driver from vtable
-    let vtable = unsafe { (*plugin_vtable)() };
-    let driver = PluginAdapter::new(vtable);
-    
-    // 6. Store and return
-    self.loaded_plugins.insert(db_type.to_string(), Box::new(driver));
-    Ok(self.loaded_plugins[db_type].as_ref())
-  }
-}
-```
-
-### Key Components (Windows)
-
-| Component | Responsibility |
-|-----------|-----------------|
-| **React Components** | UI rendering, event handling (Grid, Editor, Connection, QuickSwitcher) |
-| **Zustand Stores** | Client state management (connection, query, schema, changes) |
-| **IPC Layer** | Type-safe Tauri command wrappers |
-| **Commands** | IPC handlers that delegate to services |
-| **Services** | Business logic, database operations |
-| **DatabaseDriver** | Async trait for polymorphic database access |
-| **PluginManager** | DLL discovery, loading, version validation |
-| **PluginAdapter** | FFI ↔ Rust trait conversion with PluginVTable |
-| **Storage** | ConnectionStore (APPDATA JSON), SettingsStore (JSON) |
-| **TanStack Virtual** | Grid virtualization for 100K+ row rendering |
-
-## Plugin System (Both Platforms)
-
-### Unified Plugin Interface
-
-Both platforms use the same logical interface pattern:
-
-```swift
-// Swift protocol (macOS)
-protocol PluginDatabaseDriver: PluginInterface {
-  func instantiate() -> DatabaseDriver
-  func driverName() -> String
-  func apiVersion() -> String
-}
-
-// C interface (Windows)
-extern "C" {
-  pub fn plugin_new() -> *mut dyn DatabaseDriver;
-  pub fn plugin_api_version() -> u32;
-  pub fn plugin_driver_name() -> *const c_char;
-}
-```
-
-### Plugin Lifecycle
-
-```
-1. Discovery
-   - macOS: Scan ~/Library/Application Support/TablePro/Plugins/*.tableplugin
-   - Windows: Scan %APPDATA%/TablePro/Plugins/*.dll
-
-2. Loading
-   - macOS: Bundle(path:) API + code signature verification
-   - Windows: libloading + version validation
-
-3. Initialization
-   - macOS: Instantiate class via principalClass
-   - Windows: Call plugin_new() function pointer
-
-4. Binding
-   - Both: DatabaseDriver trait methods available
-   - Both: Polymorphic interface used throughout app
-
-5. Execution
-   - User executes query → calls driver method → plugin implementation
-```
-
-### Driver Plugin Structure (Windows)
-
-```rust
-// driver-postgres/src/lib.rs (cdylib crate)
-
-#[repr(C)]
-pub struct PostgresDriver {
-  // Internal state
-}
-
-#[tauri::command]
-impl DatabaseDriver for PostgresDriver {
-  async fn execute(&self, sql: &str) -> Result<QueryResult> {
-    // PostgreSQL-specific execution
-  }
-  
-  async fn get_tables(&self) -> Result<Vec<TableInfo>> {
-    // Query information_schema
-  }
-  
-  // ... other methods
-}
-
-// FFI entry point
-#[no_mangle]
-pub extern "C" fn plugin_new() -> *mut dyn DatabaseDriver {
-  Box::into_raw(Box::new(PostgresDriver::new()))
-}
-
-#[no_mangle]
-pub extern "C" fn plugin_api_version() -> u32 {
-  1
-}
-```
-
-## Storage Architecture
-
-### macOS Storage
-
-```
-~/Library/Application Support/TablePro/
-├── connections.json          # Encrypted passwords stored separately
-├── settings.json            # User preferences
-├── history.db               # SQLite FTS5 for query history
-└── tabs/
-    ├── {uuid}.json          # Per-tab state (SQL content, position)
-    └── ...
-```
-
-**Encryption**: Passwords stored in macOS Keychain (automatic on read/write)
-
-### Windows Storage
-
-```
-%APPDATA%/TablePro/
-├── connections.json         # Connection profiles (DPAPI-encrypted passwords)
-├── settings.json           # User preferences
-├── history.sqlite3         # SQLite FTS5 for query history (NEW: P0)
-```
-
-**Note**: Tab state persisted via localStorage (Zustand persist middleware), auto-rehydrated on app launch.
-
-**Encryption**: DPAPI (`CryptProtectData` / `CryptUnprotectData`) for passwords
-
-### Query History Schema (Both Platforms)
-
-```sql
-CREATE TABLE queries (
-  id INTEGER PRIMARY KEY,
-  database TEXT NOT NULL,
-  sql TEXT NOT NULL,
-  executed_at TIMESTAMP NOT NULL,
-  execution_time_ms INTEGER,
-  row_count INTEGER,
-  error TEXT
-);
-
-CREATE VIRTUAL TABLE queries_fts USING fts5(sql, database);
-```
-
-## Connection Pooling
-
-Both platforms implement connection pooling to minimize overhead:
-
-```
-Connection Pool (per database type)
-├─ Pool[0]: Active connection (in use)
-├─ Pool[1]: Idle connection (ready for next query)
-├─ Pool[2]: Idle connection
-└─ Pool[max]: Max connections configured
-
-When query executes:
-1. Request connection from pool
-2. If available → use immediately
-3. If none available → create new (up to max)
-4. After query → return to pool (idle)
-5. Periodic cleanup: close idle > 10 min old
-```
-
-### Pool Configuration
-
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| **min_idle** | 1 | Minimum idle connections |
-| **max_size** | 10 | Maximum total connections |
-| **idle_timeout** | 10 min | Close idle connections after |
-| **connection_timeout** | 30s | Max wait for available connection |
-
-## Change Tracking Flow
-
-### macOS
-
-```
-1. User edits cell in DataGrid
-   ↓
-2. DataGridViewModel records Change
-   ↓
-3. Change added to changeStore.pending
-   ↓
-4. Cell highlighted (visual indicator)
-   ↓
-5. User clicks Save
-   ↓
-6. changeStore generates SQL (INSERT/UPDATE/DELETE)
-   ↓
-7. SQL wrapped in transaction
-   ↓
-8. DatabaseService.execute(transaction)
-   ↓
-9. On success: changeStore.clear() + UI refresh
-   ↓
-10. On error: show alert, keep changes in editor
-```
-
-### Windows
-
-```
-1. User double-clicks cell in DataGrid
-   ↓
-2. CellInput component opens inline editor
-   ↓
-3. User edits and presses Enter OR clicks outside cell
-   ↓
-4. changeStore.recordCellChange() records the change
-   ↓
-5. Zustand store updates (addChange action)
-   ↓
-6. UI shows change indicator (yellow background)
-   ↓
-7. User clicks Save button
-   ↓
-8. changeStore.generateSQL() produces INSERT/UPDATE/DELETE
-   ↓
-9. IPC invoke('save_changes', { changes })
-   ↓
-10. Rust command wraps in transaction, executes
-    ↓
-11. Result sent back via IPC
-    ↓
-12. On success: store.clearChanges() + refresh grid
-    ↓
-13. On error: error toast, changes preserved
-```
-
-## Error Handling Strategy
-
-### Error Types
-
-```rust
-// Rust: TauriError (IPC-safe)
-pub enum TauriError {
-  DatabaseError(String),
-  ConnectionFailed(String),
-  InvalidQuery(String),
-  PermissionDenied,
-  Timeout,
-  Unknown(String),
-}
-
-// TypeScript: ApiError (IPC result type)
-type ApiResult<T> = 
-  | { ok: true; data: T }
-  | { ok: false; error: ApiError };
-
-interface ApiError {
-  code: string;
-  message: string;
-  details?: string;
-}
-```
-
-### Error Flow
-
-```
-Rust Error (database, timeout, etc.)
-    ↓
-Service catches & converts to TauriError
-    ↓
-TauriError serialized to JSON
-    ↓
-React receives error object
-    ↓
-IPC wrapper returns { ok: false, error }
-    ↓
-Component renders error toast/alert
-    ↓
-User sees user-friendly message (not stack trace)
-```
-
-## Security Architecture
-
-### Password Management
-
-**macOS**: Uses native Keychain API
-```swift
-let credentials = SecCopyMatching([...], &result)
-```
-
-**Windows**: Uses DPAPI via Rust crate
-```rust
-let encrypted = dpapi::encrypt(password)?;
-// Store encrypted bytes in JSON
-let decrypted = dpapi::decrypt(encrypted_bytes)?;
-```
-
-### SSL/TLS
-
-Both platforms support:
-- SSL mode selection (disabled, preferred, required)
-- Custom certificate validation
-- Hostname verification options
-
-### SSH Tunneling
-
-Secure remote access via SSH proxy:
-```
-Local Port
-    ↓ (TCP)
-SSH Client
-    ↓ (encrypted)
-SSH Server
-    ↓ (TCP)
-Remote Database Port
-```
-
-Implemented via native SSH libraries (macOS) and Rust `russh` crate (Windows).
-
-## Performance Optimization
-
-### Data Grid Virtualization
-
-Large datasets rendered efficiently:
-```
-Viewport (visible rows)
-    ↓
-Only render 20-30 visible rows in DOM
-    ↓
-Scroll events update render range
-    ↓
-Off-screen rows NOT in DOM (memory efficient)
-    ↓
-Can render 100K+ rows without lag
-```
-
-### Query Streaming
-
-For large result sets:
-```
-Query execution returns rows
-    ↓
-Chunk rows (e.g., 1000 per chunk)
-    ↓
-Send first chunk to frontend
-    ↓
-User can view + interact immediately
-    ↓
-Remaining chunks stream in background
-    ↓
-User can sort/filter while loading
-```
-
-### IPC Chunking
-
-Prevent JSON payloads >1MB:
-```
-Large result (5MB JSON)
-    ↓
-Split into 5x 1MB chunks
-    ↓
-Send chunk 1 via invoke
-    ↓
-Frontend updates grid
-    ↓
-Send chunk 2 via separate invoke
-    ↓
-... repeat until all chunks sent
-```
+## 3. Windows runtime architecture
+
+### 3.1 Tauri application composition
+
+`src-tauri/src/lib.rs` wires runtime state with Tauri `manage(...)` and command handler registration.
+
+Managed state includes:
+
+- `Mutex<ConnectionManager>`
+- `Mutex<SettingsStore>`
+- `Mutex<ConnectionStore>`
+- `Mutex<HistoryStore>`
+
+Command registration includes connection, query, schema, storage, history, import/export, settings, and save-changes flows.
+
+### 3.2 Session-oriented backend flow
+
+Connection lifecycle is session-based:
+
+1. Frontend sends `connect(config)`
+2. Backend creates driver and opens connection
+3. Backend returns `session_id` (UUID string)
+4. Frontend stores mapping `savedConnectionId -> session_id`
+5. Subsequent query/schema/data commands use `session_id`
+
+This is implemented across:
+
+- `commands/connection.rs`
+- `services/connection_manager.rs`
+- `stores/connectionStore.ts`
+
+## 4. Plugin subsystem architecture
+
+### 4.1 Discovery and loading
+
+`PluginManager` scans DLLs from:
+
+1. executable-adjacent `plugins/` directory (primary)
+2. executable directory fallback (dev scenario), filtered to `driver_*` or `driver-*`
+
+### 4.2 ABI handshake
+
+Current host/plugin ABI flow:
+
+1. Host allocates uninitialized `PluginVTable`
+2. Host loads `tablepro_plugin_init` symbol and calls it with vtable pointer
+3. Host verifies `vtable.api_version == API_VERSION`
+4. Host reads plugin identity from `tablepro_plugin_metadata`
+5. Host keeps DLL loaded while plugin is active
+
+This replaces older docs that referenced `plugin_new` entrypoint for host startup.
+
+### 4.3 Driver instantiation and FFI bridging
+
+For each connection, host creates a driver via:
+
+- `PluginManager::create_driver(type_id, config)`
+- `PluginDriverAdapter::new(vtable, config, type_id)`
+
+`PluginDriverAdapter`:
+
+- owns plugin `DriverHandle`
+- implements `DatabaseDriver` trait
+- converts FFI structs/results into Rust models
+- uses `catch_unwind` around FFI calls in multiple paths
+- destroys handle in `Drop` via plugin vtable destructor
+
+## 5. Query and table-browse execution path
+
+### 5.1 Query execution (`execute_query`)
+
+`commands/query.rs` flow:
+
+1. Lock `ConnectionManager` mutex
+2. Resolve driver clone for `session_id`
+3. Release manager lock
+4. Execute SQL async via driver
+5. Return `QueryResult` or `AppError`
+
+### 5.2 Paginated browse (`fetch_rows`, `fetch_count`)
+
+- Qualified table names are generated from `table` + optional `schema`
+- Optional `where_clause` passes basic guard (`;`, `--`, and destructive keywords blocked)
+- `LIMIT/OFFSET` pagination is applied in generated SQL
+
+### 5.3 Query cancellation
+
+`cancel_query(session_id)` routes to driver `cancel_query()`.
+
+## 6. Frontend architecture highlights
+
+### 6.1 State model (Zustand stores)
+
+Key stores:
+
+- `connectionStore`: saved connection map, statuses, `sessionIds` map
+- `queryStore`: run/cancel flow, safe-mode checks, query result/error state
+- `schemaStore`: schema metadata fetch state (tables/columns/etc.)
+- `changeStore`: staged edits for save workflow
+- `editorStore`: tab persistence via Zustand `persist`
+- `history.ts`: recent/search/delete/clear history state
+- `settingsStore`: app settings load/save state
+
+### 6.2 Main UI composition
+
+`MainLayout.tsx` integrates:
+
+- sidebar and toolbar
+- query editor and results panel
+- table-browse mode
+- filter panel
+- inspector panel
+- history panel
+- quick switcher and settings
+
+Keyboard shortcuts include toggles for quick switcher, settings, filter, inspector, and history.
+
+## 7. Persistence architecture (current implemented state)
+
+### 7.1 Backend files
+
+- Connections: `config_dir/TablePro/connections.json`
+- Groups: `config_dir/TablePro/groups.json`
+- History: `data_dir/TablePro/history.sqlite3`
+
+### 7.2 History database structure
+
+`HistoryStore` initializes:
+
+- `history` table
+- FTS5 table `history_fts` with `content=history`
+- insert/delete triggers to keep FTS index in sync
+
+### 7.3 Frontend persistence
+
+Editor tabs are persisted in browser storage via Zustand middleware key:
+
+- `tablepro-editor-tabs`
+
+### 7.4 Security reality note
+
+Current `ConnectionStore` serializes `SavedConnection` as JSON directly. Stored `ConnectionConfig.password` is not encrypted at rest in current implementation.
+
+## 8. Error handling and observability
+
+- Backend command signatures return `Result<_, AppError>`
+- Runtime logs use `tracing`
+- App startup configures panic hook and tracing subscriber in `lib.rs`
+- Renderer error reporting command exists: `log_renderer_error`
+
+## 9. Lifecycle and ownership constraints
+
+- `ConnectionManager` retains active driver instances keyed by session
+- Drivers should be dropped before plugin manager unloads DLL/vtable state
+- `PluginManager` `Drop` reclaims vtable allocations and then unloads libraries
+
+## 10. Architectural stale-risk checkpoints
+
+Review these files when architecture docs are updated:
+
+1. `src-tauri/src/lib.rs` (registered commands, managed state)
+2. `src-tauri/src/plugin/manager.rs` (ABI/discovery behavior)
+3. `src-tauri/src/commands/query.rs` (parameters and query safeguards)
+4. `src-tauri/src/storage/connection_store.rs` + frontend stores (persistence/security claims)
 
 ---
 
-**Last Updated**: 2026-03-16 | **Stable Release**: v0.17.0 (macOS) | **Windows Version**: P0 Feature Parity Complete
+**Last Updated**: 2026-03-18  
+**Architecture focus**: Windows active runtime + plugin/session flow

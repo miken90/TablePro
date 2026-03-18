@@ -1,215 +1,132 @@
 # TablePro Product Development Requirements (PDR)
 
-## Product Vision
+## Purpose
 
-TablePro is a **native database client** that brings professional SQL development and data exploration to desktop platforms. It combines native platform integration, modern UI, and intelligent features to eliminate context switching between databases, editors, and tools.
+This document defines current product requirements for the TablePro repository as of 2026-03-18, based on implemented code in `tablepro-windows/` and current docs.
 
-**Mission**: Enable developers to query, explore, and manage any database efficiently through a single, beautifully-crafted native application.
+## Product scope
 
-## Product Goals
+TablePro is a desktop database client with:
 
-1. **Multi-Platform Support**: Native clients for macOS and Windows, with potential Linux support
-2. **Database Agnostic**: Support 11+ database engines through a plugin system
-3. **Developer Experience**: Minimize cognitive load through autocomplete, inline editing, and intelligent SQL assistance
-4. **Safe Operations**: Change tracking, transaction management, and confirmation workflows to prevent data loss
-5. **Extensibility**: Plugin ecosystem for drivers, export formats, and import handlers
-6. **Performance**: Fast connection pooling, query history, and responsive UI for large datasets
+- A stable macOS codebase (`TablePro/`, read-only in this repo workflow)
+- An active Windows codebase (`tablepro-windows/`, Tauri v2 + Rust + React)
 
-## Target Platforms
+Windows implementation status in source:
 
-| Platform | Status | Architecture | Toolchain |
-|----------|--------|--------------|-----------|
-| **macOS** | Stable (v0.17.0) | SwiftUI + AppKit hybrid | Xcode, Swift 5.9+ |
-| **Windows** | Phase 6 + P0 Complete | Tauri v2 + Rust + React | Rust, Node.js, TypeScript |
-| **Linux** | Planned | Tauri v2 (Windows approach) | Rust, Node.js, TypeScript |
+- Core Tauri runtime, IPC command surface, and plugin loader are implemented
+- Session-based query/schema/data flows are implemented (`session_id`)
+- SQLite-backed query history and frontend tab persistence are implemented
+- Release and parity items (for full cross-platform goals) remain roadmap-driven
 
-## Supported Databases
+## Functional requirements
 
-TablePro provides native drivers and autocomplete for:
+### 1) Connection management
 
-- **SQL Databases**: MySQL/MariaDB, PostgreSQL, SQL Server, SQLite, Oracle
-- **Cloud Data**: Redshift (AWS), BigQuery (planned)
-- **NoSQL**: MongoDB, Redis
-- **Analytics**: ClickHouse, DuckDB
+The system must:
 
-Each database has dedicated documentation and driver implementation, with connection presets for common configurations.
+- Save and list connections via `list_connections`, `save_connection`, `delete_connection`
+- Open runtime sessions via `connect(config) -> session_id`
+- Route operational commands through `session_id` (not static connection handles)
+- Support optional SSH tunnel setup in backend connection flow
+- Support group management via `list_groups`, `save_group`, `delete_group`
 
-## Core Features
+### 2) Query execution
 
-### SQL Editor & Execution
-- CodeMirror 6 editor with Vim/Emacs keybindings
-- Database-aware autocomplete (tables, columns, functions)
-- Query history with full-text search (SQLite FTS5)
-- Quick Switcher (Cmd+K/Ctrl+K) for fuzzy table/view search
-- Multiple query tabs with state persistence
-- Statement execution with formatted result display
+The system must:
 
-### Inline Data Editing
-- Point-and-click cell editing within results
-- Automatic SQL generation (INSERT/UPDATE/DELETE)
-- Copy as INSERT/UPDATE SQL from grid context menu
-- Change tracking with visual indicators
-- Undo/redo with transaction wrapping
-- Safeguards: confirmation dialogs, Safe Mode for large updates
+- Execute ad-hoc SQL through `execute_query(session_id, sql, params?)`
+- Support table browse pagination through `fetch_rows` and `fetch_count`
+- Support query cancellation through `cancel_query(session_id)`
+- Record history through `history_record` and search/fetch history through history commands
 
-### Data Exploration
-- Interactive data grid with virtual scrolling (handles millions of rows)
-- **Filter Panel**: WHERE clause builder with Ctrl+Shift+F toggle (P0)
-- **Inspector Panel**: Selected row column-value pairs viewer with Ctrl+Shift+I toggle (P0)
-- Table structure viewer (columns, indexes, keys, constraints)
-- Filter presets with save/load
-- Column sorting, type indicators
-- Export to CSV, JSON, SQL, XLSX
+### 3) Schema exploration
 
-### Data Import/Export
-- Multi-format support (CSV, JSON, SQL, XLSX, MQL for MongoDB)
-- Bulk insert operations via transactions
-- Schema auto-detection from CSV headers
-- Native File → Database workflows
+The system must provide:
 
-### Advanced Features
-- **SSH Tunneling**: Secure connections to remote databases
-- **SSL/TLS Support**: Encrypted connections with cert management
-- **AI Assistant** (macOS): SQL generation, query optimization suggestions
-- **Connection Management**: Save/edit connection profiles with password encryption (DPAPI on Windows, Keychain on macOS)
-- **Tab Persistence**: Restore all editor tabs and query state across sessions
-- **Query History**: Timestamped history with search, keyboard navigation
-- **Quick Switcher**: Fuzzy search for tables and views (Cmd+K/Ctrl+K)
-- **Pre-Connect Script**: Run shell command before each database connection (.pgpass, custom commands)
-- **Plugin Metadata**: Drivers self-declare brand colors, capabilities, connection field requirements
+- Table listing (`fetch_tables`)
+- Columns (`fetch_columns`)
+- Indexes (`fetch_indexes`)
+- Foreign keys (`fetch_foreign_keys`)
+- Databases and database switching (`fetch_databases`, `switch_database`)
+- DDL retrieval (`fetch_ddl`) and schema list (`fetch_schemas`)
 
-## Technical Stack
+### 4) Data editing and transfer
 
-### macOS (Stable)
-- **UI Framework**: SwiftUI + AppKit
-- **Database Access**: DatabaseDriver protocol (async/await)
-- **Plugin System**: .tableplugin bundles with code signature verification
-- **Storage**: UserDefaults (settings), Core Data / custom JSON (history, tabs)
-- **Password Storage**: macOS Keychain
+The system must:
 
-### Windows (In Progress → Phase 6 + P0 Complete)
-- **Desktop Framework**: Tauri v2 (Chromium + native window)
-- **Backend**: Rust with tokio async runtime
-- **Frontend**: React 18 + TypeScript with Zustand (state management)
-- **Plugin System**: C-ABI FFI with libloading (DLL plugins)
-- **Storage**: DPAPI for passwords, JSON files, SQLite for history
-- **IPC**: Typed Tauri commands with TauriError handling
-- **Status**: All 6 development phases complete + P0 feature parity + manual testing bug fixes resolved
+- Support staged grid edits and commit path through `save_changes`
+- Support file export through `export_to_file`
+- Support SQL import preview/import via `import_preview`, `import_sql_file`
 
-### Shared Patterns
-- **Connection Pooling**: Reuse active connections for performance
-- **Async/Await**: Non-blocking queries, responsive UI
-- **Change Tracking**: Local diff tracking before commits
-- **Error Handling**: User-friendly error messages, logging for debugging
+### 5) UI state and workflow
 
-## Plugin System Architecture
+Frontend must maintain:
 
-TablePro supports extensible plugins for drivers, export formats, and import handlers.
+- Connection/session mapping in `connectionStore`
+- Query execution state in `queryStore`
+- Tab/editor state with Zustand persistence (`tablepro-editor-tabs` in localStorage)
+- Query history panel state and actions in `stores/history.ts`
 
-### macOS Plugin Format
-- **Type**: Xcode bundles (.tableplugin)
-- **Interface**: Swift protocol `PluginDatabaseDriver`, `ExportFormatPlugin`, `ImportFormatPlugin`
-- **Verification**: Code signature validation on load
-- **Packaging**: Bundle with Swift dylib + resources
-- **Distribution**: Plugin registry (documented in `docs/development/plugin-registry.mdx`)
+## Non-functional requirements
 
-### Windows Plugin Format
-- **Type**: Dynamic libraries (.dll, C ABI)
-- **Interface**: C vtable with function pointers (`PluginVTable`)
-- **Verification**: Loaded via `libloading` with version validation
-- **Packaging**: Cargo cdylib crate (driver-postgres, driver-mysql, etc.)
-- **Distribution**: GitHub releases, future plugin registry
+### Performance
 
-### Plugin Examples
-- **Drivers**: PostgreSQL, MySQL, SQLite, Oracle, Redis, MongoDB, ClickHouse, DuckDB, MSSQL
-- **Export**: CSV, JSON, SQL, XLSX, MQL (MongoDB)
-- **Import**: SQL, CSV (auto-detection)
+- UI must remain responsive for paginated table browsing and large result sets
+- Backend command handlers must avoid long mutex hold times (driver is cloned from manager before execute)
 
-## Storage & Persistence
+### Reliability
 
-| Data | Location | Format | Encryption |
-|------|----------|--------|------------|
-| **Connections** | `%APPDATA%/TablePro/` (Windows) / UserDefaults (macOS) | JSON | DPAPI (passwords) |
-| **Query History** | `%APPDATA%/TablePro/history.db` (Windows) | SQLite FTS5 | N/A |
-| **Tab State** | `%APPDATA%/TablePro/tabs/` (Windows) | JSON per tab | N/A |
-| **User Settings** | `%APPDATA%/TablePro/settings.json` (Windows) | JSON | N/A |
-| **Filter Presets** | `%APPDATA%/TablePro/` (Windows) | JSON | N/A |
+- Rust commands return `Result<_, AppError>` and avoid panics in normal flow
+- Plugin adapter guards FFI calls with panic boundaries (`catch_unwind`) where implemented
 
-## Acceptance Criteria
+### Security (current-state requirement)
 
-### Core Functionality (MVP)
-- ✅ Connect to 11 supported databases
-- ✅ Execute arbitrary SQL queries
-- ✅ Browse table structure with column/index info
-- ✅ Edit inline data with automatic SQL generation
-- ✅ Undo/redo changes before commit
-- ✅ Export results to multiple formats
-- ✅ Save/load connection profiles securely
-- ✅ Search query history
+Current storage reality in source code:
 
-### Code Quality
-- ✅ All IPC commands fully typed (Rust ↔ TypeScript)
-- ✅ No `unwrap()` on user data (Rust)
-- ✅ Structured logging with `tracing` crate (Rust)
-- ✅ Error messages user-friendly, not stack traces
-- ✅ ESLint + Prettier passing (TypeScript)
-- ✅ cargo clippy passing (Rust)
+- Saved connection configs are written to `config_dir/TablePro/connections.json`
+- Connection groups are written to `config_dir/TablePro/groups.json`
+- Query history is SQLite at `data_dir/TablePro/history.sqlite3`
+- Editor tabs persist in frontend localStorage (`zustand/persist`)
 
-### Platform Parity
-- ✅ Feature parity between macOS and Windows (by Phase 3)
-- ✅ UI consistency within platform conventions
-- ✅ Performance: sub-1s query execution for <1M rows
-- ✅ Virtualized rendering for large datasets (>10K rows)
+**Important current-state note:** saved connection JSON currently includes plaintext password fields from `ConnectionConfig`. Do not claim at-rest DPAPI password encryption in Windows docs until implemented in `connection_store` path.
 
-### Security
-- ✅ No plaintext passwords in config files or logs
-- ✅ DPAPI encryption for stored credentials (Windows)
-- ✅ SSL/TLS option for all supported databases
-- ✅ SSH tunnel support for remote access
-- ✅ No secrets in git history
+### Observability
 
-### Testing & Release
-- ✅ Unit tests for core business logic
-- ✅ Integration tests for IPC layer (Windows)
-- ✅ E2E tests for multi-database workflows
-- ✅ Signed MSI installer (Windows)
-- ✅ Notarized DMG (macOS)
-- ✅ CHANGELOG.md updated per release
+- Runtime logging uses `tracing`
+- Renderer error logging command (`log_renderer_error`) is exposed in Tauri invoke handler
 
-## Non-Functional Requirements
+## Windows plugin ABI requirements
 
-| Requirement | Target | Implementation |
-|-------------|--------|-----------------|
-| **Startup Time** | <2s | Native platform window, async plugin load |
-| **Query Execution** | <1s for <1M rows | Connection pooling, non-blocking async |
-| **Grid Virtualization** | 60fps for 100K rows | React virtualization, CodeMirror viewport |
-| **Memory Usage** | <500MB idle | No full DOM for large datasets, streaming results |
-| **IPC Payload Size** | <1MB per invoke | Stream large result sets in chunks |
+Host-side plugin loading must continue to use:
 
-## Release Schedule
+- `tablepro_plugin_init(vtable_ptr)` entrypoint to initialize host-allocated `PluginVTable`
+- API version check against `tablepro_plugin_sdk::API_VERSION`
+- `tablepro_plugin_metadata()` for `type_id`, `display_name`, `default_port`
+- Plugin discovery from executable-adjacent `plugins/` directory with fallback scan in executable directory for `driver_*`/`driver-*` DLLs
 
-| Phase | Status | Timeline | Scope |
-|-------|--------|----------|-------|
-| **Phase 1: macOS Foundation** | ✅ Complete | v0.1–0.17 | Native SwiftUI client, plugin system, 11 drivers, features |
-| **Phase 2: Windows Port** | ✅ Phase 6 + P0 Complete | v0.18–0.20 | Tauri v2 port, feature parity, P0 features (SQLite, History, Filter, Inspector) |
-| **Phase 3: Platform Parity** | 📋 Planned | v0.21+ | Full feature alignment, AI assistant on Windows, Linux support |
-| **Phase 4: Cloud & Expansion** | 📋 Planned | Future | BigQuery, Snowflake, cloud sync, collaborative features |
+## Acceptance criteria status snapshot
 
-## Success Metrics
+| Area | Status | Evidence |
+|---|---|---|
+| Session-based command flow | Implemented | `commands/query.rs`, `services/connection_manager.rs` |
+| Plugin ABI (`tablepro_plugin_init`) | Implemented | `plugin/manager.rs` |
+| History SQLite + FTS | Implemented | `storage/history_store.rs` |
+| Frontend tab persistence | Implemented | `stores/editorStore.ts` |
+| Password-at-rest encryption for saved connections | Not implemented | `storage/connection_store.rs` writes JSON directly |
 
-- **Adoption**: 1000+ downloads by v1.0
-- **Performance**: <1s query execution for 95% of user queries
-- **Reliability**: 99.9% uptime for all database connections (no crashes)
-- **Quality**: 90%+ code coverage on core business logic
-- **Community**: 10+ community-contributed plugins by v1.0
+## Constraints and decisions
 
-## License & Legal
+- Documentation must represent repository state, not intended state
+- Platform claims must distinguish macOS release reality from Windows development reality
+- Security claims must stay aligned with current storage implementation
 
-- **License**: GNU Affero General Public License v3.0 (AGPLv3)
-- **CLA**: Required for contributions
-- **Sponsors**: Dwarves Foundation, Nimbus, Huy TQ, Unikorn
-- **Distribution**: GitHub Releases (DMG for macOS, MSI for Windows)
+## Requirement change log
+
+- **2026-03-18**: Updated to session-based query model, current plugin ABI, and current storage behavior.
+- **2026-03-18**: Removed outdated DPAPI-at-rest claim for saved connection JSON.
 
 ---
 
-**Last Updated**: 2026-03-16 | **Version**: 0.17.0 | **Next Review**: Phase 2 completion (v0.20)
+**Last Updated**: 2026-03-18  
+**Document Status**: Active  
+**Source Scope**: `tablepro-windows/` runtime + current docs

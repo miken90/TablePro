@@ -1,33 +1,61 @@
-# TablePro Documentation
+# TablePro Docs Workspace Guide
 
-Source files for the [TablePro documentation site](https://docs.tablepro.app), powered by [Mintlify](https://mintlify.com).
+This `docs/` folder contains two documentation tracks:
 
-## Structure
+1. **Mintlify site content** (`*.mdx`, localized docs, product docs)
+2. **Engineering state docs** (`project-overview-pdr.md`, `system-architecture.md`, etc.) used for repository alignment
 
-```
+## Current docs folder structure
+
+```text
 docs/
-├── index.mdx                # Introduction
-├── quickstart.mdx           # Getting started guide
-├── installation.mdx         # Installation instructions
-├── changelog.mdx            # Release changelog
-├── databases/               # Database connection guides
-├── features/                # Feature documentation
-├── customization/           # Settings and customization
-├── development/             # Developer documentation
-└── vi/                      # Vietnamese translation (full parity)
+├── docs.json
+├── index.mdx
+├── quickstart.mdx
+├── installation.mdx
+├── changelog.mdx
+├── features/
+├── databases/
+├── customization/
+├── development/
+├── vi/
+├── zh/
+├── project-overview-pdr.md
+├── project-roadmap.md
+├── codebase-summary.md
+├── system-architecture.md
+└── code-standards.md
 ```
 
-## Local Development
-
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) and start the dev server:
+## Local docs workflow
 
 ```bash
-npm i -g mint
+# from repository root
 mint dev
 ```
 
-Preview at `http://localhost:3000`.
+Optional validation:
 
-## Deployment
+```bash
+mint broken-links
+node $HOME/.claude/scripts/validate-docs.cjs docs/
+```
 
-Changes pushed to the default branch are deployed automatically via the [Mintlify GitHub app](https://dashboard.mintlify.com/settings/organization/github-app).
+## Documentation rules for this repository
+
+- Keep implementation claims evidence-based
+- Mark roadmap items as planned until code exists
+- Keep each markdown file under 800 lines
+- Prefer relative links that resolve inside `docs/`
+
+## Key maintenance targets
+
+Update these files whenever architecture/runtime behavior changes:
+
+- `project-overview-pdr.md`
+- `project-roadmap.md`
+- `codebase-summary.md`
+- `system-architecture.md`
+- `code-standards.md`
+
+For root project context, see `README.md` at repository root.

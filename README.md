@@ -32,7 +32,7 @@
 
 TablePro is a native database client available on **macOS** and **Windows**. Connect to MySQL, MariaDB, PostgreSQL, SQLite, MongoDB, Redis, SQL Server, Redshift, Oracle, ClickHouse, and DuckDB. Features include a SQL editor with autocomplete, inline cell editing, AI assistance, data export/import, SSH tunneling, and a modular plugin system.
 
-**macOS v0.17.0** is stable and production-ready. **Windows port** (Tauri v2 + Rust + React) is currently in development, targeting v0.20 release.
+**macOS v0.17.0** is stable and production-ready. The **Windows implementation** (Tauri v2 + Rust + React) is active in this repository, with release/stabilization work ongoing.
 
 ## Features
 

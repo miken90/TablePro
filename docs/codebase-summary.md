@@ -1,336 +1,119 @@
 # TablePro Codebase Summary
 
-## Repository Structure
+## Repository summary
 
-```
+This summary is generated from current repository structure and a fresh Repomix snapshot (`repomix-output.xml`, generated 2026-03-18).
+
+### Repomix snapshot (2026-03-18)
+
+- Packed files: **1,312**
+- Total tokens: **11,756,078**
+- Output file: `repomix-output.xml`
+- Security exclusions reported by repomix: 3 test files
+- Largest token contributors are vendored/parser sources under `LocalPackages/CodeEditLanguages/.../parser.c`
+
+> Practical note: token distribution is dominated by bundled parser sources; this inflates whole-repo token counts for LLM analysis.
+
+## Top-level structure
+
+```text
 TablePro/
-├── TablePro/              # macOS Swift codebase (read-only reference, ~200 files)
-├── Plugins/               # macOS plugin system (driver bundles, export/import)
-├── tablepro-windows/      # Windows Tauri v2 app (ACTIVE DEVELOPMENT)
-├── Libs/                  # Shared Swift libraries (ReadabilityKit, etc.)
-├── docs/                  # Mintlify documentation (features, databases, development)
-├── plans/                 # Implementation plans and phase documents
-├── scripts/               # Build & CI scripts (Python, Bash)
-├── CHANGELOG.md           # Release notes and unreleased changes
-├── AGENTS.md              # Development guidelines and workflows
-└── README.md              # Root project overview
+├── tablepro-windows/        # Active Windows app (Tauri v2 + Rust + React)
+├── TablePro/                # macOS app source (reference for behavior/parity)
+├── Plugins/                 # macOS plugin-related sources and SDK pieces
+├── Libs/                    # Shared/vendor libraries used by macOS stack
+├── docs/                    # Documentation (Mintlify content + engineering markdown)
+├── plans/                   # Plans, reports, implementation tracking artifacts
+├── scripts/                 # Utility/build scripts
+├── CHANGELOG.md
+├── README.md
+└── AGENTS.md
 ```
 
-## macOS Codebase (TablePro/)
+## Active implementation area: `tablepro-windows/`
 
-**Status**: Stable (v0.17.0) | **Architecture**: SwiftUI + AppKit | **Files**: ~200 (Swift)
+### Backend (`tablepro-windows/src-tauri/src/`)
 
-### Directory Layout
-
-```
-TablePro/
-├── TableProApp.swift          # Main app entry, SwiftUI scenes
-├── AppDelegate.swift          # Window lifecycle, file open handlers
-├── Core/
-│   ├── Database/              # DatabaseDriver protocol, connection management
-│   ├── Plugins/               # PluginManager, code signature verification
-│   ├── ChangeTracking/        # Cell edit recording, SQL generation
-│   ├── SSH/                   # SSH tunnel connections
-│   ├── Autocomplete/          # SQL keyword & schema autocompletion
-│   ├── Storage/               # Connections, settings, history persistence
-│   ├── Models/                # Shared data structures
-│   └── Services/              # Business logic (queries, updates, exports)
-├── Models/                    # Data models (~15 files: Connection, QueryResult, etc.)
-├── ViewModels/                # State management (Sidebar, DatabaseSwitcher, etc.)
-├── Views/                     # UI components (~40+ files)
-│   ├── Main/                  # Main window, sidebar + editor + grid
-│   ├── Editor/                # SQL editor, result display
-│   ├── DataGrid/              # Table view with editing
-│   ├── Connection/            # Connection dialogs
-│   ├── Settings/              # User preferences
-│   └── Components/            # Reusable UI widgets
-└── Resources/                 # Icons, strings, localization
+```text
+src-tauri/src/
+├── lib.rs                   # Tauri setup, state injection, command registration
+├── main.rs                  # Entry point
+├── commands/                # IPC commands (connection/query/schema/data/...)
+├── services/                # ConnectionManager, SQL generation, SSH tunnel manager
+├── plugin/                  # PluginManager, PluginDriverAdapter, trait boundary
+├── storage/                 # ConnectionStore, SettingsStore, HistoryStore
+└── models/                  # Shared app/domain models and AppError
 ```
 
-### Key macOS Patterns
+Key runtime facts verified in source:
 
-| Component | Implementation | Notes |
-|-----------|-----------------|-------|
-| **UI Framework** | SwiftUI + AppKit (hybrid) | SwiftUI for modern views, AppKit for window chrome |
-| **State** | @Observable (Swift 5.9+) | Replaces @StateObject, cleaner syntax |
-| **Async** | async/await, Task | Non-blocking database operations |
-| **Database Access** | DatabaseDriver protocol | Polymorphic async interface for all drivers |
-| **Storage** | UserDefaults + custom JSON | Settings via UserDefaults, history via Core Data |
-| **Passwords** | macOS Keychain | Secure credential storage |
-| **Plugins** | .tableplugin bundles | Code-signed, loaded via Bundle API |
+- Commands are registered centrally in `src-tauri/src/lib.rs`
+- Query/schema/data flows use **`session_id`** and `ConnectionManager` access through `tokio::sync::Mutex`
+- Plugin host loads DLLs via `PluginManager` with:
+  - host-allocated `PluginVTable`
+  - `tablepro_plugin_init`
+  - `tablepro_plugin_metadata`
+  - `API_VERSION` compatibility check
+  - plugin directory discovery near executable with fallback to executable directory
 
-### Core Protocols (reference for Windows)
+### Frontend (`tablepro-windows/src/`)
 
-```swift
-protocol DatabaseDriver {
-  func execute(sql: String) async throws -> QueryResult
-  func getTableStructure(name: String) async throws -> TableInfo
-  func insert(table: String, rows: [[String: Any]]) async throws
-  func update(table: String, changes: [Change]) async throws
-  func delete(table: String, condition: String) async throws
-}
-
-protocol PluginDatabaseDriver: PluginInterface {
-  func instantiate() -> DatabaseDriver
-}
+```text
+src/
+├── App.tsx
+├── components/              # Layout, editor, grid, filter, inspector, settings, etc.
+├── stores/                  # Zustand stores (connection/query/schema/change/editor/...)
+├── ipc/                     # Typed `invoke` wrappers and error helpers
+├── editor/                  # SQL editor utilities and language helpers
+├── hooks/
+├── types/
+└── styles/
 ```
 
-## Windows Codebase (tablepro-windows/)
+Key frontend state facts verified in source:
 
-**Status**: Phase 6 + P0 Feature Parity Complete (v0.18 unreleased) | **Architecture**: Tauri v2 + Rust + React | **Files**: ~100 source files, ~11,800 LOC
+- Saved connection ID -> runtime session UUID mapping is stored in `connectionStore` (`sessionIds` map)
+- Editor tabs are persisted through Zustand `persist` (`tablepro-editor-tabs` in localStorage)
+- History panel state/actions are in `stores/history.ts` and call backend `history_*` commands
 
-### Directory Layout
+## Storage and persistence (current behavior)
 
-```
-tablepro-windows/
-├── src-tauri/                 # Rust backend (src/, src-tauri/Cargo.toml workspace)
-│   ├── src/
-│   │   ├── main.rs            # App entry, Tauri builder with IPC commands
-│   │   ├── lib.rs             # Library root
-│   │   ├── commands/           # IPC handlers (9 modules: connection, query, schema, data, export, settings, storage, history, mod)
-│   │   ├── services/           # ConnectionManager, QueryExecutor, SchemaLoader
-│   │   ├── plugin/             # DLL loading (manager.rs, adapter.rs, driver_trait.rs)
-│   │   ├── models/             # Rust data structures (Connection, QueryResult, etc.)
-│   │   ├── storage/            # ConnectionStore (JSON), SettingsStore (JSON), HistoryStore (SQLite FTS5)
-│   │   ├── error.rs            # TauriError wrapper for type-safe IPC
-│   │   └── utils/              # Helpers (password encryption, logging)
-│   ├── driver-postgres/        # PostgreSQL plugin (cdylib crate)
-│   ├── driver-mysql/           # MySQL plugin (cdylib crate)
-│   ├── driver-mssql/           # SQL Server plugin (cdylib crate)
-│   ├── driver-sqlite/          # SQLite plugin (cdylib crate)
-│   ├── plugin-sdk/             # FFI types shared between host & plugins
-│   ├── Cargo.toml             # Workspace manifest with all crates
-│   └── gen/                   # Tauri-generated bindings
-├── src/                       # React/TypeScript frontend (~55 components, ~8,400 LOC)
-│   ├── components/            # React components (Layout, Connection, Grid, Editor, etc.)
-│   │   ├── connection/        # Connection dialogs
-│   │   ├── editor/            # SQL editor with autocomplete
-│   │   ├── export/            # Export dialog
-│   │   ├── filter/            # Filter panel (WHERE clause builder)
-│   │   ├── grid/              # Data grid with virtual scrolling
-│   │   ├── history/           # Query history panel
-│   │   ├── inspector/         # Inspector panel (selected row details)
-│   │   ├── layout/            # Main layout, sidebar, toolbar
-│   │   ├── settings/          # Settings panels
-│   │   ├── shared/            # Reusable UI components
-│   │   └── structure/         # Table structure viewer
-│   ├── stores/                # Zustand stores (7 stores with localStorage persistence, ~1,600 LOC total)
-│   │   ├── connection-store.ts
-│   │   ├── query-store.ts
-│   │   ├── schema-store.ts
-│   │   ├── change-store.ts    # Change tracking with undo/redo
-│   │   ├── tab-store.ts       # Tab state persistence
-│   │   ├── editor-store.ts    # With localStorage + Zustand persist middleware
-│   │   └── history-store.ts   # Query history tracking
-│   ├── editor/                # SQL editor modules (9 files, ~1,600 LOC)
-│   │   ├── sql-context-analyzer.ts
-│   │   ├── sql-completion-provider.ts
-│   │   ├── sql-keywords.ts
-│   │   ├── statement-scanner.ts
-│   │   └── vim-mode.ts
-│   ├── hooks/                 # Custom React hooks (5 files)
-│   ├── ipc/                   # Typed Tauri command wrappers
-│   ├── types/                 # TypeScript interfaces (mirror Rust models)
-│   ├── App.tsx                # Root component
-│   ├── main.tsx               # Vite entry point
-│   └── styles/                # Tailwind CSS
-├── __tests__/                 # Test suite (5 test files, ~350 LOC)
-├── package.json               # Node.js dependencies (React, Zustand, TailwindCSS, @tauri-apps/api)
-├── vite.config.ts             # Vite bundler config
-├── tsconfig.json              # Strict TypeScript settings
-└── tailwind.config.js         # TailwindCSS customization
-```
+### Windows backend
 
-### Windows Architecture
+- Connections: `config_dir/TablePro/connections.json`
+- Groups: `config_dir/TablePro/groups.json`
+- History DB: `data_dir/TablePro/history.sqlite3`
+- History schema objects: `history` table + `history_fts` virtual table + triggers
+- Tab persistence: frontend localStorage via Zustand middleware
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ React/TypeScript Frontend (Chromium window)             │
-│ ├─ Components (Grid, Editor, Sidebar, Connection)      │
-│ │  └─ Quick Switcher, History Panel, Export Dialog    │
-│ ├─ Zustand Stores (connection, query, schema, change)  │
-│ └─ IPC layer (typed Tauri invokes)                      │
-└──────────────┬──────────────────────────────────────────┘
-               │ Tauri IPC (JSON messages)
-┌──────────────▼──────────────────────────────────────────┐
-│ Rust Backend (tokio async runtime)                      │
-│ ├─ IPC Commands (execute_query, get_schema, etc.)      │
-│ ├─ Services (ConnectionManager, QueryExecutor)         │
-│ ├─ Plugin System (load DLL → DatabaseDriver trait)     │
-│ ├─ Storage (DPAPI passwords, JSON settings/tabs)       │
-│ └─ Models (Connection, QueryResult, TableInfo, etc.)   │
-└──────────────┬──────────────────────────────────────────┘
-               │ C ABI FFI
-┌──────────────▼──────────────────────────────────────────┐
-│ Plugin DLLs (per database)                              │
-│ ├─ driver-postgres.dll (PostgreSQL driver)             │
-│ ├─ driver-mysql.dll (MySQL driver)                     │
-│ ├─ driver-mssql.dll (SQL Server driver)                │
-│ └─ (other database drivers)                            │
-└──────────────┬──────────────────────────────────────────┘
-               │ SQL / native protocol
-               └──────> Database (MySQL, PostgreSQL, etc.)
-```
+Security reality from current code:
 
-### Key Windows Patterns
+- Saved connection JSON currently stores `ConnectionConfig` fields directly, including password values
+- Do not document DPAPI at-rest encryption for saved connections until implemented in storage path
 
-| Component | Implementation | Notes |
-|-----------|-----------------|-------|
-| **IPC Layer** | Tauri v2 commands | Typed invoke wrapper in `ipc/` folder |
-| **Error Handling** | TauriError enum + type conversion | Never panic, always return user-friendly errors |
-| **State Management** | Zustand (reactive stores) | Separate stores: connection, query, schema, change, tab, editor |
-| **Async Runtime** | tokio (Rust) | Non-blocking queries via tasks |
-| **Database Drivers** | C ABI FFI (libloading) | Load .dll plugins at runtime, call via vtable |
-| **Password Storage** | DPAPI (Windows Crypto API) | Via `dpapi-rs` crate or FFI wrapper |
-| **Storage** | APPDATA JSON + SQLite | Settings/connections/tabs as JSON, history as SQLite FTS5 |
-| **Logging** | `tracing` crate | Structured logging, never `println!()` |
+## Command surface summary (backend)
 
-## Plugin System (Both Platforms)
+Current command groups registered in `lib.rs`:
 
-### Plugin Discovery & Loading
+- Connection: `test_connection`, `connect`, `disconnect`, `get_connection_status`
+- Query: `execute_query`, `fetch_rows`, `fetch_count`, `cancel_query`
+- Schema: `fetch_tables`, `fetch_columns`, `fetch_indexes`, `fetch_foreign_keys`, `fetch_databases`, `fetch_ddl`, `switch_database`, `fetch_schemas`
+- Storage: `list/save/delete_connection`, group CRUD
+- Data mutation: `save_changes`
+- Import/Export: `import_preview`, `import_sql_file`, `export_to_file`
+- History: `history_fetch_recent`, `history_search`, `history_clear_all`, `history_delete_entry`, `history_record`
+- Settings: `get_settings`, `set_settings`, `log_renderer_error`
 
-**macOS**:
-```
-1. App finds .tableplugin bundles in ~/Library/Application Support/TablePro/Plugins/
-2. Loads bundle via Bundle(url:) API
-3. Instantiates plugin class (code signature verified)
-4. Plugin registers drivers, exporters, importers
-```
+## Documentation stale-risk map
 
-**Windows**:
-```
-1. App finds .dll files in %APPDATA%/TablePro/Plugins/
-2. PluginManager uses libloading to load DLL
-3. Calls PluginVTable::new_driver() function pointer
-4. FFI→Rust adapter wraps plugin in DatabaseDriver trait
-```
+Areas most likely to drift and require periodic refresh:
 
-### Plugin Crates (Windows)
-
-Each database driver is a separate Rust crate compiled as `cdylib` in the `src-tauri/` workspace:
-
-**Available Drivers** (Phase 2 complete + P0 parity):
-- driver-postgres: PostgreSQL via simple_query() protocol for simplicity and correctness
-- driver-mysql: MySQL via mysql_async (NULL values now emit FfiString::null())
-- driver-mssql: SQL Server via tiberius (NULL values now emit FfiString::null())
-- driver-sqlite: SQLite via rusqlite (bundled)
-
-**Future Drivers** (planned in Phase 3):
-- MongoDB, Redis, Oracle, ClickHouse, DuckDB
-
-**Structure**:
-```
-driver-postgres/
-├── Cargo.toml                # crate-type = ["cdylib"]
-├── src/lib.rs                # FFI entry point, plugin_new() function
-└── src/driver.rs             # Implements DatabaseDriver trait
-```
-
-### Plugin Interfaces
-
-**macOS**: Swift protocols (`PluginDatabaseDriver`, `ExportFormatPlugin`, `ImportFormatPlugin`)
-
-**Windows**: C vtable with function pointers:
-```c
-struct PluginVTable {
-  fn new_driver() -> *mut DatabaseDriver,
-  fn api_version() -> u32,
-  fn driver_name() -> *const c_char,
-  ...
-}
-```
-
-## Shared Data Models
-
-| Model | Purpose | Fields |
-|-------|---------|--------|
-| **Connection** | Database connection config | host, port, user, password, database, sslConfig, sshConfig |
-| **QueryResult** | Execution result | columns (ColumnInfo[]), rows (Any[][]), rowCount |
-| **ColumnInfo** | Column metadata | name, type, nullable, isPrimaryKey, isForeignKey |
-| **TableInfo** | Table structure | name, columns (ColumnInfo[]), indexes, primaryKey, foreignKeys |
-| **Change** | Cell edit record | table, primaryKey, column, oldValue, newValue |
-
-All models are defined separately in each platform's codebase but follow consistent semantics.
-
-## Build Systems & Dependencies
-
-### macOS Build
-- **Tool**: Xcode 15.2+
-- **Language**: Swift 5.9+
-- **Dependencies**: Third-party Swift packages (SPM)
-- **Output**: .app bundle (notarized for distribution)
-
-### Windows Build
-- **Backend**: `cargo build --release` (Rust 1.75+)
-- **Frontend**: `npm run build` (Node.js 18+)
-- **Bundler**: Vite + TailwindCSS
-- **Tauri**: v2 (generates IPC bindings)
-- **Output**: MSI installer (NSIS), code-signed executable
-
-### Dependency Highlights
-
-**Rust**:
-- `tauri` v2: Desktop framework, IPC, file dialogs
-- `tokio`: Async runtime
-- `serde/serde_json`: Serialization
-- `libloading`: Dynamic library loading for plugins
-- `tracing`: Structured logging
-- `sqlparser`: SQL parsing for schema inference
-
-**TypeScript/React**:
-- `@tauri-apps/api`: Tauri IPC wrapper
-- `zustand`: State management
-- `@codemirror/lang-sql`: SQL syntax highlighting + editor
-- `@replit/codemirror-vim`: Vim keybindings
-- `lucide-react`: UI icons
-- `tailwindcss`: Utility-first CSS
-
-## Storage Implementation
-
-### macOS
-- **Connections**: UserDefaults (user domain)
-- **Query History**: Core Data (NSPersistentContainer)
-- **Tab State**: JSON in ~/Library/Application Support/TablePro/
-- **Passwords**: macOS Keychain (automatic decryption)
-
-### Windows
-- **Connections**: `%APPDATA%/TablePro/connections.json` (encrypted passwords via DPAPI)
-- **Query History**: `%APPDATA%/TablePro/history.sqlite3` (SQLite FTS5 full-text search)
-- **Tab State**: localStorage (via Zustand persist middleware, auto-rehydrate on app launch)
-- **Settings**: `%APPDATA%/TablePro/settings.json`
-- **Passwords**: DPAPI-encrypted (CryptProtectData)
-
-## Code Quality Standards
-
-### Rust
-- **Linting**: `cargo clippy` (no warnings in release builds)
-- **Formatting**: `rustfmt` (enforced via pre-commit)
-- **Error Handling**: No `unwrap()` on user data; always `Result<T, E>`
-- **Logging**: `tracing` crate with spans and events
-- **FFI**: All external types marked `#[repr(C)]`
-
-### TypeScript
-- **Linting**: ESLint + Prettier
-- **Type Checking**: `strict: true` in tsconfig.json
-- **Error Handling**: type-safe error boundaries
-- **State**: Zustand for centralized store
-- **Components**: Functional with hooks, no class components
-
-### Swift
-- **Linting**: swiftlint (enforced via Xcode build phase)
-- **Formatting**: swiftformat
-- **Async**: async/await (no Combine)
-- **Error**: Swift.Error protocol, no force unwrap in production
-
-## Testing Strategy
-
-| Layer | Tool | Coverage | Status |
-|-------|------|----------|--------|
-| **Unit (Rust)** | cargo test | Database models, SQL generation, utils, change tracking | 67 tests |
-| **Unit (TS)** | Vitest | React components, stores, IPC layer, editor logic | 84 tests |
-| **Integration** | Tauri E2E | IPC round-trips, plugin loading | Included |
-| **E2E** | Playwright | User workflows (edit, execute, export) | Ready for Phase 3 |
+1. Plugin ABI and loader sequence (`plugin/manager.rs`, `plugin/adapter.rs`)
+2. Query command signatures (`commands/query.rs`)
+3. Storage/security claims (`storage/connection_store.rs`, `storage/history_store.rs`, frontend stores)
+4. Frontend file naming and component tree changes in `src/components/**`
 
 ---
 
-**Last Updated**: 2026-03-16 | **Stable Release**: v0.17.0 | **Windows Branch**: P0 Feature Parity Complete
+**Last Updated**: 2026-03-18  
+**Source of Truth for this summary**: `repomix-output.xml` + direct reads of active Windows source files
