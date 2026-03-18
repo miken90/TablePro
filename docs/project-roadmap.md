@@ -15,6 +15,7 @@ Phase naming below reflects delivery intent, while status labels reflect what is
 |---|---|---|
 | Phase 1 — macOS foundation | Complete | Stable macOS product line exists in repo as reference/source |
 | Phase 2 — Windows core port | Complete in codebase | Core runtime, plugin loader, IPC commands, history, editing path are implemented |
+| Phase 2.5 — Optimize & Harden | Complete in codebase | Credential encryption, export identifier quoting, async blocking isolation, import/export memory hardening, frontend perf fixes, and modularization landed from plan `plans/260318-optimize-harden/plan.md` |
 | Phase 3 — parity and expansion | Planned | Linux target, broader driver parity, and advanced features remain roadmap work |
 
 ## Phase 1 — macOS foundation (completed)
@@ -76,7 +77,7 @@ Current checklist snapshot:
 - ✅ Plugin loader uses `tablepro_plugin_init` + metadata + API version validation
 - ✅ History persistence uses `history.sqlite3` + FTS table/triggers
 - ✅ Frontend tab state persists via Zustand localStorage
-- ☐ Saved-connection at-rest encryption (not yet in `connection_store`)
+- ✅ Saved-connection at-rest encryption (`dpapi:` format in `connection_store`)
 - ⏳ Ongoing docs synchronization against active Windows source changes
 
 ## Risks and tracking focus

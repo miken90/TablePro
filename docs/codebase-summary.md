@@ -88,8 +88,8 @@ Key frontend state facts verified in source:
 
 Security reality from current code:
 
-- Saved connection JSON currently stores `ConnectionConfig` fields directly, including password values
-- Do not document DPAPI at-rest encryption for saved connections until implemented in storage path
+- Saved connection secrets (`password`, `ssh_password`, `ssh_key_passphrase`) are persisted as `dpapi:`-prefixed encrypted payloads via `services/credential_store.rs` and decrypted on load in `storage/connection_store.rs`
+- Legacy plaintext values are still readable on load and auto-migrated to DPAPI format during persistence
 
 ## Command surface summary (backend)
 

@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Windows: SQL activity log — `queryLogStore` tracks all executed queries (editor + table-browse) with source, duration, row count, and timestamps; displayed in Messages tab of ResultPanel
 - Windows: Table browse mode — clicking a table in the sidebar now shows a dedicated full-height data grid view (no editor split); "Query Editor" button in table toolbar to switch back; Run button in toolbar automatically switches back to query editor mode and shows results
+- Windows: Connection credential protection at rest — `ConnectionStore` now persists `password`, `ssh_password`, and `ssh_key_passphrase` with `dpapi:`-prefixed DPAPI encryption and migrates legacy plaintext values on load
+- Windows: Export SQL identifier quoting service — per-driver quoting/escaping for PostgreSQL/SQLite (`"`), MySQL/MariaDB (`` ` ``), and MSSQL (`[]`) to prevent unsafe identifier interpolation in generated SQL exports
+- Windows: Import/export memory hardening — JSON export now streams rows directly to disk; SQL import uses buffered statement streaming for plain and `.gz` files instead of full-file reads
+- Windows: Async runtime hardening — blocking file and SQLite history operations on async command paths were isolated from Tokio worker threads
+- Windows: Frontend performance pass — ResultPanel selectors/memoization tightened, unused MainLayout schema subscription removed, and SQL editor dependencies are loaded lazily
+- Windows: Modularization pass — extracted focused modules/components from oversized frontend and Rust files while keeping existing behavior and public APIs
 
 ### Fixed
 
