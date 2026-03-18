@@ -11,7 +11,7 @@ pub async fn history_fetch_recent(
 ) -> Result<Vec<HistoryEntry>, AppError> {
     let store = store.lock().await;
     store
-        .fetch_recent(100)
+        .fetch_recent_for_async(100)
         .map_err(AppError::DatabaseError)
 }
 
@@ -22,16 +22,14 @@ pub async fn history_search(
     store: State<'_, Mutex<HistoryStore>>,
 ) -> Result<Vec<HistoryEntry>, AppError> {
     let store = store.lock().await;
-    store.search(&query).map_err(AppError::DatabaseError)
+    store.search_for_async(&query).map_err(AppError::DatabaseError)
 }
 
 /// Delete all history entries.
 #[tauri::command]
-pub async fn history_clear_all(
-    store: State<'_, Mutex<HistoryStore>>,
-) -> Result<(), AppError> {
+pub async fn history_clear_all(store: State<'_, Mutex<HistoryStore>>) -> Result<(), AppError> {
     let store = store.lock().await;
-    store.clear_all().map_err(AppError::DatabaseError)
+    store.clear_all_for_async().map_err(AppError::DatabaseError)
 }
 
 /// Delete a single history entry by id.
@@ -41,7 +39,9 @@ pub async fn history_delete_entry(
     store: State<'_, Mutex<HistoryStore>>,
 ) -> Result<(), AppError> {
     let store = store.lock().await;
-    store.delete_entry(id).map_err(AppError::DatabaseError)
+    store
+        .delete_entry_for_async(id)
+        .map_err(AppError::DatabaseError)
 }
 
 /// Record a new query execution in history.
@@ -56,6 +56,12 @@ pub async fn history_record(
 ) -> Result<(), AppError> {
     let store = store.lock().await;
     store
-        .insert(&query, database.as_deref(), execution_time_ms, row_count, &status)
+        .insert_for_async(
+            &query,
+            database.as_deref(),
+            execution_time_ms,
+            row_count,
+            &status,
+        )
         .map_err(AppError::DatabaseError)
 }

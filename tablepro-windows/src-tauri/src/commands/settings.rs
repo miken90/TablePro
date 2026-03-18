@@ -9,9 +9,7 @@ use crate::storage::{AppSettings, SettingsStore};
 
 /// Return the current application settings.
 #[tauri::command]
-pub async fn get_settings(
-    store: State<'_, Mutex<SettingsStore>>,
-) -> Result<AppSettings, AppError> {
+pub async fn get_settings(store: State<'_, Mutex<SettingsStore>>) -> Result<AppSettings, AppError> {
     let store = store.lock().await;
     Ok(store.get().clone())
 }

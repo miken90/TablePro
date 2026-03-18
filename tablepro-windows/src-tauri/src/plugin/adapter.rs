@@ -1,10 +1,20 @@
 use std::panic::catch_unwind;
 
+#[path = "adapter_ffi_helpers.rs"]
+mod adapter_ffi_helpers;
+#[path = "adapter_ffi_list_converters.rs"]
+mod adapter_ffi_list_converters;
+
 use async_trait::async_trait;
 use tablepro_plugin_sdk::{DriverConfig, DriverHandle, FfiStr, PluginVTable};
 
 use crate::models::{AppError, ColumnInfo, ForeignKeyInfo, IndexInfo, QueryResult, TableInfo};
 use crate::plugin::DatabaseDriver;
+use adapter_ffi_helpers::{convert_query_result, ffi_result_to_rust, ffi_string_to_rust};
+use adapter_ffi_list_converters::{
+    convert_column_list, convert_foreign_key_list, convert_index_list, convert_string_list,
+    convert_table_list,
+};
 
 /// Wraps a plugin vtable + DriverHandle into the DatabaseDriver trait.
 ///
@@ -39,7 +49,14 @@ impl PluginDriverAdapter {
         let database = FfiStr::from(config.database.as_str());
         let ssl_mode = FfiStr::from(config.ssl_mode.as_str());
 
-        let ffi_config = DriverConfig { host, port: config.port, user, password, database, ssl_mode };
+        let ffi_config = DriverConfig {
+            host,
+            port: config.port,
+            user,
+            password,
+            database,
+            ssl_mode,
+        };
 
         // SAFETY: vtable was fully initialised by the plugin's tablepro_plugin_init.
         let handle = unsafe {
@@ -53,7 +70,11 @@ impl PluginDriverAdapter {
             )));
         }
 
-        Ok(Self { vtable, handle, type_id: type_id.to_string() })
+        Ok(Self {
+            vtable,
+            handle,
+            type_id: type_id.to_string(),
+        })
     }
 
     fn vtable(&self) -> &PluginVTable {
@@ -68,89 +89,6 @@ impl Drop for PluginDriverAdapter {
         // SAFETY: handle is valid; we own it.
         let _ = catch_unwind(|| unsafe { (vtable.destroy_driver)(self.handle) });
     }
-}
-
-// ── FFI conversion helpers ────────────────────────────────────────────────────
-
-fn ffi_result_to_rust(
-    vtable: &PluginVTable,
-    result: tablepro_plugin_sdk::FfiResult,
-) -> Result<(), AppError> {
-    let success = result.success;
-    let msg = if !success && !result.error.is_null() {
-        unsafe { result.error.to_string_copy() }
-    } else {
-        String::new()
-    };
-    unsafe { (vtable.free_result)(result) };
-    if success {
-        Ok(())
-    } else {
-        Err(AppError::DatabaseError(msg))
-    }
-}
-
-fn ffi_string_to_rust(vtable: &PluginVTable, s: tablepro_plugin_sdk::FfiString) -> String {
-    let out = unsafe { s.to_string_copy() };
-    unsafe { (vtable.free_string)(s) };
-    out
-}
-
-fn convert_query_result(
-    vtable: &PluginVTable,
-    ffi: tablepro_plugin_sdk::FfiQueryResult,
-) -> Result<QueryResult, AppError> {
-    // Check error first
-    if !ffi.error.is_null() {
-        let msg = unsafe { ffi.error.to_string_copy() };
-        unsafe { (vtable.free_query_result)(ffi) };
-        return Err(AppError::DatabaseError(msg));
-    }
-
-    let col_count = ffi.column_count;
-    let row_count = ffi.row_count;
-
-    // Build columns
-    let columns: Vec<ColumnInfo> = if ffi.columns.is_null() {
-        vec![]
-    } else {
-        (0..col_count)
-            .map(|i| unsafe {
-                let c = &*ffi.columns.add(i);
-                ColumnInfo {
-                    name: c.name.to_string_copy(),
-                    type_name: c.type_name.to_string_copy(),
-                    nullable: c.nullable,
-                    is_primary_key: c.is_primary_key,
-                }
-            })
-            .collect()
-    };
-
-    // Build rows (row-major flat cells array)
-    let rows: Vec<Vec<Option<String>>> = if ffi.cells.is_null() || row_count == 0 {
-        vec![]
-    } else {
-        (0..row_count)
-            .map(|r| {
-                (0..col_count)
-                    .map(|c| unsafe {
-                        let cell = &*ffi.cells.add(r * col_count + c);
-                        if cell.ptr.is_null() {
-                            None
-                        } else {
-                            Some(cell.to_string_copy())
-                        }
-                    })
-                    .collect()
-            })
-            .collect()
-    };
-
-    let affected_rows = ffi.affected_rows;
-    unsafe { (vtable.free_query_result)(ffi) };
-
-    Ok(QueryResult { columns, rows, affected_rows, execution_time_ms: 0.0 })
 }
 
 // ── DatabaseDriver impl ───────────────────────────────────────────────────────
@@ -197,32 +135,14 @@ impl DatabaseDriver for PluginDriverAdapter {
             .map_err(|_| AppError::PluginError("panic in fetch_tables".to_string()))?;
         tracing::debug!(type_id = %self.type_id, "FFI: fetch_tables returned");
 
-        if !ffi.error.is_null() {
-            let msg = unsafe { ffi.error.to_string_copy() };
-            unsafe { (vtable.free_table_list)(ffi) };
-            return Err(AppError::DatabaseError(msg));
-        }
-
-        let tables: Vec<TableInfo> = if ffi.items.is_null() {
-            vec![]
-        } else {
-            (0..ffi.count)
-                .map(|i| unsafe {
-                    let t = &*ffi.items.add(i);
-                    TableInfo {
-                        name: t.name.to_string_copy(),
-                        schema: if t.schema.is_null() { None } else { Some(t.schema.to_string_copy()) },
-                        table_type: t.table_type.to_string_copy(),
-                        row_count_estimate: if t.has_row_count { Some(t.row_count_estimate) } else { None },
-                    }
-                })
-                .collect()
-        };
-        unsafe { (vtable.free_table_list)(ffi) };
-        Ok(tables)
+        convert_table_list(vtable, ffi)
     }
 
-    async fn fetch_columns(&self, table: &str, schema: Option<&str>) -> Result<Vec<ColumnInfo>, AppError> {
+    async fn fetch_columns(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<ColumnInfo>, AppError> {
         let vtable = self.vtable();
         let handle = self.handle;
         let t = FfiStr::from(table);
@@ -230,32 +150,14 @@ impl DatabaseDriver for PluginDriverAdapter {
         let ffi = catch_unwind(|| unsafe { (vtable.fetch_columns)(handle, t, s) })
             .map_err(|_| AppError::PluginError("panic in fetch_columns".to_string()))?;
 
-        if !ffi.error.is_null() {
-            let msg = unsafe { ffi.error.to_string_copy() };
-            unsafe { (vtable.free_column_list)(ffi) };
-            return Err(AppError::DatabaseError(msg));
-        }
-
-        let cols: Vec<ColumnInfo> = if ffi.items.is_null() {
-            vec![]
-        } else {
-            (0..ffi.count)
-                .map(|i| unsafe {
-                    let c = &*ffi.items.add(i);
-                    ColumnInfo {
-                        name: c.name.to_string_copy(),
-                        type_name: c.type_name.to_string_copy(),
-                        nullable: c.nullable,
-                        is_primary_key: c.is_primary_key,
-                    }
-                })
-                .collect()
-        };
-        unsafe { (vtable.free_column_list)(ffi) };
-        Ok(cols)
+        convert_column_list(vtable, ffi)
     }
 
-    async fn fetch_indexes(&self, table: &str, schema: Option<&str>) -> Result<Vec<IndexInfo>, AppError> {
+    async fn fetch_indexes(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<IndexInfo>, AppError> {
         let vtable = self.vtable();
         let handle = self.handle;
         let t = FfiStr::from(table);
@@ -263,39 +165,14 @@ impl DatabaseDriver for PluginDriverAdapter {
         let ffi = catch_unwind(|| unsafe { (vtable.fetch_indexes)(handle, t, s) })
             .map_err(|_| AppError::PluginError("panic in fetch_indexes".to_string()))?;
 
-        if !ffi.error.is_null() {
-            let msg = unsafe { ffi.error.to_string_copy() };
-            unsafe { (vtable.free_index_list)(ffi) };
-            return Err(AppError::DatabaseError(msg));
-        }
-
-        let indexes: Vec<IndexInfo> = if ffi.items.is_null() {
-            vec![]
-        } else {
-            (0..ffi.count)
-                .map(|i| unsafe {
-                    let idx = &*ffi.items.add(i);
-                    let col_names: Vec<String> = if idx.columns.is_null() {
-                        vec![]
-                    } else {
-                        (0..idx.column_count)
-                            .map(|j| (*idx.columns.add(j)).to_string_copy())
-                            .collect()
-                    };
-                    IndexInfo {
-                        name: idx.name.to_string_copy(),
-                        columns: col_names,
-                        is_unique: idx.is_unique,
-                        index_type: idx.index_type.to_string_copy(),
-                    }
-                })
-                .collect()
-        };
-        unsafe { (vtable.free_index_list)(ffi) };
-        Ok(indexes)
+        convert_index_list(vtable, ffi)
     }
 
-    async fn fetch_foreign_keys(&self, table: &str, schema: Option<&str>) -> Result<Vec<ForeignKeyInfo>, AppError> {
+    async fn fetch_foreign_keys(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<ForeignKeyInfo>, AppError> {
         let vtable = self.vtable();
         let handle = self.handle;
         let t = FfiStr::from(table);
@@ -303,29 +180,7 @@ impl DatabaseDriver for PluginDriverAdapter {
         let ffi = catch_unwind(|| unsafe { (vtable.fetch_foreign_keys)(handle, t, s) })
             .map_err(|_| AppError::PluginError("panic in fetch_foreign_keys".to_string()))?;
 
-        if !ffi.error.is_null() {
-            let msg = unsafe { ffi.error.to_string_copy() };
-            unsafe { (vtable.free_foreign_key_list)(ffi) };
-            return Err(AppError::DatabaseError(msg));
-        }
-
-        let fks: Vec<ForeignKeyInfo> = if ffi.items.is_null() {
-            vec![]
-        } else {
-            (0..ffi.count)
-                .map(|i| unsafe {
-                    let fk = &*ffi.items.add(i);
-                    ForeignKeyInfo {
-                        name: fk.name.to_string_copy(),
-                        column: fk.column.to_string_copy(),
-                        referenced_table: fk.referenced_table.to_string_copy(),
-                        referenced_column: fk.referenced_column.to_string_copy(),
-                    }
-                })
-                .collect()
-        };
-        unsafe { (vtable.free_foreign_key_list)(ffi) };
-        Ok(fks)
+        convert_foreign_key_list(vtable, ffi)
     }
 
     async fn fetch_databases(&self) -> Result<Vec<String>, AppError> {
@@ -336,21 +191,7 @@ impl DatabaseDriver for PluginDriverAdapter {
             .map_err(|_| AppError::PluginError("panic in fetch_databases".to_string()))?;
         tracing::debug!(type_id = %self.type_id, "FFI: fetch_databases returned");
 
-        if !ffi.error.is_null() {
-            let msg = unsafe { ffi.error.to_string_copy() };
-            unsafe { (vtable.free_string_list)(ffi) };
-            return Err(AppError::DatabaseError(msg));
-        }
-
-        let dbs: Vec<String> = if ffi.items.is_null() {
-            vec![]
-        } else {
-            (0..ffi.count)
-                .map(|i| unsafe { (*ffi.items.add(i)).to_string_copy() })
-                .collect()
-        };
-        unsafe { (vtable.free_string_list)(ffi) };
-        Ok(dbs)
+        convert_string_list(vtable, ffi)
     }
 
     async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, AppError> {

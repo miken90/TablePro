@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+use super::sql_generator_ops::{
+    build_delete_statement, build_insert_statement, build_update_statement, qualified_table,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum ChangeType {
@@ -34,116 +38,16 @@ pub struct SavePayload {
     pub changes: Vec<RowChange>,
 }
 
-fn escape_value(v: &Option<String>) -> String {
-    match v {
-        None => "NULL".to_string(),
-        Some(s) => {
-            if s.parse::<f64>().is_ok() {
-                s.clone()
-            } else {
-                format!("'{}'", s.replace('\'', "''"))
-            }
-        }
-    }
-}
-
-fn quote_ident(s: &str) -> String {
-    format!("\"{}\"", s)
-}
-
-fn qualified_table(table: &str, schema: &Option<String>) -> String {
-    match schema {
-        Some(s) => format!("{}.{}", quote_ident(s), quote_ident(table)),
-        None => quote_ident(table),
-    }
-}
-
-fn build_where_clause(
-    columns: &[String],
-    primary_keys: &[String],
-    original_row: &[Option<String>],
-) -> String {
-    primary_keys
-        .iter()
-        .filter_map(|pk| {
-            columns.iter().position(|c| c == pk).map(|idx| {
-                let val = original_row.get(idx).cloned().flatten();
-                format!("{}={}", quote_ident(pk), escape_value(&val))
-            })
-        })
-        .collect::<Vec<_>>()
-        .join(" AND ")
-}
-
 pub fn generate_statements(payload: &SavePayload) -> Vec<String> {
-    let tbl = qualified_table(&payload.table, &payload.schema);
+    let table = qualified_table(&payload.table, &payload.schema);
 
     payload
         .changes
         .iter()
         .filter_map(|row_change| match row_change.change_type {
-            ChangeType::Insert => {
-                if row_change.cell_changes.is_empty() {
-                    return None;
-                }
-                let cols: Vec<String> = row_change
-                    .cell_changes
-                    .iter()
-                    .map(|c| quote_ident(&c.column_name))
-                    .collect();
-                let vals: Vec<String> = row_change
-                    .cell_changes
-                    .iter()
-                    .map(|c| escape_value(&c.new_value))
-                    .collect();
-                Some(format!(
-                    "INSERT INTO {} ({}) VALUES ({})",
-                    tbl,
-                    cols.join(","),
-                    vals.join(",")
-                ))
-            }
-            ChangeType::Update => {
-                if row_change.cell_changes.is_empty() {
-                    return None;
-                }
-                let set_clause: Vec<String> = row_change
-                    .cell_changes
-                    .iter()
-                    .map(|c| {
-                        format!(
-                            "{}={}",
-                            quote_ident(&c.column_name),
-                            escape_value(&c.new_value)
-                        )
-                    })
-                    .collect();
-                let where_clause = build_where_clause(
-                    &payload.columns,
-                    &payload.primary_keys,
-                    &row_change.original_row,
-                );
-                if where_clause.is_empty() {
-                    return None;
-                }
-                Some(format!(
-                    "UPDATE {} SET {} WHERE {}",
-                    tbl,
-                    set_clause.join(", "),
-                    where_clause
-                ))
-            }
-            ChangeType::Delete => {
-                let where_clause = build_where_clause(
-                    &payload.columns,
-                    &payload.primary_keys,
-                    &row_change.original_row,
-                );
-                if where_clause.is_empty() {
-                    return None;
-                }
-                Some(format!("DELETE FROM {} WHERE {}", tbl, where_clause))
-            }
+            ChangeType::Insert => build_insert_statement(&table, row_change),
+            ChangeType::Update => build_update_statement(&table, payload, row_change),
+            ChangeType::Delete => build_delete_statement(&table, payload, row_change),
         })
         .collect()
 }
@@ -151,6 +55,7 @@ pub fn generate_statements(payload: &SavePayload) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::sql_generator_ops::{escape_value, quote_ident, qualified_table as qt};
 
     fn make_payload() -> SavePayload {
         SavePayload {
@@ -469,13 +374,13 @@ mod tests {
     #[test]
     fn test_qualified_table_with_schema() {
         assert_eq!(
-            qualified_table("users", &Some("public".to_string())),
+            qt("users", &Some("public".to_string())),
             r#""public"."users""#
         );
     }
 
     #[test]
     fn test_qualified_table_without_schema() {
-        assert_eq!(qualified_table("users", &None), r#""users""#);
+        assert_eq!(qt("users", &None), r#""users""#);
     }
 }

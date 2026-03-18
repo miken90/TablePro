@@ -48,11 +48,7 @@ pub trait DatabaseDriver: Send + Sync {
     async fn fetch_databases(&self) -> Result<Vec<String>, AppError>;
 
     /// DDL statement that recreates the given table.
-    async fn fetch_ddl(
-        &self,
-        table: &str,
-        schema: Option<&str>,
-    ) -> Result<String, AppError>;
+    async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, AppError>;
 
     /// Request cancellation of any in-flight query on this driver instance.
     fn cancel_query(&self) -> Result<(), AppError>;

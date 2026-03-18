@@ -72,7 +72,8 @@ pub async fn fetch_rows(
         _ => String::new(),
     };
 
-    let sql = format!("SELECT * FROM {qualified}{where_part}{order_part} LIMIT {limit} OFFSET {offset}");
+    let sql =
+        format!("SELECT * FROM {qualified}{where_part}{order_part} LIMIT {limit} OFFSET {offset}");
     driver.execute(&sql).await
 }
 

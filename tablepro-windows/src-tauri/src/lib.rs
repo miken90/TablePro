@@ -31,7 +31,9 @@ fn build_history_store() -> HistoryStore {
     match HistoryStore::new() {
         Ok(store) => store,
         Err(error) => {
-            tracing::error!("Failed to init history store: {error}. Falling back to in-memory history.");
+            tracing::error!(
+                "Failed to init history store: {error}. Falling back to in-memory history."
+            );
             HistoryStore::new_in_memory_fallback()
         }
     }

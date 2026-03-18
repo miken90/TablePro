@@ -1,10 +1,15 @@
-use std::fs::File;
-use std::io::{BufReader, Read};
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
 use crate::models::AppError;
+
+// Re-export parser functions for external callers
+pub use super::import_parser::scan_statements;
+
+// Use streaming helpers from import_streamer module
+pub(crate) use super::import_streamer::stream_statements_buffered;
+use super::import_streamer::count_statements_buffered;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -33,227 +38,6 @@ pub struct ImportOptions {
 }
 
 // ---------------------------------------------------------------------------
-// File reading (plain + gz)
-// ---------------------------------------------------------------------------
-
-/// Read a file to a UTF-8 string. If the path ends with `.gz` the content is
-/// decompressed with flate2 first.
-fn read_file_to_string(path: &str) -> Result<String, AppError> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    let mut buf = String::new();
-
-    if path.to_lowercase().ends_with(".gz") {
-        let mut decoder = flate2::read::GzDecoder::new(reader);
-        decoder
-            .read_to_string(&mut buf)
-            .map_err(|e| AppError::IoError(format!("gz decompress failed: {e}")))?;
-    } else {
-        let mut reader = reader;
-        reader
-            .read_to_string(&mut buf)
-            .map_err(|e| AppError::IoError(format!("read failed: {e}")))?;
-    }
-
-    Ok(buf)
-}
-
-// ---------------------------------------------------------------------------
-// Statement scanner
-// ---------------------------------------------------------------------------
-
-/// Parse a SQL string into individual executable statements.
-///
-/// Correctly handles:
-/// - Single-quoted strings `'...'` with `''` escape
-/// - Double-quoted identifiers `"..."`
-/// - Dollar-quoted strings `$$...$$` and `$tag$...$tag$` (PostgreSQL)
-/// - Line comments `-- ...`
-/// - Block comments `/* ... */`
-/// - Semicolons only terminate statements in "normal" state
-pub fn scan_statements(sql: &str) -> Vec<String> {
-    #[derive(PartialEq, Clone)]
-    enum State {
-        Normal,
-        InSingleQuote,
-        InDoubleQuote,
-        InDollarQuote(String), // holds the tag (e.g. "" for $$, "body" for $body$)
-        InLineComment,
-        InBlockComment,
-    }
-
-    let chars: Vec<char> = sql.chars().collect();
-    let len = chars.len();
-    let mut statements = Vec::new();
-    let mut state = State::Normal;
-    let mut stmt_start = 0;
-    let mut i = 0;
-
-    while i < len {
-        let ch = chars[i];
-
-        match &state {
-            // ---------------------------------------------------------------
-            // Line comment: continue until newline
-            // ---------------------------------------------------------------
-            State::InLineComment => {
-                if ch == '\n' {
-                    state = State::Normal;
-                }
-                i += 1;
-            }
-
-            // ---------------------------------------------------------------
-            // Block comment: end on */
-            // ---------------------------------------------------------------
-            State::InBlockComment => {
-                if ch == '*' && i + 1 < len && chars[i + 1] == '/' {
-                    state = State::Normal;
-                    i += 2;
-                } else {
-                    i += 1;
-                }
-            }
-
-            // ---------------------------------------------------------------
-            // Single-quoted string: '' is an escaped quote
-            // ---------------------------------------------------------------
-            State::InSingleQuote => {
-                if ch == '\'' {
-                    if i + 1 < len && chars[i + 1] == '\'' {
-                        // Escaped quote — skip both
-                        i += 2;
-                    } else {
-                        state = State::Normal;
-                        i += 1;
-                    }
-                } else {
-                    i += 1;
-                }
-            }
-
-            // ---------------------------------------------------------------
-            // Double-quoted identifier: "" is an escaped quote
-            // ---------------------------------------------------------------
-            State::InDoubleQuote => {
-                if ch == '"' {
-                    if i + 1 < len && chars[i + 1] == '"' {
-                        i += 2;
-                    } else {
-                        state = State::Normal;
-                        i += 1;
-                    }
-                } else {
-                    i += 1;
-                }
-            }
-
-            // ---------------------------------------------------------------
-            // Dollar-quoted string: ends when we see the same tag again
-            // ---------------------------------------------------------------
-            State::InDollarQuote(tag) => {
-                // Build the expected closing delimiter: $tag$
-                let closing = format!("${tag}$");
-                let clen = closing.chars().count();
-                let slice: Option<String> =
-                    chars.get(i..i + clen).map(|s| s.iter().collect::<String>());
-                if slice.as_deref() == Some(&closing) {
-                    state = State::Normal;
-                    i += clen;
-                } else {
-                    i += 1;
-                }
-            }
-
-            // ---------------------------------------------------------------
-            // Normal state
-            // ---------------------------------------------------------------
-            State::Normal => {
-                // Line comment
-                if ch == '-' && i + 1 < len && chars[i + 1] == '-' {
-                    state = State::InLineComment;
-                    i += 2;
-                    continue;
-                }
-                // Block comment
-                if ch == '/' && i + 1 < len && chars[i + 1] == '*' {
-                    state = State::InBlockComment;
-                    i += 2;
-                    continue;
-                }
-                // Single quote
-                if ch == '\'' {
-                    state = State::InSingleQuote;
-                    i += 1;
-                    continue;
-                }
-                // Double quote
-                if ch == '"' {
-                    state = State::InDoubleQuote;
-                    i += 1;
-                    continue;
-                }
-                // Dollar quote: $tag$ or $$
-                if ch == '$' {
-                    if let Some(tag) = try_read_dollar_tag(&chars, i) {
-                        let tag_len = tag.chars().count() + 2; // $<tag>$
-                        state = State::InDollarQuote(tag);
-                        i += tag_len;
-                        continue;
-                    }
-                }
-                // Statement terminator
-                if ch == ';' {
-                    let stmt: String = chars[stmt_start..=i].iter().collect();
-                    let trimmed = stmt.trim().trim_end_matches(';').trim().to_string();
-                    if !trimmed.is_empty() {
-                        statements.push(trimmed);
-                    }
-                    stmt_start = i + 1;
-                    i += 1;
-                    continue;
-                }
-                i += 1;
-            }
-        }
-    }
-
-    // Remaining text after the last semicolon (no trailing ;)
-    if stmt_start < len {
-        let tail: String = chars[stmt_start..].iter().collect();
-        let trimmed = tail.trim().to_string();
-        if !trimmed.is_empty() {
-            statements.push(trimmed);
-        }
-    }
-
-    statements
-}
-
-/// Try to parse a dollar-quote opening tag starting at `pos` in `chars`.
-/// Returns `Some(tag)` where tag is the inner text between the two `$`.
-/// Returns `None` if this isn't a valid dollar-quote opener.
-fn try_read_dollar_tag(chars: &[char], pos: usize) -> Option<String> {
-    // chars[pos] == '$' is guaranteed by caller
-    let len = chars.len();
-    let mut j = pos + 1;
-    while j < len && chars[j] != '$' {
-        let c = chars[j];
-        // Dollar-quote tag can only contain letters, digits, underscores
-        if !c.is_alphanumeric() && c != '_' {
-            return None;
-        }
-        j += 1;
-    }
-    if j >= len {
-        return None; // No closing $ found on same line
-    }
-    // chars[j] == '$'
-    let tag: String = chars[pos + 1..j].iter().collect();
-    Some(tag)
-}
-
-// ---------------------------------------------------------------------------
 // Public service functions
 // ---------------------------------------------------------------------------
 
@@ -262,24 +46,25 @@ pub fn preview(path: &str) -> Result<ImportPreview, AppError> {
     let metadata = std::fs::metadata(path)?;
     let file_size_bytes = metadata.len();
 
-    let sql = read_file_to_string(path)?;
-    let statements = scan_statements(&sql);
-    let statement_count = statements.len();
-
     const MAX_PREVIEW_STMTS: usize = 50;
     const MAX_STMT_CHARS: usize = 200;
 
-    let first_statements = statements
-        .into_iter()
-        .take(MAX_PREVIEW_STMTS)
-        .map(|s| {
-            if s.len() > MAX_STMT_CHARS {
-                format!("{}…", &s[..MAX_STMT_CHARS])
+    let mut statement_count = 0usize;
+    let mut first_statements = Vec::with_capacity(MAX_PREVIEW_STMTS);
+
+    stream_statements_buffered(path, |stmt| {
+        statement_count += 1;
+
+        if first_statements.len() < MAX_PREVIEW_STMTS {
+            if stmt.len() > MAX_STMT_CHARS {
+                first_statements.push(format!("{}…", &stmt[..MAX_STMT_CHARS]));
             } else {
-                s
+                first_statements.push(stmt);
             }
-        })
-        .collect();
+        }
+
+        Ok(())
+    })?;
 
     Ok(ImportPreview {
         statement_count,
@@ -299,9 +84,12 @@ where
     F: FnMut(usize, usize),
 {
     let start = Instant::now();
-    let sql = read_file_to_string(path)?;
-    let statements = scan_statements(&sql);
-    let total = statements.len();
+    let path_owned = path.to_string();
+
+    let total = tokio::task::spawn_blocking(move || count_statements_buffered(&path_owned))
+        .await
+        .map_err(|e| AppError::IoError(format!("Import count task join error: {e}")))?
+        ?;
 
     if total == 0 {
         return Ok(ImportResult {
@@ -314,19 +102,51 @@ where
         driver.execute("BEGIN").await?;
     }
 
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Result<String, AppError>>(64);
+    let path_for_stream = path.to_string();
+
+    let producer = tokio::task::spawn_blocking(move || {
+        let streaming_result = stream_statements_buffered(&path_for_stream, |stmt| {
+            tx.blocking_send(Ok(stmt))
+                .map_err(|_| AppError::IoError("Import streaming channel closed".to_string()))
+        });
+
+        if let Err(err) = streaming_result {
+            let _ = tx.blocking_send(Err(err));
+        }
+    });
+
     let mut executed = 0usize;
     let mut exec_error: Option<AppError> = None;
 
-    for stmt in &statements {
-        match driver.execute(stmt).await {
+    while let Some(next) = rx.recv().await {
+        let stmt = match next {
+            Ok(stmt) => stmt,
+            Err(err) => {
+                exec_error = Some(err);
+                break;
+            }
+        };
+
+        match driver.execute(&stmt).await {
             Ok(_) => {
                 executed += 1;
                 on_progress(executed, total);
             }
-            Err(e) => {
-                exec_error = Some(e);
+            Err(err) => {
+                exec_error = Some(err);
                 break;
             }
+        }
+    }
+
+    drop(rx);
+
+    if let Err(join_err) = producer.await {
+        if exec_error.is_none() {
+            exec_error = Some(AppError::IoError(format!(
+                "Import streaming task join error: {join_err}"
+            )));
         }
     }
 
@@ -363,6 +183,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn stmts(sql: &str) -> Vec<String> {
         scan_statements(sql)
@@ -573,5 +397,65 @@ INSERT INTO orders (note) VALUES ('hello');
         let sql = "SELECT 1;\nSELECT 2";
         let result = stmts(sql);
         assert_eq!(result, vec!["SELECT 1", "SELECT 2"]);
+    }
+
+    fn temp_file_path(ext: &str) -> PathBuf {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        std::env::temp_dir().join(format!("tablepro-import-test-{now}.{ext}"))
+    }
+
+    #[test]
+    fn test_stream_statements_buffered_matches_scan_statements() {
+        let sql = "SELECT 1;\nINSERT INTO t VALUES ('a;b');\n-- comment\nSELECT 3";
+        let path = temp_file_path("sql");
+        fs::write(&path, sql).expect("write temp sql");
+
+        let mut streamed = Vec::new();
+        stream_statements_buffered(path.to_string_lossy().as_ref(), |stmt| {
+            streamed.push(stmt);
+            Ok(())
+        })
+        .expect("stream statements");
+
+        let scanned = scan_statements(sql);
+        assert_eq!(streamed, scanned);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_preview_uses_buffered_parser_for_plain_file() {
+        let sql = "SELECT 1;\nSELECT 2;\nSELECT 3;";
+        let path = temp_file_path("sql");
+        fs::write(&path, sql).expect("write temp sql");
+
+        let preview = preview(path.to_string_lossy().as_ref()).expect("preview ok");
+
+        assert_eq!(preview.statement_count, 3);
+        assert_eq!(preview.first_statements, vec!["SELECT 1", "SELECT 2", "SELECT 3"]);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_preview_reads_gzip_file() {
+        use std::fs::File;
+        let sql = "SELECT 1;\nSELECT 2;";
+        let path = temp_file_path("sql.gz");
+
+        let file = File::create(&path).expect("create gz file");
+        let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        encoder.write_all(sql.as_bytes()).expect("write gzip content");
+        encoder.finish().expect("finish gzip");
+
+        let preview = preview(path.to_string_lossy().as_ref()).expect("preview ok");
+
+        assert_eq!(preview.statement_count, 2);
+        assert_eq!(preview.first_statements, vec!["SELECT 1", "SELECT 2"]);
+
+        let _ = fs::remove_file(path);
     }
 }
