@@ -83,17 +83,17 @@ export function SidebarTableNode({
   };
 
   /**
-   * Single-click: open as preview tab (temporary, italic).
-   * If Ctrl/Cmd held → open as permanent tab directly.
+   * Single-click: open in table-browse mode (server-side pagination + inline edit).
+   * If Ctrl/Cmd held → open as preview SQL tab in query mode.
    * Double-click: open Structure View (existing behavior preserved).
    */
   const handleRowClick = useCallback(
     (e: React.MouseEvent) => {
-      const isPermanent = e.ctrlKey || e.metaKey;
-      if (isPermanent) {
-        onOpenTable?.(table.name, table.schema);
-      } else {
+      const isQueryMode = e.ctrlKey || e.metaKey;
+      if (isQueryMode) {
         onOpenPreviewTable?.(table.name, table.schema);
+      } else {
+        onOpenTable?.(table.name, table.schema);
       }
     },
     [table.name, table.schema, onOpenTable, onOpenPreviewTable],
