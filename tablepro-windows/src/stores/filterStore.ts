@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { buildWhereClause } from '../components/filter/filter-types';
 import type { FilterCondition, FilterLogic } from '../components/filter/filter-types';
+import { parseFilterQuery } from '../utils/filter-parser';
+import type { ParsedFilterCondition } from '../utils/filter-parser';
 
 interface TabFilterState {
   conditions: FilterCondition[];
@@ -9,6 +11,10 @@ interface TabFilterState {
   appliedFilterClause: string;
   quickSearchTerm: string;
   quickSearchClause: string;
+  /** Raw text from the quick filter bar */
+  filterQuery: string;
+  /** Parsed conditions from filterQuery */
+  parsedConditions: ParsedFilterCondition[];
 }
 
 interface FilterState {
@@ -23,6 +29,10 @@ interface FilterState {
   setQuickSearch: (tabId: string, term: string, clause: string) => void;
   clearQuickSearch: (tabId: string) => void;
   applyPreset: (tabId: string, conditions: FilterCondition[], logic: FilterLogic) => void;
+  /** Quick filter bar actions */
+  setFilterQuery: (tabId: string, query: string) => void;
+  removeParsedCondition: (tabId: string, index: number) => void;
+  clearFilters: (tabId: string) => void;
 }
 
 let nextId = 1;
@@ -44,6 +54,8 @@ function makeTabState(): TabFilterState {
     appliedFilterClause: '',
     quickSearchTerm: '',
     quickSearchClause: '',
+    filterQuery: '',
+    parsedConditions: [],
   };
 }
 
@@ -199,6 +211,58 @@ export const useFilterStore = create<FilterState>()(
                 conditions: nextConditions,
                 logic,
                 appliedFilterClause: buildWhereClause(nextConditions, logic),
+              },
+            },
+          };
+        });
+      },
+
+      setFilterQuery: (tabId, query) => {
+        set((state) => {
+          const tab = getTab(state.byTab, tabId);
+          const parsedConditions = parseFilterQuery(query);
+          return {
+            byTab: {
+              ...state.byTab,
+              [tabId]: { ...tab, filterQuery: query, parsedConditions },
+            },
+          };
+        });
+      },
+
+      removeParsedCondition: (tabId, index) => {
+        set((state) => {
+          const tab = getTab(state.byTab, tabId);
+          const nextConditions = tab.parsedConditions.filter((_, i) => i !== index);
+          // Rebuild the query string from remaining conditions
+          const newQuery = nextConditions
+            .map((c) => {
+              if (!c.column) return c.value;
+              const op = c.operator === '=' ? '' : c.operator;
+              return `${c.column}:${op}${c.value}`;
+            })
+            .join(' AND ');
+          return {
+            byTab: {
+              ...state.byTab,
+              [tabId]: { ...tab, filterQuery: newQuery, parsedConditions: nextConditions },
+            },
+          };
+        });
+      },
+
+      clearFilters: (tabId) => {
+        set((state) => {
+          const tab = getTab(state.byTab, tabId);
+          return {
+            byTab: {
+              ...state.byTab,
+              [tabId]: {
+                ...tab,
+                filterQuery: '',
+                parsedConditions: [],
+                quickSearchTerm: '',
+                quickSearchClause: '',
               },
             },
           };

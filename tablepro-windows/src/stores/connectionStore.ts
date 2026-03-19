@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { toast } from "sonner";
 import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
@@ -46,6 +47,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   selectConnection: (id) => set({ selectedConnectionId: id }),
 
   connect: async (id, config) => {
+    const loadingId = toast.loading("Connecting...");
     set((s) => {
       const statuses = new Map(s.connectionStatuses);
       statuses.set(id, "connecting");
@@ -60,12 +62,17 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         sessionIds.set(id, sessionId);
         return { connectionStatuses: statuses, sessionIds, selectedConnectionId: id };
       });
+      toast.dismiss(loadingId);
+      toast.success("Connected", { description: config.host ?? config.database ?? undefined });
     } catch (err) {
       set((s) => {
         const statuses = new Map(s.connectionStatuses);
         statuses.set(id, "error");
         return { connectionStatuses: statuses };
       });
+      toast.dismiss(loadingId);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error("Connection failed", { description: msg, duration: Infinity });
       throw err;
     }
   },
@@ -86,6 +93,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         selectedConnectionId: s.selectedConnectionId === id ? null : s.selectedConnectionId,
       };
     });
+    toast.info("Disconnected");
   },
 
   saveConnection: async (connection) => {

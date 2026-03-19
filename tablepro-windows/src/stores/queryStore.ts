@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { toast } from "sonner";
 import type { QueryResult } from "../types/query";
 import * as commands from "../ipc/commands";
 import { extractErrorMessage } from "../ipc/error";
@@ -88,6 +89,7 @@ async function runQuery(
 ): Promise<void> {
   set({ isExecuting: true, error: null, result: null, activeConnectionId: sessionId });
   const startMs = Date.now();
+  const loadingId = toast.loading("Executing query...");
   const logId = useQueryLogStore.getState().add({
     sql,
     source: "editor",
@@ -104,6 +106,10 @@ async function runQuery(
       rowCount: result.rows.length,
     });
     commands.historyRecord(sql, null, elapsedMs, result.rows.length, "success").catch(() => {});
+    toast.dismiss(loadingId);
+    toast.success("Query executed", {
+      description: `${result.rows.length} row${result.rows.length !== 1 ? "s" : ""} in ${elapsedMs}ms`,
+    });
   } catch (err) {
     const elapsedMs = Date.now() - startMs;
     const errorMsg = extractErrorMessage(err);
@@ -117,6 +123,8 @@ async function runQuery(
       error: errorMsg,
     });
     commands.historyRecord(sql, null, elapsedMs, 0, "error").catch(() => {});
+    toast.dismiss(loadingId);
+    toast.error("Query failed", { description: errorMsg, duration: Infinity });
   }
 }
 

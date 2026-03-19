@@ -13,11 +13,14 @@ import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { ShortcutsHelp } from "../shared/ShortcutsHelp";
 import { UpdateNotification } from "../shared/update-notification";
+import { CommandPalette } from "../shared/command-palette";
+import { QueryAnnouncer } from "../shared/query-announcer";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useFilterStore } from "../../stores/filterStore";
+import { useCommandStore } from "../../hooks/useCommandRegistry";
 import { useTheme } from "../../hooks/useTheme";
 import { useAutoUpdater } from "../../hooks/useAutoUpdater";
 import type { ColumnInfo } from "../../types/query";
@@ -74,8 +77,10 @@ export function MainLayout() {
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const setQueryText = useQueryStore((s) => s.setQueryText);
+  const registerCommand = useCommandStore((s) => s.registerCommand);
   const {
     availableUpdate,
     shouldShowNotification,
@@ -105,7 +110,7 @@ export function MainLayout() {
     return combineWhereClauses(tab.appliedFilterClause, tab.quickSearchClause);
   }, [filterByTab, filterTabId]);
 
-  // Keyboard shortcuts: Ctrl+K, Ctrl+,, Ctrl+Shift+F
+  // Keyboard shortcuts: Ctrl+K, Ctrl+,, Ctrl+Shift+F, Ctrl+Shift+P
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -132,10 +137,108 @@ export function MainLayout() {
         e.preventDefault();
         setHelpOpen(true);
       }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "P") {
+        e.preventDefault();
+        setCommandPaletteOpen((v) => !v);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  // Register core commands in the command palette
+  useEffect(() => {
+    const cmds = [
+      // Navigation
+      {
+        id: 'nav.toggleSidebar',
+        label: 'Toggle Sidebar',
+        shortcut: 'Ctrl+B',
+        category: 'Navigation' as const,
+        action: () => setSidebarCollapsed((v) => !v),
+      },
+      {
+        id: 'nav.openSettings',
+        label: 'Open Settings',
+        shortcut: 'Ctrl+,',
+        category: 'Navigation' as const,
+        action: () => setSettingsOpen(true),
+      },
+      {
+        id: 'nav.quickSwitcher',
+        label: 'Quick Switcher',
+        shortcut: 'Ctrl+K',
+        category: 'Navigation' as const,
+        action: () => setQuickSwitcherOpen((v) => !v),
+      },
+      {
+        id: 'nav.toggleHistory',
+        label: 'Toggle Query History',
+        shortcut: 'Ctrl+H',
+        category: 'Navigation' as const,
+        action: () => setHistoryVisible((v) => !v),
+      },
+      // Query
+      {
+        id: 'query.run',
+        label: 'Run Query',
+        shortcut: 'Ctrl+Enter',
+        category: 'Query' as const,
+        action: () => {
+          const { queryText } = useQueryStore.getState();
+          const { selectedConnectionId: connId } = useConnectionStore.getState();
+          if (connId) {
+            const sid = useConnectionStore.getState().getSessionId(connId);
+            if (sid) void useQueryStore.getState().execute(sid, queryText);
+          }
+        },
+      },
+      {
+        id: 'query.formatSql',
+        label: 'Format SQL',
+        shortcut: 'Ctrl+Shift+F',
+        category: 'Query' as const,
+        action: () => {
+          // Dispatch a custom event that SqlEditor can listen to
+          window.dispatchEvent(new CustomEvent('tablepro:format-sql'));
+        },
+      },
+      // Edit
+      {
+        id: 'edit.newTab',
+        label: 'New Tab',
+        shortcut: 'Ctrl+N',
+        category: 'Edit' as const,
+        action: () => useEditorStore.getState().addTab(),
+      },
+      {
+        id: 'edit.closeTab',
+        label: 'Close Tab',
+        shortcut: 'Ctrl+W',
+        category: 'Edit' as const,
+        action: () => {
+          const { activeTabId: tid } = useEditorStore.getState();
+          if (tid) useEditorStore.getState().closeTab(tid);
+        },
+      },
+      // View
+      {
+        id: 'view.toggleFilterBar',
+        label: 'Toggle Filter Bar',
+        shortcut: 'Ctrl+Shift+F',
+        category: 'View' as const,
+        action: () => setFilterVisible((v) => !v),
+      },
+      {
+        id: 'view.toggleInspector',
+        label: 'Toggle Inspector',
+        shortcut: 'Ctrl+Shift+I',
+        category: 'View' as const,
+        action: () => setInspectorVisible((v) => !v),
+      },
+    ];
+    cmds.forEach(registerCommand);
+  }, [registerCommand]);
 
   // Fetch columns when active table changes (for filter panel)
   useEffect(() => {
@@ -294,7 +397,7 @@ export function MainLayout() {
   const isConnected = !!selectedConnectionId;
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-white dark:bg-zinc-900">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-surface-base">
       <Toolbar
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         onOpenSettings={() => setSettingsOpen(true)}
@@ -309,13 +412,14 @@ export function MainLayout() {
               <Sidebar onViewStructure={handleViewStructure} onOpenTable={handleOpenTable} onOpenPreviewTable={handleOpenPreviewTable} />
             </div>
             <div
-              className="w-1 cursor-col-resize bg-zinc-200 hover:bg-blue-400 dark:bg-zinc-700 dark:hover:bg-blue-500"
+              className="w-1 cursor-col-resize bg-border-subtle hover:bg-accent-blue"
               onMouseDown={handleSidebarResize}
+              aria-hidden="true"
             />
           </>
         )}
 
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <main id="main-content" className="flex flex-1 flex-col overflow-hidden">
           {structureTarget && selectedConnectionId && getSessionId(selectedConnectionId) ? (
             <TableStructureView
               sessionId={getSessionId(selectedConnectionId)!}
@@ -363,7 +467,7 @@ export function MainLayout() {
                   <SqlEditor />
                 </div>
                 <div
-                  className="h-1 cursor-row-resize bg-zinc-200 hover:bg-blue-400 dark:bg-zinc-700 dark:hover:bg-blue-500"
+                  className="h-1 cursor-row-resize bg-border-subtle hover:bg-accent-blue"
                   onMouseDown={handleEditorResize}
                 />
                 <div className="flex-1 overflow-hidden">
@@ -375,12 +479,12 @@ export function MainLayout() {
               </div>
             </>
           )}
-        </div>
+        </main>
 
         {inspectorVisible && isConnected && (
           <>
             <div
-              className="w-1 cursor-col-resize bg-zinc-200 hover:bg-blue-400 dark:bg-zinc-700 dark:hover:bg-blue-500"
+              className="w-1 cursor-col-resize bg-border-subtle hover:bg-accent-blue"
               onMouseDown={handleInspectorResize}
             />
             <div style={{ width: inspectorWidth }} className="flex-shrink-0 overflow-hidden">
@@ -395,7 +499,7 @@ export function MainLayout() {
 
         {historyVisible && isConnected && (
           <>
-            <div className="w-px bg-zinc-200 dark:bg-zinc-700" />
+            <div className="w-px bg-border-subtle" />
             <div style={{ width: 320 }} className="flex-shrink-0 overflow-hidden">
               <HistoryPanel
                 onSelectQuery={handleHistorySelect}
@@ -429,6 +533,14 @@ export function MainLayout() {
       )}
 
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+      />
+
+      {/* Screen reader announcements for dynamic state changes */}
+      <QueryAnnouncer />
     </div>
   );
 }

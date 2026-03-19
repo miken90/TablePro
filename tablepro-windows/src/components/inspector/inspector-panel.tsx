@@ -18,8 +18,9 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
           onClick={onClose}
           className="rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           title="Close inspector (Ctrl+Shift+I)"
+          aria-label="Close inspector"
         >
-          <X size={14} />
+          <X size={14} aria-hidden="true" />
         </button>
       </div>
 

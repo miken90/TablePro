@@ -52,8 +52,17 @@ export function ResultToolbar({
     }`;
 
   return (
-    <div className="flex items-center border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
-      <button className={tabCls('results')} onClick={() => onTabChange('results')}>
+    <div
+      className="flex items-center border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800"
+      role="tablist"
+      aria-label="Result panel tabs"
+    >
+      <button
+        role="tab"
+        aria-selected={activeTab === 'results'}
+        className={tabCls('results')}
+        onClick={() => onTabChange('results')}
+      >
         Results
         {result && (
           <span className="ml-1.5 rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-700">
@@ -65,9 +74,14 @@ export function ResultToolbar({
           </span>
         )}
       </button>
-      <button className={tabCls('messages')} onClick={() => onTabChange('messages')}>
+      <button
+        role="tab"
+        aria-selected={activeTab === 'messages'}
+        className={tabCls('messages')}
+        onClick={() => onTabChange('messages')}
+      >
         Messages
-        {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />}
+        {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" aria-label="Error" />}
       </button>
 
       {isTableMode && onQuickSearch && onQuickSearchClear && (

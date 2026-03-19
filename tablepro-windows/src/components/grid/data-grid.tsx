@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import type { SortingState } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { QueryResult } from '../../types/query';
@@ -55,11 +55,15 @@ export function DataGrid({
   onFkNavigate,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
-  const [columnWidths, setColumnWidths] = React.useState<Record<string, number>>({});
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+  const [checkedRows, setCheckedRows] = useState<Set<number>>(new Set());
   const parentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
 
   const rows = result.rows;
+
+  const visibleColumns = result.columns.filter(c => !hiddenColumns.has(c.name));
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -102,6 +106,36 @@ export function DataGrid({
     }
   }, [onRowSelect]);
 
+  const handleHideColumn = useCallback((colName: string) => {
+    setHiddenColumns(prev => new Set([...prev, colName]));
+  }, []);
+
+  const handleFilterColumn = useCallback((_colName: string) => {
+    // Filter integration point — parent can hook in via onSortChange extension
+    // Currently a no-op; Phase 6 will wire this up
+  }, []);
+
+  // Checkbox logic
+  const allChecked = rows.length > 0 && checkedRows.size === rows.length;
+  const someChecked = checkedRows.size > 0 && checkedRows.size < rows.length;
+
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (checked) {
+      setCheckedRows(new Set(Array.from({ length: rows.length }, (_, i) => pageOffset + i)));
+    } else {
+      setCheckedRows(new Set());
+    }
+  }, [rows.length, pageOffset]);
+
+  const handleRowCheck = useCallback((absoluteIdx: number, checked: boolean) => {
+    setCheckedRows(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(absoluteIdx);
+      else next.delete(absoluteIdx);
+      return next;
+    });
+  }, []);
+
   const resolvedWidths: Record<string, number> = {};
   for (const col of result.columns) {
     resolvedWidths[col.name] = columnWidths[col.name] ?? DEFAULT_COL_WIDTH;
@@ -115,16 +149,47 @@ export function DataGrid({
   }, []);
 
   return (
-    <div className="relative h-full overflow-hidden flex flex-col">
+    <div
+      className="relative h-full overflow-hidden flex flex-col"
+      role="grid"
+      aria-label="Query results"
+      aria-rowcount={rows.length}
+    >
       {/* Header (scroll synced with body) */}
       <div ref={headerRef} className="flex-shrink-0 overflow-hidden">
-        <GridHeader
-          columns={result.columns}
-          columnWidths={resolvedWidths}
-          sorting={sorting}
-          onSortChange={onSortChange ?? (() => {})}
-          onResizeStart={handleResizeStart}
-        />
+        {/* Checkbox header row prefix */}
+        <div className="flex border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+          {/* Checkbox select-all cell */}
+          <div className="w-10 flex-shrink-0 flex items-center justify-center border-r border-zinc-200 dark:border-zinc-700 py-1.5">
+            <input
+              type="checkbox"
+              className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600 accent-blue-500 cursor-pointer"
+              checked={allChecked}
+              ref={(el) => {
+                if (el) el.indeterminate = someChecked;
+              }}
+              onChange={(e) => handleSelectAll(e.target.checked)}
+              aria-label="Select all rows"
+            />
+          </div>
+          {/* Row # header */}
+          <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-zinc-400 dark:text-zinc-500 text-xs border-r border-zinc-200 dark:border-zinc-700 select-none">
+            #
+          </div>
+          {/* Column headers */}
+          <div className="flex flex-1 overflow-hidden">
+            <GridHeader
+              columns={visibleColumns}
+              columnWidths={resolvedWidths}
+              sorting={sorting}
+              onSortChange={onSortChange ?? (() => {})}
+              onResizeStart={handleResizeStart}
+              hiddenColumns={hiddenColumns}
+              onHideColumn={handleHideColumn}
+              onFilterColumn={handleFilterColumn}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Scrollable body */}
@@ -143,7 +208,7 @@ export function DataGrid({
                 key={virtualRow.index}
                 rowIndex={absoluteIdx}
                 row={rows[localIdx]}
-                columns={result.columns}
+                columns={visibleColumns}
                 columnWidths={resolvedWidths}
                 isSelected={selectedRows.has(absoluteIdx)}
                 changeType={changedRows?.get(absoluteIdx)}
@@ -152,6 +217,8 @@ export function DataGrid({
                 nullDisplay={nullDisplay}
                 virtualTop={virtualRow.start}
                 fkColumns={fkColumns}
+                isChecked={checkedRows.has(absoluteIdx)}
+                onCheckChange={(checked) => handleRowCheck(absoluteIdx, checked)}
                 onRowClick={(e) => handleRowClick(e, absoluteIdx)}
                 onCellDoubleClick={(colIdx) => onCellDoubleClick?.(absoluteIdx, colIdx)}
                 onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(absoluteIdx, colIdx, val) : undefined}

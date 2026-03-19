@@ -91,23 +91,24 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
 
   return (
     <>
-      <div className="flex h-9 items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-2 dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="flex h-9 items-center gap-2 border-b border-border bg-surface px-2">
         {/* Sidebar toggle */}
         <button
           onClick={onToggleSidebar}
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+          className="rounded p-1 text-text-secondary hover:bg-surface-muted hover:text-text-primary"
           title="Toggle sidebar (Ctrl+Shift+E)"
+          aria-label="Toggle sidebar"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <path d="M9 3v18" />
           </svg>
         </button>
 
-        <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-600" />
+        <div className="h-4 w-px bg-border" />
 
         {/* Connection status */}
-        <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+        <div className="flex items-center gap-1.5 text-xs text-text-secondary">
           <span className={`h-2 w-2 rounded-full ${statusColors[status] ?? statusColors.disconnected}`} />
           {connection?.color && (
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: connection.color }} title={connection.color} />
@@ -123,10 +124,11 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
           {selectedConnectionId && (
             <button
               onClick={() => void handleDisconnect()}
-              className="ml-1 rounded p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-red-600 dark:hover:bg-zinc-700 dark:hover:text-red-400"
+              className="ml-1 rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-accent-red"
               title="Disconnect"
+              aria-label="Disconnect from database"
             >
-              <Unplug size={12} />
+              <Unplug size={12} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -151,8 +153,9 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
             disabled={!selectedConnectionId || !queryText.trim()}
             className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
             title="Run query (Ctrl+Enter)"
+            aria-label="Run query"
           >
-            <Play size={12} />
+            <Play size={12} aria-hidden="true" />
             Run
           </button>
         ) : (
@@ -160,26 +163,29 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
             onClick={handleStop}
             className="flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
             title="Cancel query"
+            aria-label="Cancel running query"
           >
-            <Square size={12} />
+            <Square size={12} aria-hidden="true" />
             Stop
           </button>
         )}
 
         <button
           onClick={onToggleHistory}
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+          className="rounded p-1 text-text-secondary hover:bg-surface-muted hover:text-text-primary"
           title="Query History (Ctrl+H)"
+          aria-label="Toggle query history"
         >
-          <Clock size={15} />
+          <Clock size={15} aria-hidden="true" />
         </button>
 
         <button
           onClick={onOpenSettings}
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+          className="rounded p-1 text-text-secondary hover:bg-surface-muted hover:text-text-primary"
           title="Settings (Ctrl+,)"
+          aria-label="Open settings"
         >
-          <Settings size={15} />
+          <Settings size={15} aria-hidden="true" />
         </button>
       </div>
 

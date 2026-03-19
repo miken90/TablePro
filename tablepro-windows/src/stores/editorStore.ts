@@ -1,12 +1,19 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export type TabType = 'query' | 'table' | 'structure';
+
 export interface EditorTab {
   id: string;
   title: string;
   content: string;
   isDirty: boolean;
   isPreview: boolean;
+  /** Default: false — optional to support migration from older persisted state */
+  isPinned?: boolean;
+  connectionId?: string;
+  /** Default: 'query' — optional to support migration from older persisted state */
+  type?: TabType;
 }
 
 interface EditorState {
@@ -18,9 +25,16 @@ interface EditorState {
   addPreviewTab: (title: string) => string;
   promoteTab: (id: string) => void;
   closeTab: (id: string) => void;
+  closeOtherTabs: (id: string) => void;
+  closeAllTabs: () => void;
+  closeTabsToRight: (id: string) => void;
   setActiveTab: (id: string) => void;
   updateTabContent: (id: string, content: string) => void;
   renameTab: (id: string, title: string) => void;
+  pinTab: (id: string) => void;
+  unpinTab: (id: string) => void;
+  setTabType: (id: string, type: TabType) => void;
+  setTabConnectionId: (id: string, connectionId: string) => void;
 }
 
 let tabCounter = 1;
@@ -43,6 +57,8 @@ export const useEditorStore = create<EditorState>()(
           content: "",
           isDirty: false,
           isPreview: false,
+          isPinned: false,
+          type: 'query',
         };
         set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));
         return id;
@@ -70,6 +86,8 @@ export const useEditorStore = create<EditorState>()(
           content: "",
           isDirty: false,
           isPreview: true,
+          isPinned: false,
+          type: 'query',
         };
         set((s) => ({ tabs: [...s.tabs, previewTab], activeTabId: id }));
         return id;
@@ -91,6 +109,34 @@ export const useEditorStore = create<EditorState>()(
             activeTabId = tabs[Math.min(idx, tabs.length - 1)]?.id ?? null;
           }
           return { tabs, activeTabId };
+        });
+      },
+
+      closeOtherTabs: (id) => {
+        set((s) => {
+          const kept = s.tabs.filter((t) => t.id === id || (t.isPinned ?? false));
+          return { tabs: kept, activeTabId: id };
+        });
+      },
+
+      closeAllTabs: () => {
+        set((s) => {
+          const pinned = s.tabs.filter((t) => t.isPinned ?? false);
+          const activeTabId = pinned[0]?.id ?? null;
+          return { tabs: pinned, activeTabId };
+        });
+      },
+
+      closeTabsToRight: (id) => {
+        set((s) => {
+          const idx = s.tabs.findIndex((t) => t.id === id);
+          if (idx === -1) return s;
+          const kept = s.tabs.filter((t, i) => i <= idx || (t.isPinned ?? false));
+          const activeTabId =
+            s.activeTabId && kept.some((t) => t.id === s.activeTabId)
+              ? s.activeTabId
+              : id;
+          return { tabs: kept, activeTabId };
         });
       },
 
@@ -117,6 +163,30 @@ export const useEditorStore = create<EditorState>()(
           tabs: s.tabs.map((t) => (t.id === id ? { ...t, title } : t)),
         }));
       },
+
+      pinTab: (id) => {
+        set((s) => ({
+          tabs: s.tabs.map((t) => (t.id === id ? { ...t, isPinned: true } : t)),
+        }));
+      },
+
+      unpinTab: (id) => {
+        set((s) => ({
+          tabs: s.tabs.map((t) => (t.id === id ? { ...t, isPinned: false } : t)),
+        }));
+      },
+
+      setTabType: (id, type) => {
+        set((s) => ({
+          tabs: s.tabs.map((t) => (t.id === id ? { ...t, type } : t)),
+        }));
+      },
+
+      setTabConnectionId: (id, connectionId) => {
+        set((s) => ({
+          tabs: s.tabs.map((t) => (t.id === id ? { ...t, connectionId } : t)),
+        }));
+      },
     }),
     {
       name: "tablepro-editor-tabs",
@@ -128,12 +198,21 @@ export const useEditorStore = create<EditorState>()(
           isDirty: false,
           // Don't persist preview state — rehydrate as permanent
           isPreview: false,
+          isPinned: t.isPinned ?? false,
+          connectionId: t.connectionId,
+          type: t.type ?? 'query',
         })),
         activeTabId: state.activeTabId,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.tabs.length) {
           tabCounter = state.tabs.length + 1;
+          // Migrate: add defaults for tabs persisted before new fields were added
+          state.tabs = state.tabs.map((t) => ({
+            ...t,
+            isPinned: t.isPinned ?? false,
+            type: t.type ?? 'query',
+          }));
         }
       },
     }

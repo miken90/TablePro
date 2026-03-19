@@ -1,4 +1,7 @@
 import { create } from "zustand";
+import { toast } from "sonner";
+import * as commands from "../ipc/commands";
+import type { SavePayload } from "../ipc/commands";
 
 export interface CellChange {
   rowIndex: number;
@@ -34,6 +37,7 @@ interface ChangeStoreState {
   undo(): void;
   redo(): void;
   clear(): void;
+  saveChanges(sessionId: string, payload: SavePayload): Promise<void>;
 }
 
 const MAX_UNDO_DEPTH = 50;
@@ -178,5 +182,21 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
 
   clear() {
     set({ _changes: {}, _undoStack: [], _redoStack: [] });
+  },
+
+  async saveChanges(sessionId: string, payload: SavePayload) {
+    const loadingId = toast.loading("Saving changes...");
+    try {
+      const result = await commands.saveChanges(sessionId, payload);
+      toast.dismiss(loadingId);
+      toast.success("Changes saved", {
+        description: `${result.rowsAffected} row${result.rowsAffected !== 1 ? "s" : ""} affected`,
+      });
+    } catch (err) {
+      toast.dismiss(loadingId);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error("Save failed", { description: msg, duration: Infinity });
+      throw err;
+    }
   },
 }));

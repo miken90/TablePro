@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Design system foundation: semantic color tokens, typography scale, spacing system, CSS custom properties for light/dark themes
+- Environment badges for connections (PROD/STAGE/DEV/LOCAL) with visual distinction
+- Connection status indicators (connected/connecting/disconnected/error) with animated states  
+- Collapsible connection groups in sidebar organized by environment tag
+- Recent connections section in sidebar for quick reconnect
+- Command palette (Ctrl+Shift+P) with fuzzy search across all app actions
+- Tab type icons distinguishing query, table, and structure tabs
+- Tab pinning with persistent positioning
+- Tab context menu (right-click) with close, pin, close-others actions
+- Connection color indicator on active tabs (bottom border)
+- Toast notifications for query execution, connection events, and save operations
+- NULL value display as distinct styled badge in data grid
+- Diff indicators on grid rows (green=insert, yellow=update, red=delete)
+- Column header menu with sort, filter, hide, and copy-name actions
+- Type-aware cell formatting for JSON, UUID, dates, and booleans
+- Checkbox column for bulk row selection
+- Smart filter bar with syntax: `column:value`, `column:>value`, `column:!=value`
+- Filter chips showing active filter conditions with individual remove
+- Filter preset save/load integration
+- Skip-to-content link for keyboard users
+- Screen reader announcements for query results and connection changes
+- ARIA labels on all interactive elements across the app
+- Tab bar keyboard navigation (Left/Right arrow keys)
+- Prefers-reduced-motion support for all animations
+- Global consistent focus ring styling (2px blue outline)
+
 - Windows: Result panel pagination controls now include First/Last page buttons and row-range display (`X–Y of Z rows`) for clearer navigation in table browse/query results
 - Windows: Query History entries now support one-click SQL copy via a hover copy button with visual copied-state feedback
 - Windows: Auto-updater — Tauri updater plugin checks for updates on launch (4h debounce), shows non-blocking notification with version/changelog, download progress, and install+restart flow
