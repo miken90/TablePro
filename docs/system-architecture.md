@@ -41,7 +41,11 @@ Managed state includes:
 - `Mutex<ConnectionStore>`
 - `Mutex<HistoryStore>`
 
-Command registration includes connection, query, schema, storage, history, import/export, settings, and save-changes flows.
+Command registration includes connection, query, schema, storage, history, import/export, settings, save-changes, filter preset, structure (create table), and data (row SQL generation) flows.
+
+### 3.4 Auto-updater
+
+The Tauri updater plugin (`tauri-plugin-updater`) checks a remote endpoint for new version metadata on launch (debounced to max once per 4h). When an update is available, a non-blocking notification shows changelog and download controls. Configuration lives in `tauri.conf.json` plugins section with endpoint URL and RSA public key.
 
 ### 3.3 Async I/O patterns
 
@@ -113,8 +117,11 @@ For each connection, host creates a driver via:
 1. Lock `ConnectionManager` mutex
 2. Resolve driver clone for `session_id`
 3. Release manager lock
-4. Execute SQL async via driver
-5. Return `QueryResult` or `AppError`
+4. Emit `query:started` event via `AppHandle`
+5. Spawn background 500ms timer emitting `query:progress` with elapsed time
+6. Execute SQL async via driver
+7. Cancel timer, emit `query:completed` (or `query:error`)
+8. Return `QueryResult` or `AppError`
 
 ### 5.2 Paginated browse (`fetch_rows`, `fetch_count`)
 
@@ -136,7 +143,8 @@ Key stores:
 - `queryStore`: run/cancel flow, safe-mode checks, query result/error state
 - `schemaStore`: schema metadata fetch state (tables/columns/etc.)
 - `changeStore`: staged edits for save workflow
-- `editorStore`: tab persistence via Zustand `persist`
+- `editorStore`: tab persistence via Zustand `persist`, preview tab support (`isPreview` flag)
+- `filterStore`: per-tab filter conditions, quick search term, filter presets
 - `history.ts`: recent/search/delete/clear history state
 - `settingsStore`: app settings load/save state
 
@@ -144,10 +152,10 @@ Key stores:
 
 `MainLayout.tsx` integrates:
 
-- sidebar and toolbar
+- sidebar and toolbar (with connection color/tag indicators)
 - query editor and results panel
 - table-browse mode
-- filter panel
+- filter panel and quick search bar
 - inspector panel
 - history panel
 - quick switcher and settings
@@ -160,6 +168,7 @@ Keyboard shortcuts include toggles for quick switcher, settings, filter, inspect
 
 - Connections: `config_dir/TablePro/connections.json`
 - Groups: `config_dir/TablePro/groups.json`
+- Filter presets: `config_dir/TablePro/filter-presets.json`
 - History: `data_dir/TablePro/history.sqlite3`
 
 ### 7.2 History database structure
@@ -208,5 +217,5 @@ Review these files when architecture docs are updated:
 
 ---
 
-**Last Updated**: 2026-03-18  
+**Last Updated**: 2026-03-19  
 **Architecture focus**: Windows active runtime + plugin/session flow

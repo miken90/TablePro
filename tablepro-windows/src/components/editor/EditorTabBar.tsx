@@ -11,6 +11,7 @@ export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
   const addTab = useEditorStore((s) => s.addTab);
   const closeTab = useEditorStore((s) => s.closeTab);
   const setActiveTab = useEditorStore((s) => s.setActiveTab);
+  const promoteTab = useEditorStore((s) => s.promoteTab);
 
   return (
     <div className="flex h-8 items-center border-b border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
@@ -19,13 +20,18 @@ export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
           <div
             key={tab.id}
             onClick={() => { setActiveTab(tab.id); onTabActivate?.(); }}
+            onDoubleClick={() => {
+              if (tab.isPreview) {
+                promoteTab(tab.id);
+              }
+            }}
             className={`flex min-w-0 max-w-[160px] cursor-pointer items-center gap-1.5 border-r border-zinc-200 px-3 py-1 text-xs dark:border-zinc-700 ${
               tab.id === activeTabId
                 ? "bg-white text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
                 : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700"
-            }`}
+            } ${tab.isPreview ? "opacity-70" : ""}`}
           >
-            <span className="truncate">
+            <span className={`truncate ${tab.isPreview ? "italic" : ""}`}>
               {tab.isDirty && <span className="mr-0.5 text-blue-500">•</span>}
               {tab.title}
             </span>

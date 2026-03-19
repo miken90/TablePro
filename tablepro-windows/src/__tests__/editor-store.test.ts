@@ -71,6 +71,7 @@ describe('editorStore persistence', () => {
         title: t.title,
         content: t.content.slice(0, 100_000),
         isDirty: false,
+        isPreview: false,
       })),
       activeTabId: state.activeTabId,
     };
@@ -157,9 +158,9 @@ describe('editorStore persistence', () => {
     // Simulate rehydrated state with 3 tabs
     const rehydrated = {
       tabs: [
-        { id: 'old-1', title: 'Tab 1', content: 'SELECT 1', isDirty: false },
-        { id: 'old-2', title: 'Tab 2', content: 'SELECT 2', isDirty: false },
-        { id: 'old-3', title: 'Tab 3', content: 'SELECT 3', isDirty: false },
+        { id: 'old-1', title: 'Tab 1', content: 'SELECT 1', isDirty: false, isPreview: false },
+        { id: 'old-2', title: 'Tab 2', content: 'SELECT 2', isDirty: false, isPreview: false },
+        { id: 'old-3', title: 'Tab 3', content: 'SELECT 3', isDirty: false, isPreview: false },
       ],
       activeTabId: 'old-3',
     };

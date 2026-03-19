@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Auto-updater — Tauri updater plugin checks for updates on launch (4h debounce), shows non-blocking notification with version/changelog, download progress, and install+restart flow
+- Windows: Connection URL import — "Import from URL" button in ConnectionForm parses `mysql://`, `postgresql://`, `postgres://`, `mssql://`, `sqlserver://` URLs into form fields with edge case handling
+- Windows: Connection color picker — 10 preset color dots in ConnectionForm; color indicator shown in sidebar and toolbar when connected
+- Windows: Connection tags — environment labels (Production, Staging, Dev, Testing, Local, custom) with colored badges in sidebar and toolbar
+- Windows: Startup commands — per-connection SQL commands executed automatically after connect (non-blocking on failure), configured in Advanced section of ConnectionForm
+- Windows: Copy as SQL — right-click rows in data grid to "Copy as INSERT" or "Copy as UPDATE" with per-driver quoting; also "Copy Row (TSV)" and "Copy Cell"
+- Windows: ENUM/SET picker — dropdown cell editor for MySQL ENUM columns and multi-select checkboxes for SET columns, fetched via `fetch_enum_values` command
+- Windows: Approximate row count — instant `~N rows` display in status bar using database metadata (pg_class/INFORMATION_SCHEMA/sys.partitions) before exact count loads
+- Windows: Quick search bar — single text input above data grid that filters rows with debounced LIKE across all text columns; Esc clears
+- Windows: Filter presets — save/load/delete named filter configurations per table, persisted in `%APPDATA%/TablePro/filter-presets.json`
+- Windows: Query progress events — real-time elapsed time display during query execution with started/progress/completed/error Tauri events
+- Windows: Create Table wizard — visual GUI to define table name, columns (name, type, nullable, default, PK), preview generated DDL, and execute; per-driver DDL syntax (PG/MySQL/MSSQL/SQLite)
+- Windows: Preview tabs — single-click table opens temporary italic tab (one at a time, replaced on next click); promoted to permanent on edit, double-click tab, or Ctrl+click; double-click table still opens Structure View
 - Windows: SQL activity log — `queryLogStore` tracks all executed queries (editor + table-browse) with source, duration, row count, and timestamps; displayed in Messages tab of ResultPanel
 - Windows: Table browse mode — clicking a table in the sidebar now shows a dedicated full-height data grid view (no editor split); "Query Editor" button in table toolbar to switch back; Run button in toolbar automatically switches back to query editor mode and shows results
 - Windows: Connection credential protection at rest — `ConnectionStore` now persists `password`, `ssh_password`, and `ssh_key_passphrase` with `dpapi:`-prefixed DPAPI encryption and migrates legacy plaintext values on load

@@ -38,17 +38,21 @@ TablePro/
 src-tauri/src/
 ├── lib.rs                   # Tauri setup, state injection, command registration
 ├── main.rs                  # Entry point
-├── commands/                # 12 files — export (3), import, query, connection, ...
+├── commands/                # 14 files — export (3), import, query, connection, filter, structure, data, ...
 │   ├── export.rs            # Export orchestration + helpers
 │   ├── export_formats.rs    # CSV/JSON/SQL format generators
-│   └── export_writers.rs    # File write + XLSX writer
-├── services/                # 12 files — modularized by domain
+│   ├── export_writers.rs    # File write + XLSX writer
+│   ├── filter.rs            # Filter preset CRUD commands
+│   ├── structure.rs         # Create table command
+│   └── data.rs              # Row SQL generation command
+├── services/                # 13 files — modularized by domain
 │   ├── import_service.rs    # Import types + preview/execute
 │   ├── import_parser.rs     # In-memory SQL statement scanner
 │   ├── import_streamer.rs   # BufReader-based streaming parser
 │   ├── sql_generator.rs     # SQL generation orchestrator
 │   ├── sql_generator_ops.rs # INSERT/UPDATE/DELETE builders
 │   ├── sql_quoting.rs       # Per-driver identifier quoting
+│   ├── ddl_generator.rs     # Per-driver CREATE TABLE DDL generation
 │   ├── ssh_tunnel.rs        # SSH tunnel manager
 │   ├── ssh_tunnel_core.rs   # Active tunnel connection logic
 │   ├── ssh_config.rs        # SSH config types + builders
@@ -58,7 +62,7 @@ src-tauri/src/
 │   ├── adapter.rs           # Core PluginDriverAdapter
 │   ├── adapter_ffi_helpers.rs # FFI conversion utilities
 │   └── adapter_ffi_list_converters.rs # List/schema FFI converters
-├── storage/                 # ConnectionStore, SettingsStore, HistoryStore
+├── storage/                 # ConnectionStore, SettingsStore, HistoryStore, FilterStore
 └── models/                  # Shared app/domain models and AppError
 ```
 
@@ -78,12 +82,13 @@ Key runtime facts verified in source:
 ```text
 src/
 ├── App.tsx
-├── components/              # Layout, editor, grid, filter, inspector, settings, etc.
-├── stores/                  # Zustand stores (connection/query/schema/change/editor/...)
-├── ipc/                     # Typed `invoke` wrappers and error helpers
+├── components/              # Layout, editor, grid, filter, inspector, settings, structure, etc.
+├── stores/                  # Zustand stores (connection/query/schema/change/editor/filter/...)
+├── ipc/                     # Typed `invoke` wrappers, filter-commands, and error helpers
 ├── editor/                  # SQL editor utilities and language helpers
-├── hooks/
+├── hooks/                   # useAutoUpdater, useQueryProgress, etc.
 ├── types/
+├── utils/                   # connection-url-parser, etc.
 └── styles/
 ```
 
@@ -99,6 +104,7 @@ Key frontend state facts verified in source:
 
 - Connections: `config_dir/TablePro/connections.json`
 - Groups: `config_dir/TablePro/groups.json`
+- Filter presets: `config_dir/TablePro/filter-presets.json`
 - History DB: `data_dir/TablePro/history.sqlite3`
 - History schema objects: `history` table + `history_fts` virtual table + triggers
 - Tab persistence: frontend localStorage via Zustand middleware
@@ -114,9 +120,11 @@ Current command groups registered in `lib.rs`:
 
 - Connection: `test_connection`, `connect`, `disconnect`, `get_connection_status`
 - Query: `execute_query`, `fetch_rows`, `fetch_count`, `cancel_query`
-- Schema: `fetch_tables`, `fetch_columns`, `fetch_indexes`, `fetch_foreign_keys`, `fetch_databases`, `fetch_ddl`, `switch_database`, `fetch_schemas`
+- Schema: `fetch_tables`, `fetch_columns`, `fetch_indexes`, `fetch_foreign_keys`, `fetch_databases`, `fetch_ddl`, `switch_database`, `fetch_schemas`, `fetch_enum_values`, `fetch_approximate_count`
 - Storage: `list/save/delete_connection`, group CRUD
-- Data mutation: `save_changes`
+- Data mutation: `save_changes`, `generate_row_sql`
+- Filter: `save_filter_preset`, `load_filter_presets`, `delete_filter_preset`
+- Structure: `create_table`
 - Import/Export: `import_preview`, `import_sql_file`, `export_to_file`
 - History: `history_fetch_recent`, `history_search`, `history_clear_all`, `history_delete_entry`, `history_record`
 - Settings: `get_settings`, `set_settings`, `log_renderer_error`
@@ -132,5 +140,5 @@ Areas most likely to drift and require periodic refresh:
 
 ---
 
-**Last Updated**: 2026-03-18  
+**Last Updated**: 2026-03-19  
 **Source of Truth for this summary**: `repomix-output.xml` + direct reads of active Windows source files

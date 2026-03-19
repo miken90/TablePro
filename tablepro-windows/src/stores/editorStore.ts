@@ -6,6 +6,7 @@ export interface EditorTab {
   title: string;
   content: string;
   isDirty: boolean;
+  isPreview: boolean;
 }
 
 interface EditorState {
@@ -14,6 +15,8 @@ interface EditorState {
 
   // Actions
   addTab: (title?: string) => string;
+  addPreviewTab: (title: string) => string;
+  promoteTab: (id: string) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   updateTabContent: (id: string, content: string) => void;
@@ -39,9 +42,44 @@ export const useEditorStore = create<EditorState>()(
           title: title ?? `Query ${get().tabs.length + 1}`,
           content: "",
           isDirty: false,
+          isPreview: false,
         };
         set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));
         return id;
+      },
+
+      /** Replace the existing preview tab (if any) or create a new preview tab. */
+      addPreviewTab: (title) => {
+        const existing = get().tabs.find((t) => t.isPreview);
+        if (existing) {
+          // Reuse the preview slot — update title + clear content
+          set((s) => ({
+            tabs: s.tabs.map((t) =>
+              t.id === existing.id
+                ? { ...t, title, content: "", isDirty: false }
+                : t,
+            ),
+            activeTabId: existing.id,
+          }));
+          return existing.id;
+        }
+        const id = generateTabId();
+        const previewTab: EditorTab = {
+          id,
+          title,
+          content: "",
+          isDirty: false,
+          isPreview: true,
+        };
+        set((s) => ({ tabs: [...s.tabs, previewTab], activeTabId: id }));
+        return id;
+      },
+
+      /** Promote a preview tab to a permanent tab. */
+      promoteTab: (id) => {
+        set((s) => ({
+          tabs: s.tabs.map((t) => (t.id === id ? { ...t, isPreview: false } : t)),
+        }));
       },
 
       closeTab: (id) => {
@@ -60,7 +98,17 @@ export const useEditorStore = create<EditorState>()(
 
       updateTabContent: (id, content) => {
         set((s) => ({
-          tabs: s.tabs.map((t) => (t.id === id ? { ...t, content, isDirty: true } : t)),
+          tabs: s.tabs.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  content,
+                  isDirty: true,
+                  // Auto-promote preview tab when user edits SQL
+                  isPreview: false,
+                }
+              : t,
+          ),
         }));
       },
 
@@ -78,6 +126,8 @@ export const useEditorStore = create<EditorState>()(
           title: t.title,
           content: t.content.slice(0, 100_000),
           isDirty: false,
+          // Don't persist preview state — rehydrate as permanent
+          isPreview: false,
         })),
         activeTabId: state.activeTabId,
       }),
