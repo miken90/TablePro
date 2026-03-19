@@ -9,7 +9,7 @@ edition = "2021"
 
 [lib]
 name = "tablepro_windows"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [[bin]]
 name = "tablepro-windows"

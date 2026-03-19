@@ -151,6 +151,17 @@ pub fn run() {
             load_filter_presets,
             delete_filter_preset,
         ])
+        .on_window_event(|window, event| {
+            match event {
+                tauri::WindowEvent::CloseRequested { .. } => {
+                    tracing::warn!("Window CloseRequested: {}", window.label());
+                }
+                tauri::WindowEvent::Destroyed => {
+                    tracing::warn!("Window Destroyed: {}", window.label());
+                }
+                _ => {}
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 

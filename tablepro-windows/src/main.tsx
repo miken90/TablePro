@@ -27,6 +27,18 @@ function logRendererError(kind: string, detail: string) {
 
 logRendererError("startup", "main.tsx loaded");
 
+window.addEventListener("beforeunload", () => {
+  logRendererError("lifecycle", "beforeunload fired");
+});
+
+window.addEventListener("pagehide", () => {
+  logRendererError("lifecycle", "pagehide fired");
+});
+
+document.addEventListener("visibilitychange", () => {
+  logRendererError("lifecycle", `visibilitychange: ${document.visibilityState}`);
+});
+
 window.addEventListener("error", (event) => {
   const detail = `${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`;
   logRendererError("window.error", detail);

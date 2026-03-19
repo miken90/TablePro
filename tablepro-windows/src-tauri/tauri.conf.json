@@ -5,7 +5,8 @@
   "identifier": "app.tablepro.windows",
   "build": {
     "frontendDist": "../dist",
-    "beforeDevCommand": "npm run build:drivers && npm run build",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run build:drivers && npm run dev",
     "beforeBuildCommand": "npm run build:drivers && npm run build",
     "features": ["devtools"]
   },
