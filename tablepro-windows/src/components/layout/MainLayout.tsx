@@ -229,15 +229,20 @@ export function MainLayout() {
   const handleOpenPreviewTable = useCallback(
     (tableName: string, schema?: string | null) => {
       if (!selectedConnectionId) return;
+      const sid = getSessionId(selectedConnectionId);
+      if (!sid) return;
       const qualifiedName = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
       const selectQuery = `SELECT * FROM ${qualifiedName} LIMIT 100;`;
       const tabId = addPreviewTab(tableName);
       updateTabContent(tabId, selectQuery);
+      setQueryText(selectQuery);
       // Switch to query editor so the preview tab is visible
       setViewMode('query');
       setStructureTarget(null);
+      // Auto-execute so records display immediately
+      void useQueryStore.getState().execute(sid, selectQuery);
     },
-    [selectedConnectionId, addPreviewTab, updateTabContent]
+    [selectedConnectionId, getSessionId, addPreviewTab, updateTabContent, setQueryText]
   );
 
   const handleSwitchToQueryMode = useCallback(() => {
