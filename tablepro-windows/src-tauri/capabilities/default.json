@@ -10,6 +10,9 @@
     "core:window:allow-set-title",
     "core:app:allow-version",
     "core:app:allow-name",
-    "dialog:default"
+    "dialog:default",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download-and-install"
   ]
 }

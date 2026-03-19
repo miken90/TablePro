@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Sidebar } from "./Sidebar";
 import { Toolbar } from "./Toolbar";
 import { EditorTabBar } from "../editor/EditorTabBar";
@@ -12,11 +12,14 @@ import { FilterPanel } from "../filter/filter-panel";
 import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { ShortcutsHelp } from "../shared/ShortcutsHelp";
+import { UpdateNotification } from "../shared/update-notification";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useQueryStore } from "../../stores/queryStore";
+import { useFilterStore } from "../../stores/filterStore";
 import { useTheme } from "../../hooks/useTheme";
+import { useAutoUpdater } from "../../hooks/useAutoUpdater";
 import type { ColumnInfo } from "../../types/query";
 
 const SIDEBAR_DEFAULT = 240;
@@ -39,11 +42,20 @@ interface TableContext {
   schema?: string | null;
 }
 
+/** Combine filter clause + quick-search clause with AND */
+function combineWhereClauses(filterClause: string, quickSearchClause: string): string {
+  const parts = [filterClause, quickSearchClause].filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0]!;
+  return `(${parts[0]}) AND (${parts[1]})`;
+}
+
 export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
   const activeTabId = useEditorStore((s) => s.activeTabId);
   const addTab = useEditorStore((s) => s.addTab);
+  const addPreviewTab = useEditorStore((s) => s.addPreviewTab);
   const updateTabContent = useEditorStore((s) => s.updateTabContent);
   const fetchColumns = useSchemaStore((s) => s.fetchColumns);
 
@@ -56,7 +68,6 @@ export function MainLayout() {
   const [viewMode, setViewMode] = useState<ViewMode>('query');
   const [activeTableContext, setActiveTableContext] = useState<TableContext | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
-  const [activeWhereClause, setActiveWhereClause] = useState("");
   const [filterColumns, setFilterColumns] = useState<ColumnInfo[]>([]);
   const [inspectorVisible, setInspectorVisible] = useState(false);
   const [inspectorWidth, setInspectorWidth] = useState(INSPECTOR_DEFAULT);
@@ -65,8 +76,34 @@ export function MainLayout() {
   const [helpOpen, setHelpOpen] = useState(false);
 
   const setQueryText = useQueryStore((s) => s.setQueryText);
+  const {
+    availableUpdate,
+    shouldShowNotification,
+    isInstalling,
+    downloadedBytes,
+    totalBytes,
+    error: updateError,
+    installUpdate,
+    dismissUpdate,
+  } = useAutoUpdater();
 
   useTheme();
+
+  // Stable tabId for the filter store: table-browse uses "table:{name}", query uses activeTabId
+  const filterTabId = useMemo(() => {
+    if (viewMode === 'table-browse' && activeTableContext?.tableName) {
+      return `table:${activeTableContext.tableName}`;
+    }
+    return activeTabId ?? 'default';
+  }, [viewMode, activeTableContext, activeTabId]);
+
+  // Derive activeWhereClause from filterStore (filter panel + quick search combined)
+  const filterByTab = useFilterStore((s) => s.byTab);
+  const activeWhereClause = useMemo(() => {
+    const tab = filterByTab[filterTabId];
+    if (!tab) return '';
+    return combineWhereClauses(tab.appliedFilterClause, tab.quickSearchClause);
+  }, [filterByTab, filterTabId]);
 
   // Keyboard shortcuts: Ctrl+K, Ctrl+,, Ctrl+Shift+F
   useEffect(() => {
@@ -167,7 +204,6 @@ export function MainLayout() {
         setActiveTableContext({ tableName, schema });
         setViewMode('table-browse');
         setStructureTarget(null);
-        setActiveWhereClause("");
       }
     },
     [selectedConnectionId]
@@ -179,23 +215,34 @@ export function MainLayout() {
         setActiveTableContext({ tableName, schema });
         setViewMode('table-browse');
         setStructureTarget(null);
-        setActiveWhereClause("");
       }
     },
     [selectedConnectionId]
   );
 
+  /**
+   * Single-click table in sidebar → open as a preview SQL tab.
+   * Generates SELECT * for the table and opens it as a temporary (preview) tab.
+   * Tab is replaced if another table is single-clicked, and becomes permanent on edit.
+   * Ctrl+click in sidebar calls handleOpenTable (permanent tab) instead.
+   */
+  const handleOpenPreviewTable = useCallback(
+    (tableName: string, schema?: string | null) => {
+      if (!selectedConnectionId) return;
+      const qualifiedName = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
+      const selectQuery = `SELECT * FROM ${qualifiedName} LIMIT 100;`;
+      const tabId = addPreviewTab(tableName);
+      updateTabContent(tabId, selectQuery);
+      // Switch to query editor so the preview tab is visible
+      setViewMode('query');
+      setStructureTarget(null);
+    },
+    [selectedConnectionId, addPreviewTab, updateTabContent]
+  );
+
   const handleSwitchToQueryMode = useCallback(() => {
     setViewMode('query');
     setActiveTableContext(null);
-  }, []);
-
-  const handleFilterApply = useCallback((clause: string) => {
-    setActiveWhereClause(clause);
-  }, []);
-
-  const handleFilterClear = useCallback(() => {
-    setActiveWhereClause("");
   }, []);
 
   const handleInspectorResize = useCallback(
@@ -254,7 +301,7 @@ export function MainLayout() {
         {!sidebarCollapsed && (
           <>
             <div style={{ width: sidebarWidth }} className="flex-shrink-0 overflow-hidden">
-              <Sidebar onViewStructure={handleViewStructure} onOpenTable={handleOpenTable} />
+              <Sidebar onViewStructure={handleViewStructure} onOpenTable={handleOpenTable} onOpenPreviewTable={handleOpenPreviewTable} />
             </div>
             <div
               className="w-1 cursor-col-resize bg-zinc-200 hover:bg-blue-400 dark:bg-zinc-700 dark:hover:bg-blue-500"
@@ -278,17 +325,19 @@ export function MainLayout() {
             <>
               {filterVisible && (
                 <FilterPanel
+                  tabId={filterTabId}
+                  tableName={activeTableContext.tableName}
                   columns={filterColumns}
-                  onApply={handleFilterApply}
-                  onClear={handleFilterClear}
                 />
               )}
               <div className="flex-1 overflow-hidden">
                 <ResultPanel
+                  tabId={filterTabId}
                   tableName={activeTableContext.tableName}
                   schema={activeTableContext.schema}
                   sessionId={sessionId}
                   activeWhereClause={activeWhereClause}
+                  quickSearchColumns={filterColumns}
                   onRowSelect={handleRowSelect}
                   onOpenQueryEditor={handleSwitchToQueryMode}
                 />
@@ -300,9 +349,8 @@ export function MainLayout() {
               <EditorTabBar />
               {filterVisible && (
                 <FilterPanel
+                  tabId={filterTabId}
                   columns={filterColumns}
-                  onApply={handleFilterApply}
-                  onClear={handleFilterClear}
                 />
               )}
               <div className="editor-results-container flex flex-1 flex-col overflow-hidden">
@@ -360,6 +408,20 @@ export function MainLayout() {
       />
 
       {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
+
+      {availableUpdate && shouldShowNotification && (
+        <UpdateNotification
+          update={availableUpdate}
+          isInstalling={isInstalling}
+          downloadedBytes={downloadedBytes}
+          totalBytes={totalBytes}
+          error={updateError}
+          onUpdateNow={() => {
+            void installUpdate();
+          }}
+          onLater={dismissUpdate}
+        />
+      )}
 
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>

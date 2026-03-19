@@ -7,24 +7,26 @@ pub mod storage;
 use std::sync::Arc;
 
 use commands::connection::{connect, disconnect, get_connection_status, test_connection};
-use commands::data::save_changes;
+use commands::data::{generate_row_sql, save_changes};
 use commands::export::export_to_file;
+use commands::filter::{delete_filter_preset, load_filter_presets, save_filter_preset};
 use commands::history::{
     history_clear_all, history_delete_entry, history_fetch_recent, history_record, history_search,
 };
 use commands::import::{import_preview, import_sql_file};
 use commands::query::{cancel_query, execute_query, fetch_count, fetch_rows};
 use commands::schema::{
-    fetch_columns, fetch_databases, fetch_ddl, fetch_foreign_keys, fetch_indexes, fetch_schemas,
-    fetch_tables, switch_database,
+    fetch_approximate_count, fetch_columns, fetch_databases, fetch_ddl, fetch_enum_values,
+    fetch_foreign_keys, fetch_indexes, fetch_schemas, fetch_tables, switch_database,
 };
 use commands::settings::{get_settings, log_renderer_error, set_settings};
 use commands::storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
+use commands::structure::create_table;
 use plugin::PluginManager;
 use services::ConnectionManager;
-use storage::{ConnectionStore, HistoryStore, SettingsStore};
+use storage::{ConnectionStore, FilterStore, HistoryStore, SettingsStore};
 use tokio::sync::Mutex;
 
 fn build_history_store() -> HistoryStore {
@@ -88,6 +90,13 @@ pub fn run() {
             store
         }))
         .manage(Mutex::new(build_history_store()))
+        .manage(Mutex::new({
+            let mut store = FilterStore::new();
+            if let Err(e) = store.load() {
+                tracing::warn!("Failed to load filter presets: {e}");
+            }
+            store
+        }))
         .invoke_handler(tauri::generate_handler![
             // connection
             test_connection,
@@ -108,6 +117,9 @@ pub fn run() {
             fetch_ddl,
             switch_database,
             fetch_schemas,
+            fetch_enum_values,
+            fetch_approximate_count,
+            create_table,
             // settings
             get_settings,
             set_settings,
@@ -122,6 +134,7 @@ pub fn run() {
             delete_group,
             // data mutation
             save_changes,
+            generate_row_sql,
             // export
             export_to_file,
             // import
@@ -133,6 +146,10 @@ pub fn run() {
             history_clear_all,
             history_delete_entry,
             history_record,
+            // filter presets
+            save_filter_preset,
+            load_filter_presets,
+            delete_filter_preset,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
