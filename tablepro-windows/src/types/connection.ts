@@ -15,6 +15,7 @@ export interface ConnectionConfig {
   database: string;
   dbType: string;
   sslMode: string;
+  startupCommands?: string;
   // SSH tunnel fields
   sshEnabled: boolean;
   sshHost: string;
@@ -32,6 +33,8 @@ export interface SavedConnection {
   name: string;
   config: ConnectionConfig;
   groupId?: string;
+  color?: string;
+  tag?: string;
 }
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";

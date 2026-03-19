@@ -31,6 +31,8 @@ pub struct ConnectionConfig {
     pub database: String,
     pub db_type: String,
     pub ssl_mode: String,
+    #[serde(default)]
+    pub startup_commands: Option<String>,
     // SSH tunnel fields — all optional with defaults for backward compat
     #[serde(default)]
     pub ssh_enabled: bool,
@@ -69,6 +71,12 @@ pub struct SavedConnection {
     /// Optional group this connection belongs to.
     #[serde(default)]
     pub group_id: Option<String>,
+    /// Optional color used for sidebar/toolbar indicator.
+    #[serde(default)]
+    pub color: Option<String>,
+    /// Optional environment tag.
+    #[serde(default)]
+    pub tag: Option<String>,
 }
 
 #[cfg(test)]
@@ -85,6 +93,7 @@ mod tests {
             database: "mydb".to_string(),
             db_type: "postgresql".to_string(),
             ssl_mode: "prefer".to_string(),
+            startup_commands: None,
             ssh_enabled: false,
             ssh_host: String::new(),
             ssh_port: 22,
@@ -129,6 +138,7 @@ mod tests {
                 database: "test".to_string(),
                 db_type: "mysql".to_string(),
                 ssl_mode: "disabled".to_string(),
+                startup_commands: None,
                 ssh_enabled: false,
                 ssh_host: String::new(),
                 ssh_port: 22,
@@ -139,6 +149,8 @@ mod tests {
                 ssh_key_passphrase: String::new(),
             },
             group_id: None,
+            color: None,
+            tag: None,
         };
         let json = serde_json::to_string(&conn).unwrap();
         let deserialized: SavedConnection = serde_json::from_str(&json).unwrap();
@@ -160,6 +172,7 @@ mod tests {
                 database: "proddb".to_string(),
                 db_type: "postgres".to_string(),
                 ssl_mode: "require".to_string(),
+                startup_commands: Some("SET search_path TO public;".to_string()),
                 ssh_enabled: false,
                 ssh_host: String::new(),
                 ssh_port: 22,
@@ -170,10 +183,14 @@ mod tests {
                 ssh_key_passphrase: String::new(),
             },
             group_id: Some("group-001".to_string()),
+            color: Some("#ef4444".to_string()),
+            tag: Some("production".to_string()),
         };
         let json = serde_json::to_string(&conn).unwrap();
         let deserialized: SavedConnection = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.group_id, Some("group-001".to_string()));
+        assert_eq!(deserialized.color, Some("#ef4444".to_string()));
+        assert_eq!(deserialized.tag, Some("production".to_string()));
     }
 
     #[test]

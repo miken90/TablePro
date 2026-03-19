@@ -17,6 +17,7 @@ interface SidebarTableNodeProps {
   sessionId: string | null;
   onViewStructure?: (tableName: string, schema?: string | null) => void;
   onOpenTable?: (tableName: string, schema?: string | null) => void;
+  onOpenPreviewTable?: (tableName: string, schema?: string | null) => void;
 }
 
 export function SidebarTableNode({
@@ -26,6 +27,7 @@ export function SidebarTableNode({
   sessionId,
   onViewStructure,
   onOpenTable,
+  onOpenPreviewTable,
 }: SidebarTableNodeProps) {
   const { fetchColumns, columnsByTable } = useSchemaStore();
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -80,13 +82,39 @@ export function SidebarTableNode({
     setContextMenu(null);
   };
 
+  /**
+   * Single-click: open as preview tab (temporary, italic).
+   * If Ctrl/Cmd held → open as permanent tab directly.
+   * Double-click: open Structure View (existing behavior preserved).
+   */
+  const handleRowClick = useCallback(
+    (e: React.MouseEvent) => {
+      const isPermanent = e.ctrlKey || e.metaKey;
+      if (isPermanent) {
+        onOpenTable?.(table.name, table.schema);
+      } else {
+        onOpenPreviewTable?.(table.name, table.schema);
+      }
+    },
+    [table.name, table.schema, onOpenTable, onOpenPreviewTable],
+  );
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      // Double-click → Structure View (existing behavior preserved)
+      onViewStructure?.(table.name, table.schema);
+    },
+    [table.name, table.schema, onViewStructure],
+  );
+
   return (
     <>
       <div>
         <div
-          onClick={() => onOpenTable?.(table.name, table.schema)}
+          onClick={handleRowClick}
           onContextMenu={handleContextMenu}
-          onDoubleClick={() => onViewStructure?.(table.name, table.schema)}
+          onDoubleClick={handleDoubleClick}
           className="flex cursor-pointer items-center gap-1 px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
           <span

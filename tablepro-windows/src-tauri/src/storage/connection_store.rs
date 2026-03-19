@@ -251,6 +251,7 @@ mod tests {
                 database: "db".to_string(),
                 db_type: "postgres".to_string(),
                 ssl_mode: "prefer".to_string(),
+                startup_commands: None,
                 ssh_enabled: false,
                 ssh_host: String::new(),
                 ssh_port: 22,
@@ -261,6 +262,8 @@ mod tests {
                 ssh_key_passphrase: String::new(),
             },
             group_id: group_id.map(|s| s.to_string()),
+            color: None,
+            tag: None,
         }
     }
 

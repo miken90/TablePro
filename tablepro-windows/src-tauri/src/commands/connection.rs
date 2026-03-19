@@ -37,26 +37,47 @@ pub async fn connect(
     config: ConnectionConfig,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<String, AppError> {
-    if config.ssh_enabled {
+    let (session_id, driver): (String, Arc<dyn DatabaseDriver>) = if config.ssh_enabled {
         let mut mgr = manager.lock().await;
-        return mgr.connect(&config).await;
-    }
+        let session_id = mgr.connect(&config).await?;
+        let driver = mgr.get_driver(&session_id)?;
+        (session_id, driver)
+    } else {
+        let plugin_manager = {
+            let mgr = manager.lock().await;
+            mgr.plugin_manager()
+        };
+        let session_id = Uuid::new_v4().to_string();
+        let driver: Arc<dyn DatabaseDriver> =
+            Arc::from(plugin_manager.create_driver(&config.db_type, &config)?);
+        driver.connect().await.map_err(|e| {
+            tracing::error!(db_type = %config.db_type, "connect failed: {e}");
+            e
+        })?;
 
-    let plugin_manager = {
-        let mgr = manager.lock().await;
-        mgr.plugin_manager()
+        {
+            let mut mgr = manager.lock().await;
+            mgr.insert_connection(session_id.clone(), Arc::clone(&driver), config.clone());
+        }
+
+        (session_id, driver)
     };
-    let session_id = Uuid::new_v4().to_string();
-    let driver: Arc<dyn DatabaseDriver> =
-        Arc::from(plugin_manager.create_driver(&config.db_type, &config)?);
-    driver.connect().await.map_err(|e| {
-        tracing::error!(db_type = %config.db_type, "connect failed: {e}");
-        e
-    })?;
 
+    if let Some(startup_commands) = config
+        .startup_commands
+        .as_deref()
+        .map(str::trim)
+        .filter(|sql| !sql.is_empty())
     {
-        let mut mgr = manager.lock().await;
-        mgr.insert_connection(session_id.clone(), driver, config.clone());
+        if let Err(error) = driver.execute(startup_commands).await {
+            tracing::warn!(
+                session_id = %session_id,
+                db_type = %config.db_type,
+                "startup commands failed (connection remains open): {error}"
+            );
+        } else {
+            tracing::info!(session_id = %session_id, "startup commands executed");
+        }
     }
 
     tracing::info!(session_id = %session_id, db_type = %config.db_type, ssh = config.ssh_enabled, "Session opened");

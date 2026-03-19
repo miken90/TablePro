@@ -13,6 +13,9 @@ import {
   secondaryBtn,
 } from "./connection-form-config";
 import { Field, SshSection } from "./connection-form-sections";
+import { ConnectionColorPicker } from "./connection-color-picker";
+import { ConnectionTagPicker } from "./connection-tag-picker";
+import { parseConnectionUrl } from "../../utils/connection-url-parser";
 
 interface ConnectionFormProps {
   initial?: SavedConnection;
@@ -23,9 +26,12 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
   const { saveConnection, connect, groups } = useConnectionStore();
   const [name, setName] = useState(initial?.name ?? "");
   const [groupId, setGroupId] = useState<string>(initial?.groupId ?? "");
-  const [config, setConfig] = useState<ConnectionConfig>(
-    initial?.config ?? DEFAULT_CONNECTION_CONFIG,
-  );
+  const [color, setColor] = useState<string | undefined>(initial?.color);
+  const [tag, setTag] = useState<string | undefined>(initial?.tag);
+  const [config, setConfig] = useState<ConnectionConfig>(initial?.config ?? DEFAULT_CONNECTION_CONFIG);
+  const [urlImportOpen, setUrlImportOpen] = useState(false);
+  const [connectionUrl, setConnectionUrl] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(Boolean(initial?.config.startupCommands));
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -39,6 +45,20 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
       }
       return next;
     });
+
+  const handleImportFromUrl = () => {
+    try {
+      const parsed = parseConnectionUrl(connectionUrl);
+      updateConfig(parsed);
+      setError(null);
+      setUrlImportOpen(false);
+      if (!name && parsed.host) {
+        setName(parsed.host);
+      }
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  };
 
   const handleTest = async () => {
     setIsTesting(true);
@@ -60,6 +80,8 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
     name: name || config.host,
     config,
     groupId: groupId || undefined,
+    color,
+    tag: tag?.trim() ? tag.trim() : undefined,
   });
 
   const handleSave = async () => {
@@ -97,8 +119,39 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
         {initial ? "Edit Connection" : "New Connection"}
       </h2>
 
+      <div className="flex items-center justify-between gap-2 rounded border border-zinc-200 px-2 py-1.5 dark:border-zinc-700">
+        <span className="text-xs text-zinc-600 dark:text-zinc-300">Import settings from connection URL</span>
+        <button type="button" onClick={() => setUrlImportOpen((v) => !v)} className={secondaryBtn}>
+          {urlImportOpen ? "Hide" : "Import from URL"}
+        </button>
+      </div>
+
+      {urlImportOpen && (
+        <div className="flex flex-col gap-2 rounded border border-zinc-200 p-2 dark:border-zinc-700">
+          <input
+            value={connectionUrl}
+            onChange={(e) => setConnectionUrl(e.target.value)}
+            placeholder="postgresql://user:pass@host:5432/database"
+            className={inputCls}
+          />
+          <div className="flex justify-end">
+            <button type="button" onClick={handleImportFromUrl} className={secondaryBtn}>
+              Apply URL
+            </button>
+          </div>
+        </div>
+      )}
+
       <Field label="Name">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My DB" className={inputCls} />
+      </Field>
+
+      <Field label="Color">
+        <ConnectionColorPicker value={color} onChange={setColor} />
+      </Field>
+
+      <Field label="Tag">
+        <ConnectionTagPicker value={tag} onChange={setTag} />
       </Field>
 
       <Field label="Type">
@@ -157,6 +210,30 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
         </>
       )}
 
+      <div className="rounded border border-zinc-200 dark:border-zinc-700">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700/50"
+        >
+          <span>Advanced</span>
+          <span>{advancedOpen ? "−" : "+"}</span>
+        </button>
+        {advancedOpen && (
+          <div className="border-t border-zinc-200 p-3 dark:border-zinc-600">
+            <Field label="Startup Commands">
+              <textarea
+                value={config.startupCommands ?? ""}
+                onChange={(e) => updateConfig({ startupCommands: e.target.value })}
+                placeholder="SET search_path TO public;"
+                rows={4}
+                className={`${inputCls} min-h-20`}
+              />
+            </Field>
+          </div>
+        )}
+      </div>
+
       {groupList.length > 0 && (
         <Field label="Group">
           <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className={inputCls}>
@@ -193,5 +270,3 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
     </div>
   );
 }
-
-
