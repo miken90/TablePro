@@ -32,12 +32,14 @@ TablePro Windows — a Windows database client built with Tauri v2 + Rust + Type
 ```bash
 # Build, run, test — always via powershell.exe
 powershell.exe -Command "cd tablepro-windows; npm install"
-powershell.exe -Command "cd tablepro-windows; npm run tauri dev"
+powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"
 powershell.exe -Command "cd tablepro-windows; npm run tauri build"
 powershell.exe -Command "cd tablepro-windows; cargo test --manifest-path src-tauri/Cargo.toml"
 powershell.exe -Command "cd tablepro-windows; cargo clippy --manifest-path src-tauri/Cargo.toml"
 powershell.exe -Command "cd tablepro-windows; npx vitest run"
 ```
+
+> **Note:** `npm run dev:tauri` runs `tauri dev --no-watch`. The Tauri file watcher causes silent crashes on Windows (kills the running app to rebuild when it detects artifact changes in `src-tauri/target/`, but Windows file-locks prevent overwriting the exe/dll). When you need to pick up Rust changes, Ctrl+C and re-run.
 
 - **Use native bash** only for: git, gh, file operations, reading macOS reference code
 - **Path translation**: `wslpath -w` (WSL→Windows), `wslpath -u` (Windows→WSL)

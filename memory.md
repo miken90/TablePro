@@ -23,6 +23,16 @@
    - `%LOCALAPPDATA%/CrashDumps`
 5. Only then dive into plugin/IPC flow-specific paths.
 
+### Root cause identified (2026-03-19): Tauri CLI file watcher kills app
+- **Definitive test**: Vite dev server + `cargo run` (no Tauri CLI) = stable 5+ min. `tauri dev` = crash ~2-3 min. `tauri dev --no-watch` = stable.
+- Tauri CLI file watcher detects artifact changes in `src-tauri/target/` and kills the running app to rebuild. Windows file-locks on the running exe/dll prevent overwriting → exit code 1.
+- Secondary factors fixed along the way:
+  - `beforeDevCommand` was running one-shot `vite build` instead of long-lived Vite dev server — restored `devUrl` + `npm run dev`.
+  - PDB filename collision between bin/lib targets — reduced lib crate-type to `["rlib"]`.
+  - Vite chokidar was not ignoring `src-tauri/` — added `server.watch.ignored`.
+- **Permanent fix**: `npm run dev:tauri` now runs `tauri dev --no-watch`. Ctrl+C and re-run to pick up Rust changes.
+- Dev command: `powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"`
+
 ### Known risky areas already addressed
 - Plugin/driver shutdown lifetime ordering in `ConnectionManager` (drop connections before plugin manager).
 - Command-layer lock usage: avoid holding `Mutex<ConnectionManager>` while awaiting DB driver operations.
@@ -37,6 +47,6 @@
   - then separately diagnose Tauri bundling step failure.
 
 ### Commands used frequently
-- Dev run: `powershell.exe -Command "cd tablepro-windows; npm run tauri dev"`
+- Dev run: `powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"`
 - Release rust build: `powershell.exe -Command "cd tablepro-windows; cargo build --release --manifest-path src-tauri/Cargo.toml"`
 - Full bundle: `powershell.exe -Command "cd tablepro-windows; npm run tauri build"`

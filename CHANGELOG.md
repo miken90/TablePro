@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Windows: Result panel pagination controls now include First/Last page buttons and row-range display (`X–Y of Z rows`) for clearer navigation in table browse/query results
+- Windows: Query History entries now support one-click SQL copy via a hover copy button with visual copied-state feedback
 - Windows: Auto-updater — Tauri updater plugin checks for updates on launch (4h debounce), shows non-blocking notification with version/changelog, download progress, and install+restart flow
 - Windows: Connection URL import — "Import from URL" button in ConnectionForm parses `mysql://`, `postgresql://`, `postgres://`, `mssql://`, `sqlserver://` URLs into form fields with edge case handling
 - Windows: Connection color picker — 10 preset color dots in ConnectionForm; color indicator shown in sidebar and toolbar when connected
@@ -61,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Windows: App crash on launch or after connecting — Vite dev server (`http://localhost:1420`) destabilized WebView2 renderer; `tauri dev` now builds frontend to `dist/` and serves from embedded files instead of the dev server
+- Windows: Dev server crash loop — `tauri dev` exited after ~50s due to file watcher feedback loop (static `vite build` into `dist/` triggered spurious Cargo rebuilds) compounded by PDB filename collision between bin/lib targets and Vite HMR full-page reloads from unignored `src-tauri/` writes; restored Vite dev server (`devUrl`), reduced lib crate-type to `rlib`, and added `server.watch.ignored` for `src-tauri/`
 - Windows: Grid header not scrolling horizontally with data — synced header scrollLeft with body scroll via onScroll handler
 - Windows: Server-side pagination and sorting — table browse now uses `fetch_rows` with LIMIT/OFFSET/ORDER BY instead of loading all rows into memory; page and sort changes re-query the database
 - Windows: DevTools accessible in release builds — moved `devtools` cargo feature behind optional flag, disabled right-click context menu and F12/Ctrl+Shift+I in production
