@@ -15,11 +15,19 @@ interface DataGridProps {
   onCellDoubleClick?: (rowIdx: number, colIdx: number) => void;
   onCellCommit?: (rowIdx: number, colIdx: number, newValue: string | null) => void;
   onCellCancel?: () => void;
+  onCellContextMenu?: (
+    event: React.MouseEvent<HTMLDivElement>,
+    rowIdx: number,
+    colIdx: number,
+    cellValue: string | null,
+    row: (string | null)[],
+  ) => void;
   selectedRows?: Set<number>;
   onRowSelect?: (rowIdx: number, mode: 'single' | 'range' | 'toggle') => void;
   changedRows?: Map<number, 'modified' | 'inserted' | 'deleted'>;
   editingCell?: { rowIdx: number; colIdx: number } | null;
   cellOverrideValues?: Map<string, string | null>;
+  enumValuesByColumn?: Record<string, string[]>;
   fkColumns?: Record<string, FkRef>;
   onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
 }
@@ -36,11 +44,13 @@ export function DataGrid({
   onCellDoubleClick,
   onCellCommit,
   onCellCancel,
+  onCellContextMenu,
   selectedRows = new Set(),
   onRowSelect,
   changedRows,
   editingCell,
   cellOverrideValues,
+  enumValuesByColumn,
   fkColumns,
   onFkNavigate,
 }: DataGridProps) {
@@ -146,6 +156,8 @@ export function DataGrid({
                 onCellDoubleClick={(colIdx) => onCellDoubleClick?.(absoluteIdx, colIdx)}
                 onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(absoluteIdx, colIdx, val) : undefined}
                 onCellCancel={onCellCancel}
+                onCellContextMenu={onCellContextMenu ? (event, colIdx, cellValue, row) => onCellContextMenu(event, absoluteIdx, colIdx, cellValue, row) : undefined}
+                enumValuesByColumn={enumValuesByColumn}
                 onFkNavigate={onFkNavigate}
               />
             );

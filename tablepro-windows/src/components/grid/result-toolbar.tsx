@@ -1,6 +1,9 @@
 import React from 'react';
-import { Download, Code2 } from 'lucide-react';
-import type { QueryResult } from '../../types/query';
+import { Download, Code2, Loader2 } from 'lucide-react';
+import type { ColumnInfo, QueryResult } from '../../types/query';
+import { useConnectionStore } from '../../stores/connectionStore';
+import { useQueryProgress } from '../../hooks/useQueryProgress';
+import { QuickSearchBar } from '../filter/quick-search-bar';
 
 export type ActiveTab = 'results' | 'messages';
 
@@ -11,6 +14,11 @@ interface ResultToolbarProps {
   error: string | null;
   isTableMode: boolean;
   total: number;
+  approximateCount?: number | null;
+  quickSearchColumns?: ColumnInfo[];
+  quickSearchTerm?: string;
+  onQuickSearch?: (term: string, whereClause: string) => void;
+  onQuickSearchClear?: () => void;
   onExport: () => void;
   onOpenQueryEditor?: () => void;
 }
@@ -22,9 +30,20 @@ export function ResultToolbar({
   error,
   isTableMode,
   total,
+  approximateCount,
+  quickSearchColumns = [],
+  quickSearchTerm = '',
+  onQuickSearch,
+  onQuickSearchClear,
   onExport,
   onOpenQueryEditor,
 }: ResultToolbarProps) {
+  const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
+  const sessionId = useConnectionStore((s) =>
+    selectedConnectionId ? s.sessionIds.get(selectedConnectionId) : undefined,
+  );
+  const queryProgress = useQueryProgress(sessionId ?? null);
+
   const tabCls = (tab: ActiveTab) =>
     `px-3 py-1 text-xs cursor-pointer border-b-2 ${
       activeTab === tab
@@ -38,7 +57,11 @@ export function ResultToolbar({
         Results
         {result && (
           <span className="ml-1.5 rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-700">
-            {isTableMode ? total.toLocaleString() : result.rows.length}
+            {isTableMode
+              ? (typeof approximateCount === 'number' && approximateCount > 0
+                ? `~${approximateCount.toLocaleString()}`
+                : total.toLocaleString())
+              : result.rows.length}
           </span>
         )}
       </button>
@@ -47,7 +70,22 @@ export function ResultToolbar({
         {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />}
       </button>
 
+      {isTableMode && onQuickSearch && onQuickSearchClear && (
+        <QuickSearchBar
+          columns={quickSearchColumns}
+          value={quickSearchTerm}
+          onSearch={onQuickSearch}
+          onClear={onQuickSearchClear}
+        />
+      )}
+
       <div className="ml-auto flex items-center gap-2 px-3">
+        {queryProgress.statusText && (
+          <span className="flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-300">
+            {queryProgress.isRunning && <Loader2 size={10} className="animate-spin" />}
+            {queryProgress.error ? `Error: ${queryProgress.error}` : queryProgress.statusText}
+          </span>
+        )}
         {onOpenQueryEditor && (
           <button
             onClick={onOpenQueryEditor}

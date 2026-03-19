@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { categorizeColumn } from "../../types/column-type";
+import { EnumCellEditor } from "./enum-cell-editor";
 
 interface CellEditorProps {
   value: string | null;
   columnName: string;
   typeName: string;
+  enumValues?: string[];
   onCommit: (v: string | null) => void;
   onCancel: () => void;
   autoFocus?: boolean;
@@ -15,6 +17,7 @@ export function CellEditor({
   value,
   columnName: _columnName,
   typeName,
+  enumValues = [],
   onCommit,
   onCancel,
   autoFocus = true,
@@ -59,6 +62,27 @@ export function CellEditor({
   };
 
   const renderInput = () => {
+    if (category === "enum" && enumValues.length > 0) {
+      const isSet = typeName.toUpperCase().startsWith("SET");
+      return (
+        <EnumCellEditor
+          values={enumValues}
+          value={inputValue}
+          isSet={isSet}
+          isNull={isNull}
+          disabled={false}
+          onChangeValue={(next) => {
+            setIsNull(false);
+            setInputValue(next);
+          }}
+          onChangeSetValues={(next) => {
+            setIsNull(false);
+            setInputValue(next.join(","));
+          }}
+        />
+      );
+    }
+
     if (category === "boolean") {
       let selectVal = "";
       if (!isNull) {

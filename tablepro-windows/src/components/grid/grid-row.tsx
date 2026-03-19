@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { ColumnInfo } from '../../types/query';
 import type { FkRef } from '../../stores/schemaStore';
+import { CellEditor } from './cell-editor';
 
 interface GridRowProps {
   rowIndex: number;
@@ -14,11 +15,18 @@ interface GridRowProps {
   editingCell?: { rowIdx: number; colIdx: number } | null;
   nullDisplay: string;
   virtualTop: number;
+  enumValuesByColumn?: Record<string, string[]>;
   fkColumns?: Record<string, FkRef>;
   onRowClick: (e: React.MouseEvent) => void;
   onCellDoubleClick?: (colIdx: number) => void;
   onCellCommit?: (colIdx: number, newValue: string | null) => void;
   onCellCancel?: () => void;
+  onCellContextMenu?: (
+    event: React.MouseEvent<HTMLDivElement>,
+    colIdx: number,
+    cellValue: string | null,
+    row: (string | null)[],
+  ) => void;
   onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
 }
 
@@ -54,11 +62,13 @@ export function GridRow({
   editingCell,
   nullDisplay,
   virtualTop,
+  enumValuesByColumn,
   fkColumns,
   onRowClick,
   onCellDoubleClick,
   onCellCommit,
   onCellCancel,
+  onCellContextMenu,
   onFkNavigate,
 }: GridRowProps) {
   return (
@@ -86,12 +96,17 @@ export function GridRow({
             className="flex-shrink-0 px-2 flex items-center border-r border-zinc-100 dark:border-zinc-800 overflow-hidden cursor-default"
             style={{ width, height: 28 }}
             onDoubleClick={() => onCellDoubleClick?.(colIdx)}
+            onContextMenu={(event) => onCellContextMenu?.(event, colIdx, cellValue, row)}
           >
             {isEditing ? (
-              <CellInput
-                initialValue={cellValue}
+              <CellEditor
+                value={cellValue}
+                columnName={col.name}
+                typeName={col.typeName}
+                enumValues={enumValuesByColumn?.[col.name]}
                 onCommit={(val) => onCellCommit?.(colIdx, val)}
                 onCancel={() => onCellCancel?.()}
+                autoFocus
               />
             ) : cellValue === null ? (
               <span className="italic text-zinc-400 dark:text-zinc-600">{nullDisplay}</span>
@@ -117,44 +132,5 @@ export function GridRow({
         );
       })}
     </div>
-  );
-}
-
-function CellInput({
-  initialValue,
-  onCommit,
-  onCancel,
-}: {
-  initialValue: string | null | undefined;
-  onCommit: (value: string | null) => void;
-  onCancel: () => void;
-}) {
-  const [value, setValue] = useState(initialValue ?? '');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, []);
-
-  const commit = () => {
-    onCommit(value === '' ? null : value);
-  };
-
-  return (
-    <input
-      ref={inputRef}
-      className="w-full h-full bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 text-xs outline-none border border-blue-500 rounded-sm px-1"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') { e.preventDefault(); commit(); }
-        else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-        e.stopPropagation();
-      }}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
-    />
   );
 }
