@@ -74,6 +74,46 @@ export const switchDatabase = (sessionId: string, database: string): Promise<voi
 export const fetchDdl = (sessionId: string, table: string, schema?: string): Promise<string> =>
   invoke("fetch_ddl", { sessionId, table, schema });
 
+export interface CreateTableColumnDefinition {
+  name: string;
+  dataType: string;
+  nullable: boolean;
+  defaultValue?: string;
+  primaryKey: boolean;
+  autoIncrement: boolean;
+}
+
+export interface CreateTableDefinition {
+  tableName: string;
+  schema?: string;
+  columns: CreateTableColumnDefinition[];
+}
+
+export interface CreateTableResult {
+  ddl: string;
+}
+
+export const createTable = (
+  sessionId: string,
+  tableDefinition: CreateTableDefinition,
+): Promise<CreateTableResult> =>
+  invoke("create_table", { sessionId, tableDefinition });
+
+export const fetchEnumValues = (
+  sessionId: string,
+  table: string,
+  column: string,
+  schema: string | null,
+): Promise<string[]> =>
+  invoke("fetch_enum_values", { sessionId, table, column, schema });
+
+export const fetchApproximateCount = (
+  sessionId: string,
+  table: string,
+  schema: string | null,
+): Promise<number> =>
+  invoke("fetch_approximate_count", { sessionId, table, schema });
+
 // Schema commands (PostgreSQL)
 export const fetchSchemas = (sessionId: string): Promise<string[]> =>
   invoke("fetch_schemas", { sessionId });
@@ -150,6 +190,22 @@ export interface SaveResult {
 }
 export const saveChanges = (sessionId: string, payload: SavePayload): Promise<SaveResult> =>
   invoke('save_changes', { sessionId, payload });
+
+export type RowSqlFormat = 'INSERT' | 'UPDATE';
+
+export interface GenerateRowSqlPayload {
+  table: string;
+  schema: string | null;
+  columns: string[];
+  primaryKeys: string[];
+  rows: (string | number | boolean | null | Record<string, unknown> | unknown[])[][];
+  outputFormat: RowSqlFormat;
+}
+
+export const generateRowSql = (
+  sessionId: string,
+  payload: GenerateRowSqlPayload,
+): Promise<string> => invoke('generate_row_sql', { sessionId, payload });
 
 // Export commands
 export interface ExportOptions {

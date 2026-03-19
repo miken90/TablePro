@@ -6,6 +6,7 @@ import { useQueryStore } from "../../stores/queryStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSchemaStore } from "../../stores/schemaStore";
+import { useQueryProgress } from "../../hooks/useQueryProgress";
 
 type SqlDialect = "postgresql" | "mysql" | "mssql" | "standard";
 
@@ -99,7 +100,11 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
   const execute = useQueryStore((s) => s.execute);
   const setQueryText = useQueryStore((s) => s.setQueryText);
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
+  const getSessionId = useConnectionStore((s) => s.getSessionId);
   const settings = useSettingsStore((s) => s.settings);
+
+  const activeSessionId = selectedConnectionId ? getSessionId(selectedConnectionId) : null;
+  const queryProgress = useQueryProgress(activeSessionId);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -296,6 +301,11 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
           fontSize: `${settings.editorFontSize}px`,
         }}
       />
+      {queryProgress.isRunning && (
+        <div className="border-t border-zinc-200 bg-zinc-50 px-3 py-1 text-[10px] text-blue-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-blue-300">
+          Running query… {(queryProgress.elapsedMs / 1000).toFixed(1)}s
+        </div>
+      )}
     </div>
   );
 }

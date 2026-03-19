@@ -1,8 +1,52 @@
-use tauri::State;
-use tokio::sync::Mutex;
+use serde::Serialize;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Emitter, State};
+use tokio::sync::{watch, Mutex};
+use uuid::Uuid;
 
 use crate::models::{AppError, QueryResult};
 use crate::services::ConnectionManager;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryStartedEvent {
+    session_id: String,
+    query_id: String,
+    timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryProgressEvent {
+    session_id: String,
+    query_id: String,
+    elapsed_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryCompletedEvent {
+    session_id: String,
+    query_id: String,
+    elapsed_ms: u64,
+    row_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryErrorEvent {
+    session_id: String,
+    query_id: String,
+    elapsed_ms: u64,
+    error: String,
+}
+
+fn unix_timestamp_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 /// Basic sanity check for WHERE clauses — rejects obviously dangerous patterns.
 /// Not full SQL injection prevention (users have raw SQL access anyway).
@@ -22,6 +66,7 @@ fn validate_where_clause(clause: &str) -> Result<(), AppError> {
 /// Execute a SQL statement and return result set.
 #[tauri::command]
 pub async fn execute_query(
+    app: AppHandle,
     session_id: String,
     sql: String,
     _params: Option<Vec<String>>,
@@ -31,8 +76,88 @@ pub async fn execute_query(
         let mgr = manager.lock().await;
         mgr.get_driver(&session_id)?
     };
-    tracing::info!(session_id = %session_id, "execute_query: {}", &sql);
-    driver.execute(&sql).await
+
+    let query_id = Uuid::new_v4().to_string();
+    let started_at = Instant::now();
+
+    let _ = app.emit(
+        "query:started",
+        QueryStartedEvent {
+            session_id: session_id.clone(),
+            query_id: query_id.clone(),
+            timestamp: unix_timestamp_ms(),
+        },
+    );
+
+    let (progress_stop_tx, mut progress_stop_rx) = watch::channel(false);
+    let app_for_progress = app.clone();
+    let session_for_progress = session_id.clone();
+    let query_for_progress = query_id.clone();
+    let progress_started_at = started_at;
+
+    let progress_task = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_millis(500)) => {
+                    let _ = app_for_progress.emit(
+                        "query:progress",
+                        QueryProgressEvent {
+                            session_id: session_for_progress.clone(),
+                            query_id: query_for_progress.clone(),
+                            elapsed_ms: progress_started_at.elapsed().as_millis() as u64,
+                        },
+                    );
+                }
+                changed = progress_stop_rx.changed() => {
+                    if changed.is_err() || *progress_stop_rx.borrow() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    tracing::info!(session_id = %session_id, query_id = %query_id, "execute_query: {}", &sql);
+    let execute_result = driver.execute(&sql).await;
+
+    let _ = progress_stop_tx.send(true);
+    let _ = progress_task.await;
+
+    let elapsed_ms = started_at.elapsed().as_millis() as u64;
+
+    match execute_result {
+        Ok(result) => {
+            let row_count = if result.affected_rows > 0 {
+                result.affected_rows as usize
+            } else {
+                result.rows.len()
+            };
+
+            let _ = app.emit(
+                "query:completed",
+                QueryCompletedEvent {
+                    session_id,
+                    query_id,
+                    elapsed_ms,
+                    row_count,
+                },
+            );
+
+            Ok(result)
+        }
+        Err(error) => {
+            let _ = app.emit(
+                "query:error",
+                QueryErrorEvent {
+                    session_id,
+                    query_id,
+                    elapsed_ms,
+                    error: error.to_string(),
+                },
+            );
+            Err(error)
+        }
+    }
 }
 
 /// Fetch a paginated slice of rows from a table.

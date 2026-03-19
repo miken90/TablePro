@@ -1,4 +1,5 @@
-import { Play, Square, Settings, Unplug, Clock } from "lucide-react";
+import { Clock, Play, Settings, Square, Unplug } from "lucide-react";
+import { formatTagLabel, tagClassName } from "../connection/connection-tag-picker";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -108,9 +109,17 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
         {/* Connection status */}
         <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
           <span className={`h-2 w-2 rounded-full ${statusColors[status] ?? statusColors.disconnected}`} />
+          {connection?.color && (
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: connection.color }} title={connection.color} />
+          )}
           <span className="max-w-[140px] truncate">
             {connection ? `${connection.name} · ${connection.config.database}` : "Not connected"}
           </span>
+          {connection?.tag && (
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${tagClassName(connection.tag)}`}>
+              {formatTagLabel(connection.tag)}
+            </span>
+          )}
           {selectedConnectionId && (
             <button
               onClick={() => void handleDisconnect()}
