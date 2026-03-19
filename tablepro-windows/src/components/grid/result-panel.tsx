@@ -4,8 +4,16 @@ import { useQueryStore } from '../../stores/queryStore';
 import { useSchemaStore } from '../../stores/schemaStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useQueryLogStore } from '../../stores/queryLogStore';
-import { fetchRowsFiltered, fetchCountFiltered } from '../../ipc/commands';
-import type { QueryResult } from '../../types/query';
+import { useFilterStore } from '../../stores/filterStore';
+import {
+  fetchApproximateCount,
+  fetchCountFiltered,
+  fetchEnumValues,
+  fetchRowsFiltered,
+  generateRowSql,
+  type RowSqlFormat,
+} from '../../ipc/commands';
+import type { ColumnInfo, QueryResult } from '../../types/query';
 import { DataGrid } from './data-grid';
 import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
@@ -16,12 +24,15 @@ import { ResultToolbar } from './result-toolbar';
 import type { ActiveTab } from './result-toolbar';
 import { ResultStatusBar } from './result-status-bar';
 import { useTableSave } from './use-table-save';
+import { GridContextMenu } from './grid-context-menu';
 
 interface ResultPanelProps {
+  tabId?: string;
   tableName?: string;
   schema?: string | null;
   sessionId?: string;
   activeWhereClause?: string;
+  quickSearchColumns?: ColumnInfo[];
   onRowSelect?: (rowIndex: number | null) => void;
   onOpenQueryEditor?: () => void;
 }
@@ -31,12 +42,40 @@ function buildOrderByClause(sorting: SortingState): string | null {
   return sorting.map(s => `"${s.id}" ${s.desc ? 'DESC' : 'ASC'}`).join(', ');
 }
 
-export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, onRowSelect: onRowSelectProp, onOpenQueryEditor }: ResultPanelProps) {
+function toClipboardText(value: string | null): string {
+  return value ?? '';
+}
+
+export function ResultPanel({
+  tabId,
+  tableName,
+  schema,
+  sessionId,
+  activeWhereClause,
+  quickSearchColumns = [],
+  onRowSelect: onRowSelectProp,
+  onOpenQueryEditor,
+}: ResultPanelProps) {
   const queryResult = useQueryStore((s) => s.result);
   const queryError = useQueryStore((s) => s.error);
   const isExecuting = useQueryStore((s) => s.isExecuting);
   const activeConnectionId = useQueryStore((s) => s.activeConnectionId);
   const queryText = useQueryStore((s) => s.queryText);
+
+  // Quick search state — only active in table-browse mode (tabId provided)
+  const setQuickSearch = useFilterStore((s) => s.setQuickSearch);
+  const clearQuickSearch = useFilterStore((s) => s.clearQuickSearch);
+  const quickSearchTerm = useFilterStore((s) =>
+    tabId ? (s.byTab[tabId]?.quickSearchTerm ?? '') : '',
+  );
+
+  const handleQuickSearch = useCallback((term: string, whereClause: string) => {
+    if (tabId) setQuickSearch(tabId, term, whereClause);
+  }, [tabId, setQuickSearch]);
+
+  const handleQuickSearchClear = useCallback(() => {
+    if (tabId) clearQuickSearch(tabId);
+  }, [tabId, clearQuickSearch]);
 
   const fkMap = useSchemaStore((s) => s.fkMap);
   const fetchForeignKeysForTable = useSchemaStore((s) => s.fetchForeignKeysForTable);
@@ -50,6 +89,16 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
   const [sorting, setSorting] = useState<SortingState>([]);
   const [showExport, setShowExport] = useState(false);
   const [editingCell, setEditingCell] = useState<{ rowIdx: number; colIdx: number } | null>(null);
+  const [approximateCount, setApproximateCount] = useState<number | null>(null);
+  const [enumValuesByColumn, setEnumValuesByColumn] = useState<Record<string, string[]>>({});
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    rowIndex: number;
+    colIndex: number;
+    cellValue: string | null;
+    row: (string | null)[];
+  } | null>(null);
 
   // Server-side table data (when browsing a table)
   const [tableResult, setTableResult] = useState<QueryResult | null>(null);
@@ -59,6 +108,10 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
   const fetchSeqRef = useRef(0);
 
   const isTableMode = !!tableName && !!sessionId;
+  const result = isTableMode ? tableResult : queryResult;
+  const error = isTableMode ? fetchError : queryError;
+  const total = isTableMode ? totalCount : (queryResult?.rows.length ?? 0);
+  const loading = isTableMode ? isFetching : isExecuting;
 
   const fetchTableData = useCallback(async (
     sid: string, tbl: string, sch: string | null,
@@ -83,6 +136,7 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
       if (seq !== fetchSeqRef.current) return;
       setTableResult(rows);
       setTotalCount(typeof count === 'number' ? count : 0);
+      setApproximateCount(null);
       useQueryLogStore.getState().update(logId, { status: 'success', durationMs: Date.now() - startMs, rowCount: rows.rows.length });
     } catch (err) {
       if (seq !== fetchSeqRef.current) return;
@@ -97,7 +151,12 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
   }, []);
 
   useEffect(() => {
-    if (!isTableMode) { setTableResult(null); setTotalCount(0); return; }
+    if (!isTableMode) {
+      setTableResult(null);
+      setTotalCount(0);
+      setApproximateCount(null);
+      return;
+    }
     fetchTableData(sessionId!, tableName!, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
   }, [isTableMode, sessionId, tableName, schema, page, pageSize, activeWhereClause, sorting, fetchTableData]);
 
@@ -105,11 +164,18 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
   const prevFilterRef = useRef(activeWhereClause);
   useEffect(() => {
     if (prevTableRef.current !== tableName) {
-      setPage(1); setSorting([]); setSelectedRows(new Set()); setEditingCell(null);
+      setPage(1);
+      setSorting([]);
+      setSelectedRows(new Set());
+      setEditingCell(null);
+      setApproximateCount(null);
+      setEnumValuesByColumn({});
       prevTableRef.current = tableName;
     }
     if (prevFilterRef.current !== activeWhereClause) {
-      setPage(1); setSelectedRows(new Set()); setEditingCell(null);
+      setPage(1);
+      setSelectedRows(new Set());
+      setEditingCell(null);
       prevFilterRef.current = activeWhereClause;
     }
   }, [tableName, activeWhereClause]);
@@ -118,6 +184,62 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
     if (!isTableMode || !tableName || !sessionId) return;
     fetchForeignKeysForTable(sessionId, tableName, schema ?? undefined);
   }, [isTableMode, sessionId, tableName, schema, fetchForeignKeysForTable]);
+
+  useEffect(() => {
+    if (!isTableMode || !tableName || !sessionId) return;
+    let cancelled = false;
+    fetchApproximateCount(sessionId, tableName, schema ?? null)
+      .then((count) => {
+        if (!cancelled && Number.isFinite(count)) {
+          setApproximateCount(count);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setApproximateCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTableMode, sessionId, tableName, schema]);
+
+  useEffect(() => {
+    if (!isTableMode || !tableName || !sessionId || !result) return;
+
+    const enumColumns = result.columns.filter((col) => {
+      const upper = col.typeName.toUpperCase();
+      return upper.startsWith('ENUM') || upper.startsWith('SET');
+    });
+
+    if (enumColumns.length === 0) {
+      setEnumValuesByColumn({});
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        enumColumns.map(async (col) => {
+          try {
+            const values = await fetchEnumValues(sessionId, tableName, col.name, schema ?? null);
+            return [col.name, values] as const;
+          } catch {
+            return [col.name, [] as string[]] as const;
+          }
+        }),
+      );
+
+      if (cancelled) return;
+      const next: Record<string, string[]> = {};
+      for (const [colName, values] of entries) {
+        if (values.length > 0) next[colName] = values;
+      }
+      setEnumValuesByColumn(next);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTableMode, sessionId, tableName, schema, result]);
 
   const currentFkColumns = tableName ? fkMap[tableName] : undefined;
 
@@ -129,16 +251,18 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
     useEditorStore.getState().updateTabContent(tabId, sql);
   }, []);
 
-  const result = isTableMode ? tableResult : queryResult;
-  const error = isTableMode ? fetchError : queryError;
-  const total = isTableMode ? totalCount : (queryResult?.rows.length ?? 0);
-  const loading = isTableMode ? isFetching : isExecuting;
-
   const { isSaving, saveError, dismissSaveError, handleSave, changesSnapshot, recordCellChange } = useTableSave({
     tableName, schema, sessionId, result, fetchTableData, page, pageSize, activeWhereClause, sorting,
   });
 
   const hasChanges = useMemo(() => Object.keys(changesSnapshot).length > 0, [changesSnapshot]);
+
+  const getEffectiveCellValue = useCallback((rowIdx: number, colIdx: number, fallback: string | null) => {
+    const rowChange = changesSnapshot[rowIdx];
+    if (!rowChange) return fallback;
+    const override = rowChange.cellChanges.find((cc) => cc.columnIndex === colIdx);
+    return override ? override.newValue : fallback;
+  }, [changesSnapshot]);
 
   const handleRowSelect = useCallback((rowIdx: number, mode: 'single' | 'range' | 'toggle') => {
     setSelectedRows(prev => {
@@ -175,6 +299,90 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
   }, [result, recordCellChange]);
 
   const handleCellCancel = useCallback(() => setEditingCell(null), []);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const handleCellContextMenu = useCallback(
+    (
+      event: React.MouseEvent<HTMLDivElement>,
+      rowIdx: number,
+      colIdx: number,
+      cellValue: string | null,
+      row: (string | null)[],
+    ) => {
+      event.preventDefault();
+      setContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        rowIndex: rowIdx,
+        colIndex: colIdx,
+        cellValue,
+        row,
+      });
+    },
+    [],
+  );
+
+  const copySelectedRowsSql = useCallback(
+    async (outputFormat: RowSqlFormat) => {
+      if (!sessionId || !tableName || !result || !contextMenu) return;
+
+      const rowIndexes = selectedRows.has(contextMenu.rowIndex)
+        ? Array.from(selectedRows).sort((a, b) => a - b)
+        : [contextMenu.rowIndex];
+
+      const rows = rowIndexes.map((idx) => {
+        const source = result.rows[idx] ?? [];
+        return result.columns.map((_, colIdx) =>
+          getEffectiveCellValue(idx, colIdx, source[colIdx] ?? null),
+        );
+      });
+
+      const payload = {
+        table: tableName,
+        schema: schema ?? null,
+        columns: result.columns.map((c) => c.name),
+        primaryKeys: result.columns.filter((c) => c.isPrimaryKey).map((c) => c.name),
+        rows,
+        outputFormat,
+      };
+
+      const sql = await generateRowSql(sessionId, payload);
+      if (sql) {
+        await navigator.clipboard.writeText(sql);
+      }
+      closeContextMenu();
+    },
+    [
+      sessionId,
+      tableName,
+      result,
+      contextMenu,
+      selectedRows,
+      schema,
+      closeContextMenu,
+      getEffectiveCellValue,
+    ],
+  );
+
+  const copyContextRowTsv = useCallback(async () => {
+    if (!contextMenu || !result) return;
+    const row = result.columns
+      .map((_, colIdx) =>
+        toClipboardText(
+          getEffectiveCellValue(contextMenu.rowIndex, colIdx, contextMenu.row[colIdx] ?? null),
+        ),
+      )
+      .join('\t');
+    await navigator.clipboard.writeText(row);
+    closeContextMenu();
+  }, [contextMenu, result, closeContextMenu, getEffectiveCellValue]);
+
+  const copyContextCell = useCallback(async () => {
+    if (!contextMenu) return;
+    await navigator.clipboard.writeText(toClipboardText(contextMenu.cellValue));
+    closeContextMenu();
+  }, [contextMenu, closeContextMenu]);
 
   const handleSortChange = useCallback((colName: string) => {
     setSorting(prev => {
@@ -239,6 +447,11 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
         error={error}
         isTableMode={isTableMode}
         total={total}
+        approximateCount={isTableMode ? approximateCount : null}
+        quickSearchColumns={isTableMode ? quickSearchColumns : []}
+        quickSearchTerm={isTableMode ? quickSearchTerm : ''}
+        onQuickSearch={isTableMode ? handleQuickSearch : undefined}
+        onQuickSearchClear={isTableMode ? handleQuickSearchClear : undefined}
         onExport={() => setShowExport(true)}
         onOpenQueryEditor={onOpenQueryEditor}
       />
@@ -265,6 +478,8 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
                   onCellDoubleClick={handleCellDoubleClick}
                   onCellCommit={handleCellCommit}
                   onCellCancel={handleCellCancel}
+                  onCellContextMenu={handleCellContextMenu}
+                  enumValuesByColumn={enumValuesByColumn}
                   fkColumns={currentFkColumns}
                   onFkNavigate={handleFkNavigate}
                 />
@@ -286,6 +501,17 @@ export function ResultPanel({ tableName, schema, sessionId, activeWhereClause, o
         )}
         {!loading && activeTab === 'messages' && <ResultStatusBar logEntries={logEntries} />}
       </div>
+      {contextMenu && (
+        <GridContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeContextMenu}
+          onCopyAsInsert={() => copySelectedRowsSql('INSERT')}
+          onCopyAsUpdate={() => copySelectedRowsSql('UPDATE')}
+          onCopyRowTsv={copyContextRowTsv}
+          onCopyCell={copyContextCell}
+        />
+      )}
       {showExport && result && activeConnectionId && (
         <ExportDialog
           sessionId={activeConnectionId}
