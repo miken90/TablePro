@@ -149,6 +149,8 @@
 body {
   margin: 0;
   font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
   overflow: hidden;
   user-select: none;
 }

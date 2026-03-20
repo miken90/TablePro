@@ -4,6 +4,9 @@ import { useSettingsStore } from "../stores/settingsStore";
 function applyTheme(theme: string) {
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const isDark = theme === "dark" || (theme === "system" && prefersDark);
+  // CSS tokens default to dark in :root; .light class overrides for light mode
+  document.documentElement.classList.toggle("light", !isDark);
+  // Keep .dark for any remaining dark: variant classes
   document.documentElement.classList.toggle("dark", isDark);
 }
 
