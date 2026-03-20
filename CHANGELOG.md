@@ -61,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows: Dev runtime crash — Tauri CLI `dev` command silently killed the app process after 2-5 minutes even with `--no-watch`; replaced with independent Vite + cargo dev script (`scripts/dev.ps1`) that bypasses Tauri CLI process management
+- Windows: Updater plugin mismatch — `tauri-plugin-updater` was in Cargo.toml deps and capabilities but never registered in the Tauri builder; now properly initialized
 - Windows: Reduced backend crash risk during shutdown and startup — `ConnectionManager` now drops active drivers before releasing plugin manager state, and query history initialization falls back to in-memory storage instead of panicking when the on-disk database cannot open
 - Windows: Avoided a post-connect metadata prefetch burst that could overwhelm Tauri IPC/plugin calls and destabilize dev runtime on large schemas; column metadata now stays demand-driven instead of loading every table up front
 - Windows: Added renderer crash instrumentation so uncaught frontend errors, unhandled promise rejections, and startup beacons are written to `%APPDATA%/TablePro/renderer-errors.log` for future crash triage

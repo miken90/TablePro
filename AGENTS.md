@@ -39,7 +39,7 @@ powershell.exe -Command "cd tablepro-windows; cargo clippy --manifest-path src-t
 powershell.exe -Command "cd tablepro-windows; npx vitest run"
 ```
 
-> **Note:** `npm run dev:tauri` runs `tauri dev --no-watch`. The Tauri file watcher causes silent crashes on Windows (kills the running app to rebuild when it detects artifact changes in `src-tauri/target/`, but Windows file-locks prevent overwriting the exe/dll). When you need to pick up Rust changes, Ctrl+C and re-run.
+> **Note:** `npm run dev:tauri` runs `scripts/dev.ps1` which launches Vite and `cargo run` independently (bypassing the Tauri CLI `dev` command, which silently kills the app on Windows after a few minutes). Close the app window to stop; the script auto-cleans up Vite. Use `npm run dev:tauri:cli` for the legacy `tauri dev --no-watch` fallback. When you need to pick up Rust changes, close and re-run.
 
 - **Use native bash** only for: git, gh, file operations, reading macOS reference code
 - **Path translation**: `wslpath -w` (WSL→Windows), `wslpath -u` (Windows→WSL)
