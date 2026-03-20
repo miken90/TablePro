@@ -29,4 +29,4 @@ pub use settings::{get_settings, log_renderer_error, set_settings};
 pub use storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
-pub use structure::create_table;
+pub use structure::{apply_alter, create_table, generate_alter_sql_command};

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Editable Structure View: inline column editing (add/modify/drop) with ALTER TABLE preview and per-driver SQL generation (Postgres, MySQL, MSSQL; SQLite drops/modifies disabled)
+- JSON record view in Inspector panel: toggle between field list and pretty-printed JSON with copy button; type-aware coercion (numbers, booleans, JSON/JSONB, binary)
+- SQL Preview button in change toolbar: shows generated BEGIN/COMMIT SQL before saving with copy-to-clipboard
+- SSH key file picker now includes "All Files (*)" filter and `.ppk` extension; opens in `~/.ssh/` by default
+- Save confirmation dialog: Ctrl+S and Save button now show SQL preview modal before executing changes, with Execute/Cancel/Copy SQL actions
+- F5 refresh in table-browse mode: refreshes table data (not just schema); prompts Save & Refresh / Discard & Refresh / Cancel when unsaved changes exist
+- Cell tooltip: hovering over truncated cells shows full value as native tooltip (capped at 1024 chars)
+- Column auto-fit: double-clicking resize handle auto-fits column width to content using Canvas text measurement (capped at 600px)
+
+### Fixed
+
+- SSH tunnel connections hanging indefinitely: blocking FFI driver calls now run on dedicated threads (`spawn_blocking`) so the Tauri async runtime stays free to service SSH tunnel forwarding tasks
+- Connection mutex held too long during SSH connect/test: lock is now released before driver connect so tunnel I/O can proceed
+
+- Grid header horizontal scroll: replaced dual-container scroll sync with single scroll container + `position: sticky` — header and body now scroll together natively
+
 - Design system foundation: semantic color tokens, typography scale, spacing system, CSS custom properties for light/dark themes
 - Environment badges for connections (PROD/STAGE/DEV/LOCAL) with visual distinction
 - Connection status indicators (connected/connecting/disconnected/error) with animated states  

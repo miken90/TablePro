@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use uuid::Uuid;
-
 use crate::models::{AppError, ConnectionConfig, ConnectionStatus};
 use crate::plugin::{DatabaseDriver, PluginManager};
 use crate::services::ssh_tunnel::SshTunnelManager;
@@ -54,42 +52,20 @@ impl ConnectionManager {
         );
     }
 
-    /// Open a new session and return its UUID.
+    /// Create an SSH tunnel for `session_id` and return the local port.
     ///
-    /// If `config.ssh_enabled`, first creates an SSH tunnel and overrides the
-    /// DB host/port to point at the local tunnel endpoint.
-    pub async fn connect(&mut self, config: &ConnectionConfig) -> Result<String, AppError> {
-        // Prepare the effective config (potentially SSH-tunnelled) and session ID.
-        // If SSH is enabled we pre-generate the session ID so it can be used as
-        // the tunnel key before we know the final session ID.
-        let (session_id, connect_config) = if config.ssh_enabled {
-            let id = Uuid::new_v4().to_string();
-            let local_port = self
-                .ssh_tunnels
-                .create_tunnel(&id, config)
-                .await
-                .map_err(|e| AppError::Other(format!("SSH tunnel failed: {e}")))?;
-
-            let mut cfg = config.clone();
-            cfg.host = "127.0.0.1".to_string();
-            cfg.port = local_port;
-            (id, cfg)
-        } else {
-            (Uuid::new_v4().to_string(), config.clone())
-        };
-
-        let driver: Arc<dyn DatabaseDriver> = Arc::from(
-            self.plugin_manager
-                .create_driver(&connect_config.db_type, &connect_config)?,
-        );
-        driver.connect().await.map_err(|e| {
-            tracing::error!(db_type = %connect_config.db_type, "connect failed: {e}");
-            e
-        })?;
-
-        self.insert_connection(session_id.clone(), driver, connect_config.clone());
-        tracing::info!(session_id = %session_id, db_type = %connect_config.db_type, ssh = config.ssh_enabled, "Session opened");
-        Ok(session_id)
+    /// The caller is responsible for creating the driver and connecting to
+    /// `127.0.0.1:<local_port>` *after* releasing the manager lock, so the
+    /// Tauri runtime stays free to service the tunnel's async tasks.
+    pub async fn create_ssh_tunnel(
+        &mut self,
+        session_id: &str,
+        config: &ConnectionConfig,
+    ) -> Result<u16, AppError> {
+        self.ssh_tunnels
+            .create_tunnel(session_id, config)
+            .await
+            .map_err(|e| AppError::Other(format!("SSH tunnel failed: {e}")))
     }
 
     /// Close a session (and its SSH tunnel if any).
@@ -111,41 +87,6 @@ impl ConnectionManager {
             .get(id)
             .map(|c| c.status.clone())
             .unwrap_or(ConnectionStatus::Disconnected)
-    }
-
-    /// Test a config without persisting a session.
-    ///
-    /// If SSH is enabled, creates a temporary tunnel, tests the DB, then closes both.
-    pub async fn test_connection(&self, config: &ConnectionConfig) -> Result<(), AppError> {
-        if config.ssh_enabled {
-            // Spin up a temporary SSH tunnel for the test
-            let mut temp_mgr = SshTunnelManager::new();
-            let local_port = temp_mgr
-                .create_tunnel("__test__", config)
-                .await
-                .map_err(|e| AppError::Other(format!("SSH tunnel failed: {e}")))?;
-
-            let mut test_cfg = config.clone();
-            test_cfg.host = "127.0.0.1".to_string();
-            test_cfg.port = local_port;
-
-            let driver: Arc<dyn DatabaseDriver> = Arc::from(
-                self.plugin_manager
-                    .create_driver(&test_cfg.db_type, &test_cfg)?,
-            );
-            driver.connect().await?;
-            let ping = driver.ping().await;
-            driver.disconnect();
-            temp_mgr.close_tunnel("__test__");
-            ping
-        } else {
-            let driver: Arc<dyn DatabaseDriver> =
-                Arc::from(self.plugin_manager.create_driver(&config.db_type, config)?);
-            driver.connect().await?;
-            let ping = driver.ping().await;
-            driver.disconnect();
-            ping
-        }
     }
 
     /// Borrow the driver for a session (for query/schema calls).

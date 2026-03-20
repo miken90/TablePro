@@ -1,11 +1,16 @@
 import React, { useEffect } from "react";
 import { useChangeStore } from "../../stores/changeStore";
+import { SqlPreviewButton } from "./sql-preview-popover";
 
 interface ChangeToolbarProps {
   onSave: () => void;
+  tableName?: string;
+  schema?: string | null;
+  columns?: string[];
+  primaryKeys?: string[];
 }
 
-export function ChangeToolbar({ onSave }: ChangeToolbarProps) {
+export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys }: ChangeToolbarProps) {
   const { _changes, _undoStack, _redoStack, hasChanges, undo, redo, clear } =
     useChangeStore();
 
@@ -22,18 +27,15 @@ export function ChangeToolbar({ onSave }: ChangeToolbarProps) {
         e.preventDefault();
         redo();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        onSave();
-      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo, onSave]);
+  }, [undo, redo]);
 
   if (!hasChanges) return null;
 
   const changeCount = Object.keys(_changes).length;
+  const showPreview = !!(tableName && columns && primaryKeys);
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700 text-xs">
@@ -41,6 +43,15 @@ export function ChangeToolbar({ onSave }: ChangeToolbarProps) {
         ⚠ {changeCount} unsaved {changeCount === 1 ? "change" : "changes"}
       </span>
       <div className="flex items-center gap-1">
+        {showPreview && (
+          <SqlPreviewButton
+            changes={_changes}
+            tableName={tableName!}
+            schema={schema}
+            columns={columns!}
+            primaryKeys={primaryKeys!}
+          />
+        )}
         <button
           type="button"
           onClick={undo}
@@ -70,7 +81,7 @@ export function ChangeToolbar({ onSave }: ChangeToolbarProps) {
           className="bg-green-600 text-white hover:bg-green-700 px-2 py-0.5 rounded text-xs"
           title="Save changes (Ctrl+S)"
         >
-          Save Changes
+          Save ({changeCount})
         </button>
       </div>
     </div>

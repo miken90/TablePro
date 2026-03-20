@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Plus, Database } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Plus, Database, Pencil, Trash2 } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { ConnectionForm } from "./ConnectionForm";
 import { ConnectionGroupSection } from "./ConnectionGroupSection";
@@ -7,7 +7,7 @@ import type { SavedConnection } from "../../types/connection";
 import { extractErrorMessage } from "../../ipc/error";
 
 export function WelcomeView() {
-  const { connections, groups, loadConnections, loadGroups, connect, getStatus, deleteGroup } =
+  const { connections, groups, loadConnections, loadGroups, connect, getStatus, deleteGroup, deleteConnection } =
     useConnectionStore();
   const [showForm, setShowForm] = useState(false);
   const [editingConn, setEditingConn] = useState<SavedConnection | undefined>();
@@ -34,6 +34,10 @@ export function WelcomeView() {
   const handleEdit = (conn: SavedConnection) => {
     setEditingConn(conn);
     setShowForm(true);
+  };
+
+  const handleDelete = async (conn: SavedConnection) => {
+    await deleteConnection(conn.id);
   };
 
   const handleNewGroup = async () => {
@@ -87,6 +91,7 @@ export function WelcomeView() {
                 onConnect={handleConnect}
                 onEdit={handleEdit}
                 onDelete={() => void deleteGroup(group.id)}
+                onDeleteConnection={handleDelete}
               />
             );
           })}
@@ -103,6 +108,7 @@ export function WelcomeView() {
                     status={getStatus(conn.id)}
                     onConnect={() => void handleConnect(conn)}
                     onEdit={() => handleEdit(conn)}
+                    onDelete={() => void handleDelete(conn)}
                   />
                 ))}
               </div>
@@ -137,13 +143,34 @@ interface CardProps {
   status: string;
   onConnect: () => void;
   onEdit: () => void;
+  onDelete: () => void;
 }
 
-export function ConnectionCard({ conn, connectingId, status, onConnect, onEdit }: CardProps) {
+export function ConnectionCard({ conn, connectingId, status, onConnect, onEdit, onDelete }: CardProps) {
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuPos) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuPos]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenuPos({ x: e.clientX, y: e.clientY });
+  };
+
   return (
     <div
       className="flex items-center gap-2 rounded border border-zinc-200 bg-white p-2.5 dark:border-zinc-700 dark:bg-zinc-800"
       onDoubleClick={onEdit}
+      onContextMenu={handleContextMenu}
     >
       <div
         className={`h-2 w-2 shrink-0 rounded-full ${
@@ -161,6 +188,28 @@ export function ConnectionCard({ conn, connectingId, status, onConnect, onEdit }
       >
         {connectingId === conn.id ? "Connecting…" : "Connect"}
       </button>
+
+      {menuPos && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 min-w-[140px] rounded border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          style={{ left: menuPos.x, top: menuPos.y }}
+        >
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            onClick={() => { setMenuPos(null); onEdit(); }}
+          >
+            <Pencil size={12} /> Edit
+          </button>
+          <div className="my-0.5 border-t border-zinc-200 dark:border-zinc-700" />
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-zinc-100 dark:text-red-400 dark:hover:bg-zinc-800"
+            onClick={() => { setMenuPos(null); onDelete(); }}
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }

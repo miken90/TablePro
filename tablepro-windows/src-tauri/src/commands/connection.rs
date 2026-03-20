@@ -6,23 +6,45 @@ use uuid::Uuid;
 
 use crate::models::{AppError, ConnectionConfig, ConnectionStatus};
 use crate::plugin::DatabaseDriver;
+use crate::services::ssh_tunnel::SshTunnelManager;
 use crate::services::ConnectionManager;
 
 /// Verify that a config can connect — returns Ok(()) on success.
+///
+/// For SSH connections, the entire test runs *without* holding the
+/// ConnectionManager lock so the Tauri runtime stays free to service
+/// the SSH tunnel's async tasks.
 #[tauri::command]
 pub async fn test_connection(
     config: ConnectionConfig,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<(), AppError> {
-    if config.ssh_enabled {
-        let mgr = manager.lock().await;
-        return mgr.test_connection(&config).await;
-    }
-
+    // Grab plugin_manager briefly, then release the lock.
     let plugin_manager = {
         let mgr = manager.lock().await;
         mgr.plugin_manager()
     };
+
+    if config.ssh_enabled {
+        let mut temp_tunnels = SshTunnelManager::new();
+        let local_port = temp_tunnels
+            .create_tunnel("__test__", &config)
+            .await
+            .map_err(|e| AppError::Other(format!("SSH tunnel failed: {e}")))?;
+
+        let mut test_cfg = config.clone();
+        test_cfg.host = "127.0.0.1".to_string();
+        test_cfg.port = local_port;
+
+        let driver: Arc<dyn DatabaseDriver> =
+            Arc::from(plugin_manager.create_driver(&test_cfg.db_type, &test_cfg)?);
+        driver.connect().await?;
+        let ping = driver.ping().await;
+        driver.disconnect();
+        temp_tunnels.close_tunnel("__test__");
+        return ping;
+    }
+
     let driver: Arc<dyn DatabaseDriver> =
         Arc::from(plugin_manager.create_driver(&config.db_type, &config)?);
     driver.connect().await?;
@@ -32,21 +54,48 @@ pub async fn test_connection(
 }
 
 /// Open a persistent connection and return its session ID.
+///
+/// For SSH connections, the tunnel is created and the driver connects
+/// *without* holding the ConnectionManager lock. The lock is only
+/// re-acquired briefly to insert the finished connection.
 #[tauri::command]
 pub async fn connect(
     config: ConnectionConfig,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<String, AppError> {
+    // Both SSH and non-SSH paths: grab plugin_manager, release lock.
+    let plugin_manager = {
+        let mgr = manager.lock().await;
+        mgr.plugin_manager()
+    };
+
     let (session_id, driver): (String, Arc<dyn DatabaseDriver>) = if config.ssh_enabled {
-        let mut mgr = manager.lock().await;
-        let session_id = mgr.connect(&config).await?;
-        let driver = mgr.get_driver(&session_id)?;
+        let session_id = Uuid::new_v4().to_string();
+
+        // Create SSH tunnel without holding the manager lock.
+        let local_port = {
+            let mut mgr = manager.lock().await;
+            mgr.create_ssh_tunnel(&session_id, &config).await?
+        };
+
+        let mut connect_cfg = config.clone();
+        connect_cfg.host = "127.0.0.1".to_string();
+        connect_cfg.port = local_port;
+
+        let driver: Arc<dyn DatabaseDriver> =
+            Arc::from(plugin_manager.create_driver(&connect_cfg.db_type, &connect_cfg)?);
+        driver.connect().await.map_err(|e| {
+            tracing::error!(db_type = %connect_cfg.db_type, "SSH connect failed: {e}");
+            e
+        })?;
+
+        {
+            let mut mgr = manager.lock().await;
+            mgr.insert_connection(session_id.clone(), Arc::clone(&driver), connect_cfg);
+        }
+
         (session_id, driver)
     } else {
-        let plugin_manager = {
-            let mgr = manager.lock().await;
-            mgr.plugin_manager()
-        };
         let session_id = Uuid::new_v4().to_string();
         let driver: Arc<dyn DatabaseDriver> =
             Arc::from(plugin_manager.create_driver(&config.db_type, &config)?);

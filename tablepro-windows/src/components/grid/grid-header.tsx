@@ -13,6 +13,7 @@ interface GridHeaderProps {
   hiddenColumns?: Set<string>;
   onHideColumn?: (colName: string) => void;
   onFilterColumn?: (colName: string) => void;
+  onAutoFit?: (colName: string) => void;
 }
 
 interface MenuState {
@@ -41,6 +42,7 @@ export function GridHeader({
   onResizeStart,
   onHideColumn,
   onFilterColumn,
+  onAutoFit,
 }: GridHeaderProps) {
   const sortMap = new Map(sorting.map(s => [s.id, s.desc ? 'desc' : 'asc'] as const));
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -104,6 +106,10 @@ export function GridHeader({
                 onMouseDown={(e) => {
                   e.stopPropagation();
                   onResizeStart(col.name, e.clientX, width);
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onAutoFit?.(col.name);
                 }}
               />
             </div>

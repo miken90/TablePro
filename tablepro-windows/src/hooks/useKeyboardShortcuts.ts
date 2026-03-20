@@ -19,6 +19,7 @@ interface ShortcutHandlers {
   onInsertRow?: () => void;
   onImportSql?: () => void;
   onShowHelp?: () => void;
+  onRefreshTable?: () => void;
 }
 
 export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
@@ -85,9 +86,10 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
         handlers?.onFormatSql?.();
       }
 
-      // F5 — refresh schema
+      // F5 — refresh table (if in table mode) or refresh schema
       if (e.key === "F5") {
         e.preventDefault();
+        handlers?.onRefreshTable?.();
         if (handlers?.onRefreshSchema) {
           handlers.onRefreshSchema();
         } else if (selectedConnectionId) {

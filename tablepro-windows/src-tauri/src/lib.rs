@@ -23,7 +23,7 @@ use commands::settings::{get_settings, log_renderer_error, set_settings};
 use commands::storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
-use commands::structure::create_table;
+use commands::structure::{apply_alter, create_table, generate_alter_sql_command};
 use plugin::PluginManager;
 use services::ConnectionManager;
 use storage::{ConnectionStore, FilterStore, HistoryStore, SettingsStore};
@@ -75,9 +75,19 @@ pub fn run() {
 
     let connection_manager = ConnectionManager::new(Arc::clone(&plugin_manager));
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init());
+
+    // Only register the updater plugin in release builds — the update server
+    // is not reachable during local dev and the placeholder pubkey can cause
+    // spurious errors / intermittent crashes.
+    #[cfg(not(feature = "devtools"))]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
+    builder
         .manage(Mutex::new(connection_manager))
         .manage(Mutex::new(SettingsStore::new()))
         .manage(Mutex::new({
@@ -121,6 +131,8 @@ pub fn run() {
             fetch_enum_values,
             fetch_approximate_count,
             create_table,
+            generate_alter_sql_command,
+            apply_alter,
             // settings
             get_settings,
             set_settings,

@@ -34,7 +34,10 @@ interface DataGridProps {
 
 const DEFAULT_COL_WIDTH = 120;
 const MIN_COL_WIDTH = 80;
+const MAX_AUTO_FIT_WIDTH = 600;
 const ROW_HEIGHT = 28;
+// w-10 = 2.5rem = 40px; checkbox (40) + row# (40) = 80px fixed
+const FIXED_COLS_WIDTH = 80;
 
 export function DataGrid({
   result,
@@ -59,7 +62,6 @@ export function DataGrid({
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
   const [checkedRows, setCheckedRows] = useState<Set<number>>(new Set());
   const parentRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
 
   const rows = result.rows;
 
@@ -94,6 +96,36 @@ export function DataGrid({
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
   }, []);
+
+  const handleAutoFit = useCallback((colName: string) => {
+    if (!result) return;
+
+    const colIdx = result.columns.findIndex(c => c.name === colName);
+    if (colIdx < 0) return;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.font = '12px ui-sans-serif, system-ui, -apple-system, sans-serif';
+
+    const col = result.columns[colIdx];
+    const headerText = `${col.name} ${col.typeName}`;
+    let maxWidth = ctx.measureText(headerText).width;
+    if (col.isPrimaryKey) maxWidth += 16;
+
+    const rowsToMeasure = Math.min(rows.length, 100);
+    for (let i = 0; i < rowsToMeasure; i++) {
+      const cellVal = rows[i]?.[colIdx];
+      if (cellVal != null) {
+        const textWidth = ctx.measureText(cellVal).width;
+        if (textWidth > maxWidth) maxWidth = textWidth;
+      }
+    }
+
+    const newWidth = Math.min(Math.max(MIN_COL_WIDTH, Math.ceil(maxWidth) + 24), MAX_AUTO_FIT_WIDTH);
+    setColumnWidths(prev => ({ ...prev, [colName]: newWidth }));
+  }, [result, rows]);
 
   const handleRowClick = useCallback((e: React.MouseEvent, rowIdx: number) => {
     if (!onRowSelect) return;
@@ -141,43 +173,42 @@ export function DataGrid({
     resolvedWidths[col.name] = columnWidths[col.name] ?? DEFAULT_COL_WIDTH;
   }
 
-  // Sync header horizontal scroll with body
-  const handleBodyScroll = useCallback(() => {
-    if (parentRef.current && headerRef.current) {
-      headerRef.current.scrollLeft = parentRef.current.scrollLeft;
-    }
-  }, []);
+  // Total content width = fixed columns + sum of visible column widths
+  const columnsTotalWidth = visibleColumns.reduce(
+    (sum, col) => sum + (resolvedWidths[col.name] ?? DEFAULT_COL_WIDTH), 0
+  );
+  const totalContentWidth = FIXED_COLS_WIDTH + columnsTotalWidth;
 
   return (
     <div
-      className="relative h-full overflow-hidden flex flex-col"
+      className="relative h-full overflow-hidden"
       role="grid"
       aria-label="Query results"
       aria-rowcount={rows.length}
     >
-      {/* Header (scroll synced with body) */}
-      <div ref={headerRef} className="flex-shrink-0 overflow-hidden">
-        {/* Checkbox header row prefix */}
-        <div className="flex border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
-          {/* Checkbox select-all cell */}
-          <div className="w-10 flex-shrink-0 flex items-center justify-center border-r border-zinc-200 dark:border-zinc-700 py-1.5">
-            <input
-              type="checkbox"
-              className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600 accent-blue-500 cursor-pointer"
-              checked={allChecked}
-              ref={(el) => {
-                if (el) el.indeterminate = someChecked;
-              }}
-              onChange={(e) => handleSelectAll(e.target.checked)}
-              aria-label="Select all rows"
-            />
-          </div>
-          {/* Row # header */}
-          <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-zinc-400 dark:text-zinc-500 text-xs border-r border-zinc-200 dark:border-zinc-700 select-none">
-            #
-          </div>
-          {/* Column headers */}
-          <div className="flex flex-1 overflow-hidden">
+      {/* Single scroll container — header + body share one scroll context */}
+      <div ref={parentRef} className="h-full overflow-auto">
+        <div style={{ minWidth: totalContentWidth }}>
+          {/* Sticky header */}
+          <div className="sticky top-0 z-10 flex border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+            {/* Checkbox select-all cell */}
+            <div className="w-10 flex-shrink-0 flex items-center justify-center border-r border-zinc-200 dark:border-zinc-700 py-1.5">
+              <input
+                type="checkbox"
+                className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600 accent-blue-500 cursor-pointer"
+                checked={allChecked}
+                ref={(el) => {
+                  if (el) el.indeterminate = someChecked;
+                }}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                aria-label="Select all rows"
+              />
+            </div>
+            {/* Row # header */}
+            <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-zinc-400 dark:text-zinc-500 text-xs border-r border-zinc-200 dark:border-zinc-700 select-none">
+              #
+            </div>
+            {/* Column headers */}
             <GridHeader
               columns={visibleColumns}
               columnWidths={resolvedWidths}
@@ -187,48 +218,47 @@ export function DataGrid({
               hiddenColumns={hiddenColumns}
               onHideColumn={handleHideColumn}
               onFilterColumn={handleFilterColumn}
+              onAutoFit={handleAutoFit}
             />
           </div>
-        </div>
-      </div>
 
-      {/* Scrollable body */}
-      <div ref={parentRef} className="flex-1 overflow-auto" onScroll={handleBodyScroll}>
-        <div
-          style={{
-            height: virtualizer.getTotalSize(),
-            position: 'relative',
-          }}
-        >
-          {virtualizer.getVirtualItems().map(virtualRow => {
-            const localIdx = virtualRow.index;
-            const absoluteIdx = pageOffset + localIdx;
-            return (
-              <GridRow
-                key={virtualRow.index}
-                rowIndex={absoluteIdx}
-                row={rows[localIdx]}
-                columns={visibleColumns}
-                columnWidths={resolvedWidths}
-                isSelected={selectedRows.has(absoluteIdx)}
-                changeType={changedRows?.get(absoluteIdx)}
-                cellOverrideValues={cellOverrideValues}
-                editingCell={editingCell?.rowIdx === absoluteIdx ? editingCell : null}
-                nullDisplay={nullDisplay}
-                virtualTop={virtualRow.start}
-                fkColumns={fkColumns}
-                isChecked={checkedRows.has(absoluteIdx)}
-                onCheckChange={(checked) => handleRowCheck(absoluteIdx, checked)}
-                onRowClick={(e) => handleRowClick(e, absoluteIdx)}
-                onCellDoubleClick={(colIdx) => onCellDoubleClick?.(absoluteIdx, colIdx)}
-                onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(absoluteIdx, colIdx, val) : undefined}
-                onCellCancel={onCellCancel}
-                onCellContextMenu={onCellContextMenu ? (event, colIdx, cellValue, row) => onCellContextMenu(event, absoluteIdx, colIdx, cellValue, row) : undefined}
-                enumValuesByColumn={enumValuesByColumn}
-                onFkNavigate={onFkNavigate}
-              />
-            );
-          })}
+          {/* Virtual body */}
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map(virtualRow => {
+              const localIdx = virtualRow.index;
+              const absoluteIdx = pageOffset + localIdx;
+              return (
+                <GridRow
+                  key={virtualRow.index}
+                  rowIndex={absoluteIdx}
+                  row={rows[localIdx]}
+                  columns={visibleColumns}
+                  columnWidths={resolvedWidths}
+                  isSelected={selectedRows.has(absoluteIdx)}
+                  changeType={changedRows?.get(absoluteIdx)}
+                  cellOverrideValues={cellOverrideValues}
+                  editingCell={editingCell?.rowIdx === absoluteIdx ? editingCell : null}
+                  nullDisplay={nullDisplay}
+                  virtualTop={virtualRow.start}
+                  fkColumns={fkColumns}
+                  isChecked={checkedRows.has(absoluteIdx)}
+                  onCheckChange={(checked) => handleRowCheck(absoluteIdx, checked)}
+                  onRowClick={(e) => handleRowClick(e, absoluteIdx)}
+                  onCellDoubleClick={(colIdx) => onCellDoubleClick?.(absoluteIdx, colIdx)}
+                  onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(absoluteIdx, colIdx, val) : undefined}
+                  onCellCancel={onCellCancel}
+                  onCellContextMenu={onCellContextMenu ? (event, colIdx, cellValue, row) => onCellContextMenu(event, absoluteIdx, colIdx, cellValue, row) : undefined}
+                  enumValuesByColumn={enumValuesByColumn}
+                  onFkNavigate={onFkNavigate}
+                />
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

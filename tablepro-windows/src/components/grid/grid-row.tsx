@@ -37,6 +37,11 @@ interface GridRowProps {
   onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
 }
 
+function truncateForTitle(val: string | null, max = 1024): string | undefined {
+  if (val == null) return undefined;
+  return val.length > max ? val.slice(0, max) + '…' : val;
+}
+
 function getRowClassName(
   isSelected: boolean,
   changeType?: 'modified' | 'inserted' | 'deleted',
@@ -170,6 +175,7 @@ export function GridRow({
             key={col.name}
             className="flex-shrink-0 px-2 flex items-center border-r border-zinc-100 dark:border-zinc-800 overflow-hidden cursor-default"
             style={{ width, height: 28 }}
+            title={!isEditing && cellValue != null ? truncateForTitle(cellValue) : undefined}
             onDoubleClick={() => onCellDoubleClick?.(colIdx)}
             onContextMenu={(event) => onCellContextMenu?.(event, colIdx, cellValue, row)}
           >

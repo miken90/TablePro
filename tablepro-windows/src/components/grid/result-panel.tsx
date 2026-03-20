@@ -25,6 +25,10 @@ import type { ActiveTab } from './result-toolbar';
 import { ResultStatusBar } from './result-status-bar';
 import { useTableSave } from './use-table-save';
 import { GridContextMenu } from './grid-context-menu';
+import { ConfirmExecuteDialog } from './confirm-execute-dialog';
+import { ConfirmRefreshDialog } from './confirm-refresh-dialog';
+import { generatePreviewSql } from './sql-preview-popover';
+import { useChangeStore } from '../../stores/changeStore';
 
 interface ResultPanelProps {
   tabId?: string;
@@ -255,6 +259,9 @@ export function ResultPanel({
     tableName, schema, sessionId, result, fetchTableData, page, pageSize, activeWhereClause, sorting,
   });
 
+  const [confirmExecuteOpen, setConfirmExecuteOpen] = useState(false);
+  const [confirmRefreshOpen, setConfirmRefreshOpen] = useState(false);
+
   const hasChanges = useMemo(() => Object.keys(changesSnapshot).length > 0, [changesSnapshot]);
 
   const getEffectiveCellValue = useCallback((rowIdx: number, colIdx: number, fallback: string | null) => {
@@ -263,6 +270,54 @@ export function ResultPanel({
     const override = rowChange.cellChanges.find((cc) => cc.columnIndex === colIdx);
     return override ? override.newValue : fallback;
   }, [changesSnapshot]);
+
+  const handleRequestSave = useCallback(() => {
+    if (!hasChanges || !tableName || !result || confirmExecuteOpen) return;
+    setConfirmExecuteOpen(true);
+  }, [hasChanges, tableName, result, confirmExecuteOpen]);
+
+  const handleConfirmExecute = useCallback(async () => {
+    setConfirmExecuteOpen(false);
+    await handleSave();
+  }, [handleSave]);
+
+  const handleCancelExecute = useCallback(() => {
+    setConfirmExecuteOpen(false);
+  }, []);
+
+  const previewSql = useMemo(() => {
+    if (!confirmExecuteOpen || !tableName || !result) return '';
+    const columns = result.columns.map(c => c.name);
+    const primaryKeys = result.columns.filter(c => c.isPrimaryKey).map(c => c.name);
+    return generatePreviewSql(changesSnapshot, tableName, schema, columns, primaryKeys);
+  }, [confirmExecuteOpen, changesSnapshot, tableName, schema, result]);
+
+  const handleRefreshTable = useCallback(() => {
+    if (!isTableMode || !sessionId || !tableName || isSaving) return;
+    if (hasChanges) {
+      setConfirmRefreshOpen(true);
+    } else {
+      fetchTableData(sessionId, tableName, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
+    }
+  }, [isTableMode, sessionId, tableName, schema, hasChanges, isSaving, fetchTableData, page, pageSize, activeWhereClause, sorting]);
+
+  const handleSaveAndRefresh = useCallback(async () => {
+    setConfirmRefreshOpen(false);
+    await handleSave();
+    // handleSave already calls fetchTableData on success
+  }, [handleSave]);
+
+  const handleDiscardAndRefresh = useCallback(() => {
+    setConfirmRefreshOpen(false);
+    useChangeStore.getState().clear();
+    if (sessionId && tableName) {
+      fetchTableData(sessionId, tableName, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
+    }
+  }, [sessionId, tableName, schema, fetchTableData, page, pageSize, activeWhereClause, sorting]);
+
+  const handleCancelRefresh = useCallback(() => {
+    setConfirmRefreshOpen(false);
+  }, []);
 
   const handleRowSelect = useCallback((rowIdx: number, mode: 'single' | 'range' | 'toggle') => {
     setSelectedRows(prev => {
@@ -283,6 +338,17 @@ export function ResultPanel({
       return next;
     });
   }, [lastSelectedRow, onRowSelectProp]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'F5' && isTableMode) {
+        e.preventDefault();
+        handleRefreshTable();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isTableMode, handleRefreshTable]);
 
   const handleCellDoubleClick = useCallback((rowIdx: number, colIdx: number) => {
     if (!tableName) return;
@@ -434,7 +500,15 @@ export function ResultPanel({
           <button onClick={dismissSaveError} className="text-red-500 hover:text-red-700 dark:hover:text-red-200">Dismiss</button>
         </div>
       )}
-      {hasChanges && tableName && <ChangeToolbar onSave={handleSave} />}
+      {hasChanges && tableName && (
+        <ChangeToolbar
+          onSave={handleRequestSave}
+          tableName={tableName}
+          schema={schema}
+          columns={result?.columns.map(c => c.name)}
+          primaryKeys={result?.columns.filter(c => c.isPrimaryKey).map(c => c.name)}
+        />
+      )}
       {isSaving && (
         <div className="px-3 py-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-700">
           Saving changes...
@@ -520,6 +594,22 @@ export function ResultPanel({
           onClose={() => setShowExport(false)}
         />
       )}
+      <ConfirmExecuteDialog
+        open={confirmExecuteOpen}
+        sql={previewSql}
+        statementCount={Object.keys(changesSnapshot).length}
+        isSaving={isSaving}
+        onExecute={handleConfirmExecute}
+        onCancel={handleCancelExecute}
+      />
+      <ConfirmRefreshDialog
+        open={confirmRefreshOpen}
+        changeCount={Object.keys(changesSnapshot).length}
+        onSaveAndRefresh={handleSaveAndRefresh}
+        onDiscardAndRefresh={handleDiscardAndRefresh}
+        onCancel={handleCancelRefresh}
+        isSaving={isSaving}
+      />
     </div>
   );
 }

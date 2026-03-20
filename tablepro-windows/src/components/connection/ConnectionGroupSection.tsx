@@ -17,10 +17,11 @@ interface Props {
   onConnect: (conn: SavedConnection) => void;
   onEdit: (conn: SavedConnection) => void;
   onDelete: () => void;
+  onDeleteConnection: (conn: SavedConnection) => void;
 }
 
 export function ConnectionGroupSection({
-  group, connections, connectingId, getStatus, onConnect, onEdit, onDelete,
+  group, connections, connectingId, getStatus, onConnect, onEdit, onDelete, onDeleteConnection,
 }: Props) {
   const { saveGroup } = useConnectionStore();
   const [collapsed, setCollapsed] = useState(group.collapsed);
@@ -158,6 +159,7 @@ export function ConnectionGroupSection({
                 status={getStatus(conn.id)}
                 onConnect={() => onConnect(conn)}
                 onEdit={() => onEdit(conn)}
+                onDelete={() => void onDeleteConnection(conn)}
               />
             ))
           )}
