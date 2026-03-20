@@ -77,6 +77,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Mutex::new(connection_manager))
         .manage(Mutex::new(SettingsStore::new()))
         .manage(Mutex::new({

@@ -9,7 +9,8 @@
     "build:drivers": "cargo build --manifest-path src-tauri/driver-postgres/Cargo.toml && cargo build --manifest-path src-tauri/driver-mysql/Cargo.toml && cargo build --manifest-path src-tauri/driver-mssql/Cargo.toml && cargo build --manifest-path src-tauri/driver-sqlite/Cargo.toml",
     "preview": "vite preview",
     "tauri": "tauri",
-    "dev:tauri": "tauri dev --no-watch",
+    "dev:tauri": "powershell -ExecutionPolicy Bypass -File scripts/dev.ps1",
+    "dev:tauri:cli": "tauri dev --no-watch",
     "test": "vitest run",
     "test:watch": "vitest"
   },
