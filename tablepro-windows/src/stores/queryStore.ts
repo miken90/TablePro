@@ -68,6 +68,8 @@ interface QueryState {
   isExecuting: boolean;
   error: string | null;
   activeConnectionId: string | null;
+  /** Milliseconds the last query took (set on success or error) */
+  durationMs: number | null;
   /** Set when safe mode requires confirmation before executing */
   pendingSafeCheck: PendingSafeCheck | null;
 
@@ -87,7 +89,7 @@ async function runQuery(
   sql: string,
   params?: string[],
 ): Promise<void> {
-  set({ isExecuting: true, error: null, result: null, activeConnectionId: sessionId });
+  set({ isExecuting: true, error: null, result: null, durationMs: null, activeConnectionId: sessionId });
   const startMs = Date.now();
   const loadingId = toast.loading("Executing query...");
   const logId = useQueryLogStore.getState().add({
@@ -99,7 +101,7 @@ async function runQuery(
   try {
     const result = await commands.executeQuery(sessionId, sql, params);
     const elapsedMs = Date.now() - startMs;
-    set({ result, isExecuting: false });
+    set({ result, isExecuting: false, durationMs: elapsedMs });
     useQueryLogStore.getState().update(logId, {
       status: "success",
       durationMs: elapsedMs,
@@ -116,6 +118,7 @@ async function runQuery(
     set({
       error: errorMsg,
       isExecuting: false,
+      durationMs: elapsedMs,
     });
     useQueryLogStore.getState().update(logId, {
       status: "error",
@@ -134,6 +137,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   isExecuting: false,
   error: null,
   activeConnectionId: null,
+  durationMs: null,
   pendingSafeCheck: null,
 
   setQueryText: (text) => set({ queryText: text }),
@@ -180,5 +184,5 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     set({ isExecuting: false });
   },
 
-  clearResult: () => set({ result: null, error: null }),
+  clearResult: () => set({ result: null, error: null, durationMs: null }),
 }));

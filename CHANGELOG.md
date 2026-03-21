@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Layout store (Zustand): centralized panel state management with localStorage persistence for sidebar width; eliminates 17 useState calls from MainLayout
+- Resizable hook (`useResizable`): generic pointer-drag resize for sidebar, editor height, and inspector panels
+- Status bar: persistent bottom bar showing connection status, row count, execution time, and driver type
+- Sidebar object groups: tables and views displayed in collapsible groups with counts
+- History panel slide-over: opens as overlay from right edge instead of stealing horizontal space
+- CM6 compartments: font, vim mode, and SQL dialect changes now reconfigure in-place, preserving undo history and cursor position
+- Statement highlighter: subtle background + left border on the SQL statement the cursor is in (the one Ctrl+Enter would execute)
+- Error position marker: wavy red underline at the error position when a query fails (PostgreSQL character offset, MySQL line number)
+- Code folding: fold gutter with keyboard shortcuts for BEGIN/END blocks, CASE expressions, subqueries, and block comments
+- Error position parser utility for extracting character/line offsets from database error messages
+- Query duration tracking (`durationMs`) in query store for status bar display
 - Editable Structure View: inline column editing (add/modify/drop) with ALTER TABLE preview and per-driver SQL generation (Postgres, MySQL, MSSQL; SQLite drops/modifies disabled)
 - JSON record view in Inspector panel: toggle between field list and pretty-printed JSON with copy button; type-aware coercion (numbers, booleans, JSON/JSONB, binary)
 - SQL Preview button in change toolbar: shows generated BEGIN/COMMIT SQL before saving with copy-to-clipboard

@@ -1,8 +1,9 @@
-import { Search, Database, Plus } from "lucide-react";
+import { Search, Database, Plus, Table2, Eye } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { SidebarTableNode } from "./sidebar-table-node";
+import { SidebarObjectGroup } from "./sidebar-object-group";
 import { CreateTableWizard } from "../structure/create-table-wizard";
 import { EnvironmentBadge } from "../connection/environment-badge";
 import { ConnectionStatusIndicator } from "../connection/connection-status-indicator";
@@ -81,6 +82,13 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     const matchesSchema = !currentSchema || t.schema === currentSchema;
     return matchesFilter && matchesSchema;
   });
+
+  // Group filtered tables by type
+  const grouped = useMemo(() => {
+    const tbl = filteredTables.filter((t) => t.tableType !== "VIEW");
+    const views = filteredTables.filter((t) => t.tableType === "VIEW");
+    return { tables: tbl, views };
+  }, [filteredTables]);
 
   // Group connections by tag for the connection list section
   const connList = useMemo(() => Array.from(connections.values()), [connections]);
@@ -290,18 +298,40 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
         {!isLoading && selectedConnectionId && !selectedDatabase && databases.length === 0 && (
           <div className="p-3 text-xs text-text-muted">Connect to load schema</div>
         )}
-        {filteredTables.map((table) => (
-          <SidebarTableNode
-            key={`${table.schema ?? ""}.${table.name}`}
-            table={table}
-            expanded={expandedTables.has(table.name)}
-            onToggle={() => toggleTable(table.name)}
-            sessionId={sessionId ?? null}
-            onViewStructure={onViewStructure}
-            onOpenTable={onOpenTable}
-            onOpenPreviewTable={onOpenPreviewTable}
-          />
-        ))}
+        {filteredTables.length > 0 && (
+          <>
+            <SidebarObjectGroup label="Tables" icon={Table2} count={grouped.tables.length} defaultExpanded>
+              {grouped.tables.map((table) => (
+                <SidebarTableNode
+                  key={`${table.schema ?? ""}.${table.name}`}
+                  table={table}
+                  expanded={expandedTables.has(table.name)}
+                  onToggle={() => toggleTable(table.name)}
+                  sessionId={sessionId ?? null}
+                  onViewStructure={onViewStructure}
+                  onOpenTable={onOpenTable}
+                  onOpenPreviewTable={onOpenPreviewTable}
+                />
+              ))}
+            </SidebarObjectGroup>
+            {grouped.views.length > 0 && (
+              <SidebarObjectGroup label="Views" icon={Eye} count={grouped.views.length}>
+                {grouped.views.map((table) => (
+                  <SidebarTableNode
+                    key={`${table.schema ?? ""}.${table.name}`}
+                    table={table}
+                    expanded={expandedTables.has(table.name)}
+                    onToggle={() => toggleTable(table.name)}
+                    sessionId={sessionId ?? null}
+                    onViewStructure={onViewStructure}
+                    onOpenTable={onOpenTable}
+                    onOpenPreviewTable={onOpenPreviewTable}
+                  />
+                ))}
+              </SidebarObjectGroup>
+            )}
+          </>
+        )}
       </div>
 
       {sessionId && activeConnection && (

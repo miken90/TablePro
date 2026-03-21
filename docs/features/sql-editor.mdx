@@ -50,6 +50,21 @@ Toggle line numbers in **Settings** > **Editor** > **Show Line Numbers**.
 
 The current line gets a subtle highlight so you can track your cursor position in long queries.
 
+### Active Statement Highlighting
+
+When your cursor is inside a SQL statement, that entire statement gets a subtle background highlight and left border. This shows you exactly which statement `Ctrl+Enter` would execute — helpful when you have multiple statements in one editor tab.
+
+### Code Folding
+
+Fold and unfold code blocks to manage long queries. A fold gutter appears in the left margin for foldable regions:
+
+- `BEGIN` / `END` blocks
+- `CASE` expressions
+- Subqueries in parentheses
+- Block comments (`/* ... */`)
+
+Use `Ctrl+Shift+[` to fold and `Ctrl+Shift+]` to unfold at the cursor.
+
 ## Writing Queries
 
 ### Single Query
@@ -183,6 +198,15 @@ Results appear in the data grid below the editor:
 - Results are paginated for large datasets
 - Click column headers to sort
 
+### Status Bar
+
+A persistent status bar at the bottom of the window shows at a glance:
+
+- **Connection status** — connected database name or "Disconnected"
+- **Row count** — number of rows returned by the last query
+- **Execution time** — query duration in milliseconds or seconds
+- **Driver badge** — which database driver is active (e.g. PostgreSQL, MySQL)
+
 ### Explain Query
 
 View the execution plan for your query to spot missing indexes or inefficient joins.
@@ -303,8 +327,8 @@ Format queries before sharing with teammates or saving as templates for consiste
 When a query fails:
 
 1. The error message appears below the editor
-2. Line numbers may be highlighted if the error references a specific line
-3. Read the error message for details on what went wrong
+2. A wavy red underline marks the error position in the SQL text (PostgreSQL: character offset, MySQL: line number)
+3. The error marker clears automatically when you edit the query or run a new one
 
 {/* Screenshot: Query error message display */}
 <Frame caption="Query error message">
@@ -399,7 +423,7 @@ The mode indicator badge in the toolbar shows your current Vim mode (NORMAL, INS
 
 ## Editor Settings
 
-Customize the editor in **Settings** > **Editor**:
+Customize the editor in **Settings** > **Editor**. Changes apply instantly without resetting the editor — your undo history and cursor position are preserved.
 
 ### Font Settings
 

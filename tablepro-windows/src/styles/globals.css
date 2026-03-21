@@ -18,6 +18,9 @@
   --editor-font: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   --editor-font-size: 13px;
 
+  /* Editor enhancements */
+  --active-statement-bg: rgba(88, 166, 255, 0.08);
+
   /* ── Background ── */
   --color-bg-base:     #0f1419;
   --color-bg-surface:  #151b23;
@@ -73,6 +76,9 @@
   --border: #e0e0e0;
   --active-line-bg: #f0f0f0;
   --selection-match-bg: #add6ff80;
+
+  /* Editor enhancements (light) */
+  --active-statement-bg: rgba(88, 166, 255, 0.05);
 
   /* ── Background ── */
   --color-bg-base:     #ffffff;
@@ -153,4 +159,18 @@ body {
   color: var(--color-text-primary);
   overflow: hidden;
   user-select: none;
+}
+
+/* ─────────────────────────────────────────
+   CODEMIRROR EDITOR ENHANCEMENTS
+   ───────────────────────────────────────── */
+.cm-active-statement {
+  background-color: var(--active-statement-bg);
+  border-left: 2px solid var(--color-accent-blue);
+  margin-left: -2px;
+}
+
+.cm-error-mark {
+  text-decoration: wavy underline var(--color-accent-red);
+  text-underline-offset: 3px;
 }
