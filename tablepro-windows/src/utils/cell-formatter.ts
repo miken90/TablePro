@@ -10,6 +10,7 @@ const NUMBER_REGEX = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
 
 export function detectCellType(value: string | null, columnType?: string): CellType {
   if (value === null) return 'null';
+  if (typeof value === 'object') return 'json';
 
   // Use column type hint first
   if (columnType) {

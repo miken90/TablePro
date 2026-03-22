@@ -200,12 +200,21 @@ Results appear in the data grid below the editor:
 
 ### Status Bar
 
-A persistent status bar at the bottom of the window shows at a glance:
+A persistent status bar at the bottom of the window shows:
 
-- **Connection status** — connected database name or "Disconnected"
-- **Row count** — number of rows returned by the last query
-- **Execution time** — query duration in milliseconds or seconds
+**Left side (Connection & Schema Info):**
+- **Connection status** — connected/disconnected indicator
 - **Driver badge** — which database driver is active (e.g. PostgreSQL, MySQL)
+- **Database name** — currently selected database
+- **Table count** — number of tables in the current database
+
+**Center (Query Results):**
+- **Row count** — number of rows returned by the last query or rows affected by INSERT/UPDATE/DELETE
+- **Execution time** — query duration in milliseconds
+
+**Right side (Panel Toggles):**
+- **Inspector button** — click to show/hide the cell inspector panel (or press `Ctrl+Shift+I`)
+- **Filter button** — click to show/hide the filter panel (or press `Ctrl+Shift+L`)
 
 ### Explain Query
 

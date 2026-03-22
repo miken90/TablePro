@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useMemo } from "react";
 import { Sidebar } from "./Sidebar";
 import { Toolbar } from "./Toolbar";
 import { EditorTabBar } from "../editor/EditorTabBar";
@@ -18,9 +17,7 @@ import { QueryAnnouncer } from "../shared/query-announcer";
 import { StatusBar } from "./StatusBar";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
-import { useSchemaStore } from "../../stores/schemaStore";
 import { useQueryStore } from "../../stores/queryStore";
-import { useFilterStore } from "../../stores/filterStore";
 import {
   useLayoutStore,
   SIDEBAR_MIN,
@@ -29,29 +26,19 @@ import {
   INSPECTOR_MIN,
   INSPECTOR_MAX,
 } from "../../stores/layoutStore";
-import { useCommandStore } from "../../hooks/useCommandRegistry";
 import { useTheme } from "../../hooks/useTheme";
 import { useAutoUpdater } from "../../hooks/useAutoUpdater";
 import { useResizable } from "../../hooks/useResizable";
-
-/** Combine filter clause + quick-search clause with AND */
-function combineWhereClauses(filterClause: string, quickSearchClause: string): string {
-  const parts = [filterClause, quickSearchClause].filter(Boolean);
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0]!;
-  return `(${parts[0]}) AND (${parts[1]})`;
-}
+import { useMainLayoutShortcuts } from "../../hooks/useMainLayoutShortcuts";
+import { useMainLayoutCommands } from "../../hooks/useMainLayoutCommands";
+import { useFilterContext } from "../../hooks/useFilterContext";
+import { useTableCallbacks } from "../../hooks/useTableCallbacks";
 
 export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
   const activeTabId = useEditorStore((s) => s.activeTabId);
-  const addTab = useEditorStore((s) => s.addTab);
-  const addPreviewTab = useEditorStore((s) => s.addPreviewTab);
-  const updateTabContent = useEditorStore((s) => s.updateTabContent);
-  const fetchColumns = useSchemaStore((s) => s.fetchColumns);
 
-  // Layout store
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
   const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
   const editorHeightPercent = useLayoutStore((s) => s.editorHeightPercent);
@@ -69,8 +56,6 @@ export function MainLayout() {
   const helpOpen = useLayoutStore((s) => s.helpOpen);
   const commandPaletteOpen = useLayoutStore((s) => s.commandPaletteOpen);
 
-  const setQueryText = useQueryStore((s) => s.setQueryText);
-  const registerCommand = useCommandStore((s) => s.registerCommand);
   const {
     availableUpdate,
     shouldShowNotification,
@@ -83,8 +68,17 @@ export function MainLayout() {
   } = useAutoUpdater();
 
   useTheme();
+  useMainLayoutShortcuts();
+  useMainLayoutCommands();
 
-  // Resizable hooks
+  const { filterTabId, activeWhereClause } = useFilterContext(viewMode, activeTableContext, activeTabId);
+  const {
+    handleQuickSwitcherSelect,
+    handleOpenTable,
+    handleOpenPreviewTable,
+    handleHistorySelect,
+  } = useTableCallbacks();
+
   const { onMouseDown: handleSidebarResize } = useResizable({
     direction: "horizontal",
     min: SIDEBAR_MIN,
@@ -109,211 +103,6 @@ export function MainLayout() {
     invert: true,
     onResize: useLayoutStore.getState().setInspectorWidth,
   });
-
-  // Stable tabId for the filter store
-  const filterTabId = useMemo(() => {
-    if (viewMode === "table-browse" && activeTableContext?.tableName) {
-      return `table:${activeTableContext.tableName}`;
-    }
-    return activeTabId ?? "default";
-  }, [viewMode, activeTableContext, activeTabId]);
-
-  // Derive activeWhereClause from filterStore
-  const filterByTab = useFilterStore((s) => s.byTab);
-  const activeWhereClause = useMemo(() => {
-    const tab = filterByTab[filterTabId];
-    if (!tab) return "";
-    return combineWhereClauses(tab.appliedFilterClause, tab.quickSearchClause);
-  }, [filterByTab, filterTabId]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const ls = useLayoutStore.getState();
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-        e.preventDefault();
-        ls.setQuickSwitcherOpen(!useLayoutStore.getState().quickSwitcherOpen);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
-        e.preventDefault();
-        ls.setSettingsOpen(true);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "F") {
-        e.preventDefault();
-        useLayoutStore.getState().toggleFilter();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "I") {
-        e.preventDefault();
-        useLayoutStore.getState().toggleInspector();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "h") {
-        e.preventDefault();
-        useLayoutStore.getState().toggleHistory();
-      }
-      if (e.key === "F1") {
-        e.preventDefault();
-        ls.setHelpOpen(true);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "P") {
-        e.preventDefault();
-        ls.setCommandPaletteOpen(!useLayoutStore.getState().commandPaletteOpen);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "s" && !e.shiftKey) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  // Register core commands
-  useEffect(() => {
-    const ls = useLayoutStore.getState();
-    const cmds = [
-      {
-        id: "nav.toggleSidebar",
-        label: "Toggle Sidebar",
-        shortcut: "Ctrl+B",
-        category: "Navigation" as const,
-        action: () => ls.toggleSidebar(),
-      },
-      {
-        id: "nav.openSettings",
-        label: "Open Settings",
-        shortcut: "Ctrl+,",
-        category: "Navigation" as const,
-        action: () => ls.setSettingsOpen(true),
-      },
-      {
-        id: "nav.quickSwitcher",
-        label: "Quick Switcher",
-        shortcut: "Ctrl+K",
-        category: "Navigation" as const,
-        action: () => ls.setQuickSwitcherOpen(!useLayoutStore.getState().quickSwitcherOpen),
-      },
-      {
-        id: "nav.toggleHistory",
-        label: "Toggle Query History",
-        shortcut: "Ctrl+H",
-        category: "Navigation" as const,
-        action: () => ls.toggleHistory(),
-      },
-      {
-        id: "query.run",
-        label: "Run Query",
-        shortcut: "Ctrl+Enter",
-        category: "Query" as const,
-        action: () => {
-          const { queryText } = useQueryStore.getState();
-          const { selectedConnectionId: connId } = useConnectionStore.getState();
-          if (connId) {
-            const sid = useConnectionStore.getState().getSessionId(connId);
-            if (sid) void useQueryStore.getState().execute(sid, queryText);
-          }
-        },
-      },
-      {
-        id: "query.formatSql",
-        label: "Format SQL",
-        shortcut: "Ctrl+Shift+F",
-        category: "Query" as const,
-        action: () => window.dispatchEvent(new CustomEvent("tablepro:format-sql")),
-      },
-      {
-        id: "edit.newTab",
-        label: "New Tab",
-        shortcut: "Ctrl+N",
-        category: "Edit" as const,
-        action: () => useEditorStore.getState().addTab(),
-      },
-      {
-        id: "edit.closeTab",
-        label: "Close Tab",
-        shortcut: "Ctrl+W",
-        category: "Edit" as const,
-        action: () => {
-          const { activeTabId: tid } = useEditorStore.getState();
-          if (tid) useEditorStore.getState().closeTab(tid);
-        },
-      },
-      {
-        id: "view.toggleFilterBar",
-        label: "Toggle Filter Bar",
-        shortcut: "Ctrl+Shift+F",
-        category: "View" as const,
-        action: () => ls.toggleFilter(),
-      },
-      {
-        id: "view.toggleInspector",
-        label: "Toggle Inspector",
-        shortcut: "Ctrl+Shift+I",
-        category: "View" as const,
-        action: () => ls.toggleInspector(),
-      },
-    ];
-    cmds.forEach(registerCommand);
-  }, [registerCommand]);
-
-  // Fetch columns when active table changes
-  useEffect(() => {
-    if (!activeTableContext?.tableName || !selectedConnectionId) {
-      useLayoutStore.getState().setFilterColumns([]);
-      return;
-    }
-    const sid = getSessionId(selectedConnectionId);
-    if (!sid) return;
-    fetchColumns(sid, activeTableContext.tableName, activeTableContext.schema ?? undefined)
-      .then((cols) => useLayoutStore.getState().setFilterColumns(cols))
-      .catch(() => useLayoutStore.getState().setFilterColumns([]));
-  }, [activeTableContext, selectedConnectionId, getSessionId, fetchColumns]);
-
-  const handleQuickSwitcherSelect = useCallback(
-    (tableName: string, schema?: string | null) => {
-      if (selectedConnectionId) {
-        useLayoutStore.getState().openTable(tableName, schema);
-      }
-    },
-    [selectedConnectionId],
-  );
-
-  const handleOpenTable = useCallback(
-    (tableName: string, schema?: string | null) => {
-      if (selectedConnectionId) {
-        useLayoutStore.getState().openTable(tableName, schema);
-      }
-    },
-    [selectedConnectionId],
-  );
-
-  const handleOpenPreviewTable = useCallback(
-    (tableName: string, schema?: string | null) => {
-      if (!selectedConnectionId) return;
-      const sid = getSessionId(selectedConnectionId);
-      if (!sid) return;
-      const qualifiedName = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
-      const selectQuery = `SELECT * FROM ${qualifiedName} LIMIT 100;`;
-      const tabId = addPreviewTab(tableName);
-      updateTabContent(tabId, selectQuery);
-      setQueryText(selectQuery);
-      useLayoutStore.getState().switchToQueryMode();
-      void useQueryStore.getState().execute(sid, selectQuery);
-    },
-    [selectedConnectionId, getSessionId, addPreviewTab, updateTabContent, setQueryText],
-  );
-
-  const handleHistorySelect = useCallback(
-    (query: string) => {
-      if (activeTabId) {
-        updateTabContent(activeTabId, query);
-      } else {
-        const tabId = addTab("Query");
-        updateTabContent(tabId, query);
-      }
-      setQueryText(query);
-      useLayoutStore.getState().switchToQueryMode();
-    },
-    [activeTabId, addTab, updateTabContent, setQueryText],
-  );
 
   const queryResult = useQueryStore((s) => s.result);
   const inspectorResult = viewMode === "table-browse" ? null : queryResult;
@@ -434,7 +223,7 @@ export function MainLayout() {
               onClick={() => useLayoutStore.getState().toggleHistory()}
             />
             <div
-              className="absolute right-0 top-0 h-full w-[360px] transform shadow-panel transition-transform duration-150"
+              className="absolute right-0 top-0 h-full w-[360px] transform shadow-panel slide-in-right"
               style={{ zIndex: 21 }}
             >
               <HistoryPanel

@@ -19,13 +19,15 @@
   --editor-font-size: 13px;
 
   /* Editor enhancements */
-  --active-statement-bg: rgba(88, 166, 255, 0.08);
+  --active-statement-bg: #58a6ff10;
+  --active-statement-border: #58a6ff30;
 
   /* ── Background ── */
   --color-bg-base:     #0f1419;
   --color-bg-surface:  #151b23;
   --color-bg-elevated: #1c2431;
   --color-bg-muted:    #252d3a;
+  --color-bg-hover:    #2a3344;
 
   /* ── Text ── */
   --color-text-primary:   #e6edf3;
@@ -78,13 +80,15 @@
   --selection-match-bg: #add6ff80;
 
   /* Editor enhancements (light) */
-  --active-statement-bg: rgba(88, 166, 255, 0.05);
+  --active-statement-bg: #0969da08;
+  --active-statement-border: #0969da20;
 
   /* ── Background ── */
   --color-bg-base:     #ffffff;
   --color-bg-surface:  #f6f8fa;
   --color-bg-elevated: #ffffff;
   --color-bg-muted:    #f0f2f5;
+  --color-bg-hover:    #e8ecf0;
 
   /* ── Text ── */
   --color-text-primary:   #1f2328;
@@ -164,13 +168,24 @@ body {
 /* ─────────────────────────────────────────
    CODEMIRROR EDITOR ENHANCEMENTS
    ───────────────────────────────────────── */
-.cm-active-statement {
+/* Line decoration — applied to .cm-line elements via Decoration.line() */
+.cm-line.cm-active-statement {
   background-color: var(--active-statement-bg);
-  border-left: 2px solid var(--color-accent-blue);
-  margin-left: -2px;
+  box-shadow: inset 3px 0 0 0 var(--active-statement-border);
 }
 
 .cm-error-mark {
   text-decoration: wavy underline var(--color-accent-red);
   text-underline-offset: 3px;
+}
+
+/* ─────────────────────────────────────────
+   ANIMATIONS
+   ───────────────────────────────────────── */
+.slide-in-right {
+  animation: slideInRight 150ms ease-out;
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }

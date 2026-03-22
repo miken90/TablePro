@@ -11,6 +11,7 @@ export default {
           elevated: 'var(--color-bg-elevated)',
           muted: 'var(--color-bg-muted)',
           base: 'var(--color-bg-base)',
+          hover: 'var(--color-bg-hover)',
         },
         border: {
           DEFAULT: 'var(--color-border)',

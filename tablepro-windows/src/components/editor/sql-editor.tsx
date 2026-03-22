@@ -355,7 +355,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         }}
       />
       {queryProgress.isRunning && (
-        <div className="border-t border-zinc-200 bg-zinc-50 px-3 py-1 text-[10px] text-blue-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-blue-300">
+        <div className="border-t border-border-subtle bg-surface px-3 py-1 text-[10px] text-accent-blue">
           Running query… {(queryProgress.elapsedMs / 1000).toFixed(1)}s
         </div>
       )}

@@ -12,8 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Layout store (Zustand): centralized panel state management with localStorage persistence for sidebar width; eliminates 17 useState calls from MainLayout
 - Resizable hook (`useResizable`): generic pointer-drag resize for sidebar, editor height, and inspector panels
 - Status bar: persistent bottom bar showing connection status, row count, execution time, and driver type
+- StatusBar enhancements: database name, table count, Inspector/Filter toggle buttons with active state indicators
 - Sidebar object groups: tables and views displayed in collapsible groups with counts
 - History panel slide-over: opens as overlay from right edge instead of stealing horizontal space
+- History panel Escape key close and slide-in animation
+- Design token `--color-bg-hover` for consistent hover state across light/dark themes
+- Active editor tab bottom border indicator (accent blue)
 - CM6 compartments: font, vim mode, and SQL dialect changes now reconfigure in-place, preserving undo history and cursor position
 - Statement highlighter: subtle background + left border on the SQL statement the cursor is in (the one Ctrl+Enter would execute)
 - Error position marker: wavy red underline at the error position when a query fails (PostgreSQL character offset, MySQL line number)
@@ -35,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Connection mutex held too long during SSH connect/test: lock is now released before driver connect so tunnel I/O can proceed
 
 - Grid header horizontal scroll: replaced dual-container scroll sync with single scroll container + `position: sticky` — header and body now scroll together natively
+- `[object Object]` rendering in grid cells and quick search: added `safeString()` helper and object type guards in grid-row, cell-formatter, and quick-search-bar
+- Migrated 7 components from hardcoded `zinc-*` colors to semantic design token classes (`bg-surface`, `text-text-primary`, `border-border-subtle`, etc.)
+- Inactive editor tabs now have `border-b-2 border-b-transparent` to prevent height shift when switching active tab
 
 - Design system foundation: semantic color tokens, typography scale, spacing system, CSS custom properties for light/dark themes
 - Environment badges for connections (PROD/STAGE/DEV/LOCAL) with visual distinction

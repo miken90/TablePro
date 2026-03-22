@@ -37,16 +37,24 @@ interface GridRowProps {
   onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
 }
 
+function safeString(val: unknown): string {
+  if (val == null) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
 function truncateForTitle(val: string | null, max = 1024): string | undefined {
   if (val == null) return undefined;
-  return val.length > max ? val.slice(0, max) + '…' : val;
+  const str = typeof val === 'string' ? val : safeString(val);
+  return str.length > max ? str.slice(0, max) + '…' : str;
 }
 
 function getRowClassName(
   isSelected: boolean,
   changeType?: 'modified' | 'inserted' | 'deleted',
 ): string {
-  const base = 'absolute left-0 w-full flex border-b border-zinc-100 dark:border-zinc-800 text-xs';
+  const base = 'absolute left-0 w-full flex border-b border-border-subtle text-xs';
 
   if (changeType === 'deleted') {
     return `${base} bg-red-500/10 border-l-2 border-l-red-500 opacity-60 line-through`;
@@ -60,7 +68,7 @@ function getRowClassName(
   if (isSelected) {
     return `${base} bg-blue-50 dark:bg-blue-900/30`;
   }
-  return `${base} hover:bg-zinc-50 dark:hover:bg-zinc-800/50`;
+  return `${base} hover:bg-surface-hover`;
 }
 
 function CellContent({
@@ -90,7 +98,7 @@ function CellContent({
         return <DateCell value={cellValue} />;
       default:
         return (
-          <span className="truncate text-zinc-800 dark:text-zinc-200 flex-1">{cellValue}</span>
+          <span className="truncate text-text-primary flex-1 font-mono text-xs">{typeof cellValue === 'object' ? JSON.stringify(cellValue) : cellValue}</span>
         );
     }
   })();
@@ -145,12 +153,12 @@ export function GridRow({
     >
       {/* Checkbox column */}
       <div
-        className="w-10 flex-shrink-0 flex items-center justify-center border-r border-zinc-100 dark:border-zinc-800"
+        className="w-10 flex-shrink-0 flex items-center justify-center border-r border-border-subtle"
         onClick={(e) => e.stopPropagation()}
       >
         <input
           type="checkbox"
-          className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600 accent-blue-500 cursor-pointer"
+          className="h-3 w-3 rounded border-border-subtle accent-blue-500 cursor-pointer"
           checked={isChecked}
           onChange={(e) => onCheckChange?.(e.target.checked)}
           aria-label={`Select row ${rowIndex + 1}`}
@@ -158,7 +166,7 @@ export function GridRow({
       </div>
 
       {/* Row number */}
-      <div className="w-10 flex-shrink-0 px-1 flex items-center justify-end text-zinc-400 dark:text-zinc-600 border-r border-zinc-100 dark:border-zinc-800 select-none">
+      <div className="w-10 flex-shrink-0 px-1 flex items-center justify-end text-text-muted border-r border-border-subtle select-none">
         {rowIndex + 1}
       </div>
 
@@ -173,7 +181,7 @@ export function GridRow({
         return (
           <div
             key={col.name}
-            className="flex-shrink-0 px-2 flex items-center border-r border-zinc-100 dark:border-zinc-800 overflow-hidden cursor-default"
+            className="flex-shrink-0 px-2 flex items-center border-r border-border-subtle overflow-hidden cursor-default"
             style={{ width, height: 28 }}
             title={!isEditing && cellValue != null ? truncateForTitle(cellValue) : undefined}
             onDoubleClick={() => onCellDoubleClick?.(colIdx)}

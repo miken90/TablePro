@@ -72,7 +72,7 @@ export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
 
   return (
     <div
-      className="flex h-8 items-center border-b border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
+      className="flex h-8 items-center border-b border-border-subtle bg-surface"
       role="tablist"
       aria-label="Editor tabs"
       onKeyDown={handleKeyDown}
@@ -115,7 +115,7 @@ export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
           addTab();
           onTabActivate?.();
         }}
-        className="flex h-full items-center px-2 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700"
+        className="flex h-full items-center px-2 text-text-muted hover:bg-surface-muted hover:text-text-primary"
         title="New tab"
         aria-label="Open new tab"
       >

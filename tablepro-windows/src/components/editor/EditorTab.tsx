@@ -34,10 +34,10 @@ export function EditorTab({
       }}
       className={[
         "group relative flex min-w-0 max-w-[160px] cursor-pointer items-center gap-1.5",
-        "border-r border-zinc-200 px-3 py-1 text-xs dark:border-zinc-700",
+        "border-r border-border-subtle px-3 py-1 text-xs border-b-2",
         isActive
-          ? "bg-white text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-          : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700",
+          ? "bg-surface-elevated text-text-primary border-b-accent-blue"
+          : "text-text-secondary hover:bg-surface-hover hover:text-text-primary border-b-transparent",
         tab.isPreview ? "opacity-70" : "",
       ]
         .filter(Boolean)

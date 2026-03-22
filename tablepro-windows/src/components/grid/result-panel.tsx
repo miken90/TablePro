@@ -289,7 +289,7 @@ export function ResultPanel({
     if (!confirmExecuteOpen || !tableName || !result) return '';
     const columns = result.columns.map(c => c.name);
     const primaryKeys = result.columns.filter(c => c.isPrimaryKey).map(c => c.name);
-    return generatePreviewSql(changesSnapshot, tableName, schema, columns, primaryKeys);
+    return generatePreviewSql(changesSnapshot, tableName, schema, columns, primaryKeys, result.rows);
   }, [confirmExecuteOpen, changesSnapshot, tableName, schema, result]);
 
   const handleRefreshTable = useCallback(() => {
@@ -345,10 +345,15 @@ export function ResultPanel({
         e.preventDefault();
         handleRefreshTable();
       }
+      // Ctrl+S — trigger save confirmation (table-browse mode only)
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && !e.shiftKey && isTableMode) {
+        e.preventDefault();
+        handleRequestSave();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isTableMode, handleRefreshTable]);
+  }, [isTableMode, handleRefreshTable, handleRequestSave]);
 
   const handleCellDoubleClick = useCallback((rowIdx: number, colIdx: number) => {
     if (!tableName) return;
@@ -507,6 +512,7 @@ export function ResultPanel({
           schema={schema}
           columns={result?.columns.map(c => c.name)}
           primaryKeys={result?.columns.filter(c => c.isPrimaryKey).map(c => c.name)}
+          rows={result?.rows}
         />
       )}
       {isSaving && (
@@ -531,7 +537,7 @@ export function ResultPanel({
       />
       <div className="flex-1 overflow-hidden flex flex-col">
         {loading && (
-          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+          <div className="flex h-full items-center justify-center text-xs text-text-muted">
             {isTableMode ? 'Loading...' : 'Executing...'}
           </div>
         )}
