@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { useConnectionStore } from "./connectionStore";
 
 export type TabType = 'query' | 'table' | 'structure';
 
@@ -51,6 +52,7 @@ export const useEditorStore = create<EditorState>()(
 
       addTab: (title) => {
         const id = generateTabId();
+        const connId = useConnectionStore.getState().selectedConnectionId ?? undefined;
         const newTab: EditorTab = {
           id,
           title: title ?? `Query ${get().tabs.length + 1}`,
@@ -59,6 +61,7 @@ export const useEditorStore = create<EditorState>()(
           isPreview: false,
           isPinned: false,
           type: 'query',
+          connectionId: connId,
         };
         set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));
         return id;

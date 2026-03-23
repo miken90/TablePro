@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronRight, MoreHorizontal, Pencil, Palette, Trash2 } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
-import { ConnectionCard } from "./WelcomeView";
+import { ConnectionCard } from "./connection-card";
 import type { ConnectionGroup, SavedConnection, ConnectionStatus } from "../../types/connection";
 
 const GROUP_COLORS = [
@@ -18,10 +18,11 @@ interface Props {
   onEdit: (conn: SavedConnection) => void;
   onDelete: () => void;
   onDeleteConnection: (conn: SavedConnection) => void;
+  onDuplicateConnection?: (conn: SavedConnection) => void;
 }
 
 export function ConnectionGroupSection({
-  group, connections, connectingId, getStatus, onConnect, onEdit, onDelete, onDeleteConnection,
+  group, connections, connectingId, getStatus, onConnect, onEdit, onDelete, onDeleteConnection, onDuplicateConnection,
 }: Props) {
   const { saveGroup } = useConnectionStore();
   const [collapsed, setCollapsed] = useState(group.collapsed);
@@ -160,6 +161,7 @@ export function ConnectionGroupSection({
                 onConnect={() => onConnect(conn)}
                 onEdit={() => onEdit(conn)}
                 onDelete={() => void onDeleteConnection(conn)}
+                onDuplicate={onDuplicateConnection ? () => void onDuplicateConnection(conn) : undefined}
               />
             ))
           )}

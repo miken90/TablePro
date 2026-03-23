@@ -103,6 +103,7 @@ export function GridHeader({
               {/* Resize handle */}
               <div
                 className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-400 dark:hover:bg-blue-500 z-10"
+                onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => {
                   e.stopPropagation();
                   onResizeStart(col.name, e.clientX, width);

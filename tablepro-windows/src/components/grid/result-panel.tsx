@@ -20,7 +20,7 @@ import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
 import { EmptyState } from '../shared/EmptyState';
 import { ExportDialog } from '../export/export-dialog';
-import { Database } from 'lucide-react';
+import { Database, Loader2 } from 'lucide-react';
 import { ResultToolbar } from './result-toolbar';
 import type { ActiveTab } from './result-toolbar';
 import { ResultStatusBar } from './result-status-bar';
@@ -30,6 +30,10 @@ import { ConfirmExecuteDialog } from './confirm-execute-dialog';
 import { ConfirmRefreshDialog } from './confirm-refresh-dialog';
 import { generatePreviewSql } from './sql-preview-popover';
 import { useChangeStore } from '../../stores/changeStore';
+import { useConnectionStore } from '../../stores/connectionStore';
+import { useQueryProgress } from '../../hooks/useQueryProgress';
+import { useInspectorStore } from '../../stores/inspectorStore';
+import FilterWorker from '../../workers/filter-worker?worker';
 
 interface ResultPanelProps {
   tabId?: string;
@@ -67,12 +71,63 @@ export function ResultPanel({
   const activeConnectionId = useQueryStore((s) => s.activeConnectionId);
   const queryText = useQueryStore((s) => s.queryText);
 
+  const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
+  const getSessionIdForProgress = useConnectionStore((s) => s.getSessionId);
+  const progressSessionId = selectedConnectionId ? getSessionIdForProgress(selectedConnectionId) : undefined;
+  const queryProgress = useQueryProgress(progressSessionId ?? null);
+
   // Quick search state — only active in table-browse mode (tabId provided)
   const setQuickSearch = useFilterStore((s) => s.setQuickSearch);
   const clearQuickSearch = useFilterStore((s) => s.clearQuickSearch);
   const quickSearchTerm = useFilterStore((s) =>
     tabId ? (s.byTab[tabId]?.quickSearchTerm ?? '') : '',
   );
+
+  // Client-side quick search for query mode (web worker)
+  const [querySearchTerm, setQuerySearchTerm] = useState('');
+  const [queryFilteredIndices, setQueryFilteredIndices] = useState<number[] | null>(null);
+  const filterWorkerRef = useRef<Worker | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const worker = new FilterWorker();
+    filterWorkerRef.current = worker;
+    worker.onmessage = (e: MessageEvent) => {
+      if (e.data.type === 'filter-result') {
+        setQueryFilteredIndices(e.data.indices);
+      }
+    };
+    return () => { worker.terminate(); filterWorkerRef.current = null; };
+  }, []);
+
+  // Send rows to worker once when queryResult changes
+  useEffect(() => {
+    if (filterWorkerRef.current && queryResult) {
+      filterWorkerRef.current.postMessage({ type: 'set-rows', rows: queryResult.rows });
+    }
+    // Clear stale filter when result changes
+    setQueryFilteredIndices(null);
+    setQuerySearchTerm('');
+  }, [queryResult]);
+
+  const handleQueryQuickSearch = useCallback((term: string, _whereClause: string) => {
+    setQuerySearchTerm(term);
+    if (!term.trim()) {
+      setQueryFilteredIndices(null);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      return;
+    }
+    // Debounce worker postMessage by 200ms
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      filterWorkerRef.current?.postMessage({ type: 'filter', term });
+    }, 200);
+  }, []);
+
+  const handleQueryQuickSearchClear = useCallback(() => {
+    setQuerySearchTerm('');
+    setQueryFilteredIndices(null);
+  }, []);
 
   const handleQuickSearch = useCallback((term: string, whereClause: string) => {
     if (tabId) setQuickSearch(tabId, term, whereClause);
@@ -87,6 +142,7 @@ export function ResultPanel({
   const logEntries = useQueryLogStore((s) => s.entries);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('results');
+  const lastAutoSwitchedErrorRef = useRef<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [lastSelectedRow, setLastSelectedRow] = useState<number | null>(null);
   const [page, setPage] = useState(1);
@@ -113,10 +169,29 @@ export function ResultPanel({
   const fetchSeqRef = useRef(0);
 
   const isTableMode = !!tableName && !!sessionId;
-  const result = isTableMode ? tableResult : queryResult;
+
+  // Build filtered rows for query mode when search is active
+  const queryDisplayResult = useMemo(() => {
+    if (isTableMode || !queryResult || !queryFilteredIndices) return queryResult;
+    return {
+      ...queryResult,
+      rows: queryFilteredIndices.map((i) => queryResult.rows[i]),
+    };
+  }, [isTableMode, queryResult, queryFilteredIndices]);
+
+  const result = isTableMode ? tableResult : (queryDisplayResult ?? queryResult);
   const error = isTableMode ? fetchError : queryError;
   const total = isTableMode ? totalCount : (queryResult?.rows.length ?? 0);
+  const filteredTotal = !isTableMode && queryFilteredIndices ? queryFilteredIndices.length : null;
   const loading = isTableMode ? isFetching : isExecuting;
+
+  // Auto-switch to Messages tab on new error (once per error)
+  useEffect(() => {
+    if (error && !isTableMode && error !== lastAutoSwitchedErrorRef.current) {
+      lastAutoSwitchedErrorRef.current = error;
+      setActiveTab('messages');
+    }
+  }, [error, isTableMode]);
 
   const fetchTableData = useCallback(async (
     sid: string, tbl: string, sch: string | null,
@@ -320,14 +395,24 @@ export function ResultPanel({
     setConfirmRefreshOpen(false);
   }, []);
 
+  const setInspectorData = useInspectorStore((s) => s.setInspectorData);
+  const clearInspectorData = useInspectorStore((s) => s.clearInspectorData);
+
+  // H4 fix: clear stale inspector data when result changes
+  useEffect(() => {
+    clearInspectorData();
+  }, [queryResult, tableResult, clearInspectorData]);
+
   const handleRowSelect = useCallback((rowIdx: number, mode: 'single' | 'range' | 'toggle') => {
     setSelectedRows(prev => {
       const next = new Set(prev);
       if (mode === 'single') {
         next.clear(); next.add(rowIdx); setLastSelectedRow(rowIdx); onRowSelectProp?.(rowIdx);
+        // Update inspector data
+        if (result) setInspectorData(result.columns, result.rows[rowIdx] ?? null);
       } else if (mode === 'toggle') {
         if (next.has(rowIdx)) { next.delete(rowIdx); onRowSelectProp?.(null); }
-        else { next.add(rowIdx); onRowSelectProp?.(rowIdx); }
+        else { next.add(rowIdx); onRowSelectProp?.(rowIdx); if (result) setInspectorData(result.columns, result.rows[rowIdx] ?? null); }
         setLastSelectedRow(rowIdx);
       } else if (mode === 'range') {
         const anchor = lastSelectedRow ?? rowIdx;
@@ -335,10 +420,11 @@ export function ResultPanel({
         const to = Math.max(anchor, rowIdx);
         for (let i = from; i <= to; i++) next.add(i);
         onRowSelectProp?.(rowIdx);
+        if (result) setInspectorData(result.columns, result.rows[rowIdx] ?? null);
       }
       return next;
     });
-  }, [lastSelectedRow, onRowSelectProp]);
+  }, [lastSelectedRow, onRowSelectProp, result, setInspectorData]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -357,9 +443,14 @@ export function ResultPanel({
   }, [isTableMode, handleRefreshTable, handleRequestSave]);
 
   const handleCellDoubleClick = useCallback((rowIdx: number, colIdx: number) => {
-    if (!tableName) return;
+    if (!tableName) {
+      // Query mode: copy cell value to clipboard
+      const cellValue = result?.rows[rowIdx]?.[colIdx] ?? null;
+      navigator.clipboard.writeText(cellValue ?? '').catch(() => {});
+      return;
+    }
     setEditingCell({ rowIdx, colIdx });
-  }, [tableName]);
+  }, [tableName, result]);
 
   const handleCellCommit = useCallback((rowIdx: number, colIdx: number, newValue: string | null) => {
     if (!result) return;
@@ -528,18 +619,28 @@ export function ResultPanel({
         error={error}
         isTableMode={isTableMode}
         total={total}
+        filteredTotal={filteredTotal}
         approximateCount={isTableMode ? approximateCount : null}
-        quickSearchColumns={isTableMode ? quickSearchColumns : []}
-        quickSearchTerm={isTableMode ? quickSearchTerm : ''}
-        onQuickSearch={isTableMode ? handleQuickSearch : undefined}
-        onQuickSearchClear={isTableMode ? handleQuickSearchClear : undefined}
+        quickSearchColumns={isTableMode ? quickSearchColumns : (queryResult?.columns ?? [])}
+        quickSearchTerm={isTableMode ? quickSearchTerm : querySearchTerm}
+        onQuickSearch={isTableMode ? handleQuickSearch : handleQueryQuickSearch}
+        onQuickSearchClear={isTableMode ? handleQuickSearchClear : handleQueryQuickSearchClear}
         onExport={() => setShowExport(true)}
         onOpenQueryEditor={onOpenQueryEditor}
       />
       <div className="flex-1 overflow-hidden flex flex-col">
         {loading && (
-          <div className="flex h-full items-center justify-center text-xs text-text-muted">
-            {isTableMode ? 'Loading...' : 'Executing...'}
+          <div className="flex h-full flex-col items-center justify-center gap-3">
+            {/* Progress bar at top */}
+            <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden">
+              <div className="h-full w-1/3 animate-[shimmer_1.5s_ease-in-out_infinite] bg-accent-blue"
+                style={{ animation: 'shimmer 1.5s ease-in-out infinite', transform: 'translateX(-100%)' }}
+              />
+            </div>
+            <Loader2 size={20} className="animate-spin text-accent-blue" />
+            <span className="text-xs text-text-muted">
+              {isTableMode ? 'Loading...' : `Executing… ${(queryProgress.elapsedMs / 1000).toFixed(1)}s`}
+            </span>
           </div>
         )}
         {!loading && activeTab === 'results' && (
@@ -563,9 +664,10 @@ export function ResultPanel({
                   enumValuesByColumn={enumValuesByColumn}
                   fkColumns={currentFkColumns}
                   onFkNavigate={handleFkNavigate}
+                  showCheckboxes={isTableMode}
                 />
               ) : (
-                <EmptyState icon={<Database size={24} />} message="Run a query to see results" />
+                <EmptyState icon={<Database size={24} />} message="Run a query to see results" description="Press Ctrl+Enter to execute the current statement" />
               )}
             </div>
             {result && (

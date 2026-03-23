@@ -1,11 +1,14 @@
-import { Clock, Play, Settings, Square, Unplug } from "lucide-react";
+import { Clock, Settings, Shield, Unplug } from "lucide-react";
 import { formatTagLabel, tagClassName } from "../connection/connection-tag-picker";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useEditorStore } from "../../stores/editorStore";
+import { useEditorViewRef } from "../../contexts/editor-view-context";
+import { statementAtCursor } from "../../editor/statement-scanner";
 import { SafeModeConfirmDialog } from "../shared/SafeModeConfirmDialog";
+import { RunSplitButton } from "./run-split-button";
 
 interface ToolbarProps {
   onToggleSidebar: () => void;
@@ -48,6 +51,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
   const safeModeLevel = useSettingsStore((s) => s.settings.safeModeLevel);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
   const clearSchema = useSchemaStore((s) => s.clearSchema);
+  const editorViewRef = useEditorViewRef();
 
   const connection = selectedConnectionId ? connections.get(selectedConnectionId) : null;
   const status = selectedConnectionId ? getStatus(selectedConnectionId) : "disconnected";
@@ -59,12 +63,23 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
     disconnected: "bg-zinc-400",
   };
 
+  /** Extract the current statement at cursor from the editor, or fall back to full queryText. */
+  const getCurrentStatement = (): string => {
+    const view = editorViewRef.current;
+    if (!view) return queryText;
+    const doc = view.state.doc.toString();
+    const cursor = view.state.selection.main.head;
+    const stmt = statementAtCursor(doc, cursor);
+    return stmt.trim() || queryText;
+  };
+
   const handleRun = () => {
     if (!selectedConnectionId || !queryText.trim()) return;
     const sessionId = getSessionId(selectedConnectionId);
     if (!sessionId) return;
     onRunQuery?.();
-    void execute(sessionId, queryText, undefined, safeModeLevel);
+    const stmt = getCurrentStatement();
+    if (stmt.trim()) void execute(sessionId, stmt, undefined, safeModeLevel);
   };
 
   const handleStop = () => {
@@ -72,6 +87,35 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
     const sessionId = getSessionId(selectedConnectionId);
     if (!sessionId) return;
     void cancel(sessionId);
+  };
+
+  const handleRunAll = () => {
+    if (!selectedConnectionId || !queryText.trim()) return;
+    const sessionId = getSessionId(selectedConnectionId);
+    if (!sessionId) return;
+    onRunQuery?.();
+    // Execute all text as-is (all statements)
+    void execute(sessionId, queryText.trim(), undefined, safeModeLevel);
+  };
+
+  const handleExplain = () => {
+    if (!selectedConnectionId || !queryText.trim()) return;
+    const sessionId = getSessionId(selectedConnectionId);
+    if (!sessionId) return;
+    const conn = connections.get(selectedConnectionId);
+    const dbType = conn?.config?.dbType?.toLowerCase();
+    // Use current statement only (not all editor text)
+    const stmt = getCurrentStatement();
+    if (!stmt.trim()) return;
+    // Prefix with engine-appropriate EXPLAIN
+    let explainSql: string;
+    if (dbType === "mysql") {
+      explainSql = `EXPLAIN ${stmt}`;
+    } else {
+      explainSql = `EXPLAIN ANALYZE ${stmt}`;
+    }
+    onRunQuery?.();
+    void execute(sessionId, explainSql, undefined, safeModeLevel);
   };
 
   const handleCycleSafeMode = () => {
@@ -137,38 +181,27 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
         {safeModeLevel > 0 && (
           <button
             onClick={handleCycleSafeMode}
-            title={`Safe Mode: ${levelName} (click to cycle)`}
-            className={`rounded px-2 py-0.5 text-xs font-semibold ${levelColor}`}
+            title={`Safe Mode: ${levelName} — click to cycle (Off → Alert → Read-Only)`}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs font-semibold ${levelColor}`}
           >
+            <Shield size={12} aria-hidden="true" />
             {levelName}
           </button>
         )}
 
         <div className="flex-1" />
 
-        {/* Run / Stop */}
-        {!isExecuting ? (
-          <button
-            onClick={handleRun}
-            disabled={!selectedConnectionId || !queryText.trim()}
-            className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-            title="Run query (Ctrl+Enter)"
-            aria-label="Run query"
-          >
-            <Play size={12} aria-hidden="true" />
-            Run
-          </button>
-        ) : (
-          <button
-            onClick={handleStop}
-            className="flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
-            title="Cancel query"
-            aria-label="Cancel running query"
-          >
-            <Square size={12} aria-hidden="true" />
-            Stop
-          </button>
-        )}
+        {/* Run split-button */}
+        <RunSplitButton
+          onRun={handleRun}
+          onRunAll={handleRunAll}
+          onExplain={handleExplain}
+          onExportCsv={() => {/* Export dialog handled at ResultPanel level */}}
+          onCancel={handleStop}
+          isExecuting={isExecuting}
+          disabled={!selectedConnectionId || !queryText.trim()}
+          dbType={connection?.config?.dbType}
+        />
 
         <button
           onClick={onToggleHistory}

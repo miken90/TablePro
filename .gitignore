@@ -146,8 +146,11 @@ history/
 .beads/
 .team/
 .cocoindex_code/
+.serena/
 storage.sqlite3
 
 # bv (beads viewer) local config and caches
 .bv/
 repomix*
+# CocoIndex Code (ccc)
+/.cocoindex_code/

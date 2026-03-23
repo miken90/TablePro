@@ -1,4 +1,4 @@
-import { Database, Table2, PanelRight, Filter } from "lucide-react";
+import { Database, Table2, PanelRight, Filter, Check, X as XIcon } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -93,12 +93,14 @@ export function StatusBar() {
         {isExecuting ? (
           <span className="text-accent-blue">Running…</span>
         ) : error ? (
-          <span className="max-w-[300px] truncate text-accent-red">
+          <span className="flex items-center gap-1 max-w-[300px] truncate text-accent-red">
+            <XIcon size={10} className="flex-shrink-0" />
             Error{durationMs !== null ? ` (${durationMs}ms)` : ""}
           </span>
         ) : result ? (
           <>
-            <span>
+            <span className="flex items-center gap-1 text-accent-green">
+              <Check size={10} className="flex-shrink-0" />
               {result.affectedRows > 0
                 ? `${formatNumber(result.affectedRows)} affected`
                 : `${formatNumber(result.rows.length)} row${result.rows.length !== 1 ? "s" : ""}`}

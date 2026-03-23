@@ -2,6 +2,7 @@ import { Sidebar } from "./Sidebar";
 import { Toolbar } from "./Toolbar";
 import { EditorTabBar } from "../editor/EditorTabBar";
 import { SqlEditor } from "../editor/sql-editor";
+import { EditorStatusBar } from "../editor/editor-status-bar";
 import { ResultPanel } from "../grid/ResultPanel";
 import { WelcomeView } from "../connection/WelcomeView";
 import { QuickSwitcher } from "./quick-switcher";
@@ -15,9 +16,11 @@ import { UpdateNotification } from "../shared/update-notification";
 import { CommandPalette } from "../shared/command-palette";
 import { QueryAnnouncer } from "../shared/query-announcer";
 import { StatusBar } from "./StatusBar";
+import { EditorViewProvider } from "../../contexts/editor-view-context";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useQueryStore } from "../../stores/queryStore";
+import { useInspectorStore } from "../../stores/inspectorStore";
 import {
   useLayoutStore,
   SIDEBAR_MIN,
@@ -105,18 +108,21 @@ export function MainLayout() {
   });
 
   const queryResult = useQueryStore((s) => s.result);
-  const inspectorResult = viewMode === "table-browse" ? null : queryResult;
-  const selectedRow =
-    inspectorResult && selectedRowIndex !== null
-      ? (inspectorResult.rows[selectedRowIndex] ?? null)
-      : null;
-  const inspectorColumns = inspectorResult?.columns ?? [];
+  const inspectorStoreColumns = useInspectorStore((s) => s.columns);
+  const inspectorStoreRow = useInspectorStore((s) => s.row);
+
+  // Use inspectorStore data if available (set by ResultPanel on row select),
+  // otherwise fall back to query result with selectedRowIndex for query mode
+  const inspectorColumns = inspectorStoreRow ? inspectorStoreColumns : (queryResult?.columns ?? []);
+  const selectedRow = inspectorStoreRow
+    ?? (queryResult && selectedRowIndex !== null ? (queryResult.rows[selectedRowIndex] ?? null) : null);
 
   const sessionId = selectedConnectionId ? getSessionId(selectedConnectionId) : undefined;
   const isConnected = !!selectedConnectionId;
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-surface-base">
+      <EditorViewProvider>
       <Toolbar
         onToggleSidebar={() => useLayoutStore.getState().toggleSidebar()}
         onOpenSettings={() => useLayoutStore.getState().setSettingsOpen(true)}
@@ -135,10 +141,16 @@ export function MainLayout() {
               />
             </div>
             <div
-              className="w-1 cursor-col-resize bg-border-subtle hover:bg-accent-blue"
+              className="group w-1.5 cursor-col-resize bg-border-subtle hover:bg-accent-blue flex flex-col items-center justify-center"
               onMouseDown={handleSidebarResize}
               aria-hidden="true"
-            />
+            >
+              <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-70">
+                <span className="h-1 w-1 rounded-full bg-current" />
+                <span className="h-1 w-1 rounded-full bg-current" />
+                <span className="h-1 w-1 rounded-full bg-current" />
+              </div>
+            </div>
           </>
         )}
 
@@ -180,21 +192,30 @@ export function MainLayout() {
               {filterVisible && (
                 <FilterPanel tabId={filterTabId} columns={filterColumns} />
               )}
-              <div className="editor-results-container flex flex-1 flex-col overflow-hidden">
-                <div style={{ height: `${editorHeightPercent}%` }} className="overflow-hidden">
-                  <SqlEditor />
+                <div className="editor-results-container flex flex-1 flex-col overflow-hidden">
+                  <div style={{ height: `${editorHeightPercent}%` }} className="flex flex-col overflow-hidden">
+                    <div className="flex-1 overflow-hidden">
+                      <SqlEditor />
+                    </div>
+                    <EditorStatusBar />
+                  </div>
+                  <div
+                    className="group h-1.5 cursor-row-resize bg-border-subtle hover:bg-accent-blue flex items-center justify-center"
+                    onMouseDown={handleEditorResize}
+                  >
+                    <div className="flex gap-1 opacity-40 group-hover:opacity-70">
+                      <span className="h-1 w-1 rounded-full bg-current" />
+                      <span className="h-1 w-1 rounded-full bg-current" />
+                      <span className="h-1 w-1 rounded-full bg-current" />
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <ResultPanel
+                      sessionId={sessionId}
+                      onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
+                    />
+                  </div>
                 </div>
-                <div
-                  className="h-1 cursor-row-resize bg-border-subtle hover:bg-accent-blue"
-                  onMouseDown={handleEditorResize}
-                />
-                <div className="flex-1 overflow-hidden">
-                  <ResultPanel
-                    sessionId={sessionId}
-                    onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
-                  />
-                </div>
-              </div>
             </>
           )}
         </main>
@@ -202,9 +223,15 @@ export function MainLayout() {
         {inspectorVisible && isConnected && (
           <>
             <div
-              className="w-1 cursor-col-resize bg-border-subtle hover:bg-accent-blue"
+              className="group w-1.5 cursor-col-resize bg-border-subtle hover:bg-accent-blue flex flex-col items-center justify-center"
               onMouseDown={handleInspectorResize}
-            />
+            >
+              <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-70">
+                <span className="h-1 w-1 rounded-full bg-current" />
+                <span className="h-1 w-1 rounded-full bg-current" />
+                <span className="h-1 w-1 rounded-full bg-current" />
+              </div>
+            </div>
             <div style={{ width: inspectorWidth }} className="flex-shrink-0 overflow-hidden">
               <InspectorPanel
                 columns={inspectorColumns}
@@ -270,6 +297,7 @@ export function MainLayout() {
       />
 
       <QueryAnnouncer />
+      </EditorViewProvider>
     </div>
   );
 }

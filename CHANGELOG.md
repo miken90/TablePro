@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Query Editor UI redesign: Run split-button with dropdown (Run Current, Run All, Explain Plan, Export CSV)
+- Query Editor: editor status bar with statement count (`Stmt N/M`), cursor position, selection count, VIM indicator, and SQL dialect badge
+- Query Editor: query lifecycle states — running spinner with elapsed time, success green checkmark, error auto-switch to Messages tab
+- Query Editor: client-side quick-search in query results via web worker (available in both query and table-browse modes)
+- Query Editor: Inspector panel works in both query and table-browse modes via dedicated `inspectorStore`
+- Query Editor: double-click cell in query mode copies value to clipboard
+- Query Editor: Safe Mode badge shows Shield icon with descriptive tooltip
+- Query Editor: resize handles show 3-dot pattern with opacity transition on hover
+- Query Editor: empty state with `Ctrl+Enter` hint when no query results
+- Query Editor: checkbox column hidden in query-mode results (read-only)
+- Query Editor: PK emoji replaced with Lucide `Key` SVG icon in all grid components
+- Query Editor: integer `21px` gutter line height for Windows DPI scaling
+- Query Editor: tabs auto-assign connection color on creation
+- Query Editor: `EditorViewContext` provider for sharing CM6 EditorView between editor and status bar
+- Welcome Page redesign: search/filter connections by name, host, database, engine type, or environment tag with `/` hotkey focus
+- Welcome Page: database engine icon (color-coded per type) and environment badge on connection cards
+- Welcome Page: formatted URI display (`host:port · database`) instead of raw connection string
+- Welcome Page: app logo and version shown in header; version sourced from package.json via Vite define
+- Welcome Page: empty state with illustration for first-time users with zero saved connections
+- Welcome Page: expanded right-click context menu on all cards (Connect, Edit, Duplicate, Delete) with viewport clamping
+- Welcome Page: keyboard navigation — Ctrl+N new connection, Escape close form, ↑/↓ arrow keys between cards, Enter to connect
+- Welcome Page: "New Group" demoted from button to text link; connection list max-width increased to 480px
+- Welcome Page: connecting state shows spinner + highlighted card border; double-click card triggers connect
 - Layout store (Zustand): centralized panel state management with localStorage persistence for sidebar width; eliminates 17 useState calls from MainLayout
 - Resizable hook (`useResizable`): generic pointer-drag resize for sidebar, editor height, and inspector panels
 - Status bar: persistent bottom bar showing connection status, row count, execution time, and driver type

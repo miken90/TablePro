@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import type { SortingState } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { QueryResult } from '../../types/query';
@@ -30,6 +30,8 @@ interface DataGridProps {
   enumValuesByColumn?: Record<string, string[]>;
   fkColumns?: Record<string, FkRef>;
   onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
+  /** Show checkbox column for row selection. Default: true */
+  showCheckboxes?: boolean;
 }
 
 const DEFAULT_COL_WIDTH = 120;
@@ -56,8 +58,10 @@ export function DataGrid({
   enumValuesByColumn,
   fkColumns,
   onFkNavigate,
+  showCheckboxes = true,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
+  const fixedColsWidth = showCheckboxes ? FIXED_COLS_WIDTH : 40; // 40 = row numbers only
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
   const [checkedRows, setCheckedRows] = useState<Set<number>>(new Set());
@@ -107,13 +111,17 @@ export function DataGrid({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.font = '12px ui-sans-serif, system-ui, -apple-system, sans-serif';
+    ctx.font = "12px 'JetBrains Mono', 'Fira Code', Consolas, monospace";
 
     const col = result.columns[colIdx];
     const headerText = `${col.name} ${col.typeName}`;
+    // Header uses sans-serif, measure separately
+    ctx.font = '12px ui-sans-serif, system-ui, -apple-system, sans-serif';
     let maxWidth = ctx.measureText(headerText).width;
     if (col.isPrimaryKey) maxWidth += 16;
 
+    // Cell values use monospace
+    ctx.font = "12px 'JetBrains Mono', 'Fira Code', Consolas, monospace";
     const rowsToMeasure = Math.min(rows.length, 100);
     for (let i = 0; i < rowsToMeasure; i++) {
       const cellVal = rows[i]?.[colIdx];
@@ -125,6 +133,45 @@ export function DataGrid({
 
     const newWidth = Math.min(Math.max(MIN_COL_WIDTH, Math.ceil(maxWidth) + 24), MAX_AUTO_FIT_WIDTH);
     setColumnWidths(prev => ({ ...prev, [colName]: newWidth }));
+  }, [result, rows]);
+
+  // Auto-fit all columns on initial data load
+  const autoFitDoneRef = useRef<string>('');
+  useEffect(() => {
+    if (!result || result.columns.length === 0 || rows.length === 0) return;
+    // Build a fingerprint to detect new result sets (avoid re-fitting on same data)
+    const fingerprint = result.columns.map(c => c.name).join(',');
+    if (autoFitDoneRef.current === fingerprint) return;
+    autoFitDoneRef.current = fingerprint;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const monoFont = "12px 'JetBrains Mono', 'Fira Code', Consolas, monospace";
+    const sansFont = '12px ui-sans-serif, system-ui, -apple-system, sans-serif';
+
+    const newWidths: Record<string, number> = {};
+    for (let colIdx = 0; colIdx < result.columns.length; colIdx++) {
+      const col = result.columns[colIdx];
+      // Header uses sans-serif
+      ctx.font = sansFont;
+      const headerText = `${col.name} ${col.typeName}`;
+      let maxW = ctx.measureText(headerText).width;
+      if (col.isPrimaryKey) maxW += 16;
+      // Cell values use monospace
+      ctx.font = monoFont;
+      const rowsToMeasure = Math.min(rows.length, 100);
+      for (let i = 0; i < rowsToMeasure; i++) {
+        const cellVal = rows[i]?.[colIdx];
+        if (cellVal != null) {
+          const w = ctx.measureText(cellVal).width;
+          if (w > maxW) maxW = w;
+        }
+      }
+      newWidths[col.name] = Math.min(Math.max(MIN_COL_WIDTH, Math.ceil(maxW) + 24), MAX_AUTO_FIT_WIDTH);
+    }
+    setColumnWidths(newWidths);
   }, [result, rows]);
 
   const handleRowClick = useCallback((e: React.MouseEvent, rowIdx: number) => {
@@ -177,7 +224,7 @@ export function DataGrid({
   const columnsTotalWidth = visibleColumns.reduce(
     (sum, col) => sum + (resolvedWidths[col.name] ?? DEFAULT_COL_WIDTH), 0
   );
-  const totalContentWidth = FIXED_COLS_WIDTH + columnsTotalWidth;
+  const totalContentWidth = fixedColsWidth + columnsTotalWidth;
 
   return (
     <div
@@ -192,18 +239,20 @@ export function DataGrid({
           {/* Sticky header */}
           <div className="sticky top-0 z-10 flex border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
             {/* Checkbox select-all cell */}
-            <div className="w-10 flex-shrink-0 flex items-center justify-center border-r border-zinc-200 dark:border-zinc-700 py-1.5">
-              <input
-                type="checkbox"
-                className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600 accent-blue-500 cursor-pointer"
-                checked={allChecked}
-                ref={(el) => {
-                  if (el) el.indeterminate = someChecked;
-                }}
-                onChange={(e) => handleSelectAll(e.target.checked)}
-                aria-label="Select all rows"
-              />
-            </div>
+            {showCheckboxes && (
+              <div className="w-10 flex-shrink-0 flex items-center justify-center border-r border-zinc-200 dark:border-zinc-700 py-1.5">
+                <input
+                  type="checkbox"
+                  className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600 accent-blue-500 cursor-pointer"
+                  checked={allChecked}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someChecked;
+                  }}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  aria-label="Select all rows"
+                />
+              </div>
+            )}
             {/* Row # header */}
             <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-zinc-400 dark:text-zinc-500 text-xs border-r border-zinc-200 dark:border-zinc-700 select-none">
               #
@@ -247,6 +296,7 @@ export function DataGrid({
                   virtualTop={virtualRow.start}
                   fkColumns={fkColumns}
                   isChecked={checkedRows.has(absoluteIdx)}
+                  showCheckbox={showCheckboxes}
                   onCheckChange={(checked) => handleRowCheck(absoluteIdx, checked)}
                   onRowClick={(e) => handleRowClick(e, absoluteIdx)}
                   onCellDoubleClick={(colIdx) => onCellDoubleClick?.(absoluteIdx, colIdx)}

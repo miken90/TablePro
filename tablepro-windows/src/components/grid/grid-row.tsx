@@ -23,6 +23,7 @@ interface GridRowProps {
   enumValuesByColumn?: Record<string, string[]>;
   fkColumns?: Record<string, FkRef>;
   isChecked?: boolean;
+  showCheckbox?: boolean;
   onCheckChange?: (checked: boolean) => void;
   onRowClick: (e: React.MouseEvent) => void;
   onCellDoubleClick?: (colIdx: number) => void;
@@ -137,6 +138,7 @@ export function GridRow({
   enumValuesByColumn,
   fkColumns,
   isChecked = false,
+  showCheckbox = true,
   onCheckChange,
   onRowClick,
   onCellDoubleClick,
@@ -152,18 +154,20 @@ export function GridRow({
       onClick={onRowClick}
     >
       {/* Checkbox column */}
-      <div
-        className="w-10 flex-shrink-0 flex items-center justify-center border-r border-border-subtle"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <input
-          type="checkbox"
-          className="h-3 w-3 rounded border-border-subtle accent-blue-500 cursor-pointer"
-          checked={isChecked}
-          onChange={(e) => onCheckChange?.(e.target.checked)}
-          aria-label={`Select row ${rowIndex + 1}`}
-        />
-      </div>
+      {showCheckbox && (
+        <div
+          className="w-10 flex-shrink-0 flex items-center justify-center border-r border-border-subtle"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            className="h-3 w-3 rounded border-border-subtle accent-blue-500 cursor-pointer"
+            checked={isChecked}
+            onChange={(e) => onCheckChange?.(e.target.checked)}
+            aria-label={`Select row ${rowIndex + 1}`}
+          />
+        </div>
+      )}
 
       {/* Row number */}
       <div className="w-10 flex-shrink-0 px-1 flex items-center justify-end text-text-muted border-r border-border-subtle select-none">

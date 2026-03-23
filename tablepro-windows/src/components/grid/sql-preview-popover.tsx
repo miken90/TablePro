@@ -8,6 +8,7 @@ interface SqlPreviewPopoverProps {
   schema: string | null | undefined;
   columns: string[];
   primaryKeys: string[];
+  rows?: (string | null)[][];
   anchorEl: HTMLElement | null;
   onClose: () => void;
 }
@@ -34,11 +35,19 @@ export function generatePreviewSql(
   schema: string | null | undefined,
   columns: string[],
   primaryKeys: string[],
+  rows?: (string | null)[][],
 ): string {
   const table = qualifiedTable(tableName, schema);
   const statements: string[] = [];
+  // Fall back to all columns when no PKs detected
+  const whereKeys = primaryKeys.length > 0 ? primaryKeys : columns;
 
   for (const change of Object.values(changes)) {
+    // Use actual result rows when change.originalRow is empty (typical for updates)
+    const origRow = change.originalRow.length > 0
+      ? change.originalRow
+      : (rows?.[change.rowIndex] ?? []);
+
     if (change.type === "insert") {
       const changedCells = change.cellChanges.filter(cc => cc.newValue !== undefined);
       if (changedCells.length === 0) continue;
@@ -50,25 +59,25 @@ export function generatePreviewSql(
       const setCols = change.cellChanges
         .map(cc => `${quoteIdent(cc.columnName)}=${escapeValue(cc.newValue ?? null)}`)
         .join(", ");
-      const pkWhere = primaryKeys
+      const whereParts = whereKeys
         .map(pk => {
           const colIdx = columns.indexOf(pk);
-          const val = colIdx >= 0 ? change.originalRow[colIdx] ?? null : null;
+          const val = colIdx >= 0 ? origRow[colIdx] ?? null : null;
           return `${quoteIdent(pk)}=${escapeValue(val)}`;
         })
         .join(" AND ");
-      if (!pkWhere) continue;
-      statements.push(`UPDATE ${table} SET ${setCols} WHERE ${pkWhere}`);
+      if (!whereParts) continue;
+      statements.push(`UPDATE ${table} SET ${setCols} WHERE ${whereParts}`);
     } else if (change.type === "delete") {
-      const pkWhere = primaryKeys
+      const whereParts = whereKeys
         .map(pk => {
           const colIdx = columns.indexOf(pk);
-          const val = colIdx >= 0 ? change.originalRow[colIdx] ?? null : null;
+          const val = colIdx >= 0 ? origRow[colIdx] ?? null : null;
           return `${quoteIdent(pk)}=${escapeValue(val)}`;
         })
         .join(" AND ");
-      if (!pkWhere) continue;
-      statements.push(`DELETE FROM ${table} WHERE ${pkWhere}`);
+      if (!whereParts) continue;
+      statements.push(`DELETE FROM ${table} WHERE ${whereParts}`);
     }
   }
 
@@ -82,12 +91,13 @@ export function SqlPreviewButton({
   schema,
   columns,
   primaryKeys,
+  rows,
 }: Omit<SqlPreviewPopoverProps, "anchorEl" | "onClose">) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const btnRef = React.useRef<HTMLButtonElement>(null);
 
-  const sql = generatePreviewSql(changes, tableName, schema, columns, primaryKeys);
+  const sql = generatePreviewSql(changes, tableName, schema, columns, primaryKeys, rows);
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(sql);

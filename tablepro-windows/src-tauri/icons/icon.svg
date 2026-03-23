@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background gradient - warm blue -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5AADFF"/>
+      <stop offset="100%" stop-color="#2D7DD2"/>
+    </linearGradient>
+    <!-- Cylinder body gradient - left-to-right shading -->
+    <linearGradient id="cylBody" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#D4E4F4"/>
+      <stop offset="12%" stop-color="#ECF2F9"/>
+      <stop offset="50%" stop-color="#F5F8FC"/>
+      <stop offset="88%" stop-color="#E8EFF7"/>
+      <stop offset="100%" stop-color="#CDE0F0"/>
+    </linearGradient>
+    <!-- Top ellipse gradient -->
+    <linearGradient id="cylTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FAFCFE"/>
+      <stop offset="100%" stop-color="#E0EBF5"/>
+    </linearGradient>
+    <!-- Bottom rim gradient -->
+    <linearGradient id="cylBottom" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C8D8E8"/>
+      <stop offset="100%" stop-color="#B0C4D8"/>
+    </linearGradient>
+    <!-- Shadow -->
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#1A5A9E"/>
+      <stop offset="100%" stop-color="#2D7DD2" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Band groove color -->
+    <linearGradient id="band" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#B8CCE0"/>
+      <stop offset="50%" stop-color="#C8D8EA"/>
+      <stop offset="100%" stop-color="#B8CCE0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded rectangle -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bg)"/>
+
+  <!-- Subtle inner glow on top -->
+  <rect x="16" y="16" width="480" height="240" rx="96" ry="96" fill="#6DB8FF" opacity="0.25"/>
+
+  <!-- Drop shadow ellipse -->
+  <ellipse cx="256" cy="398" rx="120" ry="18" fill="url(#shadow)" opacity="0.5"/>
+
+  <!-- Database cylinder body -->
+  <path d="M 128 195 L 128 340 Q 128 392 256 392 Q 384 392 384 340 L 384 195 Q 384 235 256 235 Q 128 235 128 195 Z"
+        fill="url(#cylBody)"/>
+
+  <!-- Body left edge highlight -->
+  <path d="M 133 200 L 133 335" stroke="#F0F4F8" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Middle band groove - dark line -->
+  <path d="M 130 275 Q 130 305 256 305 Q 382 305 382 275"
+        fill="none" stroke="#A0B8D0" stroke-width="2.5"/>
+  <!-- Middle band groove - light line below -->
+  <path d="M 130 279 Q 130 309 256 309 Q 382 309 382 279"
+        fill="none" stroke="#E8EFF7" stroke-width="1.5"/>
+
+  <!-- Bottom ellipse visible rim -->
+  <ellipse cx="256" cy="340" rx="128" ry="52"
+           fill="none" stroke="#A8BED4" stroke-width="2"/>
+
+  <!-- Top ellipse fill -->
+  <ellipse cx="256" cy="195" rx="128" ry="52" fill="url(#cylTop)"/>
+
+  <!-- Top ellipse outer rim -->
+  <ellipse cx="256" cy="195" rx="128" ry="52"
+           fill="none" stroke="#93B4D4" stroke-width="2.5"/>
+
+  <!-- Inner ellipse detail on top -->
+  <ellipse cx="256" cy="195" rx="92" ry="34"
+           fill="none" stroke="#C0D4E8" stroke-width="2"/>
+
+  <!-- Specular highlight on top -->
+  <ellipse cx="226" cy="182" rx="56" ry="14" fill="#FFFFFF" opacity="0.55"
+           transform="rotate(-6 226 182)"/>
+
+  <!-- Small bright spot -->
+  <ellipse cx="210" cy="178" rx="20" ry="7" fill="#FFFFFF" opacity="0.3"
+           transform="rotate(-6 210 178)"/>
+</svg>

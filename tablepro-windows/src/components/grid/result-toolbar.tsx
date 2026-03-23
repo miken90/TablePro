@@ -14,6 +14,7 @@ interface ResultToolbarProps {
   error: string | null;
   isTableMode: boolean;
   total: number;
+  filteredTotal?: number | null;
   approximateCount?: number | null;
   quickSearchColumns?: ColumnInfo[];
   quickSearchTerm?: string;
@@ -30,6 +31,7 @@ export function ResultToolbar({
   error,
   isTableMode,
   total,
+  filteredTotal,
   approximateCount,
   quickSearchColumns = [],
   quickSearchTerm = '',
@@ -66,11 +68,7 @@ export function ResultToolbar({
         Results
         {result && (
           <span className="ml-1.5 rounded bg-surface-muted px-1 py-0.5 text-[10px]">
-            {isTableMode
-              ? (typeof approximateCount === 'number' && approximateCount > 0
-                ? `~${approximateCount.toLocaleString()}`
-                : total.toLocaleString())
-              : result.rows.length}
+            {result.rows.length}
           </span>
         )}
       </button>
@@ -84,7 +82,7 @@ export function ResultToolbar({
         {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" aria-label="Error" />}
       </button>
 
-      {isTableMode && onQuickSearch && onQuickSearchClear && (
+      {onQuickSearch && onQuickSearchClear && (
         <QuickSearchBar
           columns={quickSearchColumns}
           value={quickSearchTerm}
@@ -121,7 +119,15 @@ export function ResultToolbar({
               Export
             </button>
             <span className="text-[10px] text-text-muted">
-              {result.affectedRows > 0 && `${result.affectedRows} rows affected · `}
+              {filteredTotal != null && filteredTotal !== total
+                ? `${filteredTotal} of ${total} rows`
+                : isTableMode
+                  ? (typeof approximateCount === 'number' && approximateCount > 0
+                    ? `~${approximateCount.toLocaleString()} rows`
+                    : `${total.toLocaleString()} rows`)
+                  : `${total} rows`}
+              {result.affectedRows > 0 && ` · ${result.affectedRows} affected`}
+              {' · '}
               {result.executionTimeMs.toFixed(1)}ms
             </span>
           </>

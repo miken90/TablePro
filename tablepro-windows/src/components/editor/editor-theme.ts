@@ -28,7 +28,7 @@ export function createEditorTheme(): Extension {
       overflow: "auto",
       fontFamily: "inherit",
       fontSize: "inherit",
-      lineHeight: "1.5",
+      lineHeight: "21px",
     },
     // Gutters
     ".cm-gutters": {
@@ -46,6 +46,7 @@ export function createEditorTheme(): Extension {
       color: "var(--gutter-fg)",
       minWidth: "2em",
       textAlign: "right",
+      lineHeight: "21px",
     },
     ".cm-activeLineGutter": {
       backgroundColor: "var(--active-line-bg)",

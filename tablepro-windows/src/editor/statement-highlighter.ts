@@ -1,9 +1,8 @@
 import { ViewPlugin, Decoration, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
+import { type RangeSet } from "@codemirror/state";
 import { locatedStatementAtCursor } from "./statement-scanner";
 
-const statementHighlightMark = Decoration.mark({
-  class: "cm-active-statement",
-});
+const lineHighlight = Decoration.line({ class: "cm-active-statement" });
 
 export const statementHighlighter = ViewPlugin.fromClass(
   class {
@@ -27,15 +26,24 @@ export const statementHighlighter = ViewPlugin.fromClass(
       const located = locatedStatementAtCursor(doc, cursor);
       if (!located.sql.trim()) return Decoration.none;
 
-      const from = located.offset;
-      const to = located.offset + located.sql.length;
+      const from = Math.max(0, located.offset);
+      const to = Math.min(located.offset + located.sql.length, view.state.doc.length);
+      if (from >= to) return Decoration.none;
 
-      // Clamp to document bounds
-      const clampedFrom = Math.max(0, from);
-      const clampedTo = Math.min(to, view.state.doc.length);
-      if (clampedFrom >= clampedTo) return Decoration.none;
+      // Create a line decoration for each line within the statement range
+      const decorations: { from: number; value: typeof lineHighlight }[] = [];
+      const startLine = view.state.doc.lineAt(from).number;
+      const endLine = view.state.doc.lineAt(to).number;
 
-      return Decoration.set([statementHighlightMark.range(clampedFrom, clampedTo)]);
+      for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
+        const line = view.state.doc.line(lineNum);
+        decorations.push({ from: line.from, value: lineHighlight });
+      }
+
+      return Decoration.set(
+        decorations.map(d => d.value.range(d.from)),
+        true,
+      ) as RangeSet<typeof lineHighlight> as DecorationSet;
     }
   },
   { decorations: (v) => v.decorations },

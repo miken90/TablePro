@@ -107,15 +107,40 @@ Priority order for this project:
 4. If logs are silent, inspect Windows Event Log + `%LOCALAPPDATA%/CrashDumps`
 5. Only then deep-dive plugin/IPC internals
 
-## Semantic Code Search (cocoindex-code)
+## [MANDATORY] Context Gathering Protocol
 
-Use the `cocoindex-code` MCP server's `code_search` tool for semantic code search when:
+**EVERY agent MUST follow this protocol BEFORE writing code or making decisions.** Skip only if the task is purely conversational (no code changes).
+
+### Step 1 — Read project docs (if relevant)
+Read relevant docs in `docs/development/` for your task (architecture, code standards). Don't read all docs for a simple change.
+
+### Step 2 — Bootstrap and use ccc semantic search
+```bash
+ccc status 2>/dev/null || (ccc init && ccc index)
+```
+Agent MUST auto-bootstrap `ccc` if not initialized. Use `ccc search <query>` to find relevant code by meaning **BEFORE** grep/glob.
+
+```bash
+ccc search plugin loading DLL discovery
+ccc search --lang rust database connection pooling
+ccc search --lang typescript --path 'src/stores/*' change tracking
+```
+
+### Step 3 — Read full files only when needed
+After Steps 1-2 give direction, read specific files for full context.
+
+> **Why this order?** Docs = conventions/architecture (prevents wrong patterns). Semantic search = find code without knowing names. Full reads = confirm details.
+
+### When to use ccc (prefer over grep/glob):
 - Searching for code by meaning or description rather than exact text
 - Exploring unfamiliar parts of the codebase
 - Looking for implementations without knowing exact names
 - Finding similar code patterns or related functionality
 
-Use grep/glob instead when searching for exact string literals, known identifiers, or listing files by type.
+### When NOT to use (use grep/glob instead):
+- Exact string literals, error messages, or known identifiers
+- Listing all files of a type (use glob)
+- Known function name you can spell exactly
 
 ## Code Style
 

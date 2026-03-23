@@ -7,6 +7,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useQueryProgress } from "../../hooks/useQueryProgress";
+import { useEditorViewRef } from "../../contexts/editor-view-context";
 import {
   fontCompartment,
   vimCompartment,
@@ -103,6 +104,7 @@ function resolveDialect(runtime: EditorRuntime, dialect: SqlDialect | undefined)
 export function SqlEditor({ dialect }: SqlEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const contextViewRef = useEditorViewRef();
   const stateMapRef = useRef<Map<string, EditorState>>(new Map());
   const [editorRuntime, setEditorRuntime] = useState<EditorRuntime | null>(null);
 
@@ -249,6 +251,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
       });
 
       viewRef.current = view;
+      contextViewRef.current = view;
       if (tabId) {
         stateMapRef.current.set(tabId, initialState);
       }
@@ -268,6 +271,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
       view.destroy();
       viewRef.current = null;
+      contextViewRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

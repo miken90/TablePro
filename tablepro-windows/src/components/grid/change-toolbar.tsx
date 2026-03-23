@@ -8,9 +8,10 @@ interface ChangeToolbarProps {
   schema?: string | null;
   columns?: string[];
   primaryKeys?: string[];
+  rows?: (string | null)[][];
 }
 
-export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys }: ChangeToolbarProps) {
+export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys, rows }: ChangeToolbarProps) {
   const { _changes, _undoStack, _redoStack, hasChanges, undo, redo, clear } =
     useChangeStore();
 
@@ -50,6 +51,7 @@ export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys 
             schema={schema}
             columns={columns!}
             primaryKeys={primaryKeys!}
+            rows={rows}
           />
         )}
         <button
@@ -78,10 +80,10 @@ export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys 
         <button
           type="button"
           onClick={onSave}
-          className="bg-green-600 text-white hover:bg-green-700 px-2 py-0.5 rounded text-xs"
+          className="bg-green-600 text-white hover:bg-green-700 px-3 py-1 rounded font-semibold text-xs shadow-sm"
           title="Save changes (Ctrl+S)"
         >
-          Save ({changeCount})
+          ▶ Execute ({changeCount})
         </button>
       </div>
     </div>
