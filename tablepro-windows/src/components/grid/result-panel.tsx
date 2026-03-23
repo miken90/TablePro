@@ -633,9 +633,7 @@ export function ResultPanel({
           <div className="flex h-full flex-col items-center justify-center gap-3">
             {/* Progress bar at top */}
             <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden">
-              <div className="h-full w-1/3 animate-[shimmer_1.5s_ease-in-out_infinite] bg-accent-blue"
-                style={{ animation: 'shimmer 1.5s ease-in-out infinite', transform: 'translateX(-100%)' }}
-              />
+              <div className="h-full w-1/3 animate-shimmer bg-accent-blue" />
             </div>
             <Loader2 size={20} className="animate-spin text-accent-blue" />
             <span className="text-xs text-text-muted">

@@ -97,7 +97,7 @@ export function EditorStatusBar() {
   }, [viewRef]);
 
   return (
-    <div className="flex items-center gap-3 border-t border-zinc-200 bg-zinc-50 px-3 py-0.5 text-[10px] text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500">
+    <div className="flex items-center gap-3 border-t border-border-subtle bg-surface px-3 py-0.5 text-[10px] text-text-muted">
       {/* Statement index */}
       {stmtInfo.total > 0 && (
         <span>Stmt {stmtInfo.current}/{stmtInfo.total}</span>
@@ -118,7 +118,7 @@ export function EditorStatusBar() {
 
       {/* Vim mode indicator */}
       {vimMode && (
-        <span className="rounded bg-zinc-200 px-1 font-mono text-[9px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+        <span className="rounded bg-surface-muted px-1 font-mono text-[9px] text-text-secondary">
           VIM
         </span>
       )}

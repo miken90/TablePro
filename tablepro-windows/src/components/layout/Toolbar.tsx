@@ -47,7 +47,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
   const getStatus = useConnectionStore((s) => s.getStatus);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
   const disconnect = useConnectionStore((s) => s.disconnect);
-  const { isExecuting, queryText, execute, cancel, pendingSafeCheck, confirmSafeCheck, cancelSafeCheck } = useQueryStore();
+  const { isExecuting, queryText, result: queryResult, execute, cancel, pendingSafeCheck, confirmSafeCheck, cancelSafeCheck } = useQueryStore();
   const safeModeLevel = useSettingsStore((s) => s.settings.safeModeLevel);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
   const clearSchema = useSchemaStore((s) => s.clearSchema);
@@ -201,6 +201,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
           isExecuting={isExecuting}
           disabled={!selectedConnectionId || !queryText.trim()}
           dbType={connection?.config?.dbType}
+          hasResult={!!queryResult}
         />
 
         <button

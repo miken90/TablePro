@@ -145,7 +145,7 @@ export function MainLayout() {
               onMouseDown={handleSidebarResize}
               aria-hidden="true"
             >
-              <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-70">
+              <div className="flex flex-col gap-1 opacity-40 group-hover:opacity-70">
                 <span className="h-1 w-1 rounded-full bg-current" />
                 <span className="h-1 w-1 rounded-full bg-current" />
                 <span className="h-1 w-1 rounded-full bg-current" />
@@ -226,7 +226,7 @@ export function MainLayout() {
               className="group w-1.5 cursor-col-resize bg-border-subtle hover:bg-accent-blue flex flex-col items-center justify-center"
               onMouseDown={handleInspectorResize}
             >
-              <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-70">
+              <div className="flex flex-col gap-1 opacity-40 group-hover:opacity-70">
                 <span className="h-1 w-1 rounded-full bg-current" />
                 <span className="h-1 w-1 rounded-full bg-current" />
                 <span className="h-1 w-1 rounded-full bg-current" />

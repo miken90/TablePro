@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Query Editor: Inspector panel works in both query and table-browse modes via dedicated `inspectorStore`
 - Query Editor: double-click cell in query mode copies value to clipboard
 - Query Editor: Safe Mode badge shows Shield icon with descriptive tooltip
-- Query Editor: resize handles show 3-dot pattern with opacity transition on hover
+- Query Editor: resize handles show 3-dot pattern visible at rest across all panels (sidebar, editor, inspector)
+- Query Editor: all grid/editor/inspector components use semantic color tokens for theme consistency
 - Query Editor: empty state with `Ctrl+Enter` hint when no query results
 - Query Editor: checkbox column hidden in query-mode results (read-only)
 - Query Editor: PK emoji replaced with Lucide `Key` SVG icon in all grid components

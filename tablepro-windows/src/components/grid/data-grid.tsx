@@ -237,13 +237,13 @@ export function DataGrid({
       <div ref={parentRef} className="h-full overflow-auto">
         <div style={{ minWidth: totalContentWidth }}>
           {/* Sticky header */}
-          <div className="sticky top-0 z-10 flex border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+          <div className="sticky top-0 z-10 flex border-b border-border-subtle bg-surface">
             {/* Checkbox select-all cell */}
             {showCheckboxes && (
-              <div className="w-10 flex-shrink-0 flex items-center justify-center border-r border-zinc-200 dark:border-zinc-700 py-1.5">
+              <div className="w-10 flex-shrink-0 flex items-center justify-center border-r border-border-subtle py-1.5">
                 <input
                   type="checkbox"
-                  className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600 accent-blue-500 cursor-pointer"
+                  className="h-3 w-3 rounded border-border-subtle accent-blue-500 cursor-pointer"
                   checked={allChecked}
                   ref={(el) => {
                     if (el) el.indeterminate = someChecked;
@@ -254,7 +254,7 @@ export function DataGrid({
               </div>
             )}
             {/* Row # header */}
-            <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-zinc-400 dark:text-zinc-500 text-xs border-r border-zinc-200 dark:border-zinc-700 select-none">
+            <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-text-muted text-xs border-r border-border-subtle select-none">
               #
             </div>
             {/* Column headers */}

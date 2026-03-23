@@ -18,15 +18,15 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
   const toggleBtnCls = (active: boolean) =>
     `flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors ${
       active
-        ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
-        : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        ? "bg-surface-muted text-text-primary"
+        : "text-text-muted hover:text-text-secondary hover:bg-surface-muted"
     }`;
 
   return (
-    <div className="flex h-full flex-col border-l border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex h-full flex-col border-l border-border bg-surface">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-700">
-        <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Inspector</span>
+      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+        <span className="text-xs font-semibold text-text-primary">Inspector</span>
         <div className="flex items-center gap-1">
           {row !== null && (
             <div className="flex items-center gap-0.5 mr-1">
@@ -52,7 +52,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
           )}
           <button
             onClick={onClose}
-            className="rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            className="rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-text-secondary"
             title="Close inspector (Ctrl+Shift+I)"
             aria-label="Close inspector"
           >
@@ -63,7 +63,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
 
       {/* Body */}
       {row === null ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-zinc-400 dark:text-zinc-500">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-text-muted">
           <Rows3 size={24} />
           <span className="text-xs">Select a row to inspect</span>
         </div>
@@ -85,7 +85,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
 
       {/* Footer with column count */}
       {row !== null && (
-        <div className="border-t border-zinc-200 px-3 py-1 text-[10px] text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
+        <div className="border-t border-border px-3 py-1 text-[10px] text-text-muted">
           {columns.length} columns
         </div>
       )}

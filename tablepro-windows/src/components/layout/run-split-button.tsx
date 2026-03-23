@@ -11,6 +11,8 @@ interface RunSplitButtonProps {
   disabled: boolean;
   /** Database type for Explain Plan support check */
   dbType?: string;
+  /** Whether a query result exists (enables Export to CSV) */
+  hasResult?: boolean;
 }
 
 const EXPLAIN_SUPPORTED = new Set(["postgres", "postgresql", "mysql"]);
@@ -24,6 +26,7 @@ export function RunSplitButton({
   isExecuting,
   disabled,
   dbType,
+  hasResult = false,
 }: RunSplitButtonProps) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -136,6 +139,8 @@ export function RunSplitButton({
             icon={<FileSpreadsheet size={12} />}
             label="Export to CSV"
             onClick={() => { onExportCsv(); closeDropdown(); }}
+            disabled={!hasResult}
+            title={hasResult ? undefined : "Run a query first, then export from the result panel"}
           />
         </div>
       )}

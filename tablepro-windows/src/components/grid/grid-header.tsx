@@ -74,7 +74,7 @@ export function GridHeader({
           return (
             <div
               key={col.name}
-              className="relative flex-shrink-0 border-r border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700/50 group"
+              className="relative flex-shrink-0 border-r border-border-subtle cursor-pointer hover:bg-surface-hover group"
               style={{ width }}
               onClick={() => onSortChange(col.name)}
             >
@@ -82,17 +82,17 @@ export function GridHeader({
                 {col.isPrimaryKey && (
                   <Key size={10} className="text-amber-500 flex-shrink-0" />
                 )}
-                <span className="truncate font-medium text-zinc-700 dark:text-zinc-200">
+                <span className="truncate font-medium text-text-primary">
                   {col.name}
                 </span>
-                <span className="text-zinc-400 dark:text-zinc-500 text-[10px] flex-shrink-0">
+                <span className="text-text-muted text-[10px] flex-shrink-0">
                   {col.typeName}
                 </span>
                 <SortIndicator dir={sortDir} />
 
                 {/* Chevron — visible on hover */}
                 <button
-                  className="ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-opacity p-0.5 rounded"
+                  className="ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 text-text-muted hover:text-text-secondary transition-opacity p-0.5 rounded"
                   onClick={(e) => handleChevronClick(e, col)}
                   title="Column options"
                 >
