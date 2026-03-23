@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
+import { extractErrorMessage } from "../ipc/error";
 
 interface ConnectionState {
   connections: Map<string, SavedConnection>;
@@ -71,7 +72,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         return { connectionStatuses: statuses };
       });
       toast.dismiss(loadingId);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = extractErrorMessage(err);
       toast.error("Connection failed", { description: msg, duration: Infinity });
       throw err;
     }

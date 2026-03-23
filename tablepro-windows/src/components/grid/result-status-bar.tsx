@@ -9,39 +9,41 @@ export function ResultStatusBar({ logEntries }: ResultStatusBarProps) {
   return (
     <div className="h-full overflow-y-auto font-mono text-xs">
       {logEntries.length === 0 ? (
-        <p className="p-3 text-zinc-500">No queries executed yet.</p>
+        <p className="p-3 text-[var(--color-text-muted)]">No queries executed yet.</p>
       ) : (
         logEntries.map((entry) => (
           <div
             key={entry.id}
-            className={`border-b border-zinc-100 dark:border-zinc-800 px-3 py-2 ${
-              entry.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : ''
+            className={`border-b border-[var(--color-border-subtle)] px-3 py-2 ${
+              entry.status === 'error' ? 'bg-red-500/5' : ''
             }`}
           >
             <div className="flex items-center gap-2 mb-0.5">
               <span className={`text-[10px] font-semibold uppercase tracking-wide ${
                 entry.status === 'running' ? 'text-blue-500' :
                 entry.status === 'error'   ? 'text-red-500' :
-                                             'text-green-600 dark:text-green-400'
+                                             'text-green-500'
               }`}>
                 {entry.status === 'running' ? '⏳' : entry.status === 'error' ? '✗' : '✓'}
                 {' '}{entry.source}
               </span>
               {entry.durationMs !== undefined && (
-                <span className="text-[10px] text-zinc-400">{entry.durationMs.toFixed(0)}ms</span>
+                <span className="text-[10px] text-[var(--color-text-muted)]">{entry.durationMs.toFixed(0)}ms</span>
               )}
               {entry.rowCount !== undefined && (
-                <span className="text-[10px] text-zinc-400">{entry.rowCount} rows</span>
+                <span className="text-[10px] text-[var(--color-text-muted)]">{entry.rowCount} rows</span>
               )}
-              <span className="ml-auto text-[10px] text-zinc-400">
+              <span className="ml-auto text-[10px] text-[var(--color-text-muted)]">
                 {new Date(entry.timestamp).toLocaleTimeString()}
               </span>
             </div>
-            <pre className="whitespace-pre-wrap break-all text-zinc-700 dark:text-zinc-300">
+            <pre className="whitespace-pre-wrap break-all text-[var(--color-text-secondary)]">
               {entry.sql}
             </pre>
             {entry.error && (
-              <p className="mt-1 text-red-600 dark:text-red-400">{entry.error}</p>
+              <p className="mt-1 text-red-500">
+                {typeof entry.error === 'string' ? entry.error : JSON.stringify(entry.error)}
+              </p>
             )}
           </div>
         ))

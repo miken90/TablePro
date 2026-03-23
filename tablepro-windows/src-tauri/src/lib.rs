@@ -6,6 +6,8 @@ pub mod storage;
 
 use std::sync::Arc;
 
+use tauri::Manager;
+
 use commands::connection::{connect, disconnect, get_connection_status, test_connection};
 use commands::data::{generate_row_sql, save_changes};
 use commands::export::export_to_file;
@@ -108,6 +110,22 @@ pub fn run() {
             }
             store
         }))
+        .setup(|app| {
+            // Set the window icon explicitly — bundle.icon only applies to built
+            // installers, not dev mode.
+            if let Some(window) = app.get_webview_window("main") {
+                let icon_bytes = include_bytes!("../icons/32x32.png");
+                match tauri::image::Image::from_bytes(icon_bytes) {
+                    Ok(icon) => {
+                        if let Err(e) = window.set_icon(icon) {
+                            tracing::warn!("Failed to set window icon: {e}");
+                        }
+                    }
+                    Err(e) => tracing::warn!("Failed to decode window icon: {e}"),
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             // connection
             test_connection,

@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Grid header horizontal scroll: replaced dual-container scroll sync with single scroll container + `position: sticky` — header and body now scroll together natively
 - `[object Object]` rendering in grid cells and quick search: added `safeString()` helper and object type guards in grid-row, cell-formatter, and quick-search-bar
+- `[object Object]` error messages in Messages tab and toast notifications: centralized all error extraction through `extractErrorMessage()` with robust object/JSON fallbacks
+- App icon shows correctly in dev mode (previously showed generic blue square): icon now set programmatically via Rust `setup()` callback using `include_bytes!`
+- Custom scrollbar styling: thin 6px scrollbars themed with CSS variables for dark/light mode
+- Migrated result-status-bar from hardcoded `zinc-*` classes to semantic CSS variable tokens
 - Migrated 7 components from hardcoded `zinc-*` colors to semantic design token classes (`bg-surface`, `text-text-primary`, `border-border-subtle`, etc.)
 - Inactive editor tabs now have `border-b-2 border-b-transparent` to prevent height shift when switching active tab
 

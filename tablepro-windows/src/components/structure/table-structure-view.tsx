@@ -7,6 +7,7 @@ import { DdlTab } from "./ddl-tab";
 import { SchemaPreviewDialog } from "./schema-preview-dialog";
 import { useStructureChangeStore } from "../../stores/structureChangeStore";
 import * as commands from "../../ipc/commands";
+import { extractErrorMessage } from "../../ipc/error";
 import type { AlterColumnChange } from "../../ipc/commands";
 
 type StructureTab = "columns" | "indexes" | "foreign-keys" | "ddl";
@@ -82,7 +83,7 @@ export function TableStructureView({
       setPreviewSql(sql);
       setShowPreview(true);
     } catch (err) {
-      setApplyError(err instanceof Error ? err.message : String(err));
+      setApplyError(extractErrorMessage(err));
     }
   }, [sessionId, tableName, schema, buildAlterPayload]);
 
@@ -99,7 +100,7 @@ export function TableStructureView({
       setShowPreview(false);
       onRefresh?.();
     } catch (err) {
-      setApplyError(err instanceof Error ? err.message : String(err));
+      setApplyError(extractErrorMessage(err));
     } finally {
       setIsApplying(false);
     }

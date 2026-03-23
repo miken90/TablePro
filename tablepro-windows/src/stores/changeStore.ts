@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import * as commands from "../ipc/commands";
+import { extractErrorMessage } from "../ipc/error";
 import type { SavePayload } from "../ipc/commands";
 
 export interface CellChange {
@@ -194,7 +195,7 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
       });
     } catch (err) {
       toast.dismiss(loadingId);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = extractErrorMessage(err);
       toast.error("Save failed", { description: msg, duration: Infinity });
       throw err;
     }

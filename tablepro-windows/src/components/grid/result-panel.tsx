@@ -13,6 +13,7 @@ import {
   generateRowSql,
   type RowSqlFormat,
 } from '../../ipc/commands';
+import { extractErrorMessage } from '../../ipc/error';
 import type { ColumnInfo, QueryResult } from '../../types/query';
 import { DataGrid } from './data-grid';
 import { Pagination } from './pagination';
@@ -144,7 +145,7 @@ export function ResultPanel({
       useQueryLogStore.getState().update(logId, { status: 'success', durationMs: Date.now() - startMs, rowCount: rows.rows.length });
     } catch (err) {
       if (seq !== fetchSeqRef.current) return;
-      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorMsg = extractErrorMessage(err);
       setFetchError(errorMsg);
       setTableResult(null);
       setTotalCount(0);

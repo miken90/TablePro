@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { ColumnInfo } from '../../types/query';
 import type { FkRef } from '../../stores/schemaStore';
