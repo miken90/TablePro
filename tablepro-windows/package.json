@@ -11,6 +11,10 @@
     "tauri": "tauri",
     "dev:tauri": "powershell -ExecutionPolicy Bypass -File scripts/dev.ps1",
     "dev:tauri:cli": "tauri dev --no-watch",
+    "build:debug": "powershell -ExecutionPolicy Bypass -File scripts/build-debug.ps1",
+    "build:release": "powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1",
+    "build:portable": "powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Target portable",
+    "build:installer": "powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Target installer",
     "test": "vitest run",
     "test:watch": "vitest"
   },
