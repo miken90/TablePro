@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Code2, Loader2 } from 'lucide-react';
+import { Download, Code2, Loader2, RefreshCw } from 'lucide-react';
 import type { ColumnInfo, QueryResult } from '../../types/query';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
@@ -22,6 +22,7 @@ interface ResultToolbarProps {
   onQuickSearchClear?: () => void;
   onExport: () => void;
   onOpenQueryEditor?: () => void;
+  onRefresh?: () => void;
 }
 
 export function ResultToolbar({
@@ -39,12 +40,18 @@ export function ResultToolbar({
   onQuickSearchClear,
   onExport,
   onOpenQueryEditor,
+  onRefresh,
 }: ResultToolbarProps) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const sessionId = useConnectionStore((s) =>
     selectedConnectionId ? s.sessionIds.get(selectedConnectionId) : undefined,
   );
   const queryProgress = useQueryProgress(sessionId ?? null);
+
+  // Defensive: force to 'results' tab in table-browse mode
+  if (isTableMode && activeTab === 'messages') {
+    onTabChange('results');
+  }
 
   const tabCls = (tab: ActiveTab) =>
     `px-3 py-1 text-xs cursor-pointer border-b-2 ${
@@ -72,15 +79,17 @@ export function ResultToolbar({
           </span>
         )}
       </button>
-      <button
-        role="tab"
-        aria-selected={activeTab === 'messages'}
-        className={tabCls('messages')}
-        onClick={() => onTabChange('messages')}
-      >
-        Messages
-        {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" aria-label="Error" />}
-      </button>
+      {!isTableMode && (
+        <button
+          role="tab"
+          aria-selected={activeTab === 'messages'}
+          className={tabCls('messages')}
+          onClick={() => onTabChange('messages')}
+        >
+          Messages
+          {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" aria-label="Error" />}
+        </button>
+      )}
 
       {onQuickSearch && onQuickSearchClear && (
         <QuickSearchBar
@@ -106,6 +115,15 @@ export function ResultToolbar({
           >
             <Code2 size={10} />
             Query Editor
+          </button>
+        )}
+        {isTableMode && onRefresh && (
+          <button
+            onClick={onRefresh}
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-muted hover:bg-surface-muted hover:text-text-primary"
+            title="Refresh (F5)"
+          >
+            <RefreshCw size={10} />
           </button>
         )}
         {result && (

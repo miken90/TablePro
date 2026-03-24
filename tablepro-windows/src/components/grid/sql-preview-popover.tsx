@@ -111,11 +111,11 @@ export function SqlPreviewButton({
         ref={btnRef}
         type="button"
         onClick={() => setOpen(v => !v)}
-        title="Preview SQL"
+        title="Preview generated SQL statements"
         className="flex items-center gap-1 border border-zinc-300 px-2 py-0.5 rounded text-xs dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
       >
         <Eye size={12} />
-        SQL
+        Preview SQL
       </button>
 
       {open && (

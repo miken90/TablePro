@@ -11,6 +11,8 @@ import { DateCell } from './cell-formatters/date-cell';
 
 interface GridRowProps {
   rowIndex: number;
+  /** Display row number (1-based). Falls back to rowIndex + 1 if not provided. */
+  rowNumber?: number;
   row: (string | null)[];
   columns: ColumnInfo[];
   columnWidths: Record<string, number>;
@@ -56,20 +58,25 @@ function getRowClassName(
   changeType?: 'modified' | 'inserted' | 'deleted',
 ): string {
   const base = 'absolute left-0 w-full flex border-b border-border-subtle text-xs';
+  let cls = base;
 
   if (changeType === 'deleted') {
-    return `${base} bg-red-500/10 border-l-2 border-l-red-500 opacity-60 line-through`;
+    cls += ' bg-red-500/10 border-l-[4px] border-l-red-500 text-text-muted';
+  } else if (changeType === 'inserted') {
+    cls += ' bg-green-500/10 border-l-[4px] border-l-green-500';
+  } else if (changeType === 'modified') {
+    cls += ' bg-yellow-500/10 border-l-[4px] border-l-yellow-500';
+  } else if (isSelected) {
+    cls += ' bg-blue-50 dark:bg-blue-900/30';
+  } else {
+    cls += ' hover:bg-surface-hover';
   }
-  if (changeType === 'inserted') {
-    return `${base} bg-green-500/10 border-l-2 border-l-green-500`;
+
+  if (isSelected && changeType) {
+    cls += ' ring-1 ring-inset ring-accent-blue/30';
   }
-  if (changeType === 'modified') {
-    return `${base} bg-yellow-500/10 border-l-2 border-l-yellow-500`;
-  }
-  if (isSelected) {
-    return `${base} bg-blue-50 dark:bg-blue-900/30`;
-  }
-  return `${base} hover:bg-surface-hover`;
+
+  return cls;
 }
 
 function CellContent({
@@ -77,13 +84,18 @@ function CellContent({
   col,
   fkColumns,
   onFkNavigate,
+  changeType,
 }: {
   cellValue: string | null;
   col: ColumnInfo;
   fkColumns?: Record<string, FkRef>;
   onFkNavigate?: GridRowProps['onFkNavigate'];
+  changeType?: 'modified' | 'inserted' | 'deleted';
 }) {
   if (cellValue === null) {
+    if (changeType === 'inserted' && col.isPrimaryKey) {
+      return <span className="text-[10px] font-mono text-green-500 bg-green-500/10 px-1 rounded select-none">(auto)</span>;
+    }
     return <NullBadge />;
   }
 
@@ -126,6 +138,7 @@ function CellContent({
 
 export function GridRow({
   rowIndex,
+  rowNumber,
   row,
   columns,
   columnWidths,
@@ -164,14 +177,14 @@ export function GridRow({
             className="h-3 w-3 rounded border-border-subtle accent-blue-500 cursor-pointer"
             checked={isChecked}
             onChange={(e) => onCheckChange?.(e.target.checked)}
-            aria-label={`Select row ${rowIndex + 1}`}
+            aria-label={`Select row ${rowNumber ?? rowIndex + 1}`}
           />
         </div>
       )}
 
       {/* Row number */}
       <div className="w-10 flex-shrink-0 px-1 flex items-center justify-end text-text-muted border-r border-border-subtle select-none">
-        {rowIndex + 1}
+        {rowNumber ?? rowIndex + 1}
       </div>
 
       {/* Data cells */}
@@ -207,6 +220,7 @@ export function GridRow({
                 col={col}
                 fkColumns={fkColumns}
                 onFkNavigate={onFkNavigate}
+                changeType={changeType}
               />
             )}
           </div>

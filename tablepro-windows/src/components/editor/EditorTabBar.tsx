@@ -8,6 +8,10 @@ import { TabContextMenu } from "./TabContextMenu";
 
 interface EditorTabBarProps {
   onTabActivate?: () => void;
+  /** Return false to prevent switching to the target tab. */
+  onBeforeTabSwitch?: (targetTabId: string) => boolean;
+  /** Called after a tab is closed, with the newly active tab ID (or null). */
+  onAfterClose?: (newActiveTabId: string | null) => void;
 }
 
 interface ContextMenuState {
@@ -15,7 +19,7 @@ interface ContextMenuState {
   position: { x: number; y: number };
 }
 
-export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
+export function EditorTabBar({ onTabActivate, onBeforeTabSwitch, onAfterClose }: EditorTabBarProps) {
   const tabs = useEditorStore((s) => s.tabs);
   const activeTabId = useEditorStore((s) => s.activeTabId);
   const addTab = useEditorStore((s) => s.addTab);
@@ -60,14 +64,20 @@ export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
       if (e.key === "ArrowRight") {
         e.preventDefault();
         const next = sortedTabs[(currentIndex + 1) % sortedTabs.length];
-        if (next) { setActiveTab(next.id); onTabActivate?.(); }
+        if (next) {
+          if (onBeforeTabSwitch && !onBeforeTabSwitch(next.id)) return;
+          setActiveTab(next.id); onTabActivate?.();
+        }
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         const prev = sortedTabs[(currentIndex - 1 + sortedTabs.length) % sortedTabs.length];
-        if (prev) { setActiveTab(prev.id); onTabActivate?.(); }
+        if (prev) {
+          if (onBeforeTabSwitch && !onBeforeTabSwitch(prev.id)) return;
+          setActiveTab(prev.id); onTabActivate?.();
+        }
       }
     },
-    [sortedTabs, activeTabId, setActiveTab, onTabActivate],
+    [sortedTabs, activeTabId, setActiveTab, onTabActivate, onBeforeTabSwitch],
   );
 
   return (
@@ -94,6 +104,7 @@ export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
               isActive={tab.id === activeTabId}
               connectionColor={getConnectionColor(tab.connectionId)}
               onClick={() => {
+                if (onBeforeTabSwitch && !onBeforeTabSwitch(tab.id)) return;
                 setActiveTab(tab.id);
                 onTabActivate?.();
               }}
@@ -103,6 +114,7 @@ export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
               onClose={(e) => {
                 e.stopPropagation();
                 closeTab(tab.id);
+                onAfterClose?.(useEditorStore.getState().activeTabId);
               }}
             />
           </div>

@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ColumnInfo } from "../types/query";
+import { useEditorStore } from "./editorStore";
+import { useConnectionStore } from "./connectionStore";
+import { useChangeStore } from "./changeStore";
 
 export const SIDEBAR_DEFAULT = 240;
 export const SIDEBAR_MIN = 160;
@@ -101,12 +104,20 @@ export const useLayoutStore = create<LayoutState>()(
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setHelpOpen: (open) => set({ helpOpen: open }),
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
-      openTable: (tableName, schema) =>
+      openTable: (tableName, schema) => {
         set({
           activeTableContext: { tableName, schema },
           viewMode: "table-browse",
           structureTarget: null,
-        }),
+        });
+        // Create/activate a table tab in editorStore
+        useEditorStore.getState().addTableTab(tableName, schema);
+        // Scope changeStore to this table
+        const connId = useConnectionStore.getState().selectedConnectionId;
+        if (connId) {
+          useChangeStore.getState().setActiveTable(connId, schema ?? null, tableName);
+        }
+      },
       openStructure: (tableName, schema) =>
         set({ structureTarget: { tableName, schema } }),
       switchToQueryMode: () =>

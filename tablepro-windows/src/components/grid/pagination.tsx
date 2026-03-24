@@ -8,6 +8,7 @@ interface PaginationProps {
   onPageChange: (p: number) => void;
   onPageSizeChange: (s: number) => void;
   isLoading?: boolean;
+  approximateCount?: number | null;
 }
 
 const PAGE_SIZES = [50, 100, 500, 1000, 5000];
@@ -19,7 +20,11 @@ export function Pagination({
   onPageChange,
   onPageSizeChange,
   isLoading,
+  approximateCount,
 }: PaginationProps) {
+  const displayTotal = typeof approximateCount === 'number' && approximateCount > 0
+    ? `~${approximateCount.toLocaleString()}`
+    : total.toLocaleString();
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const canPrev = page > 1;
   const canNext = page < totalPages;
@@ -29,7 +34,7 @@ export function Pagination({
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs select-none">
       <span className="text-zinc-500 dark:text-zinc-400">
-        {total > 0 ? `${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} rows` : '0 rows'}
+        {total > 0 ? `${start.toLocaleString()}–${end.toLocaleString()} of ${displayTotal} rows` : '0 rows'}
       </span>
 
       <div className="flex-1" />

@@ -9,6 +9,7 @@ interface FilterRowProps {
   columns: ColumnInfo[];
   onChange: (updated: FilterCondition) => void;
   onRemove: () => void;
+  onApply?: () => void;
 }
 
 const selectCls =
@@ -16,7 +17,7 @@ const selectCls =
 const inputCls =
   'h-6 rounded border border-zinc-300 bg-white px-1.5 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200';
 
-export function FilterRow({ condition, columns, onChange, onRemove }: FilterRowProps) {
+export function FilterRow({ condition, columns, onChange, onRemove, onApply }: FilterRowProps) {
   const isUnary = UNARY_OPERATORS.includes(condition.operator);
 
   return (
@@ -64,6 +65,12 @@ export function FilterRow({ condition, columns, onChange, onRemove }: FilterRowP
           type="text"
           value={condition.value}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onApply?.();
+            }
+          }}
           placeholder={condition.operator === 'BETWEEN' ? 'a, b' : 'value'}
           className={`${inputCls} w-36 min-w-0 flex-1`}
         />

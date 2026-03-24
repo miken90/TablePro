@@ -15,6 +15,10 @@ export interface EditorTab {
   connectionId?: string;
   /** Default: 'query' — optional to support migration from older persisted state */
   type?: TabType;
+  /** For type === 'table' — the table being browsed */
+  tableName?: string;
+  /** For type === 'table' — the schema of the table */
+  tableSchema?: string;
 }
 
 interface EditorState {
@@ -24,6 +28,7 @@ interface EditorState {
   // Actions
   addTab: (title?: string) => string;
   addPreviewTab: (title: string) => string;
+  addTableTab: (tableName: string, schema?: string | null) => string;
   promoteTab: (id: string) => void;
   closeTab: (id: string) => void;
   closeOtherTabs: (id: string) => void;
@@ -93,6 +98,49 @@ export const useEditorStore = create<EditorState>()(
           type: 'query',
         };
         set((s) => ({ tabs: [...s.tabs, previewTab], activeTabId: id }));
+        return id;
+      },
+
+      /** Create or activate a table-browse tab. */
+      addTableTab: (tableName, schema) => {
+        const connId = useConnectionStore.getState().selectedConnectionId ?? undefined;
+        // Check if a table tab for this table+schema+connection already exists
+        const existing = get().tabs.find(
+          (t) => t.type === 'table' && t.tableName === tableName
+            && (t.tableSchema ?? undefined) === (schema ?? undefined)
+            && t.connectionId === connId,
+        );
+        if (existing) {
+          set({ activeTabId: existing.id });
+          return existing.id;
+        }
+        // Check if there's a preview table tab — replace it
+        const preview = get().tabs.find((t) => t.isPreview && t.type === 'table');
+        if (preview) {
+          set((s) => ({
+            tabs: s.tabs.map((t) =>
+              t.id === preview.id
+                ? { ...t, title: tableName, tableName, tableSchema: schema ?? undefined, connectionId: connId, isDirty: false }
+                : t,
+            ),
+            activeTabId: preview.id,
+          }));
+          return preview.id;
+        }
+        const id = generateTabId();
+        const newTab: EditorTab = {
+          id,
+          title: tableName,
+          content: "",
+          isDirty: false,
+          isPreview: false,
+          isPinned: false,
+          type: 'table',
+          connectionId: connId,
+          tableName,
+          tableSchema: schema ?? undefined,
+        };
+        set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));
         return id;
       },
 
@@ -204,18 +252,26 @@ export const useEditorStore = create<EditorState>()(
           isPinned: t.isPinned ?? false,
           connectionId: t.connectionId,
           type: t.type ?? 'query',
+          tableName: t.tableName,
+          tableSchema: t.tableSchema,
         })),
         activeTabId: state.activeTabId,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.tabs.length) {
           tabCounter = state.tabs.length + 1;
-          // Migrate: add defaults for tabs persisted before new fields were added
-          state.tabs = state.tabs.map((t) => ({
-            ...t,
-            isPinned: t.isPinned ?? false,
-            type: t.type ?? 'query',
-          }));
+          // Migrate: add defaults + filter orphaned table tabs
+          state.tabs = state.tabs
+            .filter((t) => {
+              // Remove table tabs missing tableName (orphaned)
+              if ((t.type ?? 'query') === 'table' && !t.tableName) return false;
+              return true;
+            })
+            .map((t) => ({
+              ...t,
+              isPinned: t.isPinned ?? false,
+              type: t.type ?? 'query',
+            }));
         }
       },
     }

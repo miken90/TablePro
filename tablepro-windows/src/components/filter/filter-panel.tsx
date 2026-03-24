@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Filter, Plus, Save, Trash2 } from 'lucide-react';
 import type { ColumnInfo } from '../../types/query';
 import { useFilterStore } from '../../stores/filterStore';
@@ -14,9 +14,10 @@ interface FilterPanelProps {
   tabId: string;
   tableName?: string;
   columns: ColumnInfo[];
+  compact?: boolean;
 }
 
-export function FilterPanel({ tabId, tableName, columns }: FilterPanelProps) {
+export function FilterPanel({ tabId, tableName, columns, compact }: FilterPanelProps) {
   const tabState = useFilterStore((s) => s.byTab[tabId]);
   const initializeTab = useFilterStore((s) => s.initializeTab);
   const addCondition = useFilterStore((s) => s.addCondition);
@@ -77,6 +78,18 @@ export function FilterPanel({ tabId, tableName, columns }: FilterPanelProps) {
     clearFilter(tabId);
   }, [clearFilter, tabId]);
 
+  // Debounced apply for Enter-key in FilterRow (RT#12: prevent query storm)
+  const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedApply = useCallback(() => {
+    if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
+    applyTimerRef.current = setTimeout(() => {
+      applyFilter(tabId);
+    }, 300);
+  }, [applyFilter, tabId]);
+  useEffect(() => () => {
+    if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
+  }, []);
+
   const handleSavePreset = useCallback(async () => {
     if (!tableName) return;
 
@@ -118,7 +131,10 @@ export function FilterPanel({ tabId, tableName, columns }: FilterPanelProps) {
   }, [refreshPresets, selectedPreset]);
 
   return (
-    <div className="flex items-start gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-1.5 dark:border-zinc-700 dark:bg-zinc-800/50">
+    <div className={compact
+      ? "flex items-start gap-2 px-3 py-1"
+      : "flex items-start gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-1.5 dark:border-zinc-700 dark:bg-zinc-800/50"
+    }>
       <Filter size={14} className="mt-1 flex-shrink-0 text-zinc-400" />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -129,6 +145,7 @@ export function FilterPanel({ tabId, tableName, columns }: FilterPanelProps) {
             columns={columns}
             onChange={(updated) => updateCondition(tabId, condition.id, updated)}
             onRemove={() => removeCondition(tabId, condition.id)}
+            onApply={debouncedApply}
           />
         ))}
       </div>

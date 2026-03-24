@@ -32,6 +32,8 @@ interface DataGridProps {
   onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
   /** Show checkbox column for row selection. Default: true */
   showCheckboxes?: boolean;
+  /** Logical row ids — maps display index to changeStore row id. Length must match result.rows.length. */
+  rowIds?: number[];
 }
 
 const DEFAULT_COL_WIDTH = 120;
@@ -59,6 +61,7 @@ export function DataGrid({
   fkColumns,
   onFkNavigate,
   showCheckboxes = true,
+  rowIds,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
   const fixedColsWidth = showCheckboxes ? FIXED_COLS_WIDTH : 40; // 40 = row numbers only
@@ -280,29 +283,31 @@ export function DataGrid({
           >
             {virtualizer.getVirtualItems().map(virtualRow => {
               const localIdx = virtualRow.index;
-              const absoluteIdx = pageOffset + localIdx;
+              const logicalRowId = rowIds?.[localIdx] ?? (pageOffset + localIdx);
+              const displayRowNumber = pageOffset + localIdx + 1;
               return (
                 <GridRow
                   key={virtualRow.index}
-                  rowIndex={absoluteIdx}
+                  rowIndex={logicalRowId}
+                  rowNumber={displayRowNumber}
                   row={rows[localIdx]}
                   columns={visibleColumns}
                   columnWidths={resolvedWidths}
-                  isSelected={selectedRows.has(absoluteIdx)}
-                  changeType={changedRows?.get(absoluteIdx)}
+                  isSelected={selectedRows.has(logicalRowId)}
+                  changeType={changedRows?.get(logicalRowId)}
                   cellOverrideValues={cellOverrideValues}
-                  editingCell={editingCell?.rowIdx === absoluteIdx ? editingCell : null}
+                  editingCell={editingCell?.rowIdx === logicalRowId ? editingCell : null}
                   nullDisplay={nullDisplay}
                   virtualTop={virtualRow.start}
                   fkColumns={fkColumns}
-                  isChecked={checkedRows.has(absoluteIdx)}
+                  isChecked={checkedRows.has(logicalRowId)}
                   showCheckbox={showCheckboxes}
-                  onCheckChange={(checked) => handleRowCheck(absoluteIdx, checked)}
-                  onRowClick={(e) => handleRowClick(e, absoluteIdx)}
-                  onCellDoubleClick={(colIdx) => onCellDoubleClick?.(absoluteIdx, colIdx)}
-                  onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(absoluteIdx, colIdx, val) : undefined}
+                  onCheckChange={(checked) => handleRowCheck(logicalRowId, checked)}
+                  onRowClick={(e) => handleRowClick(e, logicalRowId)}
+                  onCellDoubleClick={(colIdx) => onCellDoubleClick?.(logicalRowId, colIdx)}
+                  onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(logicalRowId, colIdx, val) : undefined}
                   onCellCancel={onCellCancel}
-                  onCellContextMenu={onCellContextMenu ? (event, colIdx, cellValue, row) => onCellContextMenu(event, absoluteIdx, colIdx, cellValue, row) : undefined}
+                  onCellContextMenu={onCellContextMenu ? (event, colIdx, cellValue, row) => onCellContextMenu(event, logicalRowId, colIdx, cellValue, row) : undefined}
                   enumValuesByColumn={enumValuesByColumn}
                   onFkNavigate={onFkNavigate}
                 />

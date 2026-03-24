@@ -4,6 +4,7 @@ import { EditorTabBar } from "../editor/EditorTabBar";
 import { SqlEditor } from "../editor/sql-editor";
 import { EditorStatusBar } from "../editor/editor-status-bar";
 import { ResultPanel } from "../grid/ResultPanel";
+import { ContextualBar } from "../grid/contextual-bar";
 import { WelcomeView } from "../connection/WelcomeView";
 import { QuickSwitcher } from "./quick-switcher";
 import { TableStructureView } from "../structure/table-structure-view";
@@ -12,6 +13,7 @@ import { FilterPanel } from "../filter/filter-panel";
 import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { ShortcutsHelp } from "../shared/ShortcutsHelp";
+import { UnsavedChangesDialog } from "../shared/unsaved-changes-dialog";
 import { UpdateNotification } from "../shared/update-notification";
 import { CommandPalette } from "../shared/command-palette";
 import { QueryAnnouncer } from "../shared/query-announcer";
@@ -21,6 +23,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useInspectorStore } from "../../stores/inspectorStore";
+import { useChangeStore } from "../../stores/changeStore";
 import {
   useLayoutStore,
   SIDEBAR_MIN,
@@ -36,6 +39,7 @@ import { useMainLayoutShortcuts } from "../../hooks/useMainLayoutShortcuts";
 import { useMainLayoutCommands } from "../../hooks/useMainLayoutCommands";
 import { useFilterContext } from "../../hooks/useFilterContext";
 import { useTableCallbacks } from "../../hooks/useTableCallbacks";
+import { useState, useCallback, useRef } from "react";
 
 export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
@@ -81,6 +85,89 @@ export function MainLayout() {
     handleOpenPreviewTable,
     handleHistorySelect,
   } = useTableCallbacks();
+
+  // --- Unsaved changes dialog for tab switching ---
+  const [unsavedDialog, setUnsavedDialog] = useState<{ targetTabId: string } | null>(null);
+  const pendingSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const requestSaveRef = useRef<(() => void) | null>(null);
+  const addRowRef = useRef<(() => void) | null>(null);
+
+  /** Called before switching tabs. Returns false to block the switch. */
+  const handleBeforeTabSwitch = useCallback((targetTabId: string): boolean => {
+    const hasChanges = useChangeStore.getState().hasChanges;
+    if (!hasChanges) {
+      return true; // No changes — allow switch
+    }
+    // Block switch and show dialog
+    setUnsavedDialog({ targetTabId });
+    return false;
+  }, []);
+
+  /** Perform the actual tab + view mode switch. */
+  const performTabSwitch = useCallback((tabId: string) => {
+    const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    useEditorStore.getState().setActiveTab(tabId);
+    if (tab.type === "query") {
+      useLayoutStore.getState().switchToQueryMode();
+    } else if (tab.type === "table" && tab.tableName) {
+      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
+    }
+  }, []);
+
+  /** After tab bar switches a tab (already allowed), reconcile viewMode. */
+  const handleTabActivated = useCallback(() => {
+    const tabId = useEditorStore.getState().activeTabId;
+    if (!tabId) return;
+    const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    if (tab.type === "query") {
+      useLayoutStore.getState().switchToQueryMode();
+    } else if (tab.type === "table" && tab.tableName) {
+      // Update activeTableContext + changeStore scope (openTable handles both)
+      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
+    }
+  }, []);
+
+  const handleUnsavedSave = useCallback(async () => {
+    if (!unsavedDialog) return;
+    const targetTabId = unsavedDialog.targetTabId;
+    // Trigger save via the pending save ref (set by ResultPanel's useChangeTracking)
+    if (pendingSaveRef.current) {
+      try {
+        await pendingSaveRef.current();
+        setUnsavedDialog(null);
+        performTabSwitch(targetTabId);
+      } catch {
+        // Save failed — keep dialog closed, stay on current tab (toast shows error)
+        setUnsavedDialog(null);
+      }
+    }
+  }, [unsavedDialog, performTabSwitch]);
+
+  const handleUnsavedDiscard = useCallback(() => {
+    if (!unsavedDialog) return;
+    const targetTabId = unsavedDialog.targetTabId;
+    useChangeStore.getState().clear();
+    setUnsavedDialog(null);
+    performTabSwitch(targetTabId);
+  }, [unsavedDialog, performTabSwitch]);
+
+  const handleUnsavedCancel = useCallback(() => {
+    setUnsavedDialog(null);
+  }, []);
+
+  /** After a tab is closed, reconcile viewMode based on the new active tab. */
+  const handleAfterClose = useCallback((newActiveTabId: string | null) => {
+    if (!newActiveTabId) return;
+    const tab = useEditorStore.getState().tabs.find((t) => t.id === newActiveTabId);
+    if (!tab) return;
+    if (tab.type === "query") {
+      useLayoutStore.getState().switchToQueryMode();
+    } else if (tab.type === "table" && tab.tableName) {
+      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
+    }
+  }, []);
 
   const { onMouseDown: handleSidebarResize } = useResizable({
     direction: "horizontal",
@@ -166,13 +253,18 @@ export function MainLayout() {
             <WelcomeView />
           ) : viewMode === "table-browse" && activeTableContext ? (
             <>
-              {filterVisible && (
-                <FilterPanel
-                  tabId={filterTabId}
-                  tableName={activeTableContext.tableName}
-                  columns={filterColumns}
-                />
-              )}
+              <EditorTabBar
+                onTabActivate={handleTabActivated}
+                onBeforeTabSwitch={handleBeforeTabSwitch}
+                onAfterClose={handleAfterClose}
+              />
+              <ContextualBar
+                tabId={filterTabId}
+                tableName={activeTableContext.tableName}
+                columns={filterColumns}
+                onSave={() => requestSaveRef.current?.()}
+                onAddRow={() => addRowRef.current?.()}
+              />
               <div className="flex-1 overflow-hidden">
                 <ResultPanel
                   tabId={filterTabId}
@@ -183,12 +275,20 @@ export function MainLayout() {
                   quickSearchColumns={filterColumns}
                   onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
                   onOpenQueryEditor={() => useLayoutStore.getState().switchToQueryMode()}
+                  onSaveRef={pendingSaveRef}
+                  onRequestSaveRef={requestSaveRef}
+                  onAddRowRef={addRowRef}
+                  hideChangeToolbar
                 />
               </div>
             </>
           ) : (
             <>
-              <EditorTabBar />
+              <EditorTabBar
+                onTabActivate={handleTabActivated}
+                onBeforeTabSwitch={handleBeforeTabSwitch}
+                onAfterClose={handleAfterClose}
+              />
               {filterVisible && (
                 <FilterPanel tabId={filterTabId} columns={filterColumns} />
               )}
@@ -297,6 +397,13 @@ export function MainLayout() {
       />
 
       <QueryAnnouncer />
+
+      <UnsavedChangesDialog
+        open={unsavedDialog !== null}
+        onSave={() => void handleUnsavedSave()}
+        onDiscard={handleUnsavedDiscard}
+        onCancel={handleUnsavedCancel}
+      />
       </EditorViewProvider>
     </div>
   );
