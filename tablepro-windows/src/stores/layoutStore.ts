@@ -9,9 +9,21 @@ export const SIDEBAR_DEFAULT = 240;
 export const SIDEBAR_MIN = 160;
 export const SIDEBAR_MAX = 480;
 export const EDITOR_MIN_PERCENT = 20;
-export const INSPECTOR_DEFAULT = 300;
+export const INSPECTOR_DEFAULT = 280;
 export const INSPECTOR_MIN = 200;
 export const INSPECTOR_MAX = 500;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function clampSidebarWidth(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return SIDEBAR_DEFAULT;
+  }
+
+  return clamp(value, SIDEBAR_MIN, SIDEBAR_MAX);
+}
 
 interface TableReference {
   tableName: string;
@@ -53,6 +65,10 @@ interface LayoutState {
   // Inspector row selection
   selectedRowIndex: number | null;
 
+  // Query inspector preference
+  queryInspectorVisible: boolean;
+  queryInspectorPreferenceSet: boolean;
+
   // Actions
   setSidebarWidth: (w: number) => void;
   toggleSidebar: () => void;
@@ -78,8 +94,8 @@ export const useLayoutStore = create<LayoutState>()(
     (set) => ({
       sidebarWidth: SIDEBAR_DEFAULT,
       sidebarCollapsed: false,
-      editorHeightPercent: 50,
-      inspectorVisible: false,
+      editorHeightPercent: 45,
+      inspectorVisible: true,
       inspectorWidth: INSPECTOR_DEFAULT,
       historyVisible: false,
       filterVisible: false,
@@ -92,12 +108,27 @@ export const useLayoutStore = create<LayoutState>()(
       structureTarget: null,
       filterColumns: [],
       selectedRowIndex: null,
+      queryInspectorVisible: true,
+      queryInspectorPreferenceSet: false,
 
-      setSidebarWidth: (w) => set({ sidebarWidth: w }),
+      setSidebarWidth: (w) => set({ sidebarWidth: clamp(w, SIDEBAR_MIN, SIDEBAR_MAX) }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-      setEditorHeightPercent: (pct) => set({ editorHeightPercent: pct }),
-      toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
-      setInspectorWidth: (w) => set({ inspectorWidth: w }),
+      setEditorHeightPercent: (pct) =>
+        set({ editorHeightPercent: clamp(pct, EDITOR_MIN_PERCENT, 80) }),
+      toggleInspector: () =>
+        set((s) => {
+          const nextInspectorVisible = !s.inspectorVisible;
+          if (s.viewMode === "query") {
+            return {
+              inspectorVisible: nextInspectorVisible,
+              queryInspectorVisible: nextInspectorVisible,
+              queryInspectorPreferenceSet: true,
+            };
+          }
+
+          return { inspectorVisible: nextInspectorVisible };
+        }),
+      setInspectorWidth: (w) => set({ inspectorWidth: clamp(w, INSPECTOR_MIN, INSPECTOR_MAX) }),
       toggleHistory: () => set((s) => ({ historyVisible: !s.historyVisible })),
       toggleFilter: () => set((s) => ({ filterVisible: !s.filterVisible })),
       setQuickSwitcherOpen: (open) => set({ quickSwitcherOpen: open }),
@@ -105,11 +136,12 @@ export const useLayoutStore = create<LayoutState>()(
       setHelpOpen: (open) => set({ helpOpen: open }),
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
       openTable: (tableName, schema) => {
-        set({
+        set((state) => ({
           activeTableContext: { tableName, schema },
           viewMode: "table-browse",
           structureTarget: null,
-        });
+          inspectorVisible: false,
+        }));
         // Create/activate a table tab in editorStore
         useEditorStore.getState().addTableTab(tableName, schema);
         // Scope changeStore to this table
@@ -121,7 +153,13 @@ export const useLayoutStore = create<LayoutState>()(
       openStructure: (tableName, schema) =>
         set({ structureTarget: { tableName, schema } }),
       switchToQueryMode: () =>
-        set({ viewMode: "query", activeTableContext: null }),
+        set((state) => ({
+          viewMode: "query",
+          activeTableContext: null,
+          inspectorVisible: state.queryInspectorPreferenceSet ? state.queryInspectorVisible : true,
+          queryInspectorVisible: state.queryInspectorPreferenceSet ? state.queryInspectorVisible : true,
+          queryInspectorPreferenceSet: true,
+        })),
       closeStructure: () => set({ structureTarget: null }),
       setFilterColumns: (cols) => set({ filterColumns: cols }),
       setSelectedRowIndex: (index) => set({ selectedRowIndex: index }),
@@ -132,6 +170,17 @@ export const useLayoutStore = create<LayoutState>()(
         sidebarWidth: state.sidebarWidth,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
+      merge: (persistedState, currentState) => {
+        const merged = {
+          ...currentState,
+          ...(persistedState as Partial<LayoutState>),
+        };
+
+        return {
+          ...merged,
+          sidebarWidth: clampSidebarWidth(merged.sidebarWidth),
+        };
+      },
     },
   ),
 );

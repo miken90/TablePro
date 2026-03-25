@@ -73,7 +73,7 @@ export function ContextualBar({
         <button
           onClick={handleToggleFilter}
           className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
-            filterVisible
+            filterVisible || activeFilterCount > 0
               ? 'bg-accent-blue/10 text-accent-blue'
               : 'text-text-muted hover:bg-surface-muted hover:text-text-primary'
           }`}

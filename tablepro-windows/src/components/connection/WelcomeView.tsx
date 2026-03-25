@@ -106,9 +106,10 @@ export function WelcomeView() {
   return (
     <div className="flex h-full flex-col items-center overflow-y-auto p-8">
       <div className="flex w-full max-w-[480px] flex-col items-center gap-6">
-        <div className="flex flex-col items-center gap-2 pt-8">
+        <div className="flex flex-col items-center gap-1.5 pt-8">
           <img src={logoIcon} alt="TablePro" className="h-12 w-12" />
           <h1 className="text-lg font-semibold text-text-primary">TablePro</h1>
+          <p className="text-sm text-text-secondary">Connect to a database to get started</p>
           <p className="text-xs text-text-muted">v{__APP_VERSION__}</p>
         </div>
 
