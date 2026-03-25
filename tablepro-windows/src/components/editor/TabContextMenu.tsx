@@ -48,7 +48,7 @@ export function TabContextMenu({ tab, position, onClose }: TabContextMenuProps) 
     <div
       ref={menuRef}
       style={menuStyle}
-      className="min-w-[180px] rounded border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
+      className="min-w-[180px] rounded border border-border bg-surface-elevated py-1 shadow-lg"
       onContextMenu={(e) => e.preventDefault()}
     >
       <MenuItem
@@ -113,7 +113,7 @@ function MenuItem({
   return (
     <button
       onClick={onClick}
-      className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+      className="menu-item-button w-full px-3 py-1.5 text-left text-xs"
     >
       {children}
     </button>
@@ -121,5 +121,5 @@ function MenuItem({
 }
 
 function Separator() {
-  return <div className="my-1 border-t border-zinc-200 dark:border-zinc-700" />;
+  return <div className="my-1 border-t border-border" />;
 }

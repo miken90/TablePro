@@ -1,7 +1,9 @@
-import { Search, Database, Plus, Table2, Eye } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { Search, Database, Plus, Table2, Eye, Braces, ScrollText } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useConnectionStore } from "../../stores/connectionStore";
+import { useLayoutStore } from "../../stores/layoutStore";
+import { useEditorStore } from "../../stores/editorStore";
 import { SidebarTableNode } from "./sidebar-table-node";
 import { SidebarObjectGroup } from "./sidebar-object-group";
 import { CreateTableWizard } from "../structure/create-table-wizard";
@@ -22,6 +24,8 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const sessionIds = useConnectionStore((s) => s.sessionIds);
   const connections = useConnectionStore((s) => s.connections);
+  const activeTableContext = useLayoutStore((s) => s.activeTableContext);
+  const activeTab = useEditorStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const connectionStatuses = useConnectionStore((s) => s.connectionStatuses);
   const getStatus = useConnectionStore((s) => s.getStatus);
   const connect = useConnectionStore((s) => s.connect);
@@ -31,6 +35,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     selectedDatabase,
     schemas,
     currentSchema,
+    routineCatalog,
     isLoading,
     fetchDatabases,
     fetchSchema,
@@ -46,6 +51,33 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   const sessionId = selectedConnectionId ? sessionIds.get(selectedConnectionId) : undefined;
   const activeConnection = selectedConnectionId ? connections.get(selectedConnectionId) : undefined;
   const configDatabase = activeConnection?.config?.database;
+
+  const activeTableIdentity = useMemo(() => {
+    if (activeTableContext) {
+      return {
+        name: activeTableContext.tableName,
+        schema: activeTableContext.schema ?? null,
+      };
+    }
+
+    if (activeTab?.type === "table" && activeTab.tableName) {
+      return {
+        name: activeTab.tableName,
+        schema: activeTab.tableSchema ?? null,
+      };
+    }
+
+    return null;
+  }, [activeTableContext, activeTab]);
+
+  const isTableActive = useCallback(
+    (tableName: string, schema?: string | null) => {
+      if (!activeTableIdentity) return false;
+      const normalizedSchema = schema ?? null;
+      return activeTableIdentity.name === tableName && activeTableIdentity.schema === normalizedSchema;
+    },
+    [activeTableIdentity],
+  );
 
   // Fetch database list when session changes
   useEffect(() => {
@@ -89,6 +121,21 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     const views = filteredTables.filter((t) => t.tableType === "VIEW");
     return { tables: tbl, views };
   }, [filteredTables]);
+
+  const filteredRoutines = useMemo(() => {
+    const items = routineCatalog?.items ?? [];
+    return items.filter((routine) => {
+      const matchesFilter = !filter || routine.name.toLowerCase().includes(filter.toLowerCase());
+      const matchesSchema = !currentSchema || routine.schema === currentSchema;
+      return matchesFilter && matchesSchema;
+    });
+  }, [routineCatalog, filter, currentSchema]);
+
+  const routinesGrouped = useMemo(() => {
+    const functions = filteredRoutines.filter((routine) => routine.kind === "function");
+    const procedures = filteredRoutines.filter((routine) => routine.kind === "procedure");
+    return { functions, procedures };
+  }, [filteredRoutines]);
 
   // Group connections by tag for the connection list section
   const connList = useMemo(() => Array.from(connections.values()), [connections]);
@@ -144,7 +191,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
 
       {/* Recent Connections — only when no active session and multiple connections exist */}
       {!sessionId && recentConnections.length > 0 && (
-        <div className="border-b border-border dark:border-zinc-700">
+        <div className="border-b border-border">
           <p className="px-2 pt-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
             Recent
           </p>
@@ -298,7 +345,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
         {!isLoading && selectedConnectionId && !selectedDatabase && databases.length === 0 && (
           <div className="p-3 text-xs text-text-muted">Connect to load schema</div>
         )}
-        {filteredTables.length > 0 && (
+        {(filteredTables.length > 0 || routineCatalog?.supported) && (
           <>
             <SidebarObjectGroup label="Tables" icon={Table2} count={grouped.tables.length} defaultExpanded>
               {grouped.tables.map((table) => (
@@ -308,6 +355,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                   expanded={expandedTables.has(table.name)}
                   onToggle={() => toggleTable(table.name)}
                   sessionId={sessionId ?? null}
+                  isActive={isTableActive(table.name, table.schema)}
                   onViewStructure={onViewStructure}
                   onOpenTable={onOpenTable}
                   onOpenPreviewTable={onOpenPreviewTable}
@@ -323,6 +371,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                     expanded={expandedTables.has(table.name)}
                     onToggle={() => toggleTable(table.name)}
                     sessionId={sessionId ?? null}
+                    isActive={isTableActive(table.name, table.schema)}
                     onViewStructure={onViewStructure}
                     onOpenTable={onOpenTable}
                     onOpenPreviewTable={onOpenPreviewTable}
@@ -330,7 +379,38 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                 ))}
               </SidebarObjectGroup>
             )}
+            {routineCatalog?.supported && (
+              <>
+                <SidebarObjectGroup label="Functions" icon={Braces} count={routinesGrouped.functions.length}>
+                  {routinesGrouped.functions.map((routine) => (
+                    <div
+                      key={`${routine.schema ?? ""}.${routine.name}.${routine.signature ?? ""}`}
+                      className="px-6 py-1 text-xs text-text-secondary"
+                      title={routine.signature ?? routine.name}
+                    >
+                      {routine.name}
+                    </div>
+                  ))}
+                </SidebarObjectGroup>
+                <SidebarObjectGroup label="Procedures" icon={ScrollText} count={routinesGrouped.procedures.length}>
+                  {routinesGrouped.procedures.map((routine) => (
+                    <div
+                      key={`${routine.schema ?? ""}.${routine.name}.${routine.signature ?? ""}`}
+                      className="px-6 py-1 text-xs text-text-secondary"
+                      title={routine.signature ?? routine.name}
+                    >
+                      {routine.name}
+                    </div>
+                  ))}
+                </SidebarObjectGroup>
+              </>
+            )}
           </>
+        )}
+        {!isLoading && sessionId && routineCatalog && !routineCatalog.supported && (
+          <div className="px-3 py-2 text-xs text-text-muted">
+            {routineCatalog.reason ?? "Functions and procedures are not supported for this database."}
+          </div>
         )}
       </div>
 

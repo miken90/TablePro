@@ -57,8 +57,8 @@ export function ConnectionCard({
       aria-label={`${conn.name} connection`}
       className={`group flex items-center gap-2.5 rounded-md border p-2.5 transition-colors ${
         isConnecting
-          ? "border-blue-300 bg-blue-50/50 dark:border-blue-700 dark:bg-blue-900/20"
-          : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600"
+          ? "border-accent-blue bg-accent-blue/10"
+          : "border-border bg-surface-elevated hover:bg-surface-muted"
       }`}
       onDoubleClick={onConnect}
       onContextMenu={handleContextMenu}
@@ -68,13 +68,13 @@ export function ConnectionCard({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          <p className="truncate text-sm font-medium text-text-primary">
             {conn.name}
           </p>
           <ConnectionStatusIndicator status={status} />
           <EnvironmentBadge tag={conn.tag} />
         </div>
-        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="truncate text-xs text-text-secondary">
           {formattedUri}
         </p>
       </div>
@@ -83,7 +83,7 @@ export function ConnectionCard({
         data-connect-btn
         onClick={onConnect}
         disabled={isConnecting}
-        className="flex shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+        className="button-primary flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium disabled:opacity-50"
       >
         {isConnecting ? (
           <>
@@ -98,7 +98,7 @@ export function ConnectionCard({
       {menuPos && (
         <div
           ref={menuRef}
-          className="fixed z-50 min-w-[160px] rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          className="fixed z-50 min-w-[160px] rounded-md border border-border bg-surface-elevated py-1 shadow-lg"
           style={{ left: menuPos.x, top: menuPos.y }}
         >
           <ContextMenuItem icon={<Plug size={12} />} label="Connect" onClick={() => { setMenuPos(null); onConnect(); }} />
@@ -109,7 +109,7 @@ export function ConnectionCard({
           {onTestConnection && (
             <ContextMenuItem icon={<Plug size={12} />} label="Test Connection" onClick={() => { setMenuPos(null); onTestConnection(); }} />
           )}
-          <div className="my-0.5 border-t border-zinc-200 dark:border-zinc-700" />
+          <div className="my-0.5 border-t border-border" />
           <ContextMenuItem
             icon={<Trash2 size={12} />}
             label="Delete"
@@ -128,9 +128,7 @@ function ContextMenuItem({
   return (
     <button
       className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs ${
-        danger
-          ? "text-red-600 hover:bg-zinc-100 dark:text-red-400 dark:hover:bg-zinc-800"
-          : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        danger ? "menu-item-button-danger" : "menu-item-button"
       }`}
       onClick={onClick}
     >

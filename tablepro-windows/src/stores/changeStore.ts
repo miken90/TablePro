@@ -71,47 +71,55 @@ interface ChangeStoreState {
 const MAX_UNDO_DEPTH = 50;
 
 function getActiveState(state: { _byTable: Record<string, TableChangeState>; _activeTableKey: string | null }): TableChangeState {
-  if (!state._activeTableKey) return EMPTY_STATE as TableChangeState;
-  return state._byTable[state._activeTableKey] ?? (EMPTY_STATE as TableChangeState);
+  if (!state._activeTableKey) return EMPTY_STATE;
+  return state._byTable[state._activeTableKey] ?? EMPTY_STATE;
 }
 
 function makeTableKey(connectionId: string, schema: string | null, tableName: string): string {
   return `${connectionId}:${schema ?? ''}:${tableName}`;
 }
 
+function getDerivedState(
+  byTable: Record<string, TableChangeState>,
+  activeTableKey: string | null,
+): Pick<ChangeStoreState, '_changes' | '_undoStack' | '_redoStack' | 'hasChanges'> {
+  const active = getActiveState({ _byTable: byTable, _activeTableKey: activeTableKey });
+  return {
+    _changes: active.changes,
+    _undoStack: active.undoStack,
+    _redoStack: active.redoStack,
+    hasChanges: Object.keys(active.changes).length > 0,
+  };
+}
+
+function buildState(
+  byTable: Record<string, TableChangeState>,
+  activeTableKey: string | null,
+): Pick<ChangeStoreState, '_byTable' | '_activeTableKey' | '_changes' | '_undoStack' | '_redoStack' | 'hasChanges'> {
+  return {
+    _byTable: byTable,
+    _activeTableKey: activeTableKey,
+    ...getDerivedState(byTable, activeTableKey),
+  };
+}
+
 export const useChangeStore = create<ChangeStoreState>((set, get) => ({
-  _byTable: {},
-  _activeTableKey: null,
-
-  get _changes() {
-    return getActiveState(get()).changes;
-  },
-
-  get _undoStack() {
-    return getActiveState(get()).undoStack;
-  },
-
-  get _redoStack() {
-    return getActiveState(get()).redoStack;
-  },
-
-  get hasChanges() {
-    return Object.keys(getActiveState(get()).changes).length > 0;
-  },
+  ...buildState({}, null),
 
   setActiveTable(connectionId, schema, tableName) {
     const key = makeTableKey(connectionId, schema, tableName);
-    set((s) => ({
-      _activeTableKey: key,
-      _byTable: s._byTable[key] ? s._byTable : { ...s._byTable, [key]: emptyTableState() },
-    }));
+    set((s) => {
+      const byTable = s._byTable[key] ? s._byTable : { ...s._byTable, [key]: emptyTableState() };
+      return buildState(byTable, key);
+    });
   },
 
   clearForTable(tableKey) {
     set((s) => {
       const next = { ...s._byTable };
       delete next[tableKey];
-      return { _byTable: next };
+      const activeTableKey = s._activeTableKey === tableKey ? null : s._activeTableKey;
+      return buildState(next, activeTableKey);
     });
   },
 
@@ -148,32 +156,31 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
     if (existing?.type === "insert") {
       const updatedCells = existing.cellChanges.filter((c) => c.columnName !== change.columnName);
       updatedCells.push(change);
-      set({
-        _byTable: {
-          ..._byTable,
-          [_activeTableKey]: {
-            changes: { ...active.changes, [change.rowIndex]: { ...existing, cellChanges: updatedCells } },
-            undoStack: newUndoStack,
-            redoStack: [],
-          },
+      const byTable = {
+        ..._byTable,
+        [_activeTableKey]: {
+          changes: { ...active.changes, [change.rowIndex]: { ...existing, cellChanges: updatedCells } },
+          undoStack: newUndoStack,
+          redoStack: [],
         },
-      });
+      };
+      set(buildState(byTable, _activeTableKey));
     } else {
       const rowChange: RowChange = existing ?? {
         type: "update", rowIndex: change.rowIndex, cellChanges: [], originalRow: [],
       };
       const updatedCells = rowChange.cellChanges.filter((c) => c.columnName !== change.columnName);
       updatedCells.push(change);
-      set({
-        _byTable: {
-          ..._byTable,
-          [_activeTableKey]: {
-            changes: { ...active.changes, [change.rowIndex]: { ...rowChange, type: "update", cellChanges: updatedCells } },
-            undoStack: newUndoStack,
-            redoStack: [],
-          },
+      const nextRowChange: RowChange = { ...rowChange, type: "update", cellChanges: updatedCells };
+      const byTable: Record<string, TableChangeState> = {
+        ..._byTable,
+        [_activeTableKey]: {
+          changes: { ...active.changes, [change.rowIndex]: nextRowChange },
+          undoStack: newUndoStack,
+          redoStack: [],
         },
-      });
+      };
+      set(buildState(byTable, _activeTableKey));
     }
   },
 
@@ -185,16 +192,16 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
     const cellChanges: CellChange[] = defaults.map((val, idx) => ({
       rowIndex, columnIndex: idx, columnName: columnNames?.[idx] ?? String(idx), oldValue: null, newValue: val,
     }));
-    set({
-      _byTable: {
-        ..._byTable,
-        [_activeTableKey]: {
-          changes: { ...active.changes, [rowIndex]: { type: "insert", rowIndex, cellChanges, originalRow: [], originPage } },
-          undoStack: [...active.undoStack, snapshot].slice(-MAX_UNDO_DEPTH),
-          redoStack: [],
-        },
+    const nextRowChange: RowChange = { type: "insert", rowIndex, cellChanges, originalRow: [], originPage };
+    const byTable: Record<string, TableChangeState> = {
+      ..._byTable,
+      [_activeTableKey]: {
+        changes: { ...active.changes, [rowIndex]: nextRowChange },
+        undoStack: [...active.undoStack, snapshot].slice(-MAX_UNDO_DEPTH),
+        redoStack: [],
       },
-    });
+    };
+    set(buildState(byTable, _activeTableKey));
   },
 
   recordRowDelete(rowIndex, originalRow) {
@@ -207,30 +214,29 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
       const snapshot = { ...active.changes };
       const updated = { ...active.changes };
       delete updated[rowIndex];
-      set({
-        _byTable: {
-          ..._byTable,
-          [_activeTableKey]: {
-            changes: updated,
-            undoStack: [...active.undoStack, snapshot].slice(-MAX_UNDO_DEPTH),
-            redoStack: [],
-          },
+      const byTable = {
+        ..._byTable,
+        [_activeTableKey]: {
+          changes: updated,
+          undoStack: [...active.undoStack, snapshot].slice(-MAX_UNDO_DEPTH),
+          redoStack: [],
         },
-      });
+      };
+      set(buildState(byTable, _activeTableKey));
       return;
     }
 
     const snapshot = { ...active.changes };
-    set({
-      _byTable: {
-        ..._byTable,
-        [_activeTableKey]: {
-          changes: { ...active.changes, [rowIndex]: { type: "delete", rowIndex, cellChanges: [], originalRow } },
-          undoStack: [...active.undoStack, snapshot].slice(-MAX_UNDO_DEPTH),
-          redoStack: [],
-        },
+    const nextRowChange: RowChange = { type: "delete", rowIndex, cellChanges: [], originalRow };
+    const byTable: Record<string, TableChangeState> = {
+      ..._byTable,
+      [_activeTableKey]: {
+        changes: { ...active.changes, [rowIndex]: nextRowChange },
+        undoStack: [...active.undoStack, snapshot].slice(-MAX_UNDO_DEPTH),
+        redoStack: [],
       },
-    });
+    };
+    set(buildState(byTable, _activeTableKey));
   },
 
   undo() {
@@ -239,16 +245,15 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
     const active = _byTable[_activeTableKey] ?? emptyTableState();
     if (active.undoStack.length === 0) return;
     const prev = active.undoStack[active.undoStack.length - 1];
-    set({
-      _byTable: {
-        ..._byTable,
-        [_activeTableKey]: {
-          changes: prev,
-          undoStack: active.undoStack.slice(0, -1),
-          redoStack: [...active.redoStack, active.changes],
-        },
+    const byTable = {
+      ..._byTable,
+      [_activeTableKey]: {
+        changes: prev,
+        undoStack: active.undoStack.slice(0, -1),
+        redoStack: [...active.redoStack, active.changes],
       },
-    });
+    };
+    set(buildState(byTable, _activeTableKey));
   },
 
   redo() {
@@ -257,27 +262,25 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
     const active = _byTable[_activeTableKey] ?? emptyTableState();
     if (active.redoStack.length === 0) return;
     const next = active.redoStack[active.redoStack.length - 1];
-    set({
-      _byTable: {
-        ..._byTable,
-        [_activeTableKey]: {
-          changes: next,
-          undoStack: [...active.undoStack, active.changes],
-          redoStack: active.redoStack.slice(0, -1),
-        },
+    const byTable = {
+      ..._byTable,
+      [_activeTableKey]: {
+        changes: next,
+        undoStack: [...active.undoStack, active.changes],
+        redoStack: active.redoStack.slice(0, -1),
       },
-    });
+    };
+    set(buildState(byTable, _activeTableKey));
   },
 
   clear() {
     const { _byTable, _activeTableKey } = get();
     if (!_activeTableKey) {
-      set({ _byTable: {} });
+      set(buildState({}, null));
       return;
     }
-    set({
-      _byTable: { ..._byTable, [_activeTableKey]: emptyTableState() },
-    });
+    const byTable = { ..._byTable, [_activeTableKey]: emptyTableState() };
+    set(buildState(byTable, _activeTableKey));
   },
 
   async saveChanges(sessionId: string, payload: SavePayload) {

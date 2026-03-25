@@ -1,7 +1,10 @@
 use tauri::State;
 use tokio::sync::Mutex;
 
-use crate::models::{AppError, ColumnInfo, ForeignKeyInfo, IndexInfo, QueryResult, TableInfo};
+use crate::models::{
+    AppError, ColumnInfo, ForeignKeyInfo, IndexInfo, QueryResult, RoutineCatalog, RoutineInfo,
+    RoutineKind, TableInfo,
+};
 use crate::services::sql_quoting::quote_identifier;
 use crate::services::ConnectionManager;
 
@@ -322,6 +325,177 @@ pub async fn fetch_approximate_count(
 
     let result = driver.execute(&sql).await?;
     Ok(first_value_i64(&result))
+}
+
+fn bool_from_cell(value: Option<&String>) -> bool {
+    value
+        .map(|v| {
+            let lower = v.trim().to_ascii_lowercase();
+            matches!(lower.as_str(), "1" | "true" | "t" | "yes")
+        })
+        .unwrap_or(false)
+}
+
+fn unsupported_routine_catalog(reason: String) -> RoutineCatalog {
+    RoutineCatalog {
+        supported: false,
+        reason: Some(reason),
+        items: vec![],
+    }
+}
+
+/// Return function/procedure metadata for supported engines.
+#[tauri::command]
+pub async fn fetch_routines(
+    session_id: String,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<RoutineCatalog, AppError> {
+    let (driver, driver_type) = {
+        let mgr = manager.lock().await;
+        let driver = mgr.get_driver(&session_id)?;
+        let driver_type = mgr.get_config(&session_id)?.db_type.to_ascii_lowercase();
+        (driver, driver_type)
+    };
+
+    match driver_type.as_str() {
+        "postgres" | "postgresql" => {
+            let sql = "SELECT \
+                           n.nspname AS routine_schema, \
+                           p.proname AS routine_name, \
+                           CASE p.prokind WHEN 'p' THEN 'PROCEDURE' ELSE 'FUNCTION' END AS routine_kind, \
+                           pg_get_function_identity_arguments(p.oid) AS routine_args, \
+                           CASE WHEN p.prokind = 'p' THEN NULL ELSE pg_get_function_result(p.oid) END AS return_type \
+                       FROM pg_proc p \
+                       JOIN pg_namespace n ON n.oid = p.pronamespace \
+                       WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') \
+                         AND p.prokind IN ('f', 'p') \
+                       ORDER BY n.nspname, p.proname";
+            let result = driver.execute(sql).await?;
+
+            let items = result
+                .rows
+                .iter()
+                .filter_map(|row| {
+                    let schema = row.first().and_then(|v| v.clone());
+                    let name = row.get(1).and_then(|v| v.clone())?;
+                    let kind = match row.get(2).and_then(|v| v.as_deref()) {
+                        Some("PROCEDURE") => RoutineKind::Procedure,
+                        _ => RoutineKind::Function,
+                    };
+                    let signature_args = row.get(3).and_then(|v| v.clone());
+                    let return_type = row.get(4).and_then(|v| v.clone());
+
+                    Some(RoutineInfo {
+                        name,
+                        schema,
+                        kind,
+                        signature: signature_args,
+                        return_type,
+                        is_table_valued: false,
+                    })
+                })
+                .collect();
+
+            Ok(RoutineCatalog {
+                supported: true,
+                reason: None,
+                items,
+            })
+        }
+        "mysql" | "mariadb" => {
+            let sql = "SELECT \
+                           ROUTINE_SCHEMA, \
+                           ROUTINE_NAME, \
+                           ROUTINE_TYPE, \
+                           DTD_IDENTIFIER \
+                       FROM INFORMATION_SCHEMA.ROUTINES \
+                       WHERE ROUTINE_SCHEMA = DATABASE() \
+                       ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME";
+            let result = driver.execute(sql).await?;
+
+            let items = result
+                .rows
+                .iter()
+                .filter_map(|row| {
+                    let schema = row.first().and_then(|v| v.clone());
+                    let name = row.get(1).and_then(|v| v.clone())?;
+                    let kind = match row.get(2).and_then(|v| v.as_deref()) {
+                        Some("PROCEDURE") => RoutineKind::Procedure,
+                        _ => RoutineKind::Function,
+                    };
+                    let return_type = if kind == RoutineKind::Function {
+                        row.get(3).and_then(|v| v.clone())
+                    } else {
+                        None
+                    };
+
+                    Some(RoutineInfo {
+                        name,
+                        schema,
+                        kind,
+                        signature: None,
+                        return_type,
+                        is_table_valued: false,
+                    })
+                })
+                .collect();
+
+            Ok(RoutineCatalog {
+                supported: true,
+                reason: None,
+                items,
+            })
+        }
+        "mssql" | "sqlserver" | "sql_server" => {
+            let sql = "SELECT \
+                           s.name AS routine_schema, \
+                           o.name AS routine_name, \
+                           o.type AS routine_type, \
+                           CASE WHEN o.type IN ('TF', 'IF', 'FT') THEN 1 ELSE 0 END AS is_table_valued \
+                       FROM sys.objects o \
+                       INNER JOIN sys.schemas s ON s.schema_id = o.schema_id \
+                       WHERE o.type IN ('P', 'PC', 'FN', 'TF', 'IF', 'FS', 'FT') \
+                       ORDER BY s.name, o.name";
+            let result = driver.execute(sql).await?;
+
+            let items = result
+                .rows
+                .iter()
+                .filter_map(|row| {
+                    let schema = row.first().and_then(|v| v.clone());
+                    let name = row.get(1).and_then(|v| v.clone())?;
+                    let type_code = row.get(2).and_then(|v| v.as_deref()).unwrap_or("FN");
+                    let kind = if matches!(type_code, "P" | "PC") {
+                        RoutineKind::Procedure
+                    } else {
+                        RoutineKind::Function
+                    };
+
+                    Some(RoutineInfo {
+                        name,
+                        schema,
+                        kind,
+                        signature: None,
+                        return_type: None,
+                        is_table_valued: bool_from_cell(row.get(3).and_then(|v| v.as_ref())),
+                    })
+                })
+                .collect();
+
+            Ok(RoutineCatalog {
+                supported: true,
+                reason: None,
+                items,
+            })
+        }
+        "sqlite" => Ok(unsupported_routine_catalog(
+            "Not supported for SQLite".to_string(),
+        )),
+        other => Ok(unsupported_routine_catalog(format!(
+            "Not supported for {}",
+            other
+        ))),
+    }
 }
 
 /// Return available schemas for the connected PostgreSQL database.

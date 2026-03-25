@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ConnectionConfig, ConnectionGroup, SavedConnection, ConnectionStatus } from "../types/connection";
 import type { QueryResult } from "../types/query";
-import type { TableInfo, IndexInfo, ForeignKeyInfo } from "../types/schema";
+import type { TableInfo, IndexInfo, ForeignKeyInfo, RoutineCatalog } from "../types/schema";
 import type { ColumnInfo } from "../types/query";
 import type { AppSettings } from "../types/settings";
 
@@ -64,6 +64,9 @@ export const fetchIndexes = (sessionId: string, table: string, schema?: string):
 
 export const fetchForeignKeys = (sessionId: string, table: string, schema?: string): Promise<ForeignKeyInfo[]> =>
   invoke("fetch_foreign_keys", { sessionId, table, schema });
+
+export const fetchRoutines = (sessionId: string): Promise<RoutineCatalog> =>
+  invoke("fetch_routines", { sessionId });
 
 export const fetchDatabases = (sessionId: string): Promise<string[]> =>
   invoke("fetch_databases", { sessionId });

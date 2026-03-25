@@ -141,6 +141,32 @@
   .focus-ring {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)];
   }
+
+  .menu-item-button {
+    @apply text-text-primary hover:bg-surface-muted;
+  }
+
+  .menu-item-button-danger {
+    @apply text-accent-red hover:bg-surface-muted;
+  }
+
+  .button-primary {
+    @apply bg-accent-blue text-white transition-opacity hover:opacity-90;
+  }
+
+  .button-success {
+    @apply rounded bg-accent-green text-white transition-opacity hover:opacity-90;
+  }
+
+  .state-strip-warning {
+    background-color: color-mix(in srgb, var(--color-accent-yellow) 18%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-yellow) 45%, var(--color-border-subtle));
+  }
+
+  .state-strip-danger {
+    background-color: color-mix(in srgb, var(--color-accent-red) 16%, transparent);
+    color: var(--color-accent-red);
+  }
 }
 
 /* Suppress animations for users who prefer reduced motion */

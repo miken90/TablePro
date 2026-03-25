@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useChangeStore } from '../stores/changeStore';
 
 function resetStore() {
-  useChangeStore.setState({ _changes: {}, _undoStack: [], _redoStack: [] });
+  useChangeStore.setState({ _byTable: {}, _activeTableKey: null });
+  useChangeStore.getState().setActiveTable('test-conn', 'public', 'users');
 }
 
 describe('changeStore', () => {
@@ -123,16 +124,14 @@ describe('changeStore', () => {
     expect(state.getChanges().size).toBe(3);
   });
 
-  it('hasChanges reflects whether _changes is non-empty', () => {
-    // hasChanges is a getter that uses get() internally —
-    // verify the underlying _changes state instead
-    expect(Object.keys(useChangeStore.getState()._changes).length).toBe(0);
+  it('hasChanges reflects whether changes exist for the active table', () => {
+    expect(useChangeStore.getState().hasChanges).toBe(false);
     useChangeStore.getState().recordCellChange({
       rowIndex: 0, columnIndex: 0, columnName: 'c',
       oldValue: 'a', newValue: 'b',
     });
-    expect(Object.keys(useChangeStore.getState()._changes).length).toBeGreaterThan(0);
+    expect(useChangeStore.getState().hasChanges).toBe(true);
     useChangeStore.getState().clear();
-    expect(Object.keys(useChangeStore.getState()._changes).length).toBe(0);
+    expect(useChangeStore.getState().hasChanges).toBe(false);
   });
 });

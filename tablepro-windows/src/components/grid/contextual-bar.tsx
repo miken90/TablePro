@@ -112,15 +112,15 @@ export function ContextualBar({
 
       {/* Row 3: Change actions */}
       {hasChanges && (
-        <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-700 text-xs">
-          <span className="text-amber-800 dark:text-amber-300">
+        <div className="state-strip-warning flex items-center gap-2 border-t px-3 py-1 text-xs">
+          <span className="text-accent-yellow">
             {changeCount} unsaved {changeCount === 1 ? 'change' : 'changes'}
           </span>
           <div className="ml-auto flex items-center gap-1">
             <button
               onClick={undo}
               disabled={undoStackLen === 0}
-              className="flex items-center gap-1 border border-zinc-300 px-2 py-0.5 rounded text-xs dark:border-zinc-600 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+              className="menu-item-button flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs disabled:opacity-40"
               title="Undo (Ctrl+Z)"
             >
               <Undo2 size={12} />
@@ -129,7 +129,7 @@ export function ContextualBar({
             <button
               onClick={redo}
               disabled={redoStackLen === 0}
-              className="flex items-center gap-1 border border-zinc-300 px-2 py-0.5 rounded text-xs dark:border-zinc-600 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+              className="menu-item-button flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs disabled:opacity-40"
               title="Redo (Ctrl+Y)"
             >
               <Redo2 size={12} />
@@ -137,13 +137,13 @@ export function ContextualBar({
             </button>
             <button
               onClick={handleDiscard}
-              className="border border-red-400 text-red-600 hover:bg-red-50 px-2 py-0.5 rounded text-xs"
+              className="menu-item-button-danger rounded border border-accent-red px-2 py-0.5 text-xs"
             >
               Discard
             </button>
             <button
               onClick={onSave}
-              className="bg-green-600 text-white hover:bg-green-700 px-3 py-1 rounded font-semibold text-xs shadow-sm"
+              className="button-success px-3 py-1 text-xs font-semibold shadow-sm"
               title="Save changes (Ctrl+S)"
             >
               Execute ({changeCount})

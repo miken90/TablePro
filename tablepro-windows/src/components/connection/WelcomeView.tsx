@@ -92,7 +92,7 @@ export function WelcomeView() {
   if (showForm) {
     return (
       <div className="flex h-full items-start justify-center overflow-y-auto pt-12">
-        <div className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="w-full max-w-sm rounded-lg border border-border bg-surface-elevated shadow-sm">
           <ConnectionForm initial={editingConn} onClose={closeForm} />
         </div>
       </div>
@@ -108,8 +108,8 @@ export function WelcomeView() {
       <div className="flex w-full max-w-[480px] flex-col items-center gap-6">
         <div className="flex flex-col items-center gap-2 pt-8">
           <img src={logoIcon} alt="TablePro" className="h-12 w-12" />
-          <h1 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">TablePro</h1>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500">v{__APP_VERSION__}</p>
+          <h1 className="text-lg font-semibold text-text-primary">TablePro</h1>
+          <p className="text-xs text-text-muted">v{__APP_VERSION__}</p>
         </div>
 
         {hasConnections && (
@@ -119,7 +119,7 @@ export function WelcomeView() {
         )}
 
         {error && (
-          <p className="w-full rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-400">
+          <p className="state-strip-danger w-full rounded-md px-3 py-2 text-xs">
             {error}
           </p>
         )}
@@ -142,10 +142,10 @@ export function WelcomeView() {
             />
           ) : (
             <div className="w-full py-8 text-center">
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="text-sm text-text-secondary">
                 No connections matching &quot;{search}&quot;
               </p>
-              <button onClick={() => setSearch("")} className="mt-1 text-xs text-blue-500 hover:underline">
+              <button onClick={() => setSearch("")} className="mt-1 text-xs text-accent-blue hover:underline">
                 Clear search
               </button>
             </div>
@@ -163,14 +163,14 @@ export function WelcomeView() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => { setEditingConn(undefined); setShowForm(true); }}
-            className="flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            className="button-primary flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium"
           >
             <Plus size={14} />
             New Connection
           </button>
           <button
             onClick={() => void handleNewGroup()}
-            className="text-xs text-zinc-500 transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+            className="text-xs text-text-secondary transition-colors hover:text-text-primary"
           >
             + New Group
           </button>

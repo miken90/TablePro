@@ -19,7 +19,8 @@ use commands::import::{import_preview, import_sql_file};
 use commands::query::{cancel_query, execute_query, fetch_count, fetch_rows};
 use commands::schema::{
     fetch_approximate_count, fetch_columns, fetch_databases, fetch_ddl, fetch_enum_values,
-    fetch_foreign_keys, fetch_indexes, fetch_schemas, fetch_tables, switch_database,
+    fetch_foreign_keys, fetch_indexes, fetch_routines, fetch_schemas, fetch_tables,
+    switch_database,
 };
 use commands::settings::{get_settings, log_renderer_error, set_settings};
 use commands::storage::{
@@ -142,6 +143,7 @@ pub fn run() {
             fetch_columns,
             fetch_indexes,
             fetch_foreign_keys,
+            fetch_routines,
             fetch_databases,
             fetch_ddl,
             switch_database,

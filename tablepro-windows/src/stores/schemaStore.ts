@@ -1,6 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
-import type { TableInfo } from "../types/schema";
+import type { RoutineCatalog, TableInfo } from "../types/schema";
 import type { ColumnInfo } from "../types/query";
 import * as commands from "../ipc/commands";
 import { extractErrorMessage } from "../ipc/error";
@@ -20,12 +19,14 @@ interface SchemaState {
   selectedDatabase: string | null;
   schemas: string[];
   currentSchema: string | null;
+  routineCatalog: RoutineCatalog | null;
   isLoading: boolean;
   error: string | null;
 
   // Actions
   fetchDatabases: (sessionId: string) => Promise<void>;
   fetchSchema: (sessionId: string) => Promise<void>;
+  fetchRoutines: (sessionId: string) => Promise<void>;
   fetchSchemas: (sessionId: string) => Promise<void>;
   fetchColumns: (sessionId: string, tableName: string, schema?: string) => Promise<ColumnInfo[]>;
   fetchForeignKeysForTable: (sessionId: string, table: string, schema?: string) => Promise<void>;
@@ -42,6 +43,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   selectedDatabase: null,
   schemas: [],
   currentSchema: null,
+  routineCatalog: null,
   isLoading: false,
   error: null,
 
@@ -59,7 +61,15 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const tables = await commands.fetchTables(sessionId);
-      set({ tables, isLoading: false });
+      let routineCatalog: RoutineCatalog | null = null;
+
+      try {
+        routineCatalog = await commands.fetchRoutines(sessionId);
+      } catch {
+        // Routine metadata should not block table loading.
+      }
+
+      set({ tables, routineCatalog, isLoading: false });
     } catch (err) {
       set({ error: extractErrorMessage(err), isLoading: false });
     }
@@ -67,11 +77,20 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   fetchSchemas: async (sessionId) => {
     try {
-      const schemas = await invoke<string[]>("fetch_schemas", { sessionId });
+      const schemas = await commands.fetchSchemas(sessionId);
       set({ schemas });
     } catch {
       // Non-PostgreSQL drivers will fail silently — schemas stay empty
       set({ schemas: [] });
+    }
+  },
+
+  fetchRoutines: async (sessionId) => {
+    try {
+      const routineCatalog = await commands.fetchRoutines(sessionId);
+      set({ routineCatalog });
+    } catch (err) {
+      set({ error: extractErrorMessage(err), routineCatalog: null });
     }
   },
 
@@ -108,15 +127,29 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   selectDatabase: async (sessionId, db) => {
     if (!db) {
-      set({ selectedDatabase: null, tables: [], columnsByTable: new Map(), schemas: [], currentSchema: null });
+      set({
+        selectedDatabase: null,
+        tables: [],
+        columnsByTable: new Map(),
+        schemas: [],
+        currentSchema: null,
+        routineCatalog: null,
+      });
       return;
     }
-    set({ isLoading: true, error: null, tables: [], columnsByTable: new Map(), schemas: [], currentSchema: null });
+    set({
+      isLoading: true,
+      error: null,
+      tables: [],
+      columnsByTable: new Map(),
+      schemas: [],
+      currentSchema: null,
+      routineCatalog: null,
+    });
     try {
       await commands.switchDatabase(sessionId, db);
       set({ selectedDatabase: db });
-      const tables = await commands.fetchTables(sessionId);
-      set({ tables, isLoading: false });
+      await get().fetchSchema(sessionId);
       // Fetch schemas after switching database (fire-and-forget)
       get().fetchSchemas(sessionId);
     } catch (err) {
@@ -137,5 +170,6 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       selectedDatabase: null,
       schemas: [],
       currentSchema: null,
+      routineCatalog: null,
     }),
 }));

@@ -6,4 +6,4 @@ pub mod schema;
 pub use connection::{ConnectionConfig, ConnectionGroup, ConnectionStatus, SavedConnection};
 pub use error::AppError;
 pub use query::{ColumnInfo, QueryResult};
-pub use schema::{ForeignKeyInfo, IndexInfo, TableInfo};
+pub use schema::{ForeignKeyInfo, IndexInfo, RoutineCatalog, RoutineInfo, RoutineKind, TableInfo};
