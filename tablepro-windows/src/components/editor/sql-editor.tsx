@@ -16,6 +16,18 @@ import {
   reconfigureVim,
   reconfigureDialect,
 } from "../../editor/editor-compartments";
+import { createEditorTheme, createEditorFontTheme } from "./editor-theme";
+import { sqlCompletionSource } from "../../editor/sql-completion-source";
+import { createVimExtension } from "../../editor/vim-mode";
+import { createKeybindings } from "../../editor/keybindings";
+import { formatEditorContent } from "../../editor/sql-formatter";
+import { allStatements, statementAtCursor } from "../../editor/statement-scanner";
+import { statementHighlighter } from "../../editor/statement-highlighter";
+import { errorMarkerField, setErrorMark } from "../../editor/error-marker";
+import {
+  parseErrorPosition,
+  pgCharOffsetToDocOffset,
+} from "../../editor/error-position-parser";
 
 type SqlDialect = "postgresql" | "mysql" | "mssql" | "standard";
 
@@ -24,39 +36,16 @@ interface SqlEditorProps {
 }
 
 async function loadEditorRuntime() {
-  const [
-    viewMod,
-    stateMod,
-    sqlMod,
-    commandsMod,
-    searchMod,
-    autocompleteMod,
-    languageMod,
-    themeMod,
-    completionMod,
-    vimModeMod,
-    keybindingsMod,
-    formatterMod,
-    scannerMod,
-    highlighterMod,
-    errorMarkerMod,
-  ] = await Promise.all([
-    import("@codemirror/view"),
-    import("@codemirror/state"),
-    import("@codemirror/lang-sql"),
-    import("@codemirror/commands"),
-    import("@codemirror/search"),
-    import("@codemirror/autocomplete"),
-    import("@codemirror/language"),
-    import("./editor-theme"),
-    import("../../editor/sql-completion-source"),
-    import("../../editor/vim-mode"),
-    import("../../editor/keybindings"),
-    import("../../editor/sql-formatter"),
-    import("../../editor/statement-scanner"),
-    import("../../editor/statement-highlighter"),
-    import("../../editor/error-marker"),
-  ]);
+  const [viewMod, stateMod, sqlMod, commandsMod, searchMod, autocompleteMod, languageMod] =
+    await Promise.all([
+      import("@codemirror/view"),
+      import("@codemirror/state"),
+      import("@codemirror/lang-sql"),
+      import("@codemirror/commands"),
+      import("@codemirror/search"),
+      import("@codemirror/autocomplete"),
+      import("@codemirror/language"),
+    ]);
 
   return {
     ...viewMod,
@@ -66,14 +55,17 @@ async function loadEditorRuntime() {
     ...searchMod,
     ...autocompleteMod,
     ...languageMod,
-    ...themeMod,
-    ...completionMod,
-    ...vimModeMod,
-    ...keybindingsMod,
-    ...formatterMod,
-    ...scannerMod,
-    ...highlighterMod,
-    ...errorMarkerMod,
+    createEditorTheme,
+    createEditorFontTheme,
+    sqlCompletionSource,
+    createVimExtension,
+    createKeybindings,
+    formatEditorContent,
+    allStatements,
+    statementAtCursor,
+    statementHighlighter,
+    errorMarkerField,
+    setErrorMark,
   };
 }
 
@@ -332,16 +324,13 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
     const unsub = useQueryStore.subscribe((state, prev) => {
       if (state.error && state.error !== prev.error) {
-        // Dynamic import to avoid circular deps
-        import("../../editor/error-position-parser").then(({ parseErrorPosition, pgCharOffsetToDocOffset }) => {
-          const pos = parseErrorPosition(state.error!);
-          if (pos.charOffset !== null) {
-            const docOffset = pgCharOffsetToDocOffset(pos.charOffset);
-            const clampedOffset = Math.min(docOffset, view.state.doc.length);
-            const to = Math.min(clampedOffset + 10, view.state.doc.length);
-            view.dispatch({ effects: runtime.setErrorMark.of({ from: clampedOffset, to }) });
-          }
-        });
+        const pos = parseErrorPosition(state.error);
+        if (pos.charOffset !== null) {
+          const docOffset = pgCharOffsetToDocOffset(pos.charOffset);
+          const clampedOffset = Math.min(docOffset, view.state.doc.length);
+          const to = Math.min(clampedOffset + 10, view.state.doc.length);
+          view.dispatch({ effects: runtime.setErrorMark.of({ from: clampedOffset, to }) });
+        }
       }
     });
 

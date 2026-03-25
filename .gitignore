@@ -119,6 +119,9 @@ Thumbs.db
 *.p12
 *.mobileprovision
 Secrets.xcconfig
+.env
+.env.*
+tablepro-windows/.tauri/
 
 # Debug
 *.log
@@ -154,3 +157,4 @@ storage.sqlite3
 repomix*
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+.claude/

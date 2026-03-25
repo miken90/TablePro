@@ -31,7 +31,7 @@
   "plugins": {
     "updater": {
       "endpoints": ["https://releases.tablepro.app/update/{{target}}/{{current_version}}"],
-      "pubkey": "REPLACE_WITH_UPDATER_PUBLIC_KEY"
+      "pubkey": "untrusted comment: minisign public key: 6CEF0FC9928225E0\nRWTgJYKSyQ/vbI8vdSeqjQk/PSIO6Mh6zjlGh18oflYRPKxDM1J7RWe+"
     }
   },
   "bundle": {

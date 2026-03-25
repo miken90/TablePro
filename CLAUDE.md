@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Role & Responsibilities
+
+Your role is to analyze user requirements, delegate tasks to appropriate specialized agents, and ensure cohesive delivery that matches repository architecture and current tool availability.
+
+## Workflow Inheritance
+
+- Primary workflow: `%USERPROFILE%/.claude/rules/primary-workflow.md`
+- Development rules: `%USERPROFILE%/.claude/rules/development-rules.md`
+- Orchestration protocols: `%USERPROFILE%/.claude/rules/orchestration-protocol.md`
+- Documentation management: `%USERPROFILE%/.claude/rules/documentation-management.md`
+- And other workflows: `%USERPROFILE%/.claude/rules/*`
+
+**IMPORTANT:** Analyze the skills catalog and activate relevant skills during the task.
+**IMPORTANT:** Follow `%USERPROFILE%/.claude/rules/development-rules.md` strictly.
+**IMPORTANT:** Before planning or implementation, always read `./README.md` first.
+**IMPORTANT:** When delegating implementation work, only use agent types that actually exist in the current toolset.
+**IMPORTANT:** Sacrifice grammar for concision in reports. List unresolved questions at the end.
+
 ## Project Overview
 
 TablePro is a native macOS database client (SwiftUI + AppKit) — a fast, lightweight alternative to TablePlus. macOS 14.0+, Swift 5.9, Universal Binary (arm64 + x86_64).
@@ -40,6 +58,14 @@ xcodebuild -project TablePro.xcodeproj -scheme TablePro test -skipPackagePluginV
 # DMG
 scripts/create-dmg.sh
 ```
+
+## Code Search Priority
+
+- **Prefer `ccc` first** for semantic/conceptual code search, architecture discovery, related-code exploration, and cross-file understanding.
+- Use the `ccc` skill or `ccc search` before falling back to `Grep`/`Glob` when the task is not a simple exact filename/string/symbol lookup.
+- Use `Grep`/`Glob` directly only for exact string, symbol, or file-name lookups where semantic indexing is unnecessary.
+- If `ccc` is not initialized for this repo, run `ccc init -f`, then `ccc index`, then retry the search.
+- In Windows Bash environments, use `PYTHONIOENCODING=utf-8 ccc ...` if encoding issues appear.
 
 ## Architecture
 
@@ -183,7 +209,7 @@ These are **non-negotiable** — never skip them:
 - **Plans must include edge cases.** When creating implementation plans, identify edge cases, thread safety concerns, and boundary conditions. Include them as explicit checklist items in the plan — don't defer discovery to code review.
 - **Implementation includes self-review.** Before committing, agents must check: thread safety (lock coverage, race conditions), all code paths (loops, early returns, between iterations), error handling, and flag/state reset logic. This eliminates the review→fix→review cycle.
 - **Tests are part of implementation, not a separate step.** When implementing a feature, write tests in the same commit or immediately after — don't wait for a separate `/write-tests` invocation. The implementation agent should include test writing in its scope.
-- **Always use team agents** for implementation work. Use the Agent tool (not subagents/tasks) to delegate coding to specialized agents (e.g., `feature-dev:feature-dev`, `feature-dev:code-architect`, `code-simplifier:code-simplifier`).
+- **Always use available specialized agents** for implementation work. Use the Agent tool (not subagents/tasks) to delegate coding to agents that exist in the current toolset (e.g., `fullstack-developer`, `feature-dev:code-architect`, `code-simplifier`).
 - **Always parallelize** independent tasks. Launch multiple agents in a single message.
 - **Main context = orchestrator only.** Read files, launch agents, summarize results, update tracking. Never do heavy implementation directly.
 - **Agent prompts must be self-contained.** Include file paths, the specific problem, and clear instructions.
