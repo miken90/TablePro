@@ -34,7 +34,10 @@ pub(crate) fn build_where_clause(
         .filter_map(|pk| {
             columns.iter().position(|c| c == pk).map(|idx| {
                 let val = original_row.get(idx).cloned().flatten();
-                format!("{}={}", quote_ident(pk), escape_value(&val))
+                match val {
+                    Some(value) => format!("{}={}", quote_ident(pk), escape_value(&Some(value))),
+                    None => format!("{} IS NULL", quote_ident(pk)),
+                }
             })
         })
         .collect::<Vec<_>>()

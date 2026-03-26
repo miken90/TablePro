@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::State;
@@ -8,6 +10,7 @@ use crate::services::{
     sql_generator::{generate_insert_sql, generate_statements, generate_update_sql, SavePayload},
     ConnectionManager,
 };
+use crate::storage::history_store::HistoryStore;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,19 +35,63 @@ pub async fn save_changes(
     session_id: String,
     payload: SavePayload,
     manager: State<'_, Mutex<ConnectionManager>>,
+    history_store: State<'_, Mutex<HistoryStore>>,
 ) -> Result<SaveResult, AppError> {
-    let driver = {
+    let (driver, database_name) = {
         let mgr = manager.lock().await;
-        mgr.get_driver(&session_id)?
+        let driver = mgr.get_driver(&session_id)?;
+        let database_name = mgr
+            .get_config(&session_id)
+            .ok()
+            .map(|cfg| cfg.database.clone())
+            .filter(|name| !name.trim().is_empty());
+        (driver, database_name)
     };
 
     let statements = generate_statements(&payload);
     let mut total_affected = 0i64;
+    let started_at = Instant::now();
+    let mut executed_statements: Vec<&str> = Vec::with_capacity(statements.len());
 
     for sql in &statements {
         tracing::info!(session_id = %session_id, "save_changes: {}", sql);
-        let result = driver.execute(sql).await?;
-        total_affected += result.affected_rows;
+        executed_statements.push(sql.as_str());
+
+        match driver.execute(sql).await {
+            Ok(result) => {
+                total_affected += result.affected_rows;
+            }
+            Err(error) => {
+                let elapsed_ms = started_at.elapsed().as_millis() as i64;
+                let history_sql = executed_statements.join(";\n");
+                let store = history_store.lock().await;
+                if let Err(history_error) = store.insert_for_async(
+                    &history_sql,
+                    database_name.as_deref(),
+                    elapsed_ms,
+                    total_affected,
+                    "failed",
+                ) {
+                    tracing::warn!(session_id = %session_id, "save_changes history insert failed: {}", history_error);
+                }
+                return Err(error);
+            }
+        }
+    }
+
+    let elapsed_ms = started_at.elapsed().as_millis() as i64;
+    if !executed_statements.is_empty() {
+        let history_sql = executed_statements.join(";\n");
+        let store = history_store.lock().await;
+        if let Err(error) = store.insert_for_async(
+            &history_sql,
+            database_name.as_deref(),
+            elapsed_ms,
+            total_affected,
+            "success",
+        ) {
+            tracing::warn!(session_id = %session_id, "save_changes history insert failed: {}", error);
+        }
     }
 
     Ok(SaveResult {

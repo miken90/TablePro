@@ -8,6 +8,9 @@ rss: true
   ### Sửa lỗi
 
   - Sửa lỗi định tuyến session theo tab trên Windows để thực thi truy vấn dùng đúng kết nối của tab đang hoạt động và đồng bộ trạng thái khi kích hoạt/đóng tab
+  - Sửa lỗi UPDATE save_changes trên Windows bị no-op với khóa nullable bằng cách sinh điều kiện `IS NULL` thay cho `=NULL`
+  - Sửa theo dõi chỉnh sửa bảng trên Windows để giữ snapshot hàng gốc ổn định qua nhiều lần sửa ô trước khi commit
+  - Sửa lịch sử truy vấn trên Windows để ghi nhận các lần thực thi save_changes (thành công và thất bại)
 </Update>
 
 <Update label="11 tháng 3, 2026" description="v0.17.0">

@@ -8,6 +8,9 @@ rss: true
   ### Bug Fixes
 
   - Fixed Windows tab-bound session routing so query execution uses the active tab connection and tab activate/close state stays in sync
+  - Fixed Windows save_changes UPDATE no-op on nullable key values by generating `IS NULL` predicates instead of `=NULL`
+  - Fixed Windows table edit tracking to keep a stable original row snapshot across repeated cell edits before commit
+  - Fixed Windows query history to include save_changes executions (success and failure)
 </Update>
 
 <Update label="March 11, 2026" description="v0.17.0">

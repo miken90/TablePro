@@ -24,6 +24,13 @@ function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
 
+function buildWherePredicate(columnName: string, value: string | null): string {
+  if (value === null) {
+    return `${quoteIdent(columnName)} IS NULL`;
+  }
+  return `${quoteIdent(columnName)}=${escapeValue(value)}`;
+}
+
 function qualifiedTable(table: string, schema: string | null | undefined): string {
   if (schema) return `${quoteIdent(schema)}.${quoteIdent(table)}`;
   return quoteIdent(table);
@@ -63,7 +70,7 @@ export function generatePreviewSql(
         .map(pk => {
           const colIdx = columns.indexOf(pk);
           const val = colIdx >= 0 ? origRow[colIdx] ?? null : null;
-          return `${quoteIdent(pk)}=${escapeValue(val)}`;
+          return buildWherePredicate(pk, val);
         })
         .join(" AND ");
       if (!whereParts) continue;
@@ -73,7 +80,7 @@ export function generatePreviewSql(
         .map(pk => {
           const colIdx = columns.indexOf(pk);
           const val = colIdx >= 0 ? origRow[colIdx] ?? null : null;
-          return `${quoteIdent(pk)}=${escapeValue(val)}`;
+          return buildWherePredicate(pk, val);
         })
         .join(" AND ");
       if (!whereParts) continue;

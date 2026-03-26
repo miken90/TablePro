@@ -71,9 +71,10 @@ export function useChangeTracking({
     const rowChanges: RowChangePayload[] = [];
     for (const [rowIdxStr, change] of changesEntries) {
       const rowIdx = Number(rowIdxStr);
-      // For inserted rows (negative id), build row from cellChanges; no original row exists
+      // For updates/deletes, use stable snapshot captured on first edit.
+      // For inserted rows (negative id), build from cellChanges.
       const originalRow = rowIdx >= 0
-        ? (result.rows[rowIdx] ?? [])
+        ? (change.originalRow.length > 0 ? change.originalRow : (result.rows[rowIdx] ?? []))
         : columns.map((_, colIdx) => {
             const cc = change.cellChanges.find((c) => c.columnIndex === colIdx);
             return cc?.newValue ?? null;

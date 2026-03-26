@@ -20,7 +20,39 @@ describe('changeStore', () => {
       rowIndex: 0, columnIndex: 1, columnName: 'name',
       oldValue: 'Alice', newValue: 'Bob',
     });
-    expect(useChangeStore.getState().getRowChangeType(0)).toBe('update');
+    expect(getRowChangeType(0)).toBe('update');
+  });
+
+  it('recordCellChange captures original row snapshot on first update', () => {
+    const snapshot = ['1', 'Alice', 'active'];
+    const state = useChangeStore.getState();
+
+    state.recordCellChange({
+      rowIndex: 0, columnIndex: 1, columnName: 'name',
+      oldValue: 'Alice', newValue: 'Bob',
+    }, snapshot);
+
+    const change = useChangeStore.getState().getChanges().get(0);
+    expect(change?.originalRow).toEqual(snapshot);
+  });
+
+  it('recordCellChange keeps stable original row after later edits', () => {
+    const firstSnapshot = ['1', 'Alice', 'active'];
+    const secondSnapshot = ['1', 'Bob', 'active'];
+    const state = useChangeStore.getState();
+
+    state.recordCellChange({
+      rowIndex: 0, columnIndex: 1, columnName: 'name',
+      oldValue: 'Alice', newValue: 'Bob',
+    }, firstSnapshot);
+
+    state.recordCellChange({
+      rowIndex: 0, columnIndex: 2, columnName: 'status',
+      oldValue: 'active', newValue: 'inactive',
+    }, secondSnapshot);
+
+    const change = useChangeStore.getState().getChanges().get(0);
+    expect(change?.originalRow).toEqual(firstSnapshot);
   });
 
   it('recordCellChange on same cell replaces previous', () => {

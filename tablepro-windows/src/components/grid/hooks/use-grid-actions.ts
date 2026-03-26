@@ -205,7 +205,11 @@ export function useGridActions({
     const col = result.columns[colIdx];
     const oldValue = getRowByLogicalId(rowIdx)?.[colIdx] ?? null;
     if (oldValue === newValue) { setEditingCell(null); return; }
-    recordCellChange({ rowIndex: rowIdx, columnIndex: colIdx, columnName: col.name, oldValue, newValue });
+    const originalRowSnapshot = getRowByLogicalId(rowIdx) ?? [];
+    recordCellChange(
+      { rowIndex: rowIdx, columnIndex: colIdx, columnName: col.name, oldValue, newValue },
+      originalRowSnapshot,
+    );
     setEditingCell(null);
   }, [result, recordCellChange, getRowByLogicalId]);
 
@@ -312,13 +316,14 @@ export function useGridActions({
     if (!col) { closeContextMenu(); return; }
     const oldValue = getEffectiveCellValue(contextMenu.rowIndex, contextMenu.colIndex, contextMenu.cellValue);
     if (oldValue === null) { closeContextMenu(); return; }
+    const originalRowSnapshot = getRowByLogicalId(contextMenu.rowIndex) ?? [];
     recordCellChange({
       rowIndex: contextMenu.rowIndex,
       columnIndex: contextMenu.colIndex,
       columnName: col.name,
       oldValue,
       newValue: null,
-    });
+    }, originalRowSnapshot);
     closeContextMenu();
   }, [contextMenu, result, getEffectiveCellValue, recordCellChange, closeContextMenu]);
 

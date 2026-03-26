@@ -54,7 +54,7 @@ interface ChangeStoreState {
   getRowChangeType(rowIndex: number): "insert" | "update" | "delete" | null;
   getCellNewValue(rowIndex: number, columnIndex: number): string | null | undefined;
 
-  recordCellChange(change: CellChange): void;
+  recordCellChange(change: CellChange, originalRowSnapshot?: (string | null)[]): void;
   recordRowInsert(rowIndex: number, defaults: (string | null)[], columnNames?: string[], originPage?: number): void;
   recordRowDelete(rowIndex: number, originalRow: (string | null)[]): void;
   undo(): void;
@@ -142,7 +142,7 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
     return cell.newValue;
   },
 
-  recordCellChange(change) {
+  recordCellChange(change, originalRowSnapshot) {
     const { _byTable, _activeTableKey } = get();
     if (!_activeTableKey) return;
     const active = _byTable[_activeTableKey] ?? emptyTableState();
@@ -167,7 +167,10 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
       set(buildState(byTable, _activeTableKey));
     } else {
       const rowChange: RowChange = existing ?? {
-        type: "update", rowIndex: change.rowIndex, cellChanges: [], originalRow: [],
+        type: "update",
+        rowIndex: change.rowIndex,
+        cellChanges: [],
+        originalRow: originalRowSnapshot ? [...originalRowSnapshot] : [],
       };
       const updatedCells = rowChange.cellChanges.filter((c) => c.columnName !== change.columnName);
       updatedCells.push(change);

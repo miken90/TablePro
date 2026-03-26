@@ -447,7 +447,7 @@ mod tests {
             cell_changes: vec![],
         }];
         let stmts = generate_statements(&p);
-        assert_eq!(stmts[0], r#"DELETE FROM "public"."users" WHERE "id"=NULL"#);
+        assert_eq!(stmts[0], r#"DELETE FROM "public"."users" WHERE "id" IS NULL"#);
     }
 
     #[test]
