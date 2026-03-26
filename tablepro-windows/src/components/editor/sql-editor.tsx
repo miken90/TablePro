@@ -2,7 +2,10 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { useEditorStore } from "../../stores/editorStore";
-import { useQueryStore } from "../../stores/queryStore";
+import {
+  resolveActiveQuerySessionId,
+  useQueryStore,
+} from "../../stores/queryStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -107,10 +110,9 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
   const execute = useQueryStore((s) => s.execute);
   const setQueryText = useQueryStore((s) => s.setQueryText);
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
-  const getSessionId = useConnectionStore((s) => s.getSessionId);
   const settings = useSettingsStore((s) => s.settings);
 
-  const activeSessionId = selectedConnectionId ? getSessionId(selectedConnectionId) : null;
+  const activeSessionId = resolveActiveQuerySessionId() ?? null;
   const queryProgress = useQueryProgress(activeSessionId);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -164,9 +166,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         // App keybindings
         runtime.createKeybindings({
           runQuery: (view) => {
-            const connId = useConnectionStore.getState().selectedConnectionId;
-            if (!connId) return false;
-            const sessionId = useConnectionStore.getState().getSessionId(connId);
+            const sessionId = resolveActiveQuerySessionId();
             if (!sessionId) return false;
             const text = view.state.doc.toString();
             const cursor = view.state.selection.main.head;
@@ -175,9 +175,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
             return true;
           },
           runAll: (view) => {
-            const connId = useConnectionStore.getState().selectedConnectionId;
-            if (!connId) return false;
-            const sessionId = useConnectionStore.getState().getSessionId(connId);
+            const sessionId = resolveActiveQuerySessionId();
             if (!sessionId) return false;
             const stmts = runtime.allStatements(view.state.doc.toString());
             const combined = stmts.join(";\n");

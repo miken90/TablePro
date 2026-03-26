@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryStore } from "../stores/queryStore";
+import { resolveActiveQuerySessionId, useQueryStore } from "../stores/queryStore";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useEditorStore } from "../stores/editorStore";
 import { useSchemaStore } from "../stores/schemaStore";
@@ -37,14 +37,13 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
+      const sessionId = resolveActiveQuerySessionId();
 
       // Ctrl+Enter — run query
       if (ctrl && e.key === "Enter") {
         if (handlers?.onRunQuery) {
           handlers.onRunQuery();
-        } else if (selectedConnectionId && !isExecuting) {
-          const sessionId = getSessionId(selectedConnectionId);
-          if (!sessionId) return;
+        } else if (!isExecuting && sessionId) {
           const tab = tabs.find((t) => t.id === activeTabId);
           if (tab?.content.trim()) {
             void execute(sessionId, tab.content);
@@ -53,9 +52,8 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
       }
 
       // Escape — cancel query
-      if (e.key === "Escape" && isExecuting && selectedConnectionId) {
-        const sessionId = getSessionId(selectedConnectionId);
-        if (sessionId) void cancel(sessionId);
+      if (e.key === "Escape" && isExecuting && sessionId) {
+        void cancel(sessionId);
       }
 
       // Ctrl+T — new tab

@@ -21,7 +21,7 @@ import { StatusBar } from "./StatusBar";
 import { EditorViewProvider } from "../../contexts/editor-view-context";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
-import { useQueryStore } from "../../stores/queryStore";
+import { resolveActiveQuerySessionId, useQueryStore } from "../../stores/queryStore";
 import { useInspectorStore } from "../../stores/inspectorStore";
 import { useChangeStore } from "../../stores/changeStore";
 import {
@@ -204,7 +204,7 @@ export function MainLayout() {
   const selectedRow = inspectorStoreRow
     ?? (queryResult && selectedRowIndex !== null ? (queryResult.rows[selectedRowIndex] ?? null) : null);
 
-  const sessionId = selectedConnectionId ? getSessionId(selectedConnectionId) : undefined;
+  const sessionId = resolveActiveQuerySessionId();
   const isConnected = !!selectedConnectionId;
 
   return (

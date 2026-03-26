@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import type { QueryResult } from "../types/query";
 import * as commands from "../ipc/commands";
 import { extractErrorMessage } from "../ipc/error";
+import { useConnectionStore } from "./connectionStore";
+import { useEditorStore } from "./editorStore";
 import { useQueryLogStore } from "./queryLogStore";
 
 // --- Safe mode helpers ---
@@ -83,6 +85,79 @@ interface QueryState {
   clearResult: () => void;
 }
 
+function getDisplayRowCount(result: QueryResult): number {
+  return result.affectedRows > 0 ? result.affectedRows : result.rows.length;
+}
+
+function isSelectLikeQuery(sql: string): boolean {
+  const normalized = sql.trimStart().toLowerCase();
+
+  if (
+    normalized.startsWith("select") ||
+    normalized.startsWith("show") ||
+    normalized.startsWith("describe") ||
+    normalized.startsWith("explain") ||
+    normalized.startsWith("pragma")
+  ) {
+    return true;
+  }
+
+  if (!normalized.startsWith("with")) {
+    return false;
+  }
+
+  const cteMatch = normalized.match(/\)\s*(select|show|describe|explain|pragma|insert|update|delete)\b/);
+  if (!cteMatch) {
+    return false;
+  }
+
+  return ["select", "show", "describe", "explain", "pragma"].includes(cteMatch[1]);
+}
+
+function getSuccessDescription(sql: string, result: QueryResult, elapsedMs: number): string {
+  if (result.affectedRows > 0) {
+    return `${result.affectedRows} row${result.affectedRows !== 1 ? "s" : ""} affected in ${elapsedMs}ms`;
+  }
+
+  if (result.rows.length > 0) {
+    return `${result.rows.length} row${result.rows.length !== 1 ? "s" : ""} in ${elapsedMs}ms`;
+  }
+
+  if (isSelectLikeQuery(sql)) {
+    return `0 rows in ${elapsedMs}ms`;
+  }
+
+  return `Statement executed in ${elapsedMs}ms`;
+}
+
+export function resolveActiveQueryConnectionId(): string | undefined {
+  const { activeTabId, tabs } = useEditorStore.getState();
+  const tabConnectionId = tabs.find((tab) => tab.id === activeTabId)?.connectionId;
+  if (tabConnectionId) {
+    return tabConnectionId;
+  }
+
+  const { selectedConnectionId } = useConnectionStore.getState();
+  return selectedConnectionId ?? undefined;
+}
+
+export function resolveActiveQuerySessionId(): string | undefined {
+  const connectionState = useConnectionStore.getState();
+  const { activeTabId, tabs } = useEditorStore.getState();
+  const tabConnectionId = tabs.find((tab) => tab.id === activeTabId)?.connectionId;
+
+  if (tabConnectionId) {
+    return connectionState.getSessionId(tabConnectionId);
+  }
+
+  const selectedConnectionId = connectionState.selectedConnectionId;
+  if (!selectedConnectionId) {
+    return undefined;
+  }
+
+  return connectionState.getSessionId(selectedConnectionId);
+}
+
 async function runQuery(
   set: (state: Partial<QueryState>) => void,
   sessionId: string,
@@ -101,16 +176,18 @@ async function runQuery(
   try {
     const result = await commands.executeQuery(sessionId, sql, params);
     const elapsedMs = Date.now() - startMs;
+    const displayRowCount = getDisplayRowCount(result);
+
     set({ result, isExecuting: false, durationMs: elapsedMs });
     useQueryLogStore.getState().update(logId, {
       status: "success",
       durationMs: elapsedMs,
-      rowCount: result.rows.length,
+      rowCount: displayRowCount,
     });
-    commands.historyRecord(sql, null, elapsedMs, result.rows.length, "success").catch(() => {});
+    commands.historyRecord(sql, null, elapsedMs, displayRowCount, "success").catch(() => {});
     toast.dismiss(loadingId);
     toast.success("Query executed", {
-      description: `${result.rows.length} row${result.rows.length !== 1 ? "s" : ""} in ${elapsedMs}ms`,
+      description: getSuccessDescription(sql, result, elapsedMs),
     });
   } catch (err) {
     const elapsedMs = Date.now() - startMs;
@@ -148,7 +225,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     const check = checkSafeMode(sql, safeModeLevel);
 
     if (check.blocked) {
-      set({ error: "Read-only mode: write queries are blocked (Safe Mode Level 5)." });
+      const message = "Read-only mode: write queries are blocked (Safe Mode Level 5).";
+      set({ error: message });
+      toast.error("Query blocked", { description: message });
       return;
     }
 

@@ -1,7 +1,11 @@
 import { Clock, Settings, Shield, Unplug } from "lucide-react";
 import { formatTagLabel, tagClassName } from "../connection/connection-tag-picker";
 import { useConnectionStore } from "../../stores/connectionStore";
-import { useQueryStore } from "../../stores/queryStore";
+import {
+  resolveActiveQueryConnectionId,
+  resolveActiveQuerySessionId,
+  useQueryStore,
+} from "../../stores/queryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useEditorStore } from "../../stores/editorStore";
@@ -45,7 +49,6 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const connections = useConnectionStore((s) => s.connections);
   const getStatus = useConnectionStore((s) => s.getStatus);
-  const getSessionId = useConnectionStore((s) => s.getSessionId);
   const disconnect = useConnectionStore((s) => s.disconnect);
   const { isExecuting, queryText, result: queryResult, execute, cancel, pendingSafeCheck, confirmSafeCheck, cancelSafeCheck } = useQueryStore();
   const safeModeLevel = useSettingsStore((s) => s.settings.safeModeLevel);
@@ -74,8 +77,8 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
   };
 
   const handleRun = () => {
-    if (!selectedConnectionId || !queryText.trim()) return;
-    const sessionId = getSessionId(selectedConnectionId);
+    if (!queryText.trim()) return;
+    const sessionId = resolveActiveQuerySessionId();
     if (!sessionId) return;
     onRunQuery?.();
     const stmt = getCurrentStatement();
@@ -83,15 +86,14 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
   };
 
   const handleStop = () => {
-    if (!selectedConnectionId) return;
-    const sessionId = getSessionId(selectedConnectionId);
+    const sessionId = resolveActiveQuerySessionId();
     if (!sessionId) return;
     void cancel(sessionId);
   };
 
   const handleRunAll = () => {
-    if (!selectedConnectionId || !queryText.trim()) return;
-    const sessionId = getSessionId(selectedConnectionId);
+    if (!queryText.trim()) return;
+    const sessionId = resolveActiveQuerySessionId();
     if (!sessionId) return;
     onRunQuery?.();
     // Execute all text as-is (all statements)
@@ -99,10 +101,11 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
   };
 
   const handleExplain = () => {
-    if (!selectedConnectionId || !queryText.trim()) return;
-    const sessionId = getSessionId(selectedConnectionId);
+    if (!queryText.trim()) return;
+    const sessionId = resolveActiveQuerySessionId();
     if (!sessionId) return;
-    const conn = connections.get(selectedConnectionId);
+    const resolvedConnectionId = resolveActiveQueryConnectionId();
+    const conn = resolvedConnectionId ? connections.get(resolvedConnectionId) : null;
     const dbType = conn?.config?.dbType?.toLowerCase();
     // Use current statement only (not all editor text)
     const stmt = getCurrentStatement();
@@ -199,7 +202,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
           onExportCsv={() => {/* Export dialog handled at ResultPanel level */}}
           onCancel={handleStop}
           isExecuting={isExecuting}
-          disabled={!selectedConnectionId || !queryText.trim()}
+          disabled={!resolveActiveQuerySessionId() || !queryText.trim()}
           dbType={connection?.config?.dbType}
           hasResult={!!queryResult}
         />

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLayoutStore } from "../stores/layoutStore";
-import { useQueryStore } from "../stores/queryStore";
+import { resolveActiveQuerySessionId, useQueryStore } from "../stores/queryStore";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useEditorStore } from "../stores/editorStore";
 import { useCommandStore } from "./useCommandRegistry";
@@ -45,11 +45,8 @@ export function useMainLayoutCommands() {
         category: "Query" as const,
         action: () => {
           const { queryText } = useQueryStore.getState();
-          const { selectedConnectionId: connId } = useConnectionStore.getState();
-          if (connId) {
-            const sid = useConnectionStore.getState().getSessionId(connId);
-            if (sid) void useQueryStore.getState().execute(sid, queryText);
-          }
+          const sid = resolveActiveQuerySessionId();
+          if (sid) void useQueryStore.getState().execute(sid, queryText);
         },
       },
       {

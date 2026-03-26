@@ -49,6 +49,14 @@ function generateTabId(): string {
   return `tab-${Date.now()}-${tabCounter++}`;
 }
 
+function syncSelectedConnectionByTabId(tabs: EditorTab[], tabId: string | null): void {
+  if (!tabId) return;
+  const connectionId = tabs.find((tab) => tab.id === tabId)?.connectionId;
+  if (connectionId) {
+    useConnectionStore.getState().selectConnection(connectionId);
+  }
+}
+
 export const useEditorStore = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -159,6 +167,7 @@ export const useEditorStore = create<EditorState>()(
             const idx = s.tabs.findIndex((t) => t.id === id);
             activeTabId = tabs[Math.min(idx, tabs.length - 1)]?.id ?? null;
           }
+          syncSelectedConnectionByTabId(tabs, activeTabId);
           return { tabs, activeTabId };
         });
       },
@@ -166,6 +175,7 @@ export const useEditorStore = create<EditorState>()(
       closeOtherTabs: (id) => {
         set((s) => {
           const kept = s.tabs.filter((t) => t.id === id || (t.isPinned ?? false));
+          syncSelectedConnectionByTabId(kept, id);
           return { tabs: kept, activeTabId: id };
         });
       },
@@ -174,6 +184,7 @@ export const useEditorStore = create<EditorState>()(
         set((s) => {
           const pinned = s.tabs.filter((t) => t.isPinned ?? false);
           const activeTabId = pinned[0]?.id ?? null;
+          syncSelectedConnectionByTabId(pinned, activeTabId);
           return { tabs: pinned, activeTabId };
         });
       },
@@ -187,11 +198,19 @@ export const useEditorStore = create<EditorState>()(
             s.activeTabId && kept.some((t) => t.id === s.activeTabId)
               ? s.activeTabId
               : id;
+          syncSelectedConnectionByTabId(kept, activeTabId);
           return { tabs: kept, activeTabId };
         });
       },
 
-      setActiveTab: (id) => set({ activeTabId: id }),
+      setActiveTab: (id) => {
+        const tab = get().tabs.find((t) => t.id === id);
+        const nextState: Partial<EditorState> = { activeTabId: id };
+        if (tab?.connectionId) {
+          useConnectionStore.getState().selectConnection(tab.connectionId);
+        }
+        set(nextState);
+      },
 
       updateTabContent: (id, content) => {
         set((s) => ({
