@@ -65,6 +65,8 @@ export interface UseGridActionsReturn {
   // Export
   showExport: boolean;
   setShowExport: (v: boolean) => void;
+  // Copy selected rows as TSV (Ctrl+C)
+  copySelectedRowsTsv: () => Promise<void>;
 }
 
 export function useGridActions({
@@ -348,6 +350,19 @@ export function useGridActions({
     useEditorStore.getState().updateTabContent(tabId, sql);
   }, []);
 
+  const copySelectedRowsTsv = useCallback(async () => {
+    if (!result || selectedRows.size === 0) return;
+    const header = result.columns.map(c => c.name).join('\t');
+    const sorted = Array.from(selectedRows).sort((a, b) => a - b);
+    const lines = sorted.map(idx =>
+      result.columns.map((_, ci) => {
+        const row = getRowByLogicalId(idx);
+        return getEffectiveCellValue(idx, ci, row?.[ci] ?? null) ?? '';
+      }).join('\t')
+    );
+    await navigator.clipboard.writeText([header, ...lines].join('\n'));
+  }, [result, selectedRows, getEffectiveCellValue, getRowByLogicalId]);
+
   return {
     selectedRows,
     lastSelectedRow,
@@ -378,5 +393,6 @@ export function useGridActions({
     handleFkNavigate,
     showExport,
     setShowExport,
+    copySelectedRowsTsv,
   };
 }

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { ColumnInfo } from '../../types/query';
 import type { FkRef } from '../../stores/schemaStore';
@@ -24,9 +24,6 @@ interface GridRowProps {
   virtualTop: number;
   enumValuesByColumn?: Record<string, string[]>;
   fkColumns?: Record<string, FkRef>;
-  isChecked?: boolean;
-  showCheckbox?: boolean;
-  onCheckChange?: (checked: boolean) => void;
   onRowClick: (e: React.MouseEvent) => void;
   onCellDoubleClick?: (colIdx: number) => void;
   onCellCommit?: (colIdx: number, newValue: string | null) => void;
@@ -150,9 +147,6 @@ export function GridRow({
   virtualTop,
   enumValuesByColumn,
   fkColumns,
-  isChecked = false,
-  showCheckbox = true,
-  onCheckChange,
   onRowClick,
   onCellDoubleClick,
   onCellCommit,
@@ -166,22 +160,6 @@ export function GridRow({
       style={{ top: virtualTop, height: 28 }}
       onClick={onRowClick}
     >
-      {/* Checkbox column */}
-      {showCheckbox && (
-        <div
-          className="w-10 flex-shrink-0 flex items-center justify-center border-r border-border-subtle"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <input
-            type="checkbox"
-            className="h-3 w-3 rounded border-border-subtle accent-blue-500 cursor-pointer"
-            checked={isChecked}
-            onChange={(e) => onCheckChange?.(e.target.checked)}
-            aria-label={`Select row ${rowNumber ?? rowIndex + 1}`}
-          />
-        </div>
-      )}
-
       {/* Row number */}
       <div className="w-10 flex-shrink-0 px-1 flex items-center justify-end text-text-muted border-r border-border-subtle select-none">
         {rowNumber ?? rowIndex + 1}

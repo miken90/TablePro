@@ -30,8 +30,6 @@ interface DataGridProps {
   enumValuesByColumn?: Record<string, string[]>;
   fkColumns?: Record<string, FkRef>;
   onFkNavigate?: (refTable: string, refColumn: string, refSchema: string | undefined, value: string) => void;
-  /** Show checkbox column for row selection. Default: true */
-  showCheckboxes?: boolean;
   /** Logical row ids — maps display index to changeStore row id. Length must match result.rows.length. */
   rowIds?: number[];
 }
@@ -40,8 +38,8 @@ const DEFAULT_COL_WIDTH = 120;
 const MIN_COL_WIDTH = 80;
 const MAX_AUTO_FIT_WIDTH = 600;
 const ROW_HEIGHT = 28;
-// w-10 = 2.5rem = 40px; checkbox (40) + row# (40) = 80px fixed
-const FIXED_COLS_WIDTH = 80;
+// w-10 = 2.5rem = 40px; row number column only
+const FIXED_COLS_WIDTH = 40;
 
 export function DataGrid({
   result,
@@ -60,14 +58,11 @@ export function DataGrid({
   enumValuesByColumn,
   fkColumns,
   onFkNavigate,
-  showCheckboxes = true,
   rowIds,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
-  const fixedColsWidth = showCheckboxes ? FIXED_COLS_WIDTH : 40; // 40 = row numbers only
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
-  const [checkedRows, setCheckedRows] = useState<Set<number>>(new Set());
   const parentRef = useRef<HTMLDivElement>(null);
 
   const rows = result.rows;
@@ -197,27 +192,6 @@ export function DataGrid({
     // Currently a no-op; Phase 6 will wire this up
   }, []);
 
-  // Checkbox logic
-  const allChecked = rows.length > 0 && checkedRows.size === rows.length;
-  const someChecked = checkedRows.size > 0 && checkedRows.size < rows.length;
-
-  const handleSelectAll = useCallback((checked: boolean) => {
-    if (checked) {
-      setCheckedRows(new Set(Array.from({ length: rows.length }, (_, i) => pageOffset + i)));
-    } else {
-      setCheckedRows(new Set());
-    }
-  }, [rows.length, pageOffset]);
-
-  const handleRowCheck = useCallback((absoluteIdx: number, checked: boolean) => {
-    setCheckedRows(prev => {
-      const next = new Set(prev);
-      if (checked) next.add(absoluteIdx);
-      else next.delete(absoluteIdx);
-      return next;
-    });
-  }, []);
-
   const resolvedWidths: Record<string, number> = {};
   for (const col of result.columns) {
     resolvedWidths[col.name] = columnWidths[col.name] ?? DEFAULT_COL_WIDTH;
@@ -227,7 +201,7 @@ export function DataGrid({
   const columnsTotalWidth = visibleColumns.reduce(
     (sum, col) => sum + (resolvedWidths[col.name] ?? DEFAULT_COL_WIDTH), 0
   );
-  const totalContentWidth = fixedColsWidth + columnsTotalWidth;
+  const totalContentWidth = FIXED_COLS_WIDTH + columnsTotalWidth;
 
   return (
     <div
@@ -241,21 +215,6 @@ export function DataGrid({
         <div style={{ minWidth: totalContentWidth }}>
           {/* Sticky header */}
           <div className="sticky top-0 z-10 flex border-b border-border-subtle bg-surface">
-            {/* Checkbox select-all cell */}
-            {showCheckboxes && (
-              <div className="w-10 flex-shrink-0 flex items-center justify-center border-r border-border-subtle py-1.5">
-                <input
-                  type="checkbox"
-                  className="h-3 w-3 rounded border-border-subtle accent-blue-500 cursor-pointer"
-                  checked={allChecked}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someChecked;
-                  }}
-                  onChange={(e) => handleSelectAll(e.target.checked)}
-                  aria-label="Select all rows"
-                />
-              </div>
-            )}
             {/* Row # header */}
             <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-text-muted text-xs border-r border-border-subtle select-none">
               #
@@ -300,9 +259,6 @@ export function DataGrid({
                   nullDisplay={nullDisplay}
                   virtualTop={virtualRow.start}
                   fkColumns={fkColumns}
-                  isChecked={checkedRows.has(logicalRowId)}
-                  showCheckbox={showCheckboxes}
-                  onCheckChange={(checked) => handleRowCheck(logicalRowId, checked)}
                   onRowClick={(e) => handleRowClick(e, logicalRowId)}
                   onCellDoubleClick={(colIdx) => onCellDoubleClick?.(logicalRowId, colIdx)}
                   onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(logicalRowId, colIdx, val) : undefined}

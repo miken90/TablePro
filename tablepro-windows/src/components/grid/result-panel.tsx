@@ -137,6 +137,7 @@ export function ResultPanel({
     handleQueryQuickSearch, handleQueryQuickSearchClear,
     quickSearchTerm, handleQuickSearch, handleQuickSearchClear,
     handleFkNavigate, showExport, setShowExport,
+    copySelectedRowsTsv,
   } = gridActions;
 
   // Build filtered rows for query mode when search is active
@@ -236,6 +237,18 @@ export function ResultPanel({
     return () => window.removeEventListener('keydown', handler);
   }, [isTableMode, handleRefreshTable, handleRequestSave]);
 
+  // Keyboard: Ctrl+C copy selected rows as TSV
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !editingCell && selectedRows.size > 0) {
+        e.preventDefault();
+        copySelectedRowsTsv();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [editingCell, selectedRows, copySelectedRowsTsv]);
+
   // Composed sort/page handlers that reset selection
   const handleSortChange = useCallback((colName: string) => {
     setSorting(prev => {
@@ -323,7 +336,6 @@ export function ResultPanel({
                   enumValuesByColumn={enumValuesByColumn}
                   fkColumns={currentFkColumns}
                   onFkNavigate={handleFkNavigate}
-                  showCheckboxes={isTableMode}
                   rowIds={displayRowIds}
                 />
               ) : (
