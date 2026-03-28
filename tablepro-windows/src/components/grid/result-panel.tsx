@@ -299,7 +299,7 @@ export function ResultPanel({
         total={total}
         filteredTotal={filteredTotal}
         approximateCount={isTableMode ? approximateCount : null}
-        quickSearchColumns={isTableMode ? quickSearchColumns : (queryResult?.columns ?? [])}
+        quickSearchColumns={isTableMode ? (quickSearchColumns.length > 0 ? quickSearchColumns : (displayResult?.columns ?? [])) : (queryResult?.columns ?? [])}
         quickSearchTerm={isTableMode ? quickSearchTerm : querySearchTerm}
         onQuickSearch={isTableMode ? handleQuickSearch : handleQueryQuickSearch}
         onQuickSearchClear={isTableMode ? handleQuickSearchClear : handleQueryQuickSearchClear}

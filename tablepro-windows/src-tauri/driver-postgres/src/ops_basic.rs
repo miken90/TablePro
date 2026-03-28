@@ -119,8 +119,10 @@ pub unsafe fn execute(handle: *mut DriverHandle, sql: FfiStr) -> FfiQueryResult 
     };
     driver.runtime.block_on(async {
         if is_single_statement(&sql_str) {
+            eprintln!("[driver-postgres] single-statement → extended protocol");
             execute_extended(client, &sql_str).await
         } else {
+            eprintln!("[driver-postgres] multi-statement → simple protocol");
             execute_simple(client, &sql_str).await
         }
     })
@@ -134,7 +136,10 @@ async unsafe fn execute_extended(
     // Try prepare for column metadata; fall back to simple_query on error
     let stmt = match (*client).prepare(sql).await {
         Ok(s) => s,
-        Err(_) => return execute_simple(client, sql).await,
+        Err(e) => {
+            eprintln!("[driver-postgres] prepare failed: {e}, falling back to simple_query");
+            return execute_simple(client, sql).await;
+        }
     };
 
     let typed_columns: Vec<(String, String)> = stmt
@@ -142,6 +147,7 @@ async unsafe fn execute_extended(
         .iter()
         .map(|c| (c.name().to_string(), c.type_().name().to_string()))
         .collect();
+    eprintln!("[driver-postgres] prepare OK: {} cols, types: {:?}", typed_columns.len(), typed_columns.iter().map(|(n, t)| format!("{n}:{t}")).collect::<Vec<_>>());
 
     if typed_columns.is_empty() {
         // Non-row statement (INSERT/UPDATE/DELETE/CREATE/etc.)
