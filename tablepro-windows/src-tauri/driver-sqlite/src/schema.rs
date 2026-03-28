@@ -11,7 +11,7 @@ pub unsafe fn fetch_columns(
 ) -> FfiColumnList {
     let driver = &*(handle as *mut SqliteDriver);
     let table_name = table.as_str().to_owned();
-    let guard = driver.conn.lock().unwrap();
+    let guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
     let conn = match guard.as_ref() {
         None => {
             return FfiColumnList {
@@ -78,7 +78,7 @@ pub unsafe fn fetch_indexes(
 ) -> FfiIndexList {
     let driver = &*(handle as *mut SqliteDriver);
     let table_name = table.as_str().to_owned();
-    let guard = driver.conn.lock().unwrap();
+    let guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
     let conn = match guard.as_ref() {
         None => {
             return FfiIndexList {
