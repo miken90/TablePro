@@ -58,6 +58,15 @@ try {
     cargo build --manifest-path src-tauri/driver-sqlite/Cargo.toml
     if ($LASTEXITCODE -ne 0) { throw "driver-sqlite build failed (exit $LASTEXITCODE)" }
 
+    # Copy built DLLs to plugins/ directory (where the app loads them from)
+    $pluginsDir = "src-tauri/target/debug/plugins"
+    if (-not (Test-Path $pluginsDir)) { New-Item -ItemType Directory -Path $pluginsDir | Out-Null }
+    Copy-Item src-tauri/target/debug/driver_postgres.dll $pluginsDir -Force
+    Copy-Item src-tauri/target/debug/driver_mysql.dll    $pluginsDir -Force
+    Copy-Item src-tauri/target/debug/driver_mssql.dll    $pluginsDir -Force
+    Copy-Item src-tauri/target/debug/driver_sqlite.dll   $pluginsDir -Force
+    Write-Host "[dev] Driver DLLs copied to plugins/" -ForegroundColor Green
+
     # 2. Start Vite dev server as a background PowerShell process
     Write-Host "[dev] Starting Vite dev server..." -ForegroundColor Cyan
     $viteProc = Start-Process -FilePath "powershell.exe" `
