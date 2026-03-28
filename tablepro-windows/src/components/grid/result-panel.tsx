@@ -137,7 +137,7 @@ export function ResultPanel({
     handleQueryQuickSearch, handleQueryQuickSearchClear,
     quickSearchTerm, handleQuickSearch, handleQuickSearchClear,
     handleFkNavigate, showExport, setShowExport,
-    copySelectedRowsTsv,
+    copySelectedRowsTsv, pasteIntoSelectedRows,
   } = gridActions;
 
   // Build filtered rows for query mode when search is active
@@ -244,10 +244,14 @@ export function ResultPanel({
         e.preventDefault();
         copySelectedRowsTsv();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && !editingCell && isTableMode && selectedRows.size > 0) {
+        e.preventDefault();
+        pasteIntoSelectedRows();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editingCell, selectedRows, copySelectedRowsTsv]);
+  }, [editingCell, selectedRows, isTableMode, copySelectedRowsTsv, pasteIntoSelectedRows]);
 
   // Composed sort/page handlers that reset selection
   const handleSortChange = useCallback((colName: string) => {

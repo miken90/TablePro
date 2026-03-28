@@ -67,6 +67,8 @@ export interface UseGridActionsReturn {
   setShowExport: (v: boolean) => void;
   // Copy selected rows as TSV (Ctrl+C)
   copySelectedRowsTsv: () => Promise<void>;
+  // Paste TSV into selected rows (Ctrl+V)
+  pasteIntoSelectedRows: () => Promise<void>;
 }
 
 export function useGridActions({
@@ -363,6 +365,34 @@ export function useGridActions({
     await navigator.clipboard.writeText([header, ...lines].join('\n'));
   }, [result, selectedRows, getEffectiveCellValue, getRowByLogicalId]);
 
+  const pasteIntoSelectedRows = useCallback(async () => {
+    if (!result || !tableName || selectedRows.size === 0) return;
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) return;
+
+    const lines = text.split('\n').filter(l => l.length > 0);
+    const sortedRows = Array.from(selectedRows).sort((a, b) => a - b);
+    const cols = result.columns;
+
+    for (let lineIdx = 0; lineIdx < lines.length && lineIdx < sortedRows.length; lineIdx++) {
+      const rowIdx = sortedRows[lineIdx];
+      const values = lines[lineIdx].split('\t');
+      const originalRow = getRowByLogicalId(rowIdx) ?? [];
+
+      for (let colIdx = 0; colIdx < Math.min(values.length, cols.length); colIdx++) {
+        const col = cols[colIdx];
+        if (col.isPrimaryKey) continue;
+        const newValue = values[colIdx] === '' ? null : values[colIdx];
+        const oldValue = getEffectiveCellValue(rowIdx, colIdx, originalRow[colIdx] ?? null);
+        if (oldValue === newValue) continue;
+        recordCellChange(
+          { rowIndex: rowIdx, columnIndex: colIdx, columnName: col.name, oldValue, newValue },
+          originalRow,
+        );
+      }
+    }
+  }, [result, tableName, selectedRows, getRowByLogicalId, getEffectiveCellValue, recordCellChange]);
+
   return {
     selectedRows,
     lastSelectedRow,
@@ -394,5 +424,6 @@ export function useGridActions({
     showExport,
     setShowExport,
     copySelectedRowsTsv,
+    pasteIntoSelectedRows,
   };
 }
