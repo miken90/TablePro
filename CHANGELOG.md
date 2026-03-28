@@ -69,8 +69,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - F5 refresh in table-browse mode: refreshes table data (not just schema); prompts Save & Refresh / Discard & Refresh / Cancel when unsaved changes exist
 - Cell tooltip: hovering over truncated cells shows full value as native tooltip (capped at 1024 chars)
 - Column auto-fit: double-clicking resize handle auto-fits column width to content using Canvas text measurement (capped at 600px)
+- SQL Editor: syntax highlighting with light/dark color palettes — keywords, strings, numbers, comments, operators, types each get distinct colors, auto-switches via compartment on theme change
+- Grid: Ctrl+C copies selected rows as TSV with header row (NULL → empty string)
+- Inspector: hover-reveal copy button per field row (copies value to clipboard, NULL copies as "NULL")
+- Messages panel: hover-reveal copy button per log entry (copies SQL + error text)
+- Grid: inline cell editing — double-click opens input directly in cell (text, number, boolean dropdown, date picker), Enter/Tab commits, Escape cancels, Ctrl+Delete sets NULL
 
 ### Fixed
+
+- PostgreSQL column types all showing as "text": `simple_query` result handler now reads real type from `tokio_postgres::Column::type_()` (int4, bool, timestamptz, uuid, etc.)
+- Quick search failing on UUID/integer columns: now uses `CAST("col" AS TEXT) LIKE` for all column types (cross-DB compatible); also escapes LIKE wildcards (%, _) in search term
+- MSSQL functions sidebar showing system routines: excluded `sys`, `INFORMATION_SCHEMA`, `guest` schemas from routines query
+- Grid checkbox column removed: unused `checkedRows` state and visual checkboxes eliminated, reclaiming 40px of horizontal space
 
 - MySQL table browsing broken for tables with reserved-word names: `fetch_rows`/`fetch_count` now use driver-aware identifier quoting (backticks for MySQL, brackets for MSSQL) via `quote_identifier()` instead of hardcoded ANSI double-quotes
 - WHERE clause validator false-positive on column names containing SQL keywords (e.g. `drop_reason`, `deleted_at`): switched from substring matching to word-boundary detection

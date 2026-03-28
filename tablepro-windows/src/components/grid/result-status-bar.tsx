@@ -1,8 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import type { QueryLogEntry } from '../../stores/queryLogStore';
 
 interface ResultStatusBarProps {
   logEntries: QueryLogEntry[];
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 p-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 rounded"
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      title="Copy"
+    >
+      {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+    </button>
+  );
 }
 
 export function ResultStatusBar({ logEntries }: ResultStatusBarProps) {
@@ -14,10 +32,17 @@ export function ResultStatusBar({ logEntries }: ResultStatusBarProps) {
         logEntries.map((entry) => (
           <div
             key={entry.id}
-            className={`border-b border-[var(--color-border-subtle)] px-3 py-2 ${
+            className={`group relative border-b border-[var(--color-border-subtle)] px-3 py-2 ${
               entry.status === 'error' ? 'bg-red-500/5' : ''
             }`}
           >
+            <CopyButton
+              text={
+                entry.error
+                  ? `${entry.sql}\n-- Error: ${typeof entry.error === 'string' ? entry.error : JSON.stringify(entry.error)}`
+                  : entry.sql
+              }
+            />
             <div className="flex items-center gap-2 mb-0.5">
               <span className={`text-[10px] font-semibold uppercase tracking-wide ${
                 entry.status === 'running' ? 'text-blue-500' :
