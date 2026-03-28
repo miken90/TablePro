@@ -12,6 +12,7 @@ import type { EditorView } from "@codemirror/view";
 export const fontCompartment = new Compartment();
 export const vimCompartment = new Compartment();
 export const dialectCompartment = new Compartment();
+export const highlightCompartment = new Compartment();
 
 /** Reconfigure font family and size in-place (preserves undo history). */
 export function reconfigureFont(
@@ -40,5 +41,15 @@ export function reconfigureDialect(
 ): void {
   view.dispatch({
     effects: dialectCompartment.reconfigure(dialectExtension),
+  });
+}
+
+/** Reconfigure syntax highlighting (light/dark) in-place. */
+export function reconfigureHighlight(
+  view: EditorView,
+  highlightExtension: Extension,
+): void {
+  view.dispatch({
+    effects: highlightCompartment.reconfigure(highlightExtension),
   });
 }

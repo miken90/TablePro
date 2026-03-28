@@ -15,11 +15,13 @@ import {
   fontCompartment,
   vimCompartment,
   dialectCompartment,
+  highlightCompartment,
   reconfigureFont,
   reconfigureVim,
   reconfigureDialect,
+  reconfigureHighlight,
 } from "../../editor/editor-compartments";
-import { createEditorTheme, createEditorFontTheme } from "./editor-theme";
+import { createEditorTheme, createEditorFontTheme, createSyntaxHighlighting } from "./editor-theme";
 import { sqlCompletionSource } from "../../editor/sql-completion-source";
 import { createVimExtension } from "../../editor/vim-mode";
 import { createKeybindings } from "../../editor/keybindings";
@@ -60,6 +62,7 @@ async function loadEditorRuntime() {
     ...languageMod,
     createEditorTheme,
     createEditorFontTheme,
+    createSyntaxHighlighting,
     sqlCompletionSource,
     createVimExtension,
     createKeybindings,
@@ -139,6 +142,8 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         dialectCompartment.of(runtime.sql({ dialect: resolveDialect(runtime, dialect) })),
         // Theme (CSS-variable based, auto-adapts)
         runtime.createEditorTheme(),
+        // Syntax highlighting (light/dark)
+        highlightCompartment.of(runtime.createSyntaxHighlighting(document.documentElement.classList.contains('dark'))),
         // Configurable: font (in compartment)
         fontCompartment.of(
           runtime.createEditorFontTheme(settings.editorFont, settings.editorFontSize),
@@ -313,6 +318,20 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
     reconfigureDialect(view, runtime.sql({ dialect: resolveDialect(runtime, dialect) }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorRuntime, dialect]);
+
+  // Reconfigure syntax highlighting when dark mode changes
+  useEffect(() => {
+    const view = viewRef.current;
+    const runtime = editorRuntime;
+    if (!view || !runtime) return;
+
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains('dark');
+      reconfigureHighlight(view, runtime.createSyntaxHighlighting(isDark));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [editorRuntime]);
 
   // Dispatch error marker when query fails
   useEffect(() => {

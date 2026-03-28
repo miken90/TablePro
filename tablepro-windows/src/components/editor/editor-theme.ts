@@ -1,5 +1,35 @@
 import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
+
+const lightHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: "#0550ae" },
+  { tag: tags.string, color: "#0a3069" },
+  { tag: tags.number, color: "#0550ae" },
+  { tag: tags.comment, color: "#6e7781", fontStyle: "italic" },
+  { tag: tags.operator, color: "#cf222e" },
+  { tag: tags.typeName, color: "#8250df" },
+  { tag: tags.function(tags.variableName), color: "#8250df" },
+  { tag: tags.bool, color: "#0550ae" },
+  { tag: tags.null, color: "#6e7781" },
+]);
+
+const darkHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: "#ff7b72" },
+  { tag: tags.string, color: "#a5d6ff" },
+  { tag: tags.number, color: "#79c0ff" },
+  { tag: tags.comment, color: "#8b949e", fontStyle: "italic" },
+  { tag: tags.operator, color: "#ff7b72" },
+  { tag: tags.typeName, color: "#d2a8ff" },
+  { tag: tags.function(tags.variableName), color: "#d2a8ff" },
+  { tag: tags.bool, color: "#79c0ff" },
+  { tag: tags.null, color: "#8b949e" },
+]);
+
+export function createSyntaxHighlighting(isDark: boolean): Extension {
+  return syntaxHighlighting(isDark ? darkHighlightStyle : lightHighlightStyle);
+}
 
 /**
  * Creates a CodeMirror theme that reads from CSS variables defined in globals.css.
