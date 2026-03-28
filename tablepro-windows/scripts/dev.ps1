@@ -61,11 +61,11 @@ try {
     # Copy built DLLs to plugins/ directory (where the app loads them from)
     $pluginsDir = "src-tauri/target/debug/plugins"
     if (-not (Test-Path $pluginsDir)) { New-Item -ItemType Directory -Path $pluginsDir | Out-Null }
-    Copy-Item src-tauri/target/debug/driver_postgres.dll $pluginsDir -Force
-    Copy-Item src-tauri/target/debug/driver_mysql.dll    $pluginsDir -Force
-    Copy-Item src-tauri/target/debug/driver_mssql.dll    $pluginsDir -Force
-    Copy-Item src-tauri/target/debug/driver_sqlite.dll   $pluginsDir -Force
-    Write-Host "[dev] Driver DLLs copied to plugins/" -ForegroundColor Green
+    $dlls = Get-ChildItem "src-tauri/target/debug/driver_*.dll"
+    foreach ($dll in $dlls) {
+        Copy-Item $dll.FullName $pluginsDir -Force
+    }
+    Write-Host "[dev] Copied $($dlls.Count) driver DLL(s) to plugins/" -ForegroundColor Green
 
     # 2. Start Vite dev server as a background PowerShell process
     Write-Host "[dev] Starting Vite dev server..." -ForegroundColor Cyan
