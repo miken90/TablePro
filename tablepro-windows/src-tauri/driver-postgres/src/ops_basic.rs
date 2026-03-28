@@ -82,7 +82,7 @@ pub unsafe fn execute(handle: *mut DriverHandle, sql: FfiStr) -> FfiQueryResult 
                         SimpleQueryMessage::RowDescription(cols) => {
                             if !has_columns {
                                 columns = cols.iter()
-                                    .map(|c| (c.name().to_string(), "text".to_string(), true, false))
+                                    .map(|c| (c.name().to_string(), c.type_().name().to_string(), true, false))
                                     .collect();
                                 has_columns = true;
                             }
@@ -91,7 +91,7 @@ pub unsafe fn execute(handle: *mut DriverHandle, sql: FfiStr) -> FfiQueryResult 
                             let col_count = if has_columns { columns.len() } else { row.len() };
                             if !has_columns {
                                 columns = (0..col_count)
-                                    .map(|i| (row.columns()[i].name().to_string(), "text".to_string(), true, false))
+                                    .map(|i| (row.columns()[i].name().to_string(), row.columns()[i].type_().name().to_string(), true, false))
                                     .collect();
                                 has_columns = true;
                             }

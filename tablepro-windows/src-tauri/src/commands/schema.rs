@@ -455,6 +455,7 @@ pub async fn fetch_routines(
                        FROM sys.objects o \
                        INNER JOIN sys.schemas s ON s.schema_id = o.schema_id \
                        WHERE o.type IN ('P', 'PC', 'FN', 'TF', 'IF', 'FS', 'FT') \
+                         AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest') \
                        ORDER BY s.name, o.name";
             let result = driver.execute(sql).await?;
 

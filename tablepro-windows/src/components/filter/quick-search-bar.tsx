@@ -9,28 +9,16 @@ interface QuickSearchBarProps {
   onClear: () => void;
 }
 
-function isTextColumn(typeName: string): boolean {
-  const t = typeName.toLowerCase();
-  return (
-    t.includes('char')
-    || t.includes('text')
-    || t.includes('string')
-    || t.includes('uuid')
-    || t.includes('json')
-    || t.includes('xml')
-  );
-}
-
 function buildQuickSearchWhereClause(term: string, columns: ColumnInfo[]): string {
   const normalized = String(term).trim();
   if (!normalized) return '';
+  if (columns.length === 0) return '';
 
   const escaped = normalized.replace(/'/g, "''");
-  const searchableColumns = columns.filter((c) => isTextColumn(c.typeName));
-  if (searchableColumns.length === 0) return '';
+  const likeEscaped = escaped.replace(/[%_\\]/g, '\\$&');
 
-  return searchableColumns
-    .map((c) => `"${c.name}" LIKE '%${escaped}%'`)
+  return columns
+    .map((c) => `CAST("${c.name}" AS TEXT) LIKE '%${likeEscaped}%'`)
     .join(' OR ');
 }
 
