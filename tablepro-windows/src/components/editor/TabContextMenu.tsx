@@ -55,7 +55,7 @@ export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContex
     >
       <MenuItem
         onClick={() => {
-          (tab.isPinned ?? false) ? unpinTab(tab.id) : pinTab(tab.id);
+          if (tab.isPinned ?? false) { unpinTab(tab.id); } else { pinTab(tab.id); }
           onClose();
         }}
       >

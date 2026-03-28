@@ -59,7 +59,7 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
       // Ctrl+T — new tab
       if (ctrl && e.key === "t") {
         e.preventDefault();
-        handlers?.onNewTab ? handlers.onNewTab() : addTab();
+        if (handlers?.onNewTab) { handlers.onNewTab(); } else { addTab(); }
       }
 
       // Ctrl+W — close current tab
@@ -117,7 +117,7 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
       // Ctrl+N — new tab (alternative)
       if (ctrl && e.key === "n") {
         e.preventDefault();
-        handlers?.onNewTab ? handlers.onNewTab() : addTab();
+        if (handlers?.onNewTab) { handlers.onNewTab(); } else { addTab(); }
       }
 
       // Ctrl+/ — toggle line comment

@@ -241,10 +241,6 @@ export function detectFunctionContext(text: string): string | null {
     }
     prev = ch;
   }
-  if (wordStart >= 0) {
-    lastWord = text.slice(wordStart);
-  }
-
   if (parenStack.length > 0) {
     const last = parenStack[parenStack.length - 1];
     if (last.precedingWord) {

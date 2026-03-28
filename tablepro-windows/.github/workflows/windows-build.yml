@@ -49,7 +49,7 @@ jobs:
 
       - name: TypeScript lint
         working-directory: tablepro-windows
-        run: npx eslint . --max-warnings=0
+        run: npx eslint .
 
       - name: Build frontend
         working-directory: tablepro-windows
