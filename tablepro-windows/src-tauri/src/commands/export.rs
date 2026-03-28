@@ -69,17 +69,28 @@ pub async fn export_to_file(
     };
     let driver_type = driver.database_type_id().to_string();
 
-    // Count total rows.
+    // Count total rows (with timeout to avoid blocking on slow queries).
     let total = {
         let count_sql = format!("SELECT COUNT(*) FROM ({sql}) AS _export_count");
-        let result = driver.execute(&count_sql).await?;
-        result
-            .rows
-            .first()
-            .and_then(|r| r.first())
-            .and_then(|v| v.as_deref())
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(0)
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            driver.execute(&count_sql),
+        ).await {
+            Ok(Ok(result)) => result
+                .rows.first()
+                .and_then(|r| r.first())
+                .and_then(|v| v.as_deref())
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0),
+            Ok(Err(e)) => {
+                tracing::warn!(session_id = %session_id, "Export count query failed: {e}");
+                0
+            }
+            Err(_) => {
+                tracing::warn!(session_id = %session_id, "Export count query timed out (2s), using indeterminate progress");
+                0
+            }
+        }
     };
 
     tracing::info!(session_id = %session_id, "export total rows: {}", total);
@@ -107,7 +118,7 @@ pub async fn export_to_file(
     // JSON: write opening bracket.
     if format == "json" {
         let open = if pretty { b"[\n".to_vec() } else { b"[".to_vec() };
-        write_file_chunk(output_file.as_ref().cloned().unwrap(), open).await?;
+        write_file_chunk(output_file.as_ref().cloned().ok_or_else(|| AppError::IoError("Missing output file handle".to_string()))?, open).await?;
     }
 
     // XLSX: create worksheet.
@@ -163,7 +174,7 @@ pub async fn export_to_file(
         // Flush text buffer.
         if !buf.is_empty() && matches!(format.as_str(), "csv" | "sql") {
             let bytes = std::mem::take(&mut buf);
-            write_file_chunk(output_file.as_ref().cloned().unwrap(), bytes).await?;
+            write_file_chunk(output_file.as_ref().cloned().ok_or_else(|| AppError::IoError("Missing output file handle".to_string()))?, bytes).await?;
             buf = Vec::with_capacity(64 * 1024);
         }
 
@@ -175,7 +186,7 @@ pub async fn export_to_file(
     // Finalize JSON.
     if format == "json" {
         let close = if pretty { b"\n]".to_vec() } else { b"]".to_vec() };
-        write_file_chunk(output_file.as_ref().cloned().unwrap(), close).await?;
+        write_file_chunk(output_file.as_ref().cloned().ok_or_else(|| AppError::IoError("Missing output file handle".to_string()))?, close).await?;
     }
 
     // Finalize XLSX.

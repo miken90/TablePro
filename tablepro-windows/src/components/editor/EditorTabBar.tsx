@@ -5,6 +5,7 @@ import { useEditorStore } from "../../stores/editorStore";
 import type { EditorTab } from "../../stores/editorStore";
 import { EditorTab as EditorTabComponent } from "./EditorTab";
 import { TabContextMenu } from "./TabContextMenu";
+import { ConfirmDiscardDialog } from "../shared/confirm-discard-dialog";
 
 interface EditorTabBarProps {
   onTabActivate?: () => void;
@@ -30,7 +31,29 @@ export function EditorTabBar({ onTabActivate, onBeforeTabSwitch, onAfterClose }:
   const connections = useConnectionStore((s) => s.connections);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
+
+  const handleCloseTab = useCallback(
+    (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab?.isDirty && (tab.type === "query" || !tab.type)) {
+        setPendingCloseTabId(tabId);
+        return;
+      }
+      closeTab(tabId);
+      onAfterClose?.(useEditorStore.getState().activeTabId);
+    },
+    [tabs, closeTab, onAfterClose],
+  );
+
+  const confirmDiscard = useCallback(() => {
+    if (pendingCloseTabId) {
+      closeTab(pendingCloseTabId);
+      setPendingCloseTabId(null);
+      onAfterClose?.(useEditorStore.getState().activeTabId);
+    }
+  }, [pendingCloseTabId, closeTab, onAfterClose]);
 
   // Sort: pinned tabs first, then by original order
   const sortedTabs = useMemo(() => {
@@ -113,8 +136,7 @@ export function EditorTabBar({ onTabActivate, onBeforeTabSwitch, onAfterClose }:
               }}
               onClose={(e) => {
                 e.stopPropagation();
-                closeTab(tab.id);
-                onAfterClose?.(useEditorStore.getState().activeTabId);
+                handleCloseTab(tab.id);
               }}
             />
           </div>
@@ -140,8 +162,17 @@ export function EditorTabBar({ onTabActivate, onBeforeTabSwitch, onAfterClose }:
           tab={contextMenu.tab}
           position={contextMenu.position}
           onClose={() => setContextMenu(null)}
+          onCloseTab={handleCloseTab}
         />
       )}
+
+      {/* Confirm discard unsaved query dialog */}
+      <ConfirmDiscardDialog
+        open={pendingCloseTabId !== null}
+        changeCount={1}
+        onConfirm={confirmDiscard}
+        onCancel={() => setPendingCloseTabId(null)}
+      />
     </div>
   );
 }

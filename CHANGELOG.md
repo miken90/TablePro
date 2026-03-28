@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- SSH known_hosts TOFU: fingerprint verification for SSH tunnel connections — new hosts accepted with warning, changed keys rejected, stored in `%APPDATA%/TablePro/known_hosts.json`
+- Graceful shutdown: all active database sessions and SSH tunnels disconnected on window close
+- Connection health detection: frontend listens for `connection:lost` events and shows persistent error toast
+- Schema loading timeout: 15-second timeout on `fetchTables` prevents indefinite sidebar loading
+- Sidebar filter debounce: `useDeferredValue` prevents jank during rapid typing with large table lists
+- Export count timeout: `SELECT COUNT(*)` pre-query capped at 2 seconds — falls back to indeterminate progress
+- IPC payload size warning: logs warning when result sets exceed 500K cells
+- Confirm discard on closing dirty query tabs: shows confirmation dialog before discarding unsaved SQL
+- Background connection ping on tab switch to detect stale sessions
+- CI: TypeScript lint step in GitHub Actions build pipeline
+- CI: conditional code signing certificate import step (no-op without secrets)
+- Version bump script: `scripts/bump-version.ps1 -Version X.Y.Z` updates package.json, tauri.conf.json, and Cargo.toml
+
 - Query Editor UI redesign: Run split-button with dropdown (Run Current, Run All, Explain Plan, Export CSV)
 - Query Editor: editor status bar with statement count (`Stmt N/M`), cursor position, selection count, VIM indicator, and SQL dialect badge
 - Query Editor: query lifecycle states — running spinner with elapsed time, success green checkmark, error auto-switch to Messages tab
@@ -59,6 +72,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- MySQL table browsing broken for tables with reserved-word names: `fetch_rows`/`fetch_count` now use driver-aware identifier quoting (backticks for MySQL, brackets for MSSQL) via `quote_identifier()` instead of hardcoded ANSI double-quotes
+- WHERE clause validator false-positive on column names containing SQL keywords (e.g. `drop_reason`, `deleted_at`): switched from substring matching to word-boundary detection
+- Potential panic in SQLite and MSSQL drivers: replaced `Mutex::lock().unwrap()` with poison-resistant `unwrap_or_else` across all driver crates (17 call sites)
+- Potential panic in export command when output file handle is None: replaced 3 `unwrap()` calls with proper `AppError` propagation
+- External URL opening not working: registered `tauri-plugin-shell` in Rust backend and added `shell:allow-open` capability
 - SSH tunnel connections hanging indefinitely: blocking FFI driver calls now run on dedicated threads (`spawn_blocking`) so the Tauri async runtime stays free to service SSH tunnel forwarding tasks
 - Connection mutex held too long during SSH connect/test: lock is now released before driver connect so tunnel I/O can proceed
 

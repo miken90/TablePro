@@ -27,6 +27,7 @@ pub fn encrypt_secret(secret: &str) -> Result<String, AppError> {
     }
 
     #[cfg(not(windows))]
+    // Intentional: non-Windows (WSL dev) returns plaintext — DPAPI unavailable
     {
         Ok(secret.to_string())
     }
@@ -55,6 +56,7 @@ pub fn decrypt_secret(secret: &str) -> Result<String, AppError> {
     }
 
     #[cfg(not(windows))]
+    // Intentional: non-Windows (WSL dev) returns plaintext — DPAPI unavailable
     {
         String::from_utf8(encrypted)
             .map_err(|e| AppError::ConfigError(format!("DPAPI payload is not UTF-8 text: {e}")))

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useConnectionStore } from "./connectionStore";
+import * as commands from "../ipc/commands";
 
 export type TabType = 'query' | 'table' | 'structure';
 
@@ -208,6 +209,13 @@ export const useEditorStore = create<EditorState>()(
         const nextState: Partial<EditorState> = { activeTabId: id };
         if (tab?.connectionId) {
           useConnectionStore.getState().selectConnection(tab.connectionId);
+          // Background ping to detect stale connections
+          const sessionId = useConnectionStore.getState().sessionIds.get(tab.connectionId);
+          if (sessionId) {
+            void commands.getConnectionStatus(sessionId).catch(() => {
+              // Silently ignore — connection health will be surfaced via events
+            });
+          }
         }
         set(nextState);
       },

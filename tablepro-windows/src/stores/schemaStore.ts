@@ -60,7 +60,12 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   fetchSchema: async (sessionId) => {
     set({ isLoading: true, error: null });
     try {
-      const tables = await commands.fetchTables(sessionId);
+      const tables = await Promise.race([
+        commands.fetchTables(sessionId),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Schema loading timed out")), 15_000)
+        ),
+      ]);
       let routineCatalog: RoutineCatalog | null = null;
 
       try {

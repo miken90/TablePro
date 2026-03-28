@@ -68,6 +68,18 @@ impl ConnectionManager {
             .map_err(|e| AppError::Other(format!("SSH tunnel failed: {e}")))
     }
 
+    /// Disconnect all active sessions and close all SSH tunnels.
+    pub fn disconnect_all(&mut self) {
+        let ids: Vec<String> = self.connections.keys().cloned().collect();
+        for id in ids {
+            if let Some(conn) = self.connections.remove(&id) {
+                conn.driver.disconnect();
+                self.ssh_tunnels.close_tunnel(&id);
+                tracing::info!(session_id = %id, "Session closed (shutdown)");
+            }
+        }
+    }
+
     /// Close a session (and its SSH tunnel if any).
     pub fn disconnect(&mut self, id: &str) -> Result<(), AppError> {
         let conn = self

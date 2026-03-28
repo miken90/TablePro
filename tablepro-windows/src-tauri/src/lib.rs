@@ -80,7 +80,8 @@ pub fn run() {
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init());
 
     // Only register the updater plugin in release builds — the update server
     // is not reachable during local dev and the placeholder pubkey can cause
@@ -187,7 +188,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::CloseRequested { .. } => {
-                    tracing::warn!("Window CloseRequested: {}", window.label());
+                    tracing::info!("Window CloseRequested: {}", window.label());
+                    let state = window.state::<Mutex<ConnectionManager>>();
+                    let lock_result = state.try_lock();
+                    if let Ok(mut guard) = lock_result {
+                        guard.disconnect_all();
+                    }
                 }
                 tauri::WindowEvent::Destroyed => {
                     tracing::warn!("Window Destroyed: {}", window.label());

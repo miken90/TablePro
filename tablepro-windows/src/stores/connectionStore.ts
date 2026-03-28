@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
+import { listen } from "@tauri-apps/api/event";
 import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
@@ -143,3 +144,25 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   getStatus: (id) => get().connectionStatuses.get(id) ?? "disconnected",
   getSessionId: (id) => get().sessionIds.get(id),
 }));
+
+// Auto-subscribe to connection:lost events from Rust backend
+if (typeof window !== "undefined") {
+void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => {
+  const { sessionId, host } = event.payload;
+  const state = useConnectionStore.getState();
+  for (const [connId, sid] of state.sessionIds) {
+    if (sid === sessionId) {
+      useConnectionStore.setState((s) => {
+        const statuses = new Map(s.connectionStatuses);
+        statuses.set(connId, "error");
+        return { connectionStatuses: statuses };
+      });
+      toast.error("Connection lost", {
+        description: host ?? "Database connection was lost",
+        duration: Infinity,
+      });
+      break;
+    }
+  }
+});
+}

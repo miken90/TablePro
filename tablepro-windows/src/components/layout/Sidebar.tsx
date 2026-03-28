@@ -1,5 +1,5 @@
 import { Search, Database, Plus, Table2, Eye, Braces, ScrollText } from "lucide-react";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useDeferredValue } from "react";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
@@ -45,6 +45,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   } = useSchemaStore();
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
+  const deferredFilter = useDeferredValue(filter);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [connectingId, setConnectingId] = useState<string | null>(null);
 
@@ -110,7 +111,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
 
   // Filter by text search AND by currentSchema
   const filteredTables = tables.filter((t) => {
-    const matchesFilter = !filter || t.name.toLowerCase().includes(filter.toLowerCase());
+    const matchesFilter = !deferredFilter || t.name.toLowerCase().includes(deferredFilter.toLowerCase());
     const matchesSchema = !currentSchema || t.schema === currentSchema;
     return matchesFilter && matchesSchema;
   });
@@ -125,11 +126,11 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   const filteredRoutines = useMemo(() => {
     const items = routineCatalog?.items ?? [];
     return items.filter((routine) => {
-      const matchesFilter = !filter || routine.name.toLowerCase().includes(filter.toLowerCase());
+      const matchesFilter = !deferredFilter || routine.name.toLowerCase().includes(deferredFilter.toLowerCase());
       const matchesSchema = !currentSchema || routine.schema === currentSchema;
       return matchesFilter && matchesSchema;
     });
-  }, [routineCatalog, filter, currentSchema]);
+  }, [routineCatalog, deferredFilter, currentSchema]);
 
   const routinesGrouped = useMemo(() => {
     const functions = filteredRoutines.filter((routine) => routine.kind === "function");

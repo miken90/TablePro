@@ -6,9 +6,11 @@ interface TabContextMenuProps {
   tab: EditorTab;
   position: { x: number; y: number };
   onClose: () => void;
+  /** Intercept close to allow confirm-discard for dirty query tabs. */
+  onCloseTab?: (tabId: string) => void;
 }
 
-export function TabContextMenu({ tab, position, onClose }: TabContextMenuProps) {
+export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const pinTab = useEditorStore((s) => s.pinTab);
@@ -64,7 +66,11 @@ export function TabContextMenu({ tab, position, onClose }: TabContextMenuProps) 
 
       <MenuItem
         onClick={() => {
-          closeTab(tab.id);
+          if (onCloseTab) {
+            onCloseTab(tab.id);
+          } else {
+            closeTab(tab.id);
+          }
           onClose();
         }}
       >
