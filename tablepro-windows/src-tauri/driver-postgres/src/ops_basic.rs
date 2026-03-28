@@ -6,6 +6,55 @@ use tablepro_plugin_sdk::{
     FfiString, FfiTableList, FfiTableInfo,
 };
 
+/// Check if SQL is a single statement (no semicolons outside quotes/comments).
+/// Conservative: returns false if uncertain — caller falls back to simple_query.
+fn is_single_statement(sql: &str) -> bool {
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut in_line_comment = false;
+    let mut in_block_comment = false;
+    let mut semicolons = 0u32;
+    let chars: Vec<char> = sql.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        let ch = chars[i];
+        if in_line_comment {
+            if ch == '\n' { in_line_comment = false; }
+            i += 1;
+        } else if in_block_comment {
+            if ch == '*' && i + 1 < len && chars[i + 1] == '/' {
+                in_block_comment = false;
+                i += 2;
+            } else {
+                i += 1;
+            }
+        } else if in_single_quote {
+            if ch == '\'' {
+                if i + 1 < len && chars[i + 1] == '\'' { i += 2; } else { in_single_quote = false; i += 1; }
+            } else {
+                i += 1;
+            }
+        } else if in_double_quote {
+            if ch == '"' { in_double_quote = false; }
+            i += 1;
+        } else {
+            match ch {
+                '-' if i + 1 < len && chars[i + 1] == '-' => { in_line_comment = true; i += 2; }
+                '/' if i + 1 < len && chars[i + 1] == '*' => { in_block_comment = true; i += 2; }
+                '\'' => { in_single_quote = true; i += 1; }
+                '"' => { in_double_quote = true; i += 1; }
+                ';' => { semicolons += 1; i += 1; }
+                _ => { i += 1; }
+            }
+        }
+    }
+
+    // 0 or 1 trailing semicolons = single statement
+    semicolons <= 1
+}
+
 pub unsafe fn connect(handle: *mut DriverHandle) -> FfiResult {
     let driver = &mut *(handle as *mut PostgresDriver);
     let ssl_mode = driver.ssl_mode.clone();
@@ -69,48 +118,110 @@ pub unsafe fn execute(handle: *mut DriverHandle, sql: FfiStr) -> FfiQueryResult 
         Some(ref c) => c as *const tokio_postgres::Client,
     };
     driver.runtime.block_on(async {
-        match (*client).simple_query(&sql_str).await {
+        if is_single_statement(&sql_str) {
+            execute_extended(client, &sql_str).await
+        } else {
+            execute_simple(client, &sql_str).await
+        }
+    })
+}
+
+/// Extended protocol: prepare → get typed columns → execute via simple_query for text values.
+async unsafe fn execute_extended(
+    client: *const tokio_postgres::Client,
+    sql: &str,
+) -> FfiQueryResult {
+    // Try prepare for column metadata; fall back to simple_query on error
+    let stmt = match (*client).prepare(sql).await {
+        Ok(s) => s,
+        Err(_) => return execute_simple(client, sql).await,
+    };
+
+    let typed_columns: Vec<(String, String)> = stmt
+        .columns()
+        .iter()
+        .map(|c| (c.name().to_string(), c.type_().name().to_string()))
+        .collect();
+
+    if typed_columns.is_empty() {
+        // Non-row statement (INSERT/UPDATE/DELETE/CREATE/etc.)
+        match (*client).execute(&stmt, &[]).await {
+            Ok(n) => build_query_result(vec![], vec![], n as i64),
+            Err(e) => err_query_result(e.to_string()),
+        }
+    } else {
+        // Row-returning statement — use simple_query for text values, typed_columns for metadata
+        match (*client).simple_query(sql).await {
             Err(e) => err_query_result(e.to_string()),
             Ok(messages) => {
-                let mut columns: Vec<(String, String, bool, bool)> = vec![];
+                let columns: Vec<(String, String, bool, bool)> = typed_columns
+                    .iter()
+                    .map(|(name, type_name)| (name.clone(), type_name.clone(), true, false))
+                    .collect();
                 let mut data_rows: Vec<Vec<Option<String>>> = vec![];
-                let mut affected: i64 = 0;
-                let mut has_columns = false;
+                let col_count = columns.len();
 
                 for msg in &messages {
-                    match msg {
-                        SimpleQueryMessage::RowDescription(cols) => {
-                            if !has_columns {
-                                columns = cols.iter()
-                                    .map(|c| (c.name().to_string(), c.type_().name().to_string(), true, false))
-                                    .collect();
-                                has_columns = true;
-                            }
-                        }
-                        SimpleQueryMessage::Row(row) => {
-                            let col_count = if has_columns { columns.len() } else { row.len() };
-                            if !has_columns {
-                                columns = (0..col_count)
-                                    .map(|i| (row.columns()[i].name().to_string(), row.columns()[i].type_().name().to_string(), true, false))
-                                    .collect();
-                                has_columns = true;
-                            }
-                            let cells: Vec<Option<String>> = (0..col_count)
-                                .map(|i| row.get(i).map(|s| s.to_string()))
-                                .collect();
-                            data_rows.push(cells);
-                        }
-                        SimpleQueryMessage::CommandComplete(n) => {
-                            affected = *n as i64;
-                        }
-                        _ => {}
+                    if let SimpleQueryMessage::Row(row) = msg {
+                        let cells: Vec<Option<String>> = (0..col_count)
+                            .map(|i| row.get(i).map(|s| s.to_string()))
+                            .collect();
+                        data_rows.push(cells);
                     }
                 }
 
-                build_query_result(columns, data_rows, affected)
+                build_query_result(columns, data_rows, 0)
             }
         }
-    })
+    }
+}
+
+/// Simple query protocol — multi-statement, all types as "text".
+async unsafe fn execute_simple(
+    client: *const tokio_postgres::Client,
+    sql: &str,
+) -> FfiQueryResult {
+    match (*client).simple_query(sql).await {
+        Err(e) => err_query_result(e.to_string()),
+        Ok(messages) => {
+            let mut columns: Vec<(String, String, bool, bool)> = vec![];
+            let mut data_rows: Vec<Vec<Option<String>>> = vec![];
+            let mut affected: i64 = 0;
+            let mut has_columns = false;
+
+            for msg in &messages {
+                match msg {
+                    SimpleQueryMessage::RowDescription(cols) => {
+                        if !has_columns {
+                            columns = cols.iter()
+                                .map(|c| (c.name().to_string(), "text".to_string(), true, false))
+                                .collect();
+                            has_columns = true;
+                        }
+                    }
+                    SimpleQueryMessage::Row(row) => {
+                        let col_count = if has_columns { columns.len() } else { row.len() };
+                        if !has_columns {
+                            columns = (0..col_count)
+                                .map(|i| (row.columns()[i].name().to_string(), "text".to_string(), true, false))
+                                .collect();
+                            has_columns = true;
+                        }
+                        let cells: Vec<Option<String>> = (0..col_count)
+                            .map(|i| row.get(i).map(|s| s.to_string()))
+                            .collect();
+                        data_rows.push(cells);
+                    }
+                    SimpleQueryMessage::CommandComplete(n) => {
+                        affected = *n as i64;
+                    }
+                    _ => {}
+                }
+            }
+
+            build_query_result(columns, data_rows, affected)
+        }
+    }
 }
 
 pub unsafe fn cancel(_handle: *mut DriverHandle) -> FfiResult {
