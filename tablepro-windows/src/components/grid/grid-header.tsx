@@ -14,6 +14,7 @@ interface GridHeaderProps {
   onHideColumn?: (colName: string) => void;
   onFilterColumn?: (colName: string) => void;
   onAutoFit?: (colName: string) => void;
+  onSelectColumn?: (colIdx: number) => void;
 }
 
 interface MenuState {
@@ -43,6 +44,7 @@ export function GridHeader({
   onHideColumn,
   onFilterColumn,
   onAutoFit,
+  onSelectColumn,
 }: GridHeaderProps) {
   const sortMap = new Map(sorting.map(s => [s.id, s.desc ? 'desc' : 'asc'] as const));
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -130,6 +132,10 @@ export function GridHeader({
           onCopyName={() => {
             navigator.clipboard.writeText(menu.column.name).catch(() => {});
           }}
+          onSelectColumn={onSelectColumn ? () => {
+            const colIdx = columns.findIndex(c => c.name === menu.column.name);
+            if (colIdx >= 0) onSelectColumn(colIdx);
+          } : undefined}
           onClose={() => setMenu(null)}
         />
       )}

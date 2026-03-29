@@ -8,6 +8,7 @@ interface ColumnMenuProps {
   onFilter: () => void;
   onHide: () => void;
   onCopyName: () => void;
+  onSelectColumn?: () => void;
   onClose: () => void;
 }
 
@@ -18,6 +19,7 @@ export function ColumnMenu({
   onFilter,
   onHide,
   onCopyName,
+  onSelectColumn,
   onClose,
 }: ColumnMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -70,6 +72,11 @@ export function ColumnMenu({
       <button className={itemClass} onClick={() => { onHide(); onClose(); }}>
         Hide Column
       </button>
+      {onSelectColumn && (
+        <button className={itemClass} onClick={() => { onSelectColumn(); onClose(); }}>
+          Select Column
+        </button>
+      )}
 
       <div className="h-px bg-zinc-100 dark:bg-zinc-700 mx-1 my-1" />
 

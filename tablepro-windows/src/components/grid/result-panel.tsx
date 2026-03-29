@@ -127,7 +127,8 @@ export function ResultPanel({
     getEffectiveCellValue, onRowSelectProp,
   });
   const {
-    selectedRows, handleRowSelect,
+    selectedRows, selection, selectionRect, selectCell, selectRow, clearSelection,
+    handleRowSelect,
     editingCell, handleCellDoubleClick, handleCellCommit, handleCellCancel,
     contextMenu, handleCellContextMenu, closeContextMenu,
     copySelectedRowsSql, copyContextRowTsv, copyContextCell, copyContextRowJson,
@@ -137,7 +138,9 @@ export function ResultPanel({
     handleQueryQuickSearch, handleQueryQuickSearchClear,
     quickSearchTerm, handleQuickSearch, handleQuickSearchClear,
     handleFkNavigate, showExport, setShowExport,
-    copySelectedRowsTsv, pasteIntoSelectedRows,
+    copySelection, copySelectedRowsTsv, pasteIntoSelectedRows,
+    isDragging, extendTo, extendActive, beginDrag, updateDrag, endDrag,
+    selectColumn, selectAll,
   } = gridActions;
 
   // Build filtered rows for query mode when search is active
@@ -237,12 +240,12 @@ export function ResultPanel({
     return () => window.removeEventListener('keydown', handler);
   }, [isTableMode, handleRefreshTable, handleRequestSave]);
 
-  // Keyboard: Ctrl+C copy selected rows as TSV
+  // Keyboard: Ctrl+C copy selection, Ctrl+V paste into selected rows
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !editingCell && selectedRows.size > 0) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !editingCell && selection.mode) {
         e.preventDefault();
-        copySelectedRowsTsv();
+        copySelection();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'v' && !editingCell && isTableMode && selectedRows.size > 0) {
         e.preventDefault();
@@ -251,7 +254,7 @@ export function ResultPanel({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editingCell, selectedRows, isTableMode, copySelectedRowsTsv, pasteIntoSelectedRows]);
+  }, [editingCell, selection.mode, selectedRows, isTableMode, copySelection, pasteIntoSelectedRows]);
 
   // Composed sort/page handlers that reset selection
   const handleSortChange = useCallback((colName: string) => {
@@ -330,6 +333,10 @@ export function ResultPanel({
                   onSortChange={handleSortChange}
                   selectedRows={selectedRows}
                   onRowSelect={handleRowSelect}
+                  selection={selection}
+                  selectionRect={selectionRect}
+                  onCellClick={selectCell}
+                  onRowHeaderClick={(rowId) => selectRow(rowId, displayResult?.columns.length ?? 0)}
                   changedRows={changeMap}
                   cellOverrideValues={cellOverrides}
                   editingCell={editingCell}
@@ -341,6 +348,23 @@ export function ResultPanel({
                   fkColumns={currentFkColumns}
                   onFkNavigate={handleFkNavigate}
                   rowIds={displayRowIds}
+                  onMoveActive={gridActions.moveActive}
+                  onMoveNext={gridActions.moveNext}
+                  onMovePrev={gridActions.movePrev}
+                  onMoveToFirst={gridActions.moveToFirst}
+                  onMoveToLast={gridActions.moveToLast}
+                  onMoveToRowStart={gridActions.moveToRowStart}
+                  onMoveToRowEnd={gridActions.moveToRowEnd}
+                  onMoveActivePage={gridActions.moveActivePage}
+                  onStartEditingActive={gridActions.startEditingActive}
+                  onClearSelection={gridActions.clearSelection}
+                  isDragging={isDragging}
+                  onExtendTo={extendTo}
+                  onExtendActive={extendActive}
+                  onBeginDrag={beginDrag}
+                  onUpdateDrag={updateDrag}
+                  onSelectColumn={selectColumn}
+                  onSelectAll={selectAll}
                 />
               ) : (
                 <EmptyState icon={<Database size={24} />} message="Run a query to see results" description="Press Ctrl+Enter to execute the current statement" />
@@ -378,6 +402,8 @@ export function ResultPanel({
           onDeleteRow={isTableMode ? deleteContextRows : undefined}
           isDeletedRow={changeMap.get(contextMenu.rowIndex) === 'deleted'}
           isPkColumn={result?.columns[contextMenu.colIndex]?.isPrimaryKey ?? false}
+          selectionMode={selection.mode}
+          onCopySelection={copySelection}
         />
       )}
       {showExport && displayResult && activeConnectionId && (

@@ -16,6 +16,8 @@ interface GridContextMenuProps {
   onDeleteRow?: () => void;
   isDeletedRow?: boolean;
   isPkColumn?: boolean;
+  selectionMode?: 'cell' | 'range' | 'row' | 'column' | null;
+  onCopySelection?: () => void;
 }
 
 function Item({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
@@ -43,7 +45,7 @@ export function GridContextMenu({
   x, y, onClose,
   onCopyAsInsert, onCopyAsUpdate, onCopyRowTsv, onCopyCell, onCopyAsJson,
   isTableMode, onEditValue, onSetNull, onDuplicateRow, onDeleteRow,
-  isDeletedRow, isPkColumn,
+  isDeletedRow, isPkColumn, selectionMode, onCopySelection,
 }: GridContextMenuProps) {
   return (
     <>
@@ -58,6 +60,9 @@ export function GridContextMenu({
         style={{ left: x, top: y }}
       >
         <Item label="Copy Cell" onClick={onCopyCell} />
+        {onCopySelection && selectionMode && selectionMode !== 'cell' && (
+          <Item label="Copy Selection" onClick={onCopySelection} />
+        )}
         <Item label="Copy Row (Tab-separated)" onClick={onCopyRowTsv} />
         {onCopyAsJson && <Item label="Copy Row (JSON)" onClick={onCopyAsJson} />}
         <Item label="Copy as INSERT" onClick={onCopyAsInsert} />

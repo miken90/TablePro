@@ -2,6 +2,8 @@ import React from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { ColumnInfo } from '../../types/query';
 import type { FkRef } from '../../stores/schemaStore';
+import type { GridSelection, SelectionRect } from './grid-selection';
+import { isCellActive, isCellInRect } from './grid-selection';
 import { CellEditor } from './cell-editor';
 import { detectCellType } from '../../utils/cell-formatter';
 import { NullBadge } from './cell-formatters/null-badge';
@@ -11,6 +13,8 @@ import { DateCell } from './cell-formatters/date-cell';
 
 interface GridRowProps {
   rowIndex: number;
+  /** 0-based display position in the virtualizer (needed for selection rect hit test). */
+  displayRowIndex: number;
   /** Display row number (1-based). Falls back to rowIndex + 1 if not provided. */
   rowNumber?: number;
   row: (string | null)[];
@@ -24,7 +28,12 @@ interface GridRowProps {
   virtualTop: number;
   enumValuesByColumn?: Record<string, string[]>;
   fkColumns?: Record<string, FkRef>;
+  selection?: GridSelection;
+  selectionRect?: SelectionRect | null;
   onRowClick: (e: React.MouseEvent) => void;
+  onCellMouseDown?: (colIdx: number, e: React.MouseEvent) => void;
+  onCellMouseEnter?: (colIdx: number) => void;
+  onRowHeaderClick?: (e: React.MouseEvent) => void;
   onCellDoubleClick?: (colIdx: number) => void;
   onCellCommit?: (colIdx: number, newValue: string | null) => void;
   onCellCancel?: () => void;
@@ -63,8 +72,6 @@ function getRowClassName(
     cls += ' bg-green-500/10 border-l-[4px] border-l-green-500';
   } else if (changeType === 'modified') {
     cls += ' bg-yellow-500/10 border-l-[4px] border-l-yellow-500';
-  } else if (isSelected) {
-    cls += ' bg-blue-50 dark:bg-blue-900/30';
   } else {
     cls += ' hover:bg-surface-hover';
   }
@@ -135,6 +142,7 @@ function CellContent({
 
 export function GridRow({
   rowIndex,
+  displayRowIndex,
   rowNumber,
   row,
   columns,
@@ -147,7 +155,12 @@ export function GridRow({
   virtualTop,
   enumValuesByColumn,
   fkColumns,
+  selection,
+  selectionRect,
   onRowClick,
+  onCellMouseDown,
+  onCellMouseEnter,
+  onRowHeaderClick,
   onCellDoubleClick,
   onCellCommit,
   onCellCancel,
@@ -161,7 +174,10 @@ export function GridRow({
       onClick={onRowClick}
     >
       {/* Row number */}
-      <div className="w-10 flex-shrink-0 px-1 flex items-center justify-end text-text-muted border-r border-border-subtle select-none">
+      <div
+        className="w-10 flex-shrink-0 px-1 flex items-center justify-end text-text-muted border-r border-border-subtle select-none cursor-pointer hover:bg-surface-hover"
+        onClick={(e) => { e.stopPropagation(); onRowHeaderClick?.(e); }}
+      >
         {rowNumber ?? rowIndex + 1}
       </div>
 
@@ -173,12 +189,21 @@ export function GridRow({
         const width = columnWidths[col.name] ?? 120;
         const isEditing = editingCell?.colIdx === colIdx;
 
+        const active = selection ? isCellActive(selection, rowIndex, colIdx) : false;
+        const inSelection = selectionRect ? isCellInRect(selectionRect, displayRowIndex, colIdx) : false;
+
+        let cellCls = 'flex-shrink-0 px-2 flex items-center border-r border-border-subtle overflow-hidden cursor-default';
+        if (inSelection) cellCls += ' bg-blue-100/60 dark:bg-blue-900/40';
+        if (active) cellCls += ' ring-2 ring-inset ring-blue-500 z-[1]';
+
         return (
           <div
             key={col.name}
-            className="flex-shrink-0 px-2 flex items-center border-r border-border-subtle overflow-hidden cursor-default"
+            className={cellCls}
             style={{ width, height: 28 }}
             title={!isEditing && cellValue != null ? truncateForTitle(cellValue) : undefined}
+            onMouseDown={(e) => { e.stopPropagation(); onCellMouseDown?.(colIdx, e); }}
+            onMouseEnter={() => onCellMouseEnter?.(colIdx)}
             onDoubleClick={() => onCellDoubleClick?.(colIdx)}
             onContextMenu={(event) => onCellContextMenu?.(event, colIdx, cellValue, row)}
           >

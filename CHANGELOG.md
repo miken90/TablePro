@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Query Editor: client-side quick-search in query results via web worker (available in both query and table-browse modes)
 - Query Editor: Inspector panel works in both query and table-browse modes via dedicated `inspectorStore`
 - Query Editor: double-click cell in query mode copies value to clipboard
+- Data Grid: cell-level selection with blue focus ring (active cell) and rectangular range highlight
+- Data Grid: keyboard navigation — Arrow/Tab/Shift+Tab/Enter/Esc/Home/End/Ctrl+Home/Ctrl+End/PageUp/PageDown
+- Data Grid: rectangular range selection via Shift+click, Shift+Arrow, and mouse drag with auto-scroll
+- Data Grid: row selection via row number click, Shift+click for row range
+- Data Grid: column selection via "Select Column" in column header menu
+- Data Grid: Ctrl+A selects all cells
+- Data Grid: mode-aware Ctrl+C — cell copies value, range copies TSV, row/column copies TSV with headers
+- Data Grid: right-click context menu adapts to selection mode, includes "Copy Selection" for ranges
 - Query Editor: Safe Mode badge shows Shield icon with descriptive tooltip
 - Query Editor: resize handles show 3-dot pattern visible at rest across all panels (sidebar, editor, inspector)
 - Query Editor: all grid/editor/inspector components use semantic color tokens for theme consistency
