@@ -41,7 +41,7 @@ Managed state includes:
 - `Mutex<ConnectionStore>`
 - `Mutex<HistoryStore>`
 
-Command registration includes connection, query, schema, storage, history, import/export, settings, save-changes, filter preset, structure (create table), and data (row SQL generation) flows.
+Command registration includes connection, query, schema (including routine catalog fetch), storage, history, import/export, settings, save-changes, filter preset, structure (create/alter table), and data (row SQL generation) flows.
 
 ### 3.4 Auto-updater
 
@@ -141,7 +141,7 @@ Key stores:
 
 - `connectionStore`: saved connection map, statuses, `sessionIds` map
 - `queryStore`: run/cancel flow, safe-mode checks, query result/error state
-- `schemaStore`: schema metadata fetch state (tables/columns/etc.)
+- `schemaStore`: schema metadata fetch state (tables/columns/indexes/foreign keys/routines)
 - `changeStore`: staged edits for save workflow
 - `editorStore`: tab persistence via Zustand `persist`, preview tab support (`isPreview` flag)
 - `filterStore`: per-tab filter conditions, quick search term, filter presets

@@ -49,6 +49,7 @@ The system must provide:
 - Foreign keys (`fetch_foreign_keys`)
 - Databases and database switching (`fetch_databases`, `switch_database`)
 - DDL retrieval (`fetch_ddl`) and schema list (`fetch_schemas`)
+- Routine catalog discovery for supported engines (`fetch_routines`)
 
 ### 4) Data editing and transfer
 

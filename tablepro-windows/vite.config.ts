@@ -1,10 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import pkg from "./package.json";
 
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -15,7 +19,12 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      ignored: [
+        "**/src-tauri/**",
+        "**/dist/**",
+        "**/node_modules/.cache/**",
+        "**/.git/**",
+      ],
     },
   },
   envPrefix: ["VITE_", "TAURI_"],

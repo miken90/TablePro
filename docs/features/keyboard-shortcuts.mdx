@@ -7,6 +7,10 @@ description: Complete list of keyboard shortcuts for the SQL editor, data grid, 
 
 TablePro is keyboard-driven. Most actions have shortcuts, and most menu shortcuts are rebindable.
 
+<Warning>
+**Platform Note**: This documentation uses macOS shortcuts (`Cmd`, `Option`). On **Windows**, substitute `Ctrl` for `Cmd`, `Alt` for `Option`, and `Shift` works the same way. For example, `Cmd+Enter` becomes `Ctrl+Enter`, and `Option+Cmd+F` becomes `Alt+Ctrl+F`.
+</Warning>
+
 ## Quick Reference
 
 ### Essential Shortcuts
@@ -165,17 +169,9 @@ TablePro is keyboard-driven. Most actions have shortcuts, and most menu shortcut
 | Action | Shortcut |
 |--------|----------|
 | Query History | `Cmd+Y` |
-| Toggle Cell Inspector | `Cmd+Shift+B` |
-| Toggle AI Chat | `Cmd+Shift+L` |
+| Toggle Cell Inspector | `Cmd+Shift+I` |
+| Toggle Filter | `Cmd+Shift+L` |
 | Settings | `Cmd+,` |
-
-### AI
-
-| Action | Shortcut | Description |
-|--------|----------|-------------|
-| Toggle AI Chat | `Cmd+Shift+L` | Open or close the AI chat panel |
-| Explain with AI | `Cmd+L` | Send selected SQL (or current query) to AI for explanation |
-| Optimize with AI | `Cmd+Option+L` | Send selected SQL (or current query) to AI for optimization |
 
 ## Vim Mode Keybindings
 
@@ -349,9 +345,8 @@ Click **Reset to Defaults** at the bottom of the Keyboard settings to restore al
 |----------|----------|
 | **File** | New Connection, New Query Tab, Close Tab, Save Changes |
 | **Edit** | Copy as CSV, Copy as JSON, Export, Import |
-| **View** | Toggle Sidebar, Toggle Cell Inspector, Query History |
+| **View** | Toggle Sidebar, Toggle Cell Inspector, Toggle Filter, Query History |
 | **Tabs** | Next Tab, Previous Tab |
-| **AI** | Toggle AI Chat, Explain with AI, Optimize with AI |
 
 <Note>
 Tab switching shortcuts (`Cmd+1` through `Cmd+9`) follow standard macOS convention and cannot be customized.
@@ -448,11 +443,10 @@ dd/yy/cc       Delete/Yank/Change line
 === Application ===
 Cmd+N          New connection
 Cmd+Y          Query history
-Cmd+Shift+L    Toggle AI Chat
-Cmd+L          Explain with AI
-Cmd+Opt+L      Optimize with AI
+Cmd+Shift+L    Toggle Filter
+Cmd+Shift+I    Toggle Inspector
 Cmd+,          Settings
-Cmd+P          Quick Switcher
+Cmd+K          Quick Switcher
 Cmd+W          Close window
 Cmd+Q          Quit
 ```

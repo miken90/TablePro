@@ -40,15 +40,21 @@ export function SettingsView({ initialSection = "General", onClose }: SettingsVi
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       onClick={handleOverlayClick}
     >
-      <div className="flex h-[600px] w-[760px] max-w-[95vw] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        className="flex h-[600px] w-[760px] max-w-[95vw] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
           <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Settings</span>
           <button
             onClick={onClose}
             className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            aria-label="Close settings"
           >
-            <X size={15} />
+            <X size={15} aria-hidden="true" />
           </button>
         </div>
 

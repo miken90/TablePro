@@ -6,6 +6,8 @@ pub mod storage;
 
 use std::sync::Arc;
 
+use tauri::Manager;
+
 use commands::connection::{connect, disconnect, get_connection_status, test_connection};
 use commands::data::{generate_row_sql, save_changes};
 use commands::export::export_to_file;
@@ -17,13 +19,14 @@ use commands::import::{import_preview, import_sql_file};
 use commands::query::{cancel_query, execute_query, fetch_count, fetch_rows};
 use commands::schema::{
     fetch_approximate_count, fetch_columns, fetch_databases, fetch_ddl, fetch_enum_values,
-    fetch_foreign_keys, fetch_indexes, fetch_schemas, fetch_tables, switch_database,
+    fetch_foreign_keys, fetch_indexes, fetch_routines, fetch_schemas, fetch_tables,
+    switch_database,
 };
 use commands::settings::{get_settings, log_renderer_error, set_settings};
 use commands::storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
-use commands::structure::create_table;
+use commands::structure::{apply_alter, create_table, generate_alter_sql_command};
 use plugin::PluginManager;
 use services::ConnectionManager;
 use storage::{ConnectionStore, FilterStore, HistoryStore, SettingsStore};
@@ -75,8 +78,20 @@ pub fn run() {
 
     let connection_manager = ConnectionManager::new(Arc::clone(&plugin_manager));
 
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init());
+
+    // Only register the updater plugin in release builds — the update server
+    // is not reachable during local dev and the placeholder pubkey can cause
+    // spurious errors / intermittent crashes.
+    #[cfg(not(feature = "devtools"))]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
+    builder
         .manage(Mutex::new(connection_manager))
         .manage(Mutex::new(SettingsStore::new()))
         .manage(Mutex::new({
@@ -97,6 +112,22 @@ pub fn run() {
             }
             store
         }))
+        .setup(|app| {
+            // Set the window icon explicitly — bundle.icon only applies to built
+            // installers, not dev mode.
+            if let Some(window) = app.get_webview_window("main") {
+                let icon_bytes = include_bytes!("../icons/32x32.png");
+                match tauri::image::Image::from_bytes(icon_bytes) {
+                    Ok(icon) => {
+                        if let Err(e) = window.set_icon(icon) {
+                            tracing::warn!("Failed to set window icon: {e}");
+                        }
+                    }
+                    Err(e) => tracing::warn!("Failed to decode window icon: {e}"),
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             // connection
             test_connection,
@@ -113,6 +144,7 @@ pub fn run() {
             fetch_columns,
             fetch_indexes,
             fetch_foreign_keys,
+            fetch_routines,
             fetch_databases,
             fetch_ddl,
             switch_database,
@@ -120,6 +152,8 @@ pub fn run() {
             fetch_enum_values,
             fetch_approximate_count,
             create_table,
+            generate_alter_sql_command,
+            apply_alter,
             // settings
             get_settings,
             set_settings,
@@ -154,7 +188,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::CloseRequested { .. } => {
-                    tracing::warn!("Window CloseRequested: {}", window.label());
+                    tracing::info!("Window CloseRequested: {}", window.label());
+                    let state = window.state::<Mutex<ConnectionManager>>();
+                    let lock_result = state.try_lock();
+                    if let Ok(mut guard) = lock_result {
+                        guard.disconnect_all();
+                    }
                 }
                 tauri::WindowEvent::Destroyed => {
                     tracing::warn!("Window Destroyed: {}", window.label());

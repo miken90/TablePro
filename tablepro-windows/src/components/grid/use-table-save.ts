@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useChangeStore } from '../../stores/changeStore';
 import { saveChanges } from '../../ipc/commands';
+import { extractErrorMessage } from '../../ipc/error';
 import type { SavePayload, RowChangePayload, CellChangePayload } from '../../ipc/commands';
 import type { QueryResult } from '../../types/query';
 import type { SortingState } from '@tanstack/react-table';
@@ -39,7 +40,9 @@ export function useTableSave({
     if (changesEntries.length === 0) return;
 
     const columns = result.columns.map(c => c.name);
-    const primaryKeys = result.columns.filter(c => c.isPrimaryKey).map(c => c.name);
+    const detectedPks = result.columns.filter(c => c.isPrimaryKey).map(c => c.name);
+    // Fallback to all columns when backend doesn't populate isPrimaryKey
+    const primaryKeys = detectedPks.length > 0 ? detectedPks : columns;
 
     const rowChanges: RowChangePayload[] = [];
     for (const [rowIdxStr, change] of changesEntries) {
@@ -72,7 +75,7 @@ export function useTableSave({
       clearChanges();
       fetchTableData(sessionId, tableName, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveError(extractErrorMessage(err));
     } finally {
       setIsSaving(false);
     }

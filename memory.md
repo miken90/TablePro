@@ -33,6 +33,19 @@
 - **Permanent fix**: `npm run dev:tauri` now runs `tauri dev --no-watch`. Ctrl+C and re-run to pick up Rust changes.
 - Dev command: `powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"`
 
+### Root cause identified (2026-03-20): Tauri CLI `dev --no-watch` STILL kills app
+- **Even with `--no-watch`**, the Tauri CLI 2.10.1 `dev` command silently terminates the app process after ~2-5 minutes while idle.
+- No crash dumps, no panic logs, no Windows Event Log entries. Process exits with code 1.
+- `on_window_event` callbacks for CloseRequested/Destroyed never fire → Tauri CLI kills the child process, not a normal window close or Rust panic.
+- **Definitive test**: `cargo run` directly (no Tauri CLI) = stable 5+ min with Vite running separately. `tauri dev --no-watch` = crash ~2-5 min.
+- **Root cause**: Tauri CLI `dev` manages child processes (Vite + cargo) and has known bugs on Windows where it prematurely terminates the app process.
+- **Permanent fix**: `scripts/dev.ps1` — PowerShell script that runs Vite and `cargo run` independently, bypassing Tauri CLI entirely.
+  - `npm run dev:tauri` now invokes `scripts/dev.ps1`
+  - `npm run dev:tauri:cli` preserved as fallback for `tauri dev --no-watch`
+  - Script auto-cleans stale port 1420 processes, waits for Vite TCP listen, and kills Vite on app exit.
+- **Secondary fix**: `tauri-plugin-updater` was in Cargo.toml and capabilities but never registered in `tauri::Builder` — now properly initialized with `.plugin(tauri_plugin_updater::Builder::new().build())`
+- Dev command: `powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"`
+
 ### Known risky areas already addressed
 - Plugin/driver shutdown lifetime ordering in `ConnectionManager` (drop connections before plugin manager).
 - Command-layer lock usage: avoid holding `Mutex<ConnectionManager>` while awaiting DB driver operations.

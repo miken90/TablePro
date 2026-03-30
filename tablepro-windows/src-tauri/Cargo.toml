@@ -19,7 +19,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["image-png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -31,6 +31,7 @@ tablepro-plugin-sdk = { path = "plugin-sdk" }
 libloading = "0.8"
 async-trait = "0.1"
 tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 rust_xlsxwriter = "0.79"
@@ -51,3 +52,6 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[dev-dependencies]
+tempfile = "3"

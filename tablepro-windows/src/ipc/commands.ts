@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ConnectionConfig, ConnectionGroup, SavedConnection, ConnectionStatus } from "../types/connection";
 import type { QueryResult } from "../types/query";
-import type { TableInfo, IndexInfo, ForeignKeyInfo } from "../types/schema";
+import type { TableInfo, IndexInfo, ForeignKeyInfo, RoutineCatalog } from "../types/schema";
 import type { ColumnInfo } from "../types/query";
 import type { AppSettings } from "../types/settings";
 
@@ -64,6 +64,9 @@ export const fetchIndexes = (sessionId: string, table: string, schema?: string):
 
 export const fetchForeignKeys = (sessionId: string, table: string, schema?: string): Promise<ForeignKeyInfo[]> =>
   invoke("fetch_foreign_keys", { sessionId, table, schema });
+
+export const fetchRoutines = (sessionId: string): Promise<RoutineCatalog> =>
+  invoke("fetch_routines", { sessionId });
 
 export const fetchDatabases = (sessionId: string): Promise<string[]> =>
   invoke("fetch_databases", { sessionId });
@@ -207,7 +210,40 @@ export const generateRowSql = (
   payload: GenerateRowSqlPayload,
 ): Promise<string> => invoke('generate_row_sql', { sessionId, payload });
 
-// Export commands
+// Structure alter commands
+export interface AlterColumnDef {
+  name: string;
+  typeName: string;
+  nullable: boolean;
+  defaultValue: string | null;
+  isPrimaryKey: boolean;
+  position: number;
+}
+
+export interface AlterColumnChange {
+  changeType: 'add_column' | 'modify_column' | 'drop_column';
+  columnName: string;
+  before?: AlterColumnDef;
+  after?: AlterColumnDef;
+}
+
+export interface GenerateAlterSqlPayload {
+  table: string;
+  schema: string | null | undefined;
+  changes: AlterColumnChange[];
+}
+
+export const generateAlterSql = (
+  sessionId: string,
+  payload: GenerateAlterSqlPayload,
+): Promise<string[]> =>
+  invoke('generate_alter_sql_command', { sessionId, payload });
+
+export const applyAlter = (
+  sessionId: string,
+  payload: GenerateAlterSqlPayload,
+): Promise<void> =>
+  invoke('apply_alter', { sessionId, payload });
 export interface ExportOptions {
   delimiter?: string;
   includeHeader?: boolean;

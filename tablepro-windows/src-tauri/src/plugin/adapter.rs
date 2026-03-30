@@ -91,16 +91,48 @@ impl Drop for PluginDriverAdapter {
     }
 }
 
+// ── Helpers for running blocking FFI on a dedicated thread ────────────────────
+
+// Newtype wrappers so raw pointers can cross the `spawn_blocking` boundary.
+// SAFETY: same invariants as `unsafe impl Send/Sync for PluginDriverAdapter`.
+struct SendVTable(*const PluginVTable);
+unsafe impl Send for SendVTable {}
+struct SendHandle(*mut DriverHandle);
+unsafe impl Send for SendHandle {}
+
+/// Run a blocking FFI operation on a dedicated thread.
+///
+/// The vtable and handle pointers are wrapped in Send newtypes so they can
+/// cross the spawn_blocking boundary without requiring raw pointers in the
+/// async future state.
+fn ffi_blocking<F, R>(vtable: *const PluginVTable, handle: *mut DriverHandle, f: F)
+    -> tokio::task::JoinHandle<Result<R, AppError>>
+where
+    F: FnOnce(*const PluginVTable, *mut DriverHandle) -> Result<R, AppError> + Send + 'static,
+    R: Send + 'static,
+{
+    let vt = SendVTable(vtable);
+    let hd = SendHandle(handle);
+    tokio::task::spawn_blocking(move || {
+        let vt = vt;
+        let hd = hd;
+        f(vt.0, hd.0)
+    })
+}
+
 // ── DatabaseDriver impl ───────────────────────────────────────────────────────
 
 #[async_trait]
 impl DatabaseDriver for PluginDriverAdapter {
     async fn connect(&self) -> Result<(), AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
-        let result = catch_unwind(|| unsafe { (vtable.connect)(handle) })
-            .map_err(|_| AppError::PluginError("panic in connect".to_string()))?;
-        ffi_result_to_rust(vtable, result)
+        ffi_blocking(self.vtable, self.handle, |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let ffi = catch_unwind(|| unsafe { (vtable.connect)(hd) })
+                .map_err(|_| AppError::PluginError("panic in connect".to_string()))?;
+            ffi_result_to_rust(vtable, ffi)
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?
     }
 
     fn disconnect(&self) {
@@ -109,33 +141,44 @@ impl DatabaseDriver for PluginDriverAdapter {
     }
 
     async fn ping(&self) -> Result<(), AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
-        let result = catch_unwind(|| unsafe { (vtable.ping)(handle) })
-            .map_err(|_| AppError::PluginError("panic in ping".to_string()))?;
-        ffi_result_to_rust(vtable, result)
+        ffi_blocking(self.vtable, self.handle, |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let ffi = catch_unwind(|| unsafe { (vtable.ping)(hd) })
+                .map_err(|_| AppError::PluginError("panic in ping".to_string()))?;
+            ffi_result_to_rust(vtable, ffi)
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?
     }
 
     async fn execute(&self, query: &str) -> Result<QueryResult, AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
-        let sql = FfiStr::from(query);
+        let sql_owned = query.to_owned();
         tracing::debug!(type_id = %self.type_id, "FFI: execute enter");
-        let ffi = catch_unwind(|| unsafe { (vtable.execute)(handle, sql) })
-            .map_err(|_| AppError::PluginError("panic in execute".to_string()))?;
+        let result = ffi_blocking(self.vtable, self.handle, move |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let sql = FfiStr::from(sql_owned.as_str());
+            let ffi = catch_unwind(|| unsafe { (vtable.execute)(hd, sql) })
+                .map_err(|_| AppError::PluginError("panic in execute".to_string()))?;
+            convert_query_result(vtable, ffi)
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?;
         tracing::debug!(type_id = %self.type_id, "FFI: execute returned");
-        convert_query_result(vtable, ffi)
+        result
     }
 
     async fn fetch_tables(&self) -> Result<Vec<TableInfo>, AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
         tracing::debug!(type_id = %self.type_id, "FFI: fetch_tables enter");
-        let ffi = catch_unwind(|| unsafe { (vtable.fetch_tables)(handle) })
-            .map_err(|_| AppError::PluginError("panic in fetch_tables".to_string()))?;
+        let result = ffi_blocking(self.vtable, self.handle, |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let ffi = catch_unwind(|| unsafe { (vtable.fetch_tables)(hd) })
+                .map_err(|_| AppError::PluginError("panic in fetch_tables".to_string()))?;
+            convert_table_list(vtable, ffi)
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?;
         tracing::debug!(type_id = %self.type_id, "FFI: fetch_tables returned");
-
-        convert_table_list(vtable, ffi)
+        result
     }
 
     async fn fetch_columns(
@@ -143,14 +186,18 @@ impl DatabaseDriver for PluginDriverAdapter {
         table: &str,
         schema: Option<&str>,
     ) -> Result<Vec<ColumnInfo>, AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
-        let t = FfiStr::from(table);
-        let s = FfiStr::from(schema.unwrap_or(""));
-        let ffi = catch_unwind(|| unsafe { (vtable.fetch_columns)(handle, t, s) })
-            .map_err(|_| AppError::PluginError("panic in fetch_columns".to_string()))?;
-
-        convert_column_list(vtable, ffi)
+        let t_owned = table.to_owned();
+        let s_owned = schema.unwrap_or("").to_owned();
+        ffi_blocking(self.vtable, self.handle, move |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let t = FfiStr::from(t_owned.as_str());
+            let s = FfiStr::from(s_owned.as_str());
+            let ffi = catch_unwind(|| unsafe { (vtable.fetch_columns)(hd, t, s) })
+                .map_err(|_| AppError::PluginError("panic in fetch_columns".to_string()))?;
+            convert_column_list(vtable, ffi)
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?
     }
 
     async fn fetch_indexes(
@@ -158,14 +205,18 @@ impl DatabaseDriver for PluginDriverAdapter {
         table: &str,
         schema: Option<&str>,
     ) -> Result<Vec<IndexInfo>, AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
-        let t = FfiStr::from(table);
-        let s = FfiStr::from(schema.unwrap_or(""));
-        let ffi = catch_unwind(|| unsafe { (vtable.fetch_indexes)(handle, t, s) })
-            .map_err(|_| AppError::PluginError("panic in fetch_indexes".to_string()))?;
-
-        convert_index_list(vtable, ffi)
+        let t_owned = table.to_owned();
+        let s_owned = schema.unwrap_or("").to_owned();
+        ffi_blocking(self.vtable, self.handle, move |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let t = FfiStr::from(t_owned.as_str());
+            let s = FfiStr::from(s_owned.as_str());
+            let ffi = catch_unwind(|| unsafe { (vtable.fetch_indexes)(hd, t, s) })
+                .map_err(|_| AppError::PluginError("panic in fetch_indexes".to_string()))?;
+            convert_index_list(vtable, ffi)
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?
     }
 
     async fn fetch_foreign_keys(
@@ -173,35 +224,47 @@ impl DatabaseDriver for PluginDriverAdapter {
         table: &str,
         schema: Option<&str>,
     ) -> Result<Vec<ForeignKeyInfo>, AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
-        let t = FfiStr::from(table);
-        let s = FfiStr::from(schema.unwrap_or(""));
-        let ffi = catch_unwind(|| unsafe { (vtable.fetch_foreign_keys)(handle, t, s) })
-            .map_err(|_| AppError::PluginError("panic in fetch_foreign_keys".to_string()))?;
-
-        convert_foreign_key_list(vtable, ffi)
+        let t_owned = table.to_owned();
+        let s_owned = schema.unwrap_or("").to_owned();
+        ffi_blocking(self.vtable, self.handle, move |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let t = FfiStr::from(t_owned.as_str());
+            let s = FfiStr::from(s_owned.as_str());
+            let ffi = catch_unwind(|| unsafe { (vtable.fetch_foreign_keys)(hd, t, s) })
+                .map_err(|_| AppError::PluginError("panic in fetch_foreign_keys".to_string()))?;
+            convert_foreign_key_list(vtable, ffi)
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?
     }
 
     async fn fetch_databases(&self) -> Result<Vec<String>, AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
         tracing::debug!(type_id = %self.type_id, "FFI: fetch_databases enter");
-        let ffi = catch_unwind(|| unsafe { (vtable.fetch_databases)(handle) })
-            .map_err(|_| AppError::PluginError("panic in fetch_databases".to_string()))?;
+        let result = ffi_blocking(self.vtable, self.handle, |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let ffi = catch_unwind(|| unsafe { (vtable.fetch_databases)(hd) })
+                .map_err(|_| AppError::PluginError("panic in fetch_databases".to_string()))?;
+            convert_string_list(vtable, ffi)
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?;
         tracing::debug!(type_id = %self.type_id, "FFI: fetch_databases returned");
-
-        convert_string_list(vtable, ffi)
+        result
     }
 
     async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, AppError> {
-        let vtable = self.vtable();
-        let handle = self.handle;
-        let t = FfiStr::from(table);
-        let s = FfiStr::from(schema.unwrap_or(""));
-        let ffi_str = catch_unwind(|| unsafe { (vtable.fetch_ddl)(handle, t, s) })
-            .map_err(|_| AppError::PluginError("panic in fetch_ddl".to_string()))?;
-        Ok(ffi_string_to_rust(vtable, ffi_str))
+        let t_owned = table.to_owned();
+        let s_owned = schema.unwrap_or("").to_owned();
+        ffi_blocking(self.vtable, self.handle, move |vt, hd| {
+            let vtable = unsafe { &*vt };
+            let t = FfiStr::from(t_owned.as_str());
+            let s = FfiStr::from(s_owned.as_str());
+            let ffi = catch_unwind(|| unsafe { (vtable.fetch_ddl)(hd, t, s) })
+                .map_err(|_| AppError::PluginError("panic in fetch_ddl".to_string()))?;
+            Ok(ffi_string_to_rust(vtable, ffi))
+        })
+        .await
+        .map_err(|e| AppError::PluginError(format!("spawn_blocking join: {e}")))?
     }
 
     fn cancel_query(&self) -> Result<(), AppError> {

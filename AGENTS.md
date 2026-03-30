@@ -39,7 +39,7 @@ powershell.exe -Command "cd tablepro-windows; cargo clippy --manifest-path src-t
 powershell.exe -Command "cd tablepro-windows; npx vitest run"
 ```
 
-> **Note:** `npm run dev:tauri` runs `tauri dev --no-watch`. The Tauri file watcher causes silent crashes on Windows (kills the running app to rebuild when it detects artifact changes in `src-tauri/target/`, but Windows file-locks prevent overwriting the exe/dll). When you need to pick up Rust changes, Ctrl+C and re-run.
+> **Note:** `npm run dev:tauri` runs `scripts/dev.ps1` which launches Vite and `cargo run` independently (bypassing the Tauri CLI `dev` command, which silently kills the app on Windows after a few minutes). Close the app window to stop; the script auto-cleans up Vite. Use `npm run dev:tauri:cli` for the legacy `tauri dev --no-watch` fallback. When you need to pick up Rust changes, close and re-run.
 
 - **Use native bash** only for: git, gh, file operations, reading macOS reference code
 - **Path translation**: `wslpath -w` (WSL→Windows), `wslpath -u` (Windows→WSL)
@@ -107,15 +107,40 @@ Priority order for this project:
 4. If logs are silent, inspect Windows Event Log + `%LOCALAPPDATA%/CrashDumps`
 5. Only then deep-dive plugin/IPC internals
 
-## Semantic Code Search (cocoindex-code)
+## [MANDATORY] Context Gathering Protocol
 
-Use the `cocoindex-code` MCP server's `code_search` tool for semantic code search when:
+**EVERY agent MUST follow this protocol BEFORE writing code or making decisions.** Skip only if the task is purely conversational (no code changes).
+
+### Step 1 — Read project docs (if relevant)
+Read relevant docs in `docs/development/` for your task (architecture, code standards). Don't read all docs for a simple change.
+
+### Step 2 — Bootstrap and use ccc semantic search
+```bash
+ccc status 2>/dev/null || (ccc init && ccc index)
+```
+Agent MUST auto-bootstrap `ccc` if not initialized. Use `ccc search <query>` to find relevant code by meaning **BEFORE** grep/glob.
+
+```bash
+ccc search plugin loading DLL discovery
+ccc search --lang rust database connection pooling
+ccc search --lang typescript --path 'src/stores/*' change tracking
+```
+
+### Step 3 — Read full files only when needed
+After Steps 1-2 give direction, read specific files for full context.
+
+> **Why this order?** Docs = conventions/architecture (prevents wrong patterns). Semantic search = find code without knowing names. Full reads = confirm details.
+
+### When to use ccc (prefer over grep/glob):
 - Searching for code by meaning or description rather than exact text
 - Exploring unfamiliar parts of the codebase
 - Looking for implementations without knowing exact names
 - Finding similar code patterns or related functionality
 
-Use grep/glob instead when searching for exact string literals, known identifiers, or listing files by type.
+### When NOT to use (use grep/glob instead):
+- Exact string literals, error messages, or known identifiers
+- Listing all files of a type (use glob)
+- Known function name you can spell exactly
 
 ## Code Style
 

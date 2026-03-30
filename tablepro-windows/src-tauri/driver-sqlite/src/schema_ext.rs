@@ -11,7 +11,7 @@ pub unsafe fn fetch_foreign_keys(
 ) -> FfiForeignKeyList {
     let driver = &*(handle as *mut SqliteDriver);
     let table_name = table.as_str().to_owned();
-    let guard = driver.conn.lock().unwrap();
+    let guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
     let conn = match guard.as_ref() {
         None => {
             return FfiForeignKeyList {
@@ -74,7 +74,7 @@ pub unsafe fn fetch_foreign_keys(
 
 pub unsafe fn fetch_databases(handle: *mut DriverHandle) -> FfiStringList {
     let driver = &*(handle as *mut SqliteDriver);
-    let guard = driver.conn.lock().unwrap();
+    let guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
     let conn = match guard.as_ref() {
         None => {
             return FfiStringList {
@@ -127,7 +127,7 @@ pub unsafe fn fetch_databases(handle: *mut DriverHandle) -> FfiStringList {
 pub unsafe fn fetch_ddl(handle: *mut DriverHandle, table: FfiStr, _schema: FfiStr) -> FfiString {
     let driver = &*(handle as *mut SqliteDriver);
     let table_name = table.as_str().to_owned();
-    let guard = driver.conn.lock().unwrap();
+    let guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
     let conn = match guard.as_ref() {
         None => return string_to_ffi("ERROR: Not connected".to_string()),
         Some(c) => c,

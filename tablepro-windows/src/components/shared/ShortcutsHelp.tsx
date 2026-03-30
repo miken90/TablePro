@@ -50,6 +50,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: ["Ctrl", "K"], description: "Quick switcher" },
       { keys: ["Ctrl", "Shift", "E"], description: "Toggle sidebar" },
+      { keys: ["Ctrl", "Shift", "L"], description: "Toggle filter" },
       { keys: ["Ctrl", "Shift", "I"], description: "Toggle inspector" },
       { keys: ["Ctrl", "H"], description: "Toggle history" },
     ],

@@ -3,6 +3,7 @@ pub mod import_service;
 pub(crate) mod import_parser;
 pub(crate) mod import_streamer;
 pub mod ddl_generator;
+pub mod schema_alter;
 pub mod sql_generator;
 pub(crate) mod sql_generator_ops;
 pub mod sql_quoting;

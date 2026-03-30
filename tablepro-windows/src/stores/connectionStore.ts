@@ -1,7 +1,10 @@
 import { create } from "zustand";
+import { toast } from "sonner";
+import { listen } from "@tauri-apps/api/event";
 import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
+import { extractErrorMessage } from "../ipc/error";
 
 interface ConnectionState {
   connections: Map<string, SavedConnection>;
@@ -46,6 +49,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   selectConnection: (id) => set({ selectedConnectionId: id }),
 
   connect: async (id, config) => {
+    const loadingId = toast.loading("Connecting...");
     set((s) => {
       const statuses = new Map(s.connectionStatuses);
       statuses.set(id, "connecting");
@@ -60,12 +64,17 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         sessionIds.set(id, sessionId);
         return { connectionStatuses: statuses, sessionIds, selectedConnectionId: id };
       });
+      toast.dismiss(loadingId);
+      toast.success("Connected", { description: config.host ?? config.database ?? undefined });
     } catch (err) {
       set((s) => {
         const statuses = new Map(s.connectionStatuses);
         statuses.set(id, "error");
         return { connectionStatuses: statuses };
       });
+      toast.dismiss(loadingId);
+      const msg = extractErrorMessage(err);
+      toast.error("Connection failed", { description: msg, duration: Infinity });
       throw err;
     }
   },
@@ -86,6 +95,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         selectedConnectionId: s.selectedConnectionId === id ? null : s.selectedConnectionId,
       };
     });
+    toast.info("Disconnected");
   },
 
   saveConnection: async (connection) => {
@@ -134,3 +144,25 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   getStatus: (id) => get().connectionStatuses.get(id) ?? "disconnected",
   getSessionId: (id) => get().sessionIds.get(id),
 }));
+
+// Auto-subscribe to connection:lost events from Rust backend
+if (typeof window !== "undefined") {
+void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => {
+  const { sessionId, host } = event.payload;
+  const state = useConnectionStore.getState();
+  for (const [connId, sid] of state.sessionIds) {
+    if (sid === sessionId) {
+      useConnectionStore.setState((s) => {
+        const statuses = new Map(s.connectionStatuses);
+        statuses.set(connId, "error");
+        return { connectionStatuses: statuses };
+      });
+      toast.error("Connection lost", {
+        description: host ?? "Database connection was lost",
+        duration: Infinity,
+      });
+      break;
+    }
+  }
+});
+}

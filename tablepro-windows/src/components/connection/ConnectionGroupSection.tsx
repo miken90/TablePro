@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronRight, MoreHorizontal, Pencil, Palette, Trash2 } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
-import { ConnectionCard } from "./WelcomeView";
+import { ConnectionCard } from "./connection-card";
 import type { ConnectionGroup, SavedConnection, ConnectionStatus } from "../../types/connection";
 
 const GROUP_COLORS = [
@@ -17,10 +17,12 @@ interface Props {
   onConnect: (conn: SavedConnection) => void;
   onEdit: (conn: SavedConnection) => void;
   onDelete: () => void;
+  onDeleteConnection: (conn: SavedConnection) => void;
+  onDuplicateConnection?: (conn: SavedConnection) => void;
 }
 
 export function ConnectionGroupSection({
-  group, connections, connectingId, getStatus, onConnect, onEdit, onDelete,
+  group, connections, connectingId, getStatus, onConnect, onEdit, onDelete, onDeleteConnection, onDuplicateConnection,
 }: Props) {
   const { saveGroup } = useConnectionStore();
   const [collapsed, setCollapsed] = useState(group.collapsed);
@@ -63,13 +65,13 @@ export function ConnectionGroupSection({
   };
 
   return (
-    <div className="rounded border border-zinc-200 dark:border-zinc-700">
+    <div className="rounded border border-border">
       {/* Group header */}
       <div
-        className="flex cursor-pointer select-none items-center gap-2 rounded-t px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+        className="flex cursor-pointer select-none items-center gap-2 rounded-t px-2 py-1.5 hover:bg-surface-muted"
         style={{ borderLeft: `3px solid ${group.color}` }}
       >
-        <button onClick={toggleCollapsed} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+        <button onClick={toggleCollapsed} className="text-text-muted hover:text-text-primary">
           <ChevronRight
             size={14}
             className={`transition-transform ${collapsed ? "" : "rotate-90"}`}
@@ -86,36 +88,36 @@ export function ConnectionGroupSection({
               if (e.key === "Enter") void handleRename();
               if (e.key === "Escape") { setNameInput(group.name); setRenaming(false); }
             }}
-            className="flex-1 rounded border border-blue-400 bg-transparent px-1 text-xs outline-none"
+            className="flex-1 rounded border border-accent-blue bg-transparent px-1 text-xs text-text-primary outline-none"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="flex-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          <span className="flex-1 text-xs font-medium text-text-primary">
             {group.name}
           </span>
         )}
 
-        <span className="text-xs text-zinc-400">{connections.length}</span>
+        <span className="text-xs text-text-muted">{connections.length}</span>
 
         {/* Context menu trigger */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu((v) => !v); }}
-            className="rounded p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+            className="rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-text-primary"
           >
             <MoreHorizontal size={13} />
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 top-full z-50 mt-1 min-w-[140px] rounded border border-zinc-200 bg-white shadow-md dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="absolute right-0 top-full z-50 mt-1 min-w-[140px] rounded border border-border bg-surface-elevated shadow-md">
               <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="menu-item-button flex w-full items-center gap-2 px-3 py-1.5 text-xs"
                 onClick={() => { setRenaming(true); setShowMenu(false); }}
               >
                 <Pencil size={12} /> Rename
               </button>
               <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="menu-item-button flex w-full items-center gap-2 px-3 py-1.5 text-xs"
                 onClick={() => setShowColorPicker((v) => !v)}
               >
                 <Palette size={12} /> Change Color
@@ -126,15 +128,15 @@ export function ConnectionGroupSection({
                     <button
                       key={c}
                       onClick={() => void handleColorChange(c)}
-                      className="h-4 w-4 rounded-full border-2 border-transparent hover:border-zinc-400"
+                      className="h-4 w-4 rounded-full border-2 border-transparent hover:border-border"
                       style={{ backgroundColor: c }}
                     />
                   ))}
                 </div>
               )}
-              <div className="my-0.5 border-t border-zinc-200 dark:border-zinc-700" />
+              <div className="my-0.5 border-t border-border" />
               <button
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-zinc-100 dark:text-red-400 dark:hover:bg-zinc-800"
+                className="menu-item-button-danger flex w-full items-center gap-2 px-3 py-1.5 text-xs"
                 onClick={() => { onDelete(); setShowMenu(false); }}
               >
                 <Trash2 size={12} /> Delete
@@ -148,7 +150,7 @@ export function ConnectionGroupSection({
       {!collapsed && (
         <div className="flex flex-col gap-1 p-1.5">
           {connections.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-zinc-400 dark:text-zinc-500">No connections in this group</p>
+            <p className="px-2 py-1 text-xs text-text-muted">No connections in this group</p>
           ) : (
             connections.map((conn) => (
               <ConnectionCard
@@ -158,6 +160,8 @@ export function ConnectionGroupSection({
                 status={getStatus(conn.id)}
                 onConnect={() => onConnect(conn)}
                 onEdit={() => onEdit(conn)}
+                onDelete={() => void onDeleteConnection(conn)}
+                onDuplicate={onDuplicateConnection ? () => void onDuplicateConnection(conn) : undefined}
               />
             ))
           )}

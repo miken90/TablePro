@@ -25,11 +25,60 @@ The filter panel builds WHERE clauses without writing SQL. Pick columns, operato
 
 The filtering system has five parts:
 
+- **Quick Filter Bar** — instant syntax-based filtering with `column:value` notation
 - **Filter Panel** — visual builder for WHERE clause conditions
 - **Quick Search** — instant search across all visible columns
 - **Filter Presets** — save and load named filter configurations
 - **SQL Preview** — inspect the generated WHERE clause before applying
 - **Per-Tab State** — each tab remembers its own filters independently
+
+## Quick Filter Bar
+
+The Quick Filter Bar appears above the data grid and lets you filter instantly using a simple syntax.
+
+### Opening the Quick Filter Bar
+
+The filter bar is always visible above the grid. Click in the search field or press `Cmd+F` to focus it.
+
+### Quick Filter Syntax
+
+The syntax is simple:
+
+| Pattern | Example | Result |
+|---------|---------|--------|
+| `value` | `john` | Search for "john" in all columns (contains) |
+| `column:value` | `status:active` | Filter by column equals value |
+| `column:>value` | `age:>25` | Filter by column greater than value |
+| `column:!=value` | `status:!=inactive` | Filter by column not equal to value |
+
+Operators include: `:` (equals), `:>`, `:<`, `:!=`, `:>=`, `:<=`
+
+### Examples
+
+```
+# Search all columns
+john
+
+# Filter by column
+status:active
+
+# Greater than
+price:>100
+
+# Not equal
+status:!=deleted
+
+# Multiple conditions with AND
+status:active price:>100
+```
+
+### Filter Chips
+
+Active filters appear as chips below the search bar. Each chip shows the filter condition and can be dismissed individually by clicking the **x** button.
+
+<Tip>
+The quick filter bar is perfect for one-off lookups. For frequently-used filters, save them as presets instead.
+</Tip>
 
 ## Filter Panel
 

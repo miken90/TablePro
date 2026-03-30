@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
 import { Sidebar } from "./Sidebar";
 import { Toolbar } from "./Toolbar";
 import { EditorTabBar } from "../editor/EditorTabBar";
 import { SqlEditor } from "../editor/sql-editor";
+import { EditorStatusBar } from "../editor/editor-status-bar";
 import { ResultPanel } from "../grid/ResultPanel";
+import { ContextualBar } from "../grid/contextual-bar";
 import { WelcomeView } from "../connection/WelcomeView";
 import { QuickSwitcher } from "./quick-switcher";
 import { TableStructureView } from "../structure/table-structure-view";
@@ -12,70 +13,56 @@ import { FilterPanel } from "../filter/filter-panel";
 import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { ShortcutsHelp } from "../shared/ShortcutsHelp";
+import { UnsavedChangesDialog } from "../shared/unsaved-changes-dialog";
 import { UpdateNotification } from "../shared/update-notification";
+import { CommandPalette } from "../shared/command-palette";
+import { QueryAnnouncer } from "../shared/query-announcer";
+import { StatusBar } from "./StatusBar";
+import { EditorViewProvider } from "../../contexts/editor-view-context";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
-import { useSchemaStore } from "../../stores/schemaStore";
-import { useQueryStore } from "../../stores/queryStore";
-import { useFilterStore } from "../../stores/filterStore";
+import { resolveActiveQuerySessionId, useQueryStore } from "../../stores/queryStore";
+import { useInspectorStore } from "../../stores/inspectorStore";
+import { useChangeStore } from "../../stores/changeStore";
+import {
+  useLayoutStore,
+  SIDEBAR_MIN,
+  SIDEBAR_MAX,
+  EDITOR_MIN_PERCENT,
+  INSPECTOR_MIN,
+  INSPECTOR_MAX,
+} from "../../stores/layoutStore";
 import { useTheme } from "../../hooks/useTheme";
 import { useAutoUpdater } from "../../hooks/useAutoUpdater";
-import type { ColumnInfo } from "../../types/query";
-
-const SIDEBAR_DEFAULT = 240;
-const SIDEBAR_MIN = 160;
-const SIDEBAR_MAX = 480;
-const EDITOR_MIN_PERCENT = 20;
-const INSPECTOR_DEFAULT = 300;
-const INSPECTOR_MIN = 200;
-const INSPECTOR_MAX = 500;
-
-interface StructureTarget {
-  tableName: string;
-  schema?: string | null;
-}
-
-type ViewMode = 'query' | 'table-browse';
-
-interface TableContext {
-  tableName: string;
-  schema?: string | null;
-}
-
-/** Combine filter clause + quick-search clause with AND */
-function combineWhereClauses(filterClause: string, quickSearchClause: string): string {
-  const parts = [filterClause, quickSearchClause].filter(Boolean);
-  if (parts.length === 0) return '';
-  if (parts.length === 1) return parts[0]!;
-  return `(${parts[0]}) AND (${parts[1]})`;
-}
+import { useResizable } from "../../hooks/useResizable";
+import { useMainLayoutShortcuts } from "../../hooks/useMainLayoutShortcuts";
+import { useMainLayoutCommands } from "../../hooks/useMainLayoutCommands";
+import { useFilterContext } from "../../hooks/useFilterContext";
+import { useTableCallbacks } from "../../hooks/useTableCallbacks";
+import { useState, useCallback, useRef } from "react";
 
 export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
   const activeTabId = useEditorStore((s) => s.activeTabId);
-  const addTab = useEditorStore((s) => s.addTab);
-  const addPreviewTab = useEditorStore((s) => s.addPreviewTab);
-  const updateTabContent = useEditorStore((s) => s.updateTabContent);
-  const fetchColumns = useSchemaStore((s) => s.fetchColumns);
 
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [editorHeightPercent, setEditorHeightPercent] = useState(50);
-  const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
-  const [structureTarget, setStructureTarget] = useState<StructureTarget | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('query');
-  const [activeTableContext, setActiveTableContext] = useState<TableContext | null>(null);
-  const [filterVisible, setFilterVisible] = useState(false);
-  const [filterColumns, setFilterColumns] = useState<ColumnInfo[]>([]);
-  const [inspectorVisible, setInspectorVisible] = useState(false);
-  const [inspectorWidth, setInspectorWidth] = useState(INSPECTOR_DEFAULT);
-  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
-  const [historyVisible, setHistoryVisible] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
+  const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
+  const editorHeightPercent = useLayoutStore((s) => s.editorHeightPercent);
+  const quickSwitcherOpen = useLayoutStore((s) => s.quickSwitcherOpen);
+  const structureTarget = useLayoutStore((s) => s.structureTarget);
+  const settingsOpen = useLayoutStore((s) => s.settingsOpen);
+  const viewMode = useLayoutStore((s) => s.viewMode);
+  const activeTableContext = useLayoutStore((s) => s.activeTableContext);
+  const filterVisible = useLayoutStore((s) => s.filterVisible);
+  const filterColumns = useLayoutStore((s) => s.filterColumns);
+  const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
+  const inspectorWidth = useLayoutStore((s) => s.inspectorWidth);
+  const selectedRowIndex = useLayoutStore((s) => s.selectedRowIndex);
+  const historyVisible = useLayoutStore((s) => s.historyVisible);
+  const helpOpen = useLayoutStore((s) => s.helpOpen);
+  const commandPaletteOpen = useLayoutStore((s) => s.commandPaletteOpen);
 
-  const setQueryText = useQueryStore((s) => s.setQueryText);
   const {
     availableUpdate,
     shouldShowNotification,
@@ -88,253 +75,196 @@ export function MainLayout() {
   } = useAutoUpdater();
 
   useTheme();
+  useMainLayoutShortcuts();
+  useMainLayoutCommands();
 
-  // Stable tabId for the filter store: table-browse uses "table:{name}", query uses activeTabId
-  const filterTabId = useMemo(() => {
-    if (viewMode === 'table-browse' && activeTableContext?.tableName) {
-      return `table:${activeTableContext.tableName}`;
+  const { filterTabId, activeWhereClause } = useFilterContext(viewMode, activeTableContext, activeTabId);
+  const {
+    handleQuickSwitcherSelect,
+    handleOpenTable,
+    handleOpenPreviewTable,
+    handleHistorySelect,
+  } = useTableCallbacks();
+
+  // --- Unsaved changes dialog for tab switching ---
+  const [unsavedDialog, setUnsavedDialog] = useState<{ targetTabId: string } | null>(null);
+  const pendingSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const requestSaveRef = useRef<(() => void) | null>(null);
+  const addRowRef = useRef<(() => void) | null>(null);
+
+  /** Called before switching tabs. Returns false to block the switch. */
+  const handleBeforeTabSwitch = useCallback((targetTabId: string): boolean => {
+    const hasChanges = useChangeStore.getState().hasChanges;
+    if (!hasChanges) {
+      return true; // No changes — allow switch
     }
-    return activeTabId ?? 'default';
-  }, [viewMode, activeTableContext, activeTabId]);
-
-  // Derive activeWhereClause from filterStore (filter panel + quick search combined)
-  const filterByTab = useFilterStore((s) => s.byTab);
-  const activeWhereClause = useMemo(() => {
-    const tab = filterByTab[filterTabId];
-    if (!tab) return '';
-    return combineWhereClauses(tab.appliedFilterClause, tab.quickSearchClause);
-  }, [filterByTab, filterTabId]);
-
-  // Keyboard shortcuts: Ctrl+K, Ctrl+,, Ctrl+Shift+F
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-        e.preventDefault();
-        setQuickSwitcherOpen((v) => !v);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
-        e.preventDefault();
-        setSettingsOpen(true);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "F") {
-        e.preventDefault();
-        setFilterVisible((v) => !v);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "I") {
-        e.preventDefault();
-        setInspectorVisible((v) => !v);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "h") {
-        e.preventDefault();
-        setHistoryVisible((v) => !v);
-      }
-      if (e.key === "F1") {
-        e.preventDefault();
-        setHelpOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    // Block switch and show dialog
+    setUnsavedDialog({ targetTabId });
+    return false;
   }, []);
 
-  // Fetch columns when active table changes (for filter panel)
-  useEffect(() => {
-    if (!activeTableContext?.tableName || !selectedConnectionId) {
-      setFilterColumns([]);
-      return;
+  /** Perform the actual tab + view mode switch. */
+  const performTabSwitch = useCallback((tabId: string) => {
+    const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    useEditorStore.getState().setActiveTab(tabId);
+    if (tab.type === "query") {
+      useLayoutStore.getState().switchToQueryMode();
+    } else if (tab.type === "table" && tab.tableName) {
+      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
     }
-    const sid = getSessionId(selectedConnectionId);
-    if (!sid) return;
-    fetchColumns(sid, activeTableContext.tableName, activeTableContext.schema ?? undefined)
-      .then(setFilterColumns)
-      .catch(() => setFilterColumns([]));
-  }, [activeTableContext, selectedConnectionId, getSessionId, fetchColumns]);
-
-  const handleSidebarResize = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = sidebarWidth;
-      const onMove = (mv: MouseEvent) => {
-        const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + mv.clientX - startX));
-        setSidebarWidth(next);
-      };
-      const onUp = () => {
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    },
-    [sidebarWidth]
-  );
-
-  const handleEditorResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const container = (e.currentTarget as HTMLElement).closest(
-      ".editor-results-container"
-    ) as HTMLElement;
-    if (!container) return;
-    const onMove = (mv: MouseEvent) => {
-      const rect = container.getBoundingClientRect();
-      const pct = Math.min(
-        80,
-        Math.max(EDITOR_MIN_PERCENT, ((mv.clientY - rect.top) / rect.height) * 100)
-      );
-      setEditorHeightPercent(pct);
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
   }, []);
 
-  const handleViewStructure = useCallback(
-    (tableName: string, schema?: string | null) => {
-      setStructureTarget({ tableName, schema });
-    },
-    []
-  );
-
-  const handleQuickSwitcherSelect = useCallback(
-    (tableName: string, schema?: string | null) => {
-      if (selectedConnectionId) {
-        setActiveTableContext({ tableName, schema });
-        setViewMode('table-browse');
-        setStructureTarget(null);
-      }
-    },
-    [selectedConnectionId]
-  );
-
-  const handleOpenTable = useCallback(
-    (tableName: string, schema?: string | null) => {
-      if (selectedConnectionId) {
-        setActiveTableContext({ tableName, schema });
-        setViewMode('table-browse');
-        setStructureTarget(null);
-      }
-    },
-    [selectedConnectionId]
-  );
-
-  /**
-   * Single-click table in sidebar → open as a preview SQL tab.
-   * Generates SELECT * for the table and opens it as a temporary (preview) tab.
-   * Tab is replaced if another table is single-clicked, and becomes permanent on edit.
-   * Ctrl+click in sidebar calls handleOpenTable (permanent tab) instead.
-   */
-  const handleOpenPreviewTable = useCallback(
-    (tableName: string, schema?: string | null) => {
-      if (!selectedConnectionId) return;
-      const sid = getSessionId(selectedConnectionId);
-      if (!sid) return;
-      const qualifiedName = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
-      const selectQuery = `SELECT * FROM ${qualifiedName} LIMIT 100;`;
-      const tabId = addPreviewTab(tableName);
-      updateTabContent(tabId, selectQuery);
-      setQueryText(selectQuery);
-      // Switch to query editor so the preview tab is visible
-      setViewMode('query');
-      setStructureTarget(null);
-      // Auto-execute so records display immediately
-      void useQueryStore.getState().execute(sid, selectQuery);
-    },
-    [selectedConnectionId, getSessionId, addPreviewTab, updateTabContent, setQueryText]
-  );
-
-  const handleSwitchToQueryMode = useCallback(() => {
-    setViewMode('query');
-    setActiveTableContext(null);
-  }, []);
-
-  const handleInspectorResize = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = inspectorWidth;
-      const onMove = (mv: MouseEvent) => {
-        const next = Math.min(INSPECTOR_MAX, Math.max(INSPECTOR_MIN, startWidth - (mv.clientX - startX)));
-        setInspectorWidth(next);
-      };
-      const onUp = () => {
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    },
-    [inspectorWidth]
-  );
-
-  const handleRowSelect = useCallback((rowIndex: number | null) => {
-    setSelectedRowIndex(rowIndex);
-  }, []);
-
-  const handleHistorySelect = useCallback((query: string) => {
-    if (activeTabId) {
-      updateTabContent(activeTabId, query);
-    } else {
-      const tabId = addTab('Query');
-      updateTabContent(tabId, query);
+  /** After tab bar switches a tab (already allowed), reconcile viewMode. */
+  const handleTabActivated = useCallback(() => {
+    const tabId = useEditorStore.getState().activeTabId;
+    if (!tabId) return;
+    const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    if (tab.type === "query") {
+      useLayoutStore.getState().switchToQueryMode();
+    } else if (tab.type === "table" && tab.tableName) {
+      // Update activeTableContext + changeStore scope (openTable handles both)
+      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
     }
-    setQueryText(query);
-    setViewMode('query');
-    setActiveTableContext(null);
-  }, [activeTabId, addTab, updateTabContent, setQueryText]);
+  }, []);
+
+  const handleUnsavedSave = useCallback(async () => {
+    if (!unsavedDialog) return;
+    const targetTabId = unsavedDialog.targetTabId;
+    // Trigger save via the pending save ref (set by ResultPanel's useChangeTracking)
+    if (pendingSaveRef.current) {
+      try {
+        await pendingSaveRef.current();
+        setUnsavedDialog(null);
+        performTabSwitch(targetTabId);
+      } catch {
+        // Save failed — keep dialog closed, stay on current tab (toast shows error)
+        setUnsavedDialog(null);
+      }
+    }
+  }, [unsavedDialog, performTabSwitch]);
+
+  const handleUnsavedDiscard = useCallback(() => {
+    if (!unsavedDialog) return;
+    const targetTabId = unsavedDialog.targetTabId;
+    useChangeStore.getState().clear();
+    setUnsavedDialog(null);
+    performTabSwitch(targetTabId);
+  }, [unsavedDialog, performTabSwitch]);
+
+  const handleUnsavedCancel = useCallback(() => {
+    setUnsavedDialog(null);
+  }, []);
+
+  /** After a tab is closed, reconcile viewMode based on the new active tab. */
+  const handleAfterClose = useCallback((newActiveTabId: string | null) => {
+    if (!newActiveTabId) return;
+    const tab = useEditorStore.getState().tabs.find((t) => t.id === newActiveTabId);
+    if (!tab) return;
+    if (tab.type === "query") {
+      useLayoutStore.getState().switchToQueryMode();
+    } else if (tab.type === "table" && tab.tableName) {
+      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
+    }
+  }, []);
+
+  const { onMouseDown: handleSidebarResize } = useResizable({
+    direction: "horizontal",
+    min: SIDEBAR_MIN,
+    max: SIDEBAR_MAX,
+    currentValue: sidebarWidth,
+    onResize: useLayoutStore.getState().setSidebarWidth,
+  });
+
+  const { onMouseDown: handleEditorResize } = useResizable({
+    direction: "vertical",
+    min: EDITOR_MIN_PERCENT,
+    max: 80,
+    containerSelector: ".editor-results-container",
+    onResize: useLayoutStore.getState().setEditorHeightPercent,
+  });
+
+  const { onMouseDown: handleInspectorResize } = useResizable({
+    direction: "horizontal",
+    min: INSPECTOR_MIN,
+    max: INSPECTOR_MAX,
+    currentValue: inspectorWidth,
+    invert: true,
+    onResize: useLayoutStore.getState().setInspectorWidth,
+  });
 
   const queryResult = useQueryStore((s) => s.result);
-  const inspectorResult = viewMode === 'table-browse' ? null : queryResult;
-  const selectedRow = inspectorResult && selectedRowIndex !== null ? inspectorResult.rows[selectedRowIndex] ?? null : null;
-  const inspectorColumns = inspectorResult?.columns ?? [];
+  const inspectorStoreColumns = useInspectorStore((s) => s.columns);
+  const inspectorStoreRow = useInspectorStore((s) => s.row);
 
-  const sessionId = selectedConnectionId ? getSessionId(selectedConnectionId) : undefined;
+  // Use inspectorStore data if available (set by ResultPanel on row select),
+  // otherwise fall back to query result with selectedRowIndex for query mode
+  const inspectorColumns = inspectorStoreRow ? inspectorStoreColumns : (queryResult?.columns ?? []);
+  const selectedRow = inspectorStoreRow
+    ?? (queryResult && selectedRowIndex !== null ? (queryResult.rows[selectedRowIndex] ?? null) : null);
+
+  const sessionId = resolveActiveQuerySessionId();
   const isConnected = !!selectedConnectionId;
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-white dark:bg-zinc-900">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-surface-base">
+      <EditorViewProvider>
       <Toolbar
-        onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onToggleHistory={() => setHistoryVisible((v) => !v)}
-        onRunQuery={handleSwitchToQueryMode}
+        onToggleSidebar={() => useLayoutStore.getState().toggleSidebar()}
+        onOpenSettings={() => useLayoutStore.getState().setSettingsOpen(true)}
+        onToggleHistory={() => useLayoutStore.getState().toggleHistory()}
+        onRunQuery={() => useLayoutStore.getState().switchToQueryMode()}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         {!sidebarCollapsed && (
           <>
             <div style={{ width: sidebarWidth }} className="flex-shrink-0 overflow-hidden">
-              <Sidebar onViewStructure={handleViewStructure} onOpenTable={handleOpenTable} onOpenPreviewTable={handleOpenPreviewTable} />
+              <Sidebar
+                onViewStructure={(t, s) => useLayoutStore.getState().openStructure(t, s)}
+                onOpenTable={handleOpenTable}
+                onOpenPreviewTable={handleOpenPreviewTable}
+              />
             </div>
             <div
-              className="w-1 cursor-col-resize bg-zinc-200 hover:bg-blue-400 dark:bg-zinc-700 dark:hover:bg-blue-500"
+              className="group w-1.5 cursor-col-resize bg-border-subtle hover:bg-accent-blue flex flex-col items-center justify-center"
               onMouseDown={handleSidebarResize}
-            />
+              aria-hidden="true"
+            >
+              <div className="flex flex-col gap-1 opacity-40 group-hover:opacity-70">
+                <span className="h-1 w-1 rounded-full bg-current" />
+                <span className="h-1 w-1 rounded-full bg-current" />
+                <span className="h-1 w-1 rounded-full bg-current" />
+              </div>
+            </div>
           </>
         )}
 
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <main id="main-content" className="flex flex-1 flex-col overflow-hidden">
           {structureTarget && selectedConnectionId && getSessionId(selectedConnectionId) ? (
             <TableStructureView
               sessionId={getSessionId(selectedConnectionId)!}
               tableName={structureTarget.tableName}
               schema={structureTarget.schema ?? undefined}
-              onClose={() => setStructureTarget(null)}
+              onClose={() => useLayoutStore.getState().closeStructure()}
             />
           ) : !isConnected ? (
             <WelcomeView />
-          ) : viewMode === 'table-browse' && activeTableContext ? (
-            /* ── Table Browse Mode: full-height data grid, no editor ── */
+          ) : viewMode === "table-browse" && activeTableContext ? (
             <>
-              {filterVisible && (
-                <FilterPanel
-                  tabId={filterTabId}
-                  tableName={activeTableContext.tableName}
-                  columns={filterColumns}
-                />
-              )}
+              <EditorTabBar
+                onTabActivate={handleTabActivated}
+                onBeforeTabSwitch={handleBeforeTabSwitch}
+                onAfterClose={handleAfterClose}
+              />
+              <ContextualBar
+                tabId={filterTabId}
+                tableName={activeTableContext.tableName}
+                columns={filterColumns}
+                onSave={() => requestSaveRef.current?.()}
+                onAddRow={() => addRowRef.current?.()}
+              />
               <div className="flex-1 overflow-hidden">
                 <ResultPanel
                   tabId={filterTabId}
@@ -343,76 +273,106 @@ export function MainLayout() {
                   sessionId={sessionId}
                   activeWhereClause={activeWhereClause}
                   quickSearchColumns={filterColumns}
-                  onRowSelect={handleRowSelect}
-                  onOpenQueryEditor={handleSwitchToQueryMode}
+                  onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
+                  onOpenQueryEditor={() => useLayoutStore.getState().switchToQueryMode()}
+                  onSaveRef={pendingSaveRef}
+                  onRequestSaveRef={requestSaveRef}
+                  onAddRowRef={addRowRef}
+                  hideChangeToolbar
                 />
               </div>
             </>
           ) : (
-            /* ── Query Editor Mode: editor on top, results below ── */
             <>
-              <EditorTabBar />
+              <EditorTabBar
+                onTabActivate={handleTabActivated}
+                onBeforeTabSwitch={handleBeforeTabSwitch}
+                onAfterClose={handleAfterClose}
+              />
               {filterVisible && (
-                <FilterPanel
-                  tabId={filterTabId}
-                  columns={filterColumns}
-                />
+                <FilterPanel tabId={filterTabId} columns={filterColumns} />
               )}
-              <div className="editor-results-container flex flex-1 flex-col overflow-hidden">
-                <div style={{ height: `${editorHeightPercent}%` }} className="overflow-hidden">
-                  <SqlEditor />
+                <div className="editor-results-container flex flex-1 flex-col overflow-hidden">
+                  <div style={{ height: `${editorHeightPercent}%` }} className="flex flex-col overflow-hidden">
+                    <div className="flex-1 overflow-hidden">
+                      <SqlEditor />
+                    </div>
+                    <EditorStatusBar />
+                  </div>
+                  <div
+                    className="group h-1.5 cursor-row-resize bg-border-subtle hover:bg-accent-blue flex items-center justify-center"
+                    onMouseDown={handleEditorResize}
+                  >
+                    <div className="flex gap-1 opacity-40 group-hover:opacity-70">
+                      <span className="h-1 w-1 rounded-full bg-current" />
+                      <span className="h-1 w-1 rounded-full bg-current" />
+                      <span className="h-1 w-1 rounded-full bg-current" />
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <ResultPanel
+                      sessionId={sessionId}
+                      onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
+                    />
+                  </div>
                 </div>
-                <div
-                  className="h-1 cursor-row-resize bg-zinc-200 hover:bg-blue-400 dark:bg-zinc-700 dark:hover:bg-blue-500"
-                  onMouseDown={handleEditorResize}
-                />
-                <div className="flex-1 overflow-hidden">
-                  <ResultPanel
-                    sessionId={sessionId}
-                    onRowSelect={handleRowSelect}
-                  />
-                </div>
-              </div>
             </>
           )}
-        </div>
+        </main>
 
         {inspectorVisible && isConnected && (
           <>
             <div
-              className="w-1 cursor-col-resize bg-zinc-200 hover:bg-blue-400 dark:bg-zinc-700 dark:hover:bg-blue-500"
+              className="group w-1.5 cursor-col-resize bg-border-subtle hover:bg-accent-blue flex flex-col items-center justify-center"
               onMouseDown={handleInspectorResize}
-            />
+            >
+              <div className="flex flex-col gap-1 opacity-40 group-hover:opacity-70">
+                <span className="h-1 w-1 rounded-full bg-current" />
+                <span className="h-1 w-1 rounded-full bg-current" />
+                <span className="h-1 w-1 rounded-full bg-current" />
+              </div>
+            </div>
             <div style={{ width: inspectorWidth }} className="flex-shrink-0 overflow-hidden">
               <InspectorPanel
                 columns={inspectorColumns}
                 row={selectedRow}
-                onClose={() => setInspectorVisible(false)}
+                onClose={() => useLayoutStore.getState().toggleInspector()}
               />
             </div>
           </>
         )}
 
+        {/* History slide-over overlay */}
         {historyVisible && isConnected && (
           <>
-            <div className="w-px bg-zinc-200 dark:bg-zinc-700" />
-            <div style={{ width: 320 }} className="flex-shrink-0 overflow-hidden">
+            <div
+              className="absolute inset-0 z-20 bg-black/20"
+              onClick={() => useLayoutStore.getState().toggleHistory()}
+            />
+            <div
+              className="absolute right-0 top-0 h-full w-[360px] transform shadow-panel slide-in-right"
+              style={{ zIndex: 21 }}
+            >
               <HistoryPanel
                 onSelectQuery={handleHistorySelect}
-                onClose={() => setHistoryVisible(false)}
+                onClose={() => useLayoutStore.getState().toggleHistory()}
               />
             </div>
           </>
         )}
       </div>
 
+      <StatusBar />
+
       <QuickSwitcher
         open={quickSwitcherOpen}
-        onClose={() => setQuickSwitcherOpen(false)}
+        onClose={() => useLayoutStore.getState().setQuickSwitcherOpen(false)}
         onSelectTable={handleQuickSwitcherSelect}
       />
 
-      {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsView onClose={() => useLayoutStore.getState().setSettingsOpen(false)} />
+      )}
 
       {availableUpdate && shouldShowNotification && (
         <UpdateNotification
@@ -421,14 +381,30 @@ export function MainLayout() {
           downloadedBytes={downloadedBytes}
           totalBytes={totalBytes}
           error={updateError}
-          onUpdateNow={() => {
-            void installUpdate();
-          }}
+          onUpdateNow={() => void installUpdate()}
           onLater={dismissUpdate}
         />
       )}
 
-      <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <ShortcutsHelp
+        open={helpOpen}
+        onClose={() => useLayoutStore.getState().setHelpOpen(false)}
+      />
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={(open) => useLayoutStore.getState().setCommandPaletteOpen(open)}
+      />
+
+      <QueryAnnouncer />
+
+      <UnsavedChangesDialog
+        open={unsavedDialog !== null}
+        onSave={() => void handleUnsavedSave()}
+        onDiscard={handleUnsavedDiscard}
+        onCancel={handleUnsavedCancel}
+      />
+      </EditorViewProvider>
     </div>
   );
 }

@@ -187,6 +187,8 @@ export function useAutoUpdater() {
   }, []);
 
   useEffect(() => {
+    // Skip update checks in dev mode — the updater plugin is not registered.
+    if (import.meta.env.DEV) return;
     if (shouldSkipAutoCheck()) return;
     void checkForUpdate();
   }, [checkForUpdate]);

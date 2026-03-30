@@ -75,6 +75,9 @@ pub struct FfiResult {
     pub error: FfiString,
 }
 
+// SAFETY: FfiResult only contains Send types (bool + FfiString).
+unsafe impl Send for FfiResult {}
+
 /// Column metadata returned from the plugin.
 #[repr(C)]
 pub struct FfiColumnInfo {

@@ -9,28 +9,16 @@ interface QuickSearchBarProps {
   onClear: () => void;
 }
 
-function isTextColumn(typeName: string): boolean {
-  const t = typeName.toLowerCase();
-  return (
-    t.includes('char')
-    || t.includes('text')
-    || t.includes('string')
-    || t.includes('uuid')
-    || t.includes('json')
-    || t.includes('xml')
-  );
-}
-
 function buildQuickSearchWhereClause(term: string, columns: ColumnInfo[]): string {
-  const normalized = term.trim();
+  const normalized = String(term).trim();
   if (!normalized) return '';
+  if (columns.length === 0) return '';
 
   const escaped = normalized.replace(/'/g, "''");
-  const searchableColumns = columns.filter((c) => isTextColumn(c.typeName));
-  if (searchableColumns.length === 0) return '';
+  const likeEscaped = escaped.replace(/[%_\\]/g, '\\$&');
 
-  return searchableColumns
-    .map((c) => `"${c.name}" LIKE '%${escaped}%'`)
+  return columns
+    .map((c) => `CAST("${c.name}" AS TEXT) LIKE '%${likeEscaped}%'`)
     .join(' OR ');
 }
 
@@ -90,20 +78,20 @@ export function QuickSearchBar({ columns, value, onSearch, onClear }: QuickSearc
   }, []);
 
   return (
-    <div className="ml-2 flex items-center gap-1 rounded border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900">
-      <Search size={12} className="text-zinc-400" />
+    <div className="ml-2 flex items-center gap-1 rounded border border-border-subtle bg-surface-elevated px-2 py-1">
+      <Search size={12} className="text-text-muted" />
       <input
         type="text"
         value={term}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder="Quick search"
-        className="h-5 w-56 bg-transparent text-xs outline-none placeholder:text-zinc-400 dark:text-zinc-200"
+        className="h-5 w-56 bg-transparent text-xs outline-none text-text-primary placeholder:text-text-muted"
       />
       {term && (
         <button
           onClick={clearSearch}
-          className="rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          className="rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-text-primary"
           title="Clear quick search"
         >
           <X size={11} />

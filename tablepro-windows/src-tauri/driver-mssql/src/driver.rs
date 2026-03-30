@@ -74,12 +74,12 @@ impl MssqlDriver {
                 .await
                 .map_err(|e| e.to_string())
         })?;
-        *self.client.lock().unwrap() = Some(client);
+        *self.client.lock().unwrap_or_else(|e| e.into_inner()) = Some(client);
         Ok(())
     }
 
     pub fn disconnect(&self) {
-        let mut guard = self.client.lock().unwrap();
+        let mut guard = self.client.lock().unwrap_or_else(|e| e.into_inner());
         *guard = None;
     }
 
@@ -93,7 +93,7 @@ impl MssqlDriver {
         &self,
         sql: &str,
     ) -> Result<(Vec<String>, Vec<Vec<Option<String>>>, i64), String> {
-        let mut guard = self.client.lock().unwrap();
+        let mut guard = self.client.lock().unwrap_or_else(|e| e.into_inner());
         let client = guard.as_mut().ok_or("Not connected")?;
 
         let sql_owned = sql.to_owned();

@@ -2,8 +2,7 @@ import { type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { vim, Vim, getCM } from '@replit/codemirror-vim';
 import { useEditorStore } from '../stores/editorStore';
-import { useQueryStore } from '../stores/queryStore';
-import { useConnectionStore } from '../stores/connectionStore';
+import { resolveActiveQuerySessionId, useQueryStore } from '../stores/queryStore';
 
 let exCommandsRegistered = false;
 
@@ -14,9 +13,7 @@ function registerExCommands(): void {
   // :w — execute current SQL
   Vim.defineEx('write', 'w', (cm) => {
     const sql = cm.getValue();
-    const connectionId = useConnectionStore.getState().selectedConnectionId;
-    if (!connectionId) return;
-    const sessionId = useConnectionStore.getState().getSessionId(connectionId);
+    const sessionId = resolveActiveQuerySessionId();
     if (!sessionId) return;
     useQueryStore.getState().execute(sessionId, sql).catch(() => {
       // errors handled inside execute()

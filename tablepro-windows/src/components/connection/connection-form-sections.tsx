@@ -1,4 +1,5 @@
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
+import { homeDir } from "@tauri-apps/api/path";
 import type { ReactNode } from "react";
 import type { ConnectionConfig } from "../../types/connection";
 import { inputCls, secondaryBtn } from "./connection-form-config";
@@ -19,8 +20,19 @@ interface SshSectionProps {
 
 export function SshSection({ config, updateConfig }: SshSectionProps) {
   const handlePickKeyFile = async () => {
+    let defaultPath: string | undefined;
+    try {
+      const home = await homeDir();
+      defaultPath = `${home}.ssh`;
+    } catch {
+      // homeDir not available — omit defaultPath
+    }
     const path = await openFilePicker({
-      filters: [{ name: "SSH Key", extensions: ["pem", "key", "pub", ""] }],
+      defaultPath,
+      filters: [
+        { name: "SSH Key", extensions: ["pem", "key", "pub", "ppk", ""] },
+        { name: "All Files", extensions: ["*"] },
+      ],
     });
     if (path) {
       updateConfig({ sshKeyPath: path as string });

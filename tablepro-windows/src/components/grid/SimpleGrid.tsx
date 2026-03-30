@@ -1,3 +1,4 @@
+import { Key } from "lucide-react";
 import type { QueryResult } from "../../types/query";
 import { useSettingsStore } from "../../stores/settingsStore";
 
@@ -35,8 +36,8 @@ export function SimpleGrid({ result }: SimpleGridProps) {
                   {col.name}
                   <span className="text-[10px] font-normal text-zinc-400 dark:text-zinc-500">
                     {col.typeName}
-                    {col.isPrimaryKey && " 🔑"}
                   </span>
+                  {col.isPrimaryKey && <Key size={10} className="text-amber-500 flex-shrink-0" />}
                 </div>
               </th>
             ))}

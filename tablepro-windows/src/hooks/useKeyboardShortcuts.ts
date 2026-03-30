@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryStore } from "../stores/queryStore";
+import { resolveActiveQuerySessionId, useQueryStore } from "../stores/queryStore";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useEditorStore } from "../stores/editorStore";
 import { useSchemaStore } from "../stores/schemaStore";
@@ -19,6 +19,7 @@ interface ShortcutHandlers {
   onInsertRow?: () => void;
   onImportSql?: () => void;
   onShowHelp?: () => void;
+  onRefreshTable?: () => void;
 }
 
 export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
@@ -36,14 +37,13 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
+      const sessionId = resolveActiveQuerySessionId();
 
       // Ctrl+Enter — run query
       if (ctrl && e.key === "Enter") {
         if (handlers?.onRunQuery) {
           handlers.onRunQuery();
-        } else if (selectedConnectionId && !isExecuting) {
-          const sessionId = getSessionId(selectedConnectionId);
-          if (!sessionId) return;
+        } else if (!isExecuting && sessionId) {
           const tab = tabs.find((t) => t.id === activeTabId);
           if (tab?.content.trim()) {
             void execute(sessionId, tab.content);
@@ -52,15 +52,14 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
       }
 
       // Escape — cancel query
-      if (e.key === "Escape" && isExecuting && selectedConnectionId) {
-        const sessionId = getSessionId(selectedConnectionId);
-        if (sessionId) void cancel(sessionId);
+      if (e.key === "Escape" && isExecuting && sessionId) {
+        void cancel(sessionId);
       }
 
       // Ctrl+T — new tab
       if (ctrl && e.key === "t") {
         e.preventDefault();
-        handlers?.onNewTab ? handlers.onNewTab() : addTab();
+        if (handlers?.onNewTab) { handlers.onNewTab(); } else { addTab(); }
       }
 
       // Ctrl+W — close current tab
@@ -85,9 +84,10 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
         handlers?.onFormatSql?.();
       }
 
-      // F5 — refresh schema
+      // F5 — refresh table (if in table mode) or refresh schema
       if (e.key === "F5") {
         e.preventDefault();
+        handlers?.onRefreshTable?.();
         if (handlers?.onRefreshSchema) {
           handlers.onRefreshSchema();
         } else if (selectedConnectionId) {
@@ -117,7 +117,7 @@ export function useKeyboardShortcuts(handlers?: ShortcutHandlers) {
       // Ctrl+N — new tab (alternative)
       if (ctrl && e.key === "n") {
         e.preventDefault();
-        handlers?.onNewTab ? handlers.onNewTab() : addTab();
+        if (handlers?.onNewTab) { handlers.onNewTab(); } else { addTab(); }
       }
 
       // Ctrl+/ — toggle line comment

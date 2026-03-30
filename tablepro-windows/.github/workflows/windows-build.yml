@@ -47,9 +47,25 @@ jobs:
         working-directory: tablepro-windows
         run: npx vitest run
 
+      - name: TypeScript lint
+        working-directory: tablepro-windows
+        run: npx eslint .
+
       - name: Build frontend
         working-directory: tablepro-windows
         run: npm run build
+
+      - name: Import code signing certificate
+        if: env.WINDOWS_SIGN_CERT_BASE64 != ''
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $certBytes = [Convert]::FromBase64String($env:CERTIFICATE_BASE64)
+          $certPath = "$env:RUNNER_TEMP\cert.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+          Import-PfxCertificate -FilePath $certPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String $env:CERTIFICATE_PASSWORD -AsPlainText -Force)
 
       - name: Build Tauri app
         working-directory: tablepro-windows

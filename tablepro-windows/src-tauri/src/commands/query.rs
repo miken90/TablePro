@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::models::{AppError, QueryResult};
 use crate::services::ConnectionManager;
+use crate::services::sql_quoting::quote_identifier;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,17 +51,42 @@ fn unix_timestamp_ms() -> u64 {
 
 /// Basic sanity check for WHERE clauses — rejects obviously dangerous patterns.
 /// Not full SQL injection prevention (users have raw SQL access anyway).
+/// Uses word-boundary matching for keywords to avoid false positives on column
+/// names like `drop_reason` or `deletion_date`.
 fn validate_where_clause(clause: &str) -> Result<(), AppError> {
     let upper = clause.to_uppercase();
-    let forbidden = [";", "--", "DROP ", "DELETE ", "ALTER ", "TRUNCATE "];
-    for pat in &forbidden {
+    // Semicolons and comments are always suspicious in a WHERE clause
+    for pat in [";", "--"] {
         if upper.contains(pat) {
             return Err(AppError::DatabaseError(format!(
                 "WHERE clause contains forbidden pattern: {pat}"
             )));
         }
     }
+    // SQL keywords must appear as standalone words (preceded by start or whitespace)
+    for keyword in ["DROP ", "DELETE ", "ALTER ", "TRUNCATE "] {
+        if is_standalone_keyword(&upper, keyword) {
+            return Err(AppError::DatabaseError(format!(
+                "WHERE clause contains forbidden keyword: {}",
+                keyword.trim()
+            )));
+        }
+    }
     Ok(())
+}
+
+/// Check if `keyword` appears as a standalone word in `haystack`.
+/// A keyword is standalone if it's at the start or preceded by whitespace.
+fn is_standalone_keyword(haystack: &str, keyword: &str) -> bool {
+    let mut start = 0;
+    while let Some(pos) = haystack[start..].find(keyword) {
+        let abs_pos = start + pos;
+        if abs_pos == 0 || haystack.as_bytes()[abs_pos - 1].is_ascii_whitespace() {
+            return true;
+        }
+        start = abs_pos + 1;
+    }
+    false
 }
 
 /// Execute a SQL statement and return result set.
@@ -133,6 +159,16 @@ pub async fn execute_query(
                 result.rows.len()
             };
 
+            let cell_count = result.rows.len() * result.columns.len();
+            if cell_count > 500_000 {
+                tracing::warn!(
+                    session_id = %session_id,
+                    query_id = %query_id,
+                    cell_count,
+                    "Large IPC payload may cause WebView lag"
+                );
+            }
+
             let _ = app.emit(
                 "query:completed",
                 QueryCompletedEvent {
@@ -173,15 +209,19 @@ pub async fn fetch_rows(
     limit: u64,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<QueryResult, AppError> {
-    let driver = {
+    let (driver, driver_type) = {
         let mgr = manager.lock().await;
-        mgr.get_driver(&session_id)?
+        let driver = mgr.get_driver(&session_id)?;
+        let driver_type = mgr.get_config(&session_id)
+            .map(|c| c.db_type.clone())
+            .unwrap_or_default();
+        (driver, driver_type)
     };
     tracing::info!(session_id = %session_id, "fetch_rows {table} offset={offset} limit={limit}");
 
     let qualified = match &schema {
-        Some(s) if !s.is_empty() => format!("\"{s}\".\"{table}\""),
-        _ => format!("\"{table}\""),
+        Some(s) if !s.is_empty() => format!("{}.{}", quote_identifier(s, &driver_type), quote_identifier(&table, &driver_type)),
+        _ => quote_identifier(&table, &driver_type),
     };
 
     let where_part = match &where_clause {
@@ -211,15 +251,19 @@ pub async fn fetch_count(
     where_clause: Option<String>,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<i64, AppError> {
-    let driver = {
+    let (driver, driver_type) = {
         let mgr = manager.lock().await;
-        mgr.get_driver(&session_id)?
+        let driver = mgr.get_driver(&session_id)?;
+        let driver_type = mgr.get_config(&session_id)
+            .map(|c| c.db_type.clone())
+            .unwrap_or_default();
+        (driver, driver_type)
     };
     tracing::info!(session_id = %session_id, "fetch_count {table}");
 
     let qualified = match &schema {
-        Some(s) if !s.is_empty() => format!("\"{s}\".\"{table}\""),
-        _ => format!("\"{table}\""),
+        Some(s) if !s.is_empty() => format!("{}.{}", quote_identifier(s, &driver_type), quote_identifier(&table, &driver_type)),
+        _ => quote_identifier(&table, &driver_type),
     };
 
     let where_part = match &where_clause {
@@ -306,5 +350,17 @@ mod tests {
     #[test]
     fn test_validate_where_clause_whitespace_only() {
         assert!(validate_where_clause("   ").is_ok());
+    }
+
+    #[test]
+    fn test_validate_where_clause_column_name_with_drop_prefix() {
+        // Column names containing "drop" should NOT be rejected
+        assert!(validate_where_clause("\"drop_reason\" = 'test'").is_ok());
+        assert!(validate_where_clause("\"deleted_at\" IS NOT NULL").is_ok());
+    }
+
+    #[test]
+    fn test_validate_where_clause_standalone_drop_still_caught() {
+        assert!(validate_where_clause("1=1 DROP TABLE users").is_err());
     }
 }

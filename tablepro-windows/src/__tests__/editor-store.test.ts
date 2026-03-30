@@ -1,8 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { useConnectionStore } from '../stores/connectionStore';
 import { useEditorStore } from '../stores/editorStore';
+import { resolveActiveQueryConnectionId, resolveActiveQuerySessionId } from '../stores/queryStore';
 
 function resetStore() {
   useEditorStore.setState({ tabs: [], activeTabId: null });
+  useConnectionStore.setState({
+    connections: new Map(),
+    groups: new Map(),
+    selectedConnectionId: null,
+    connectionStatuses: new Map(),
+    sessionIds: new Map(),
+  });
 }
 
 describe('editorStore', () => {
@@ -56,6 +65,146 @@ describe('editorStore', () => {
     const id2 = useEditorStore.getState().addTab('B');
     useEditorStore.getState().setActiveTab(id1);
     expect(useEditorStore.getState().activeTabId).toBe(id1);
+  });
+});
+
+describe('editorStore connection routing', () => {
+  beforeEach(() => resetStore());
+
+  it('setActiveTab syncs selectedConnectionId from tab connectionId', () => {
+    const firstTabId = useEditorStore.getState().addTab('A');
+    const secondTabId = useEditorStore.getState().addTab('B');
+
+    useEditorStore.getState().setTabConnectionId(firstTabId, 'conn-a');
+    useEditorStore.getState().setTabConnectionId(secondTabId, 'conn-b');
+
+    useEditorStore.getState().setActiveTab(firstTabId);
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-a');
+
+    useEditorStore.getState().setActiveTab(secondTabId);
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-b');
+  });
+
+  it('closeTab syncs selectedConnectionId to newly active tab connection', () => {
+    const firstTabId = useEditorStore.getState().addTab('A');
+    const secondTabId = useEditorStore.getState().addTab('B');
+
+    useEditorStore.getState().setTabConnectionId(firstTabId, 'conn-a');
+    useEditorStore.getState().setTabConnectionId(secondTabId, 'conn-b');
+
+    useEditorStore.getState().setActiveTab(secondTabId);
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-b');
+
+    useEditorStore.getState().closeTab(secondTabId);
+
+    expect(useEditorStore.getState().activeTabId).toBe(firstTabId);
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-a');
+  });
+
+  it('setActiveTab keeps selectedConnectionId when tab has no connectionId', () => {
+    const tabId = useEditorStore.getState().addTab('No Connection');
+    useEditorStore.setState((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, connectionId: undefined } : tab)),
+    }));
+    useConnectionStore.getState().selectConnection('conn-global');
+
+    useEditorStore.getState().setActiveTab(tabId);
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-global');
+  });
+
+  it('closeOtherTabs syncs selectedConnectionId to kept tab connection', () => {
+    const firstTabId = useEditorStore.getState().addTab('A');
+    const secondTabId = useEditorStore.getState().addTab('B');
+
+    useEditorStore.getState().setTabConnectionId(firstTabId, 'conn-a');
+    useEditorStore.getState().setTabConnectionId(secondTabId, 'conn-b');
+    useConnectionStore.getState().selectConnection('conn-b');
+
+    useEditorStore.getState().closeOtherTabs(firstTabId);
+
+    expect(useEditorStore.getState().activeTabId).toBe(firstTabId);
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-a');
+  });
+
+  it('closeTabsToRight syncs selectedConnectionId when active tab is removed', () => {
+    const tabA = useEditorStore.getState().addTab('A');
+    const tabB = useEditorStore.getState().addTab('B');
+    const tabC = useEditorStore.getState().addTab('C');
+
+    useEditorStore.getState().setTabConnectionId(tabA, 'conn-a');
+    useEditorStore.getState().setTabConnectionId(tabB, 'conn-b');
+    useEditorStore.getState().setTabConnectionId(tabC, 'conn-c');
+
+    useEditorStore.getState().setActiveTab(tabC);
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-c');
+
+    useEditorStore.getState().closeTabsToRight(tabA);
+
+    expect(useEditorStore.getState().activeTabId).toBe(tabA);
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-a');
+  });
+
+  it('closeAllTabs keeps selectedConnectionId when no tab remains', () => {
+    const tabA = useEditorStore.getState().addTab('A');
+    useEditorStore.getState().setTabConnectionId(tabA, 'conn-a');
+    useEditorStore.getState().setActiveTab(tabA);
+
+    useEditorStore.getState().closeAllTabs();
+
+    expect(useEditorStore.getState().activeTabId).toBeNull();
+    expect(useConnectionStore.getState().selectedConnectionId).toBe('conn-a');
+  });
+
+  it('resolveActiveQuerySessionId prefers active tab connection session', () => {
+    const tabA = useEditorStore.getState().addTab('A');
+    const tabB = useEditorStore.getState().addTab('B');
+
+    useEditorStore.getState().setTabConnectionId(tabA, 'conn-a');
+    useEditorStore.getState().setTabConnectionId(tabB, 'conn-b');
+
+    useConnectionStore.setState({
+      sessionIds: new Map([
+        ['conn-a', 'session-a'],
+        ['conn-b', 'session-b'],
+      ]),
+    });
+
+    useConnectionStore.getState().selectConnection('conn-b');
+    useEditorStore.getState().setActiveTab(tabA);
+
+    expect(resolveActiveQueryConnectionId()).toBe('conn-a');
+    expect(resolveActiveQuerySessionId()).toBe('session-a');
+  });
+
+  it('resolveActiveQuerySessionId falls back to selected connection', () => {
+    useConnectionStore.getState().selectConnection(null);
+    const tabId = useEditorStore.getState().addTab('No Bound Connection');
+
+    useConnectionStore.setState({
+      selectedConnectionId: 'conn-fallback',
+      sessionIds: new Map([['conn-fallback', 'session-fallback']]),
+    });
+
+    useEditorStore.getState().setActiveTab(tabId);
+
+    expect(resolveActiveQueryConnectionId()).toBe('conn-fallback');
+    expect(resolveActiveQuerySessionId()).toBe('session-fallback');
+  });
+
+  it('resolveActiveQuerySessionId does not reroute when tab connection has no live session', () => {
+    const tabA = useEditorStore.getState().addTab('A');
+    useEditorStore.getState().setTabConnectionId(tabA, 'conn-a');
+
+    useConnectionStore.setState({
+      selectedConnectionId: 'conn-fallback',
+      sessionIds: new Map([
+        ['conn-fallback', 'session-fallback'],
+      ]),
+    });
+
+    expect(useEditorStore.getState().activeTabId).toBe(tabA);
+    expect(resolveActiveQueryConnectionId()).toBe('conn-a');
+    expect(resolveActiveQuerySessionId()).toBeUndefined();
   });
 });
 

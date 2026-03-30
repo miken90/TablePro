@@ -2,11 +2,37 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { useEditorStore } from "../../stores/editorStore";
-import { useQueryStore } from "../../stores/queryStore";
+import {
+  resolveActiveQuerySessionId,
+  useQueryStore,
+} from "../../stores/queryStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useQueryProgress } from "../../hooks/useQueryProgress";
+import { useEditorViewRef } from "../../contexts/editor-view-context";
+import {
+  fontCompartment,
+  vimCompartment,
+  dialectCompartment,
+  highlightCompartment,
+  reconfigureFont,
+  reconfigureVim,
+  reconfigureDialect,
+  reconfigureHighlight,
+} from "../../editor/editor-compartments";
+import { createEditorTheme, createEditorFontTheme, createSyntaxHighlighting } from "./editor-theme";
+import { sqlCompletionSource } from "../../editor/sql-completion-source";
+import { createVimExtension } from "../../editor/vim-mode";
+import { createKeybindings } from "../../editor/keybindings";
+import { formatEditorContent } from "../../editor/sql-formatter";
+import { allStatements, statementAtCursor } from "../../editor/statement-scanner";
+import { statementHighlighter } from "../../editor/statement-highlighter";
+import { errorMarkerField, setErrorMark } from "../../editor/error-marker";
+import {
+  parseErrorPosition,
+  pgCharOffsetToDocOffset,
+} from "../../editor/error-position-parser";
 
 type SqlDialect = "postgresql" | "mysql" | "mssql" | "standard";
 
@@ -15,35 +41,16 @@ interface SqlEditorProps {
 }
 
 async function loadEditorRuntime() {
-  const [
-    viewMod,
-    stateMod,
-    sqlMod,
-    commandsMod,
-    searchMod,
-    autocompleteMod,
-    languageMod,
-    themeMod,
-    completionMod,
-    vimModeMod,
-    keybindingsMod,
-    formatterMod,
-    scannerMod,
-  ] = await Promise.all([
-    import("@codemirror/view"),
-    import("@codemirror/state"),
-    import("@codemirror/lang-sql"),
-    import("@codemirror/commands"),
-    import("@codemirror/search"),
-    import("@codemirror/autocomplete"),
-    import("@codemirror/language"),
-    import("./editor-theme"),
-    import("../../editor/sql-completion-source"),
-    import("../../editor/vim-mode"),
-    import("../../editor/keybindings"),
-    import("../../editor/sql-formatter"),
-    import("../../editor/statement-scanner"),
-  ]);
+  const [viewMod, stateMod, sqlMod, commandsMod, searchMod, autocompleteMod, languageMod] =
+    await Promise.all([
+      import("@codemirror/view"),
+      import("@codemirror/state"),
+      import("@codemirror/lang-sql"),
+      import("@codemirror/commands"),
+      import("@codemirror/search"),
+      import("@codemirror/autocomplete"),
+      import("@codemirror/language"),
+    ]);
 
   return {
     ...viewMod,
@@ -53,12 +60,18 @@ async function loadEditorRuntime() {
     ...searchMod,
     ...autocompleteMod,
     ...languageMod,
-    ...themeMod,
-    ...completionMod,
-    ...vimModeMod,
-    ...keybindingsMod,
-    ...formatterMod,
-    ...scannerMod,
+    createEditorTheme,
+    createEditorFontTheme,
+    createSyntaxHighlighting,
+    sqlCompletionSource,
+    createVimExtension,
+    createKeybindings,
+    formatEditorContent,
+    allStatements,
+    statementAtCursor,
+    statementHighlighter,
+    errorMarkerField,
+    setErrorMark,
   };
 }
 
@@ -89,7 +102,7 @@ function resolveDialect(runtime: EditorRuntime, dialect: SqlDialect | undefined)
 export function SqlEditor({ dialect }: SqlEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  // Map from tabId → saved EditorState
+  const contextViewRef = useEditorViewRef();
   const stateMapRef = useRef<Map<string, EditorState>>(new Map());
   const [editorRuntime, setEditorRuntime] = useState<EditorRuntime | null>(null);
 
@@ -100,22 +113,21 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
   const execute = useQueryStore((s) => s.execute);
   const setQueryText = useQueryStore((s) => s.setQueryText);
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
-  const getSessionId = useConnectionStore((s) => s.getSessionId);
   const settings = useSettingsStore((s) => s.settings);
 
-  const activeSessionId = selectedConnectionId ? getSessionId(selectedConnectionId) : null;
+  const activeSessionId = resolveActiveQuerySessionId() ?? null;
   const queryProgress = useQueryProgress(activeSessionId);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
-  // Init default tab (only when connected)
+  // Init default tab
   useEffect(() => {
     if (tabs.length === 0 && selectedConnectionId) {
       addTab();
     }
   }, [tabs.length, addTab, selectedConnectionId]);
 
-  // Build the extension list (stable between renders)
+  // Build extensions with compartments for configurable parts
   const buildExtensions = useCallback(
     (tabId: string, runtime: EditorRuntime) => {
       const updateListener = runtime.EditorView.updateListener.of((update) => {
@@ -125,12 +137,17 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         setQueryText(content);
       });
 
-      const extensions = [
-        // Language
-        runtime.sql({ dialect: resolveDialect(runtime, dialect) }),
-        // Theme
+      return [
+        // Configurable: dialect (in compartment)
+        dialectCompartment.of(runtime.sql({ dialect: resolveDialect(runtime, dialect) })),
+        // Theme (CSS-variable based, auto-adapts)
         runtime.createEditorTheme(),
-        runtime.createEditorFontTheme(settings.editorFont, settings.editorFontSize),
+        // Syntax highlighting (light/dark)
+        highlightCompartment.of(runtime.createSyntaxHighlighting(document.documentElement.classList.contains('dark'))),
+        // Configurable: font (in compartment)
+        fontCompartment.of(
+          runtime.createEditorFontTheme(settings.editorFont, settings.editorFontSize),
+        ),
         // Editor features
         runtime.lineNumbers(),
         runtime.highlightActiveLineGutter(),
@@ -143,14 +160,18 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         runtime.closeBrackets(),
         runtime.indentOnInput(),
         runtime.history(),
-        // Autocomplete with schema-aware SQL source
+        // Code folding
+        runtime.foldGutter({ openText: "▾", closedText: "▸" }),
+        // Autocomplete
         runtime.autocompletion({ override: [runtime.sqlCompletionSource] }),
-        // App keybindings (run query, format, etc.)
+        // Statement highlighting
+        runtime.statementHighlighter,
+        // Error marking
+        runtime.errorMarkerField,
+        // App keybindings
         runtime.createKeybindings({
           runQuery: (view) => {
-            const connId = useConnectionStore.getState().selectedConnectionId;
-            if (!connId) return false;
-            const sessionId = useConnectionStore.getState().getSessionId(connId);
+            const sessionId = resolveActiveQuerySessionId();
             if (!sessionId) return false;
             const text = view.state.doc.toString();
             const cursor = view.state.selection.main.head;
@@ -159,9 +180,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
             return true;
           },
           runAll: (view) => {
-            const connId = useConnectionStore.getState().selectedConnectionId;
-            if (!connId) return false;
-            const sessionId = useConnectionStore.getState().getSessionId(connId);
+            const sessionId = resolveActiveQuerySessionId();
             if (!sessionId) return false;
             const stmts = runtime.allStatements(view.state.doc.toString());
             const combined = stmts.join(";\n");
@@ -176,26 +195,23 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
             if (sessionId) void useSchemaStore.getState().fetchSchema(sessionId);
           },
         }),
-        // Keymaps
+        // Keymaps (including fold keymaps)
         runtime.keymap.of([
           ...runtime.closeBracketsKeymap,
           ...runtime.defaultKeymap,
           ...runtime.historyKeymap,
           ...runtime.searchKeymap,
           ...runtime.completionKeymap,
+          ...runtime.foldKeymap,
           runtime.indentWithTab,
         ]),
-        // Placeholder hint
+        // Placeholder
         runtime.placeholder("-- Write SQL here\n-- Ctrl+Enter to execute"),
+        // Configurable: vim mode (in compartment)
+        vimCompartment.of(settings.vimMode ? runtime.createVimExtension() : []),
         // Change listener
         updateListener,
       ];
-
-      if (settings.vimMode) {
-        extensions.unshift(runtime.createVimExtension());
-      }
-
-      return extensions;
     },
     [dialect, settings.editorFont, settings.editorFontSize, settings.vimMode, updateTabContent, setQueryText, execute],
   );
@@ -230,6 +246,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
       });
 
       viewRef.current = view;
+      contextViewRef.current = view;
       if (tabId) {
         stateMapRef.current.set(tabId, initialState);
       }
@@ -249,11 +266,12 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
       view.destroy();
       viewRef.current = null;
+      contextViewRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Set editor state when active tab changes (or first becomes available)
+  // Set editor state when active tab changes
   useEffect(() => {
     const view = viewRef.current;
     const runtime = editorRuntime;
@@ -271,25 +289,70 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
       view.setState(newState);
       stateMapRef.current.set(activeTabId, newState);
     }
+
+    // Re-apply current settings to restored state (settings may have changed
+    // while another tab was active; compartment reconfigure is idempotent)
+    const currentSettings = useSettingsStore.getState().settings;
+    reconfigureFont(view, runtime.createEditorFontTheme(currentSettings.editorFont, currentSettings.editorFontSize));
+    reconfigureVim(view, currentSettings.vimMode ? runtime.createVimExtension() : []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId, editorRuntime]);
 
-  // Update font/vim settings without full remount
+  // Reconfigure font/vim via compartments (preserves undo history)
   useEffect(() => {
     const view = viewRef.current;
     const runtime = editorRuntime;
-    if (!view || !runtime || !activeTabId) return;
+    if (!view || !runtime) return;
 
-    const doc = view.state.doc;
-    const newState = runtime.EditorState.create({
-      doc,
-      extensions: buildExtensions(activeTabId, runtime),
+    reconfigureFont(view, runtime.createEditorFontTheme(settings.editorFont, settings.editorFontSize));
+    reconfigureVim(view, settings.vimMode ? runtime.createVimExtension() : []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorRuntime, settings.editorFont, settings.editorFontSize, settings.vimMode]);
+
+  // Reconfigure dialect via compartment when it changes
+  useEffect(() => {
+    const view = viewRef.current;
+    const runtime = editorRuntime;
+    if (!view || !runtime) return;
+
+    reconfigureDialect(view, runtime.sql({ dialect: resolveDialect(runtime, dialect) }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorRuntime, dialect]);
+
+  // Reconfigure syntax highlighting when dark mode changes
+  useEffect(() => {
+    const view = viewRef.current;
+    const runtime = editorRuntime;
+    if (!view || !runtime) return;
+
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains('dark');
+      reconfigureHighlight(view, runtime.createSyntaxHighlighting(isDark));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [editorRuntime]);
+
+  // Dispatch error marker when query fails
+  useEffect(() => {
+    const view = viewRef.current;
+    const runtime = editorRuntime;
+    if (!view || !runtime) return;
+
+    const unsub = useQueryStore.subscribe((state, prev) => {
+      if (state.error && state.error !== prev.error) {
+        const pos = parseErrorPosition(state.error);
+        if (pos.charOffset !== null) {
+          const docOffset = pgCharOffsetToDocOffset(pos.charOffset);
+          const clampedOffset = Math.min(docOffset, view.state.doc.length);
+          const to = Math.min(clampedOffset + 10, view.state.doc.length);
+          view.dispatch({ effects: runtime.setErrorMark.of({ from: clampedOffset, to }) });
+        }
+      }
     });
 
-    view.setState(newState);
-    stateMapRef.current.set(activeTabId, view.state as EditorState);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorRuntime, settings.editorFont, settings.editorFontSize, settings.vimMode, dialect]);
+    return unsub;
+  }, [editorRuntime]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -302,7 +365,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         }}
       />
       {queryProgress.isRunning && (
-        <div className="border-t border-zinc-200 bg-zinc-50 px-3 py-1 text-[10px] text-blue-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-blue-300">
+        <div className="border-t border-border-subtle bg-surface px-3 py-1 text-[10px] text-accent-blue">
           Running query… {(queryProgress.elapsedMs / 1000).toFixed(1)}s
         </div>
       )}
@@ -310,5 +373,4 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
   );
 }
 
-/** Expose the EditorView ref for parent components that need to dispatch commands. */
 export type { SqlEditorProps };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key } from 'lucide-react';
+import { Check, Copy, Key } from 'lucide-react';
 
 interface FieldRowProps {
   name: string;
@@ -19,6 +19,7 @@ function isBoolType(typeName: string): boolean {
 
 export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
   const isLong = value !== null && value.length > 100;
   const isJson = value !== null && isJsonLike(value);
   const isBool = isBoolType(typeName);
@@ -72,7 +73,7 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
   };
 
   return (
-    <div className="flex items-start gap-2 border-b border-zinc-100 px-3 py-1.5 dark:border-zinc-800">
+    <div className="group flex items-start gap-2 border-b border-zinc-100 px-3 py-1.5 dark:border-zinc-800">
       <div className="flex min-w-0 shrink-0 items-center gap-1" style={{ width: '40%' }}>
         {isPrimaryKey && <Key size={10} className="shrink-0 text-amber-500" />}
         <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-400" title={name}>
@@ -82,7 +83,21 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
           {typeName}
         </span>
       </div>
-      <div className="min-w-0 flex-1 overflow-hidden text-xs">{renderValue()}</div>
+      <div className="min-w-0 flex-1 overflow-hidden text-xs flex items-start gap-1">
+        <div className="flex-1 min-w-0">{renderValue()}</div>
+        <button
+          className="opacity-0 group-hover:opacity-100 p-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(value === null ? 'NULL' : value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+          title="Copy value"
+        >
+          {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+        </button>
+      </div>
     </div>
   );
 }

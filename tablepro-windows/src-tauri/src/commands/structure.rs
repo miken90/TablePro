@@ -4,6 +4,7 @@ use tokio::sync::Mutex;
 
 use crate::models::AppError;
 use crate::services::ddl_generator::{generate_create_table, ColumnDefinition};
+use crate::services::schema_alter::{generate_alter_sql, AlterColumnChange};
 use crate::services::ConnectionManager;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -74,4 +75,78 @@ pub async fn create_table(
     driver.execute(&ddl).await?;
 
     Ok(CreateTableResult { ddl })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateAlterSqlPayload {
+    pub table: String,
+    pub schema: Option<String>,
+    pub changes: Vec<AlterColumnChange>,
+}
+
+#[tauri::command]
+pub async fn generate_alter_sql_command(
+    session_id: String,
+    payload: GenerateAlterSqlPayload,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<Vec<String>, AppError> {
+    let driver_type = {
+        let mgr = manager.lock().await;
+        mgr.get_config(&session_id)?.db_type.clone()
+    };
+
+    let sql = generate_alter_sql(
+        &payload.table,
+        payload.schema.as_deref(),
+        &payload.changes,
+        &driver_type,
+    )?;
+
+    tracing::info!(
+        session_id = %session_id,
+        table = %payload.table,
+        statements = sql.len(),
+        "generate_alter_sql"
+    );
+
+    Ok(sql)
+}
+
+#[tauri::command]
+pub async fn apply_alter(
+    session_id: String,
+    payload: GenerateAlterSqlPayload,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<(), AppError> {
+    let (driver, driver_type) = {
+        let mgr = manager.lock().await;
+        let driver = mgr.get_driver(&session_id)?;
+        let driver_type = mgr.get_config(&session_id)?.db_type.clone();
+        (driver, driver_type)
+    };
+
+    let statements = generate_alter_sql(
+        &payload.table,
+        payload.schema.as_deref(),
+        &payload.changes,
+        &driver_type,
+    )?;
+
+    if statements.is_empty() {
+        return Ok(());
+    }
+
+    tracing::info!(
+        session_id = %session_id,
+        table = %payload.table,
+        statements = statements.len(),
+        "apply_alter"
+    );
+
+    for sql in &statements {
+        driver.execute(sql).await?;
+    }
+
+    Ok(())
 }

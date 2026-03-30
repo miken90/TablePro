@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -9,11 +11,18 @@ use super::ssh_config::{SshAuthMethod, SshTunnelConfig};
 use super::ssh_tunnel::SshTunnelError;
 
 // ---------------------------------------------------------------------------
-// russh client handler
+// russh client handler — TOFU (Trust On First Use) known_hosts
 // ---------------------------------------------------------------------------
 
-/// Minimal client handler that accepts all host keys (P1 — no strict checking).
-pub(crate) struct SshClientHandler;
+/// Client handler that implements TOFU host-key verification.
+///
+/// On first connection to a host the key fingerprint is stored in
+/// `known_hosts.json` under `data_dir`. On subsequent connections the
+/// stored fingerprint is compared; a mismatch rejects the connection.
+pub(crate) struct SshClientHandler {
+    pub host: String,
+    pub data_dir: PathBuf,
+}
 
 #[async_trait]
 impl russh::client::Handler for SshClientHandler {
@@ -21,11 +30,61 @@ impl russh::client::Handler for SshClientHandler {
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh_keys::key::PublicKey,
+        server_public_key: &russh_keys::key::PublicKey,
     ) -> Result<bool, Self::Error> {
-        // Accept all host keys for P1.
-        // TODO: implement known_hosts verification in a future phase.
-        Ok(true)
+        let fingerprint = server_public_key.fingerprint();
+        let known_hosts = load_known_hosts(&self.data_dir);
+
+        match known_hosts.get(&self.host) {
+            Some(stored) if stored == &fingerprint => Ok(true),
+            Some(stored) => {
+                tracing::error!(
+                    "SSH HOST KEY CHANGED for {}: expected {}, got {}",
+                    self.host,
+                    stored,
+                    fingerprint
+                );
+                Ok(false)
+            }
+            None => {
+                tracing::warn!("New SSH host key for {}: {}", self.host, fingerprint);
+                let mut hosts = known_hosts;
+                hosts.insert(self.host.clone(), fingerprint);
+                save_known_hosts(&self.data_dir, &hosts);
+                Ok(true)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// known_hosts.json helpers
+// ---------------------------------------------------------------------------
+
+fn known_hosts_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("known_hosts.json")
+}
+
+fn load_known_hosts(data_dir: &Path) -> HashMap<String, String> {
+    let path = known_hosts_path(data_dir);
+    match std::fs::read_to_string(&path) {
+        Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
+        Err(_) => HashMap::new(),
+    }
+}
+
+fn save_known_hosts(data_dir: &Path, hosts: &HashMap<String, String>) {
+    let path = known_hosts_path(data_dir);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    match serde_json::to_string_pretty(hosts) {
+        Ok(json) => {
+            if let Err(e) = std::fs::write(&path, json) {
+                tracing::warn!("Failed to write known_hosts.json: {e}");
+            }
+        }
+        Err(e) => tracing::warn!("Failed to serialize known_hosts: {e}"),
     }
 }
 
@@ -71,11 +130,20 @@ pub async fn open_tunnel(cfg: SshTunnelConfig<'_>) -> Result<SshTunnel, SshTunne
     let ssh_addr = format!("{}:{}", cfg.ssh_host, cfg.ssh_port);
     tracing::debug!(ssh_addr = %ssh_addr, "Opening SSH tunnel");
 
+    let data_dir = dirs::config_dir()
+        .map(|d| d.join("TablePro"))
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let handler = SshClientHandler {
+        host: ssh_addr.clone(),
+        data_dir,
+    };
+
     let russh_config = russh::client::Config {
         ..Default::default()
     };
     let mut session =
-        russh::client::connect(Arc::new(russh_config), ssh_addr.as_str(), SshClientHandler)
+        russh::client::connect(Arc::new(russh_config), ssh_addr.as_str(), handler)
             .await
             .map_err(|e| SshTunnelError::ConnectionFailed(e.to_string()))?;
 
@@ -198,5 +266,88 @@ async fn forward_connection(mut tcp: TcpStream, channel: russh::Channel<russh::c
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_new_host_is_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().to_path_buf();
+
+        let hosts = load_known_hosts(&data_dir);
+        assert!(hosts.is_empty());
+
+        let mut hosts = HashMap::new();
+        hosts.insert("example.com:22".to_string(), "abc123".to_string());
+        save_known_hosts(&data_dir, &hosts);
+
+        let loaded = load_known_hosts(&data_dir);
+        assert_eq!(loaded.get("example.com:22").unwrap(), "abc123");
+    }
+
+    #[test]
+    fn test_known_host_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().to_path_buf();
+
+        let mut hosts = HashMap::new();
+        hosts.insert("server:22".to_string(), "fp_aaa".to_string());
+        save_known_hosts(&data_dir, &hosts);
+
+        let loaded = load_known_hosts(&data_dir);
+        assert_eq!(loaded.get("server:22").unwrap(), "fp_aaa");
+    }
+
+    #[test]
+    fn test_known_host_mismatch_detected() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().to_path_buf();
+
+        let mut hosts = HashMap::new();
+        hosts.insert("server:22".to_string(), "fp_old".to_string());
+        save_known_hosts(&data_dir, &hosts);
+
+        let loaded = load_known_hosts(&data_dir);
+        let stored = loaded.get("server:22").unwrap();
+        let new_fp = "fp_new";
+        assert_ne!(stored, new_fp, "Fingerprint mismatch should be detected");
+    }
+
+    #[test]
+    fn test_missing_file_returns_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().join("nonexistent_subdir");
+        let hosts = load_known_hosts(&data_dir);
+        assert!(hosts.is_empty());
+    }
+
+    #[test]
+    fn test_corrupt_file_returns_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().to_path_buf();
+        fs::write(known_hosts_path(&data_dir), "not valid json").unwrap();
+        let hosts = load_known_hosts(&data_dir);
+        assert!(hosts.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_hosts() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().to_path_buf();
+
+        let mut hosts = HashMap::new();
+        hosts.insert("host1:22".to_string(), "fp1".to_string());
+        hosts.insert("host2:5432".to_string(), "fp2".to_string());
+        save_known_hosts(&data_dir, &hosts);
+
+        let loaded = load_known_hosts(&data_dir);
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded.get("host1:22").unwrap(), "fp1");
+        assert_eq!(loaded.get("host2:5432").unwrap(), "fp2");
     }
 }

@@ -1,11 +1,26 @@
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
+import { useCallback, useMemo, useState, useRef } from "react";
+import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
+import type { EditorTab } from "../../stores/editorStore";
+import { EditorTab as EditorTabComponent } from "./EditorTab";
+import { TabContextMenu } from "./TabContextMenu";
+import { ConfirmDiscardDialog } from "../shared/confirm-discard-dialog";
 
 interface EditorTabBarProps {
   onTabActivate?: () => void;
+  /** Return false to prevent switching to the target tab. */
+  onBeforeTabSwitch?: (targetTabId: string) => boolean;
+  /** Called after a tab is closed, with the newly active tab ID (or null). */
+  onAfterClose?: (newActiveTabId: string | null) => void;
 }
 
-export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
+interface ContextMenuState {
+  tab: EditorTab;
+  position: { x: number; y: number };
+}
+
+export function EditorTabBar({ onTabActivate, onBeforeTabSwitch, onAfterClose }: EditorTabBarProps) {
   const tabs = useEditorStore((s) => s.tabs);
   const activeTabId = useEditorStore((s) => s.activeTabId);
   const addTab = useEditorStore((s) => s.addTab);
@@ -13,49 +28,151 @@ export function EditorTabBar({ onTabActivate }: EditorTabBarProps) {
   const setActiveTab = useEditorStore((s) => s.setActiveTab);
   const promoteTab = useEditorStore((s) => s.promoteTab);
 
+  const connections = useConnectionStore((s) => s.connections);
+
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
+  const tabListRef = useRef<HTMLDivElement>(null);
+
+  const handleCloseTab = useCallback(
+    (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab?.isDirty && (tab.type === "query" || !tab.type)) {
+        setPendingCloseTabId(tabId);
+        return;
+      }
+      closeTab(tabId);
+      onAfterClose?.(useEditorStore.getState().activeTabId);
+    },
+    [tabs, closeTab, onAfterClose],
+  );
+
+  const confirmDiscard = useCallback(() => {
+    if (pendingCloseTabId) {
+      closeTab(pendingCloseTabId);
+      setPendingCloseTabId(null);
+      onAfterClose?.(useEditorStore.getState().activeTabId);
+    }
+  }, [pendingCloseTabId, closeTab, onAfterClose]);
+
+  // Sort: pinned tabs first, then by original order
+  const sortedTabs = useMemo(() => {
+    const pinned = tabs.filter((t) => t.isPinned ?? false);
+    const normal = tabs.filter((t) => !(t.isPinned ?? false));
+    return [...pinned, ...normal];
+  }, [tabs]);
+
+  const getConnectionColor = useCallback(
+    (connectionId: string | undefined): string | undefined => {
+      if (!connectionId) return undefined;
+      const conn = connections.get(connectionId);
+      return conn?.color ?? undefined;
+    },
+    [connections],
+  );
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, tab: EditorTab) => {
+      e.preventDefault();
+      setContextMenu({ tab, position: { x: e.clientX, y: e.clientY } });
+    },
+    [],
+  );
+
+  /** Arrow key navigation within the tab list */
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!sortedTabs.length) return;
+      const currentIndex = sortedTabs.findIndex((t) => t.id === activeTabId);
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const next = sortedTabs[(currentIndex + 1) % sortedTabs.length];
+        if (next) {
+          if (onBeforeTabSwitch && !onBeforeTabSwitch(next.id)) return;
+          setActiveTab(next.id); onTabActivate?.();
+        }
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const prev = sortedTabs[(currentIndex - 1 + sortedTabs.length) % sortedTabs.length];
+        if (prev) {
+          if (onBeforeTabSwitch && !onBeforeTabSwitch(prev.id)) return;
+          setActiveTab(prev.id); onTabActivate?.();
+        }
+      }
+    },
+    [sortedTabs, activeTabId, setActiveTab, onTabActivate, onBeforeTabSwitch],
+  );
+
   return (
-    <div className="flex h-8 items-center border-b border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
-      <div className="flex flex-1 items-center overflow-x-auto">
-        {tabs.map((tab) => (
+    <div
+      className="flex h-8 items-center border-b border-border-subtle bg-surface"
+      role="tablist"
+      aria-label="Editor tabs"
+      onKeyDown={handleKeyDown}
+    >
+      {/* Scrollable tab list */}
+      <div
+        ref={tabListRef}
+        className="flex flex-1 items-center overflow-x-auto scroll-smooth"
+        style={{ scrollSnapType: "x mandatory" }}
+      >
+        {sortedTabs.map((tab) => (
           <div
             key={tab.id}
-            onClick={() => { setActiveTab(tab.id); onTabActivate?.(); }}
-            onDoubleClick={() => {
-              if (tab.isPreview) {
-                promoteTab(tab.id);
-              }
-            }}
-            className={`flex min-w-0 max-w-[160px] cursor-pointer items-center gap-1.5 border-r border-zinc-200 px-3 py-1 text-xs dark:border-zinc-700 ${
-              tab.id === activeTabId
-                ? "bg-white text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
-                : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700"
-            } ${tab.isPreview ? "opacity-70" : ""}`}
+            style={{ scrollSnapAlign: "start" }}
+            onContextMenu={(e) => handleContextMenu(e, tab)}
           >
-            <span className={`truncate ${tab.isPreview ? "italic" : ""}`}>
-              {tab.isDirty && <span className="mr-0.5 text-blue-500">•</span>}
-              {tab.title}
-            </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                closeTab(tab.id);
+            <EditorTabComponent
+              tab={tab}
+              isActive={tab.id === activeTabId}
+              connectionColor={getConnectionColor(tab.connectionId)}
+              onClick={() => {
+                if (onBeforeTabSwitch && !onBeforeTabSwitch(tab.id)) return;
+                setActiveTab(tab.id);
+                onTabActivate?.();
               }}
-              className="flex-shrink-0 rounded p-0.5 opacity-60 hover:opacity-100"
-            >
-              <X size={10} />
-            </button>
+              onDoubleClick={() => {
+                if (tab.isPreview) promoteTab(tab.id);
+              }}
+              onClose={(e) => {
+                e.stopPropagation();
+                handleCloseTab(tab.id);
+              }}
+            />
           </div>
         ))}
       </div>
 
       {/* New tab button */}
       <button
-        onClick={() => { addTab(); onTabActivate?.(); }}
-        className="flex h-full items-center px-2 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700"
+        onClick={() => {
+          addTab();
+          onTabActivate?.();
+        }}
+        className="flex h-full items-center px-2 text-text-muted hover:bg-surface-muted hover:text-text-primary"
         title="New tab"
+        aria-label="Open new tab"
       >
-        <Plus size={13} />
+        <Plus size={13} aria-hidden="true" />
       </button>
+
+      {/* Context menu portal */}
+      {contextMenu && (
+        <TabContextMenu
+          tab={contextMenu.tab}
+          position={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+          onCloseTab={handleCloseTab}
+        />
+      )}
+
+      {/* Confirm discard unsaved query dialog */}
+      <ConfirmDiscardDialog
+        open={pendingCloseTabId !== null}
+        changeCount={1}
+        onConfirm={confirmDiscard}
+        onCancel={() => setPendingCloseTabId(null)}
+      />
     </div>
   );
 }

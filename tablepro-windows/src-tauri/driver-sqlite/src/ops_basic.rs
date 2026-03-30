@@ -27,11 +27,11 @@ pub unsafe fn connect(handle: *mut DriverHandle) -> FfiResult {
 
             let interrupt = conn.get_interrupt_handle();
             {
-                let mut guard = driver.interrupt_handle.lock().unwrap();
+                let mut guard = driver.interrupt_handle.lock().unwrap_or_else(|e| e.into_inner());
                 *guard = Some(interrupt);
             }
             {
-                let mut guard = driver.conn.lock().unwrap();
+                let mut guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
                 *guard = Some(conn);
             }
             ok_result()
@@ -43,18 +43,18 @@ pub unsafe fn connect(handle: *mut DriverHandle) -> FfiResult {
 pub unsafe fn disconnect(handle: *mut DriverHandle) {
     let driver = &*(handle as *mut SqliteDriver);
     {
-        let mut guard = driver.interrupt_handle.lock().unwrap();
+        let mut guard = driver.interrupt_handle.lock().unwrap_or_else(|e| e.into_inner());
         *guard = None;
     }
     {
-        let mut guard = driver.conn.lock().unwrap();
+        let mut guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
         *guard = None;
     }
 }
 
 pub unsafe fn ping(handle: *mut DriverHandle) -> FfiResult {
     let driver = &*(handle as *mut SqliteDriver);
-    let guard = driver.conn.lock().unwrap();
+    let guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
     match guard.as_ref() {
         None => err_result("Not connected".to_string()),
         Some(conn) => match conn.execute_batch("SELECT 1") {
@@ -67,7 +67,7 @@ pub unsafe fn ping(handle: *mut DriverHandle) -> FfiResult {
 pub unsafe fn execute(handle: *mut DriverHandle, sql: FfiStr) -> FfiQueryResult {
     let driver = &*(handle as *mut SqliteDriver);
     let sql_str = sql.as_str().to_owned();
-    let guard = driver.conn.lock().unwrap();
+    let guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
     let conn = match guard.as_ref() {
         None => return err_query_result("Not connected".to_string()),
         Some(c) => c,
@@ -123,7 +123,7 @@ pub unsafe fn execute(handle: *mut DriverHandle, sql: FfiStr) -> FfiQueryResult 
 
 pub unsafe fn cancel(handle: *mut DriverHandle) -> FfiResult {
     let driver = &*(handle as *mut SqliteDriver);
-    let guard = driver.interrupt_handle.lock().unwrap();
+    let guard = driver.interrupt_handle.lock().unwrap_or_else(|e| e.into_inner());
     match guard.as_ref() {
         None => err_result("No active connection to cancel".to_string()),
         Some(interrupt) => {
@@ -135,7 +135,7 @@ pub unsafe fn cancel(handle: *mut DriverHandle) -> FfiResult {
 
 pub unsafe fn fetch_tables(handle: *mut DriverHandle) -> FfiTableList {
     let driver = &*(handle as *mut SqliteDriver);
-    let guard = driver.conn.lock().unwrap();
+    let guard = driver.conn.lock().unwrap_or_else(|e| e.into_inner());
     let conn = match guard.as_ref() {
         None => {
             return FfiTableList {

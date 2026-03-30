@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" width="360" height="80">
+  <defs>
+    <linearGradient id="wm-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5AADFF"/>
+      <stop offset="100%" stop-color="#2D7DD2"/>
+    </linearGradient>
+    <linearGradient id="wm-cyl" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#D4E4F4"/>
+      <stop offset="50%" stop-color="#F5F8FC"/>
+      <stop offset="100%" stop-color="#CDE0F0"/>
+    </linearGradient>
+    <linearGradient id="wm-top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FAFCFE"/>
+      <stop offset="100%" stop-color="#E0EBF5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon background -->
+  <rect x="4" y="4" width="72" height="72" rx="16" ry="16" fill="url(#wm-bg)"/>
+
+  <!-- Database cylinder - body -->
+  <path d="M 22 28 L 22 52 Q 22 60 40 60 Q 58 60 58 52 L 58 28 Q 58 34 40 34 Q 22 34 22 28 Z"
+        fill="url(#wm-cyl)"/>
+
+  <!-- Middle band -->
+  <path d="M 22 42 Q 22 47 40 47 Q 58 47 58 42"
+        fill="none" stroke="#A0B8D0" stroke-width="1"/>
+
+  <!-- Top ellipse -->
+  <ellipse cx="40" cy="28" rx="18" ry="8" fill="url(#wm-top)"/>
+  <ellipse cx="40" cy="28" rx="18" ry="8" fill="none"
+           stroke="#93B4D4" stroke-width="1"/>
+
+  <!-- Specular highlight -->
+  <ellipse cx="37" cy="26" rx="8" ry="3" fill="#FFFFFF" opacity="0.6"
+           transform="rotate(-6 37 26)"/>
+
+  <!-- "Table" text - dark for light backgrounds -->
+  <text x="92" y="53" font-family="'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="36" font-weight="400" fill="#24292F" letter-spacing="-0.5">Table</text>
+
+  <!-- "Pro" text - darker accent for light mode -->
+  <text x="210" y="53" font-family="'Segoe UI', system-ui, -apple-system, sans-serif"
+        font-size="36" font-weight="600" fill="#2D7DD2" letter-spacing="-0.5">Pro</text>
+</svg>

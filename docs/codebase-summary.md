@@ -2,12 +2,12 @@
 
 ## Repository summary
 
-This summary is generated from current repository structure and a fresh Repomix snapshot (`repomix-output.xml`, generated 2026-03-18).
+This summary is generated from current repository structure and a fresh Repomix snapshot (`repomix-output.xml`, generated 2026-03-25).
 
-### Repomix snapshot (2026-03-18)
+### Repomix snapshot (2026-03-25)
 
-- Packed files: **1,312**
-- Total tokens: **11,756,078**
+- Packed files: **1,426**
+- Total tokens: **11,872,698**
 - Output file: `repomix-output.xml`
 - Security exclusions reported by repomix: 3 test files
 - Largest token contributors are vendored/parser sources under `LocalPackages/CodeEditLanguages/.../parser.c`
@@ -120,11 +120,11 @@ Current command groups registered in `lib.rs`:
 
 - Connection: `test_connection`, `connect`, `disconnect`, `get_connection_status`
 - Query: `execute_query`, `fetch_rows`, `fetch_count`, `cancel_query`
-- Schema: `fetch_tables`, `fetch_columns`, `fetch_indexes`, `fetch_foreign_keys`, `fetch_databases`, `fetch_ddl`, `switch_database`, `fetch_schemas`, `fetch_enum_values`, `fetch_approximate_count`
+- Schema: `fetch_tables`, `fetch_columns`, `fetch_indexes`, `fetch_foreign_keys`, `fetch_routines`, `fetch_databases`, `fetch_ddl`, `switch_database`, `fetch_schemas`, `fetch_enum_values`, `fetch_approximate_count`
 - Storage: `list/save/delete_connection`, group CRUD
 - Data mutation: `save_changes`, `generate_row_sql`
 - Filter: `save_filter_preset`, `load_filter_presets`, `delete_filter_preset`
-- Structure: `create_table`
+- Structure: `create_table`, `generate_alter_sql_command`, `apply_alter`
 - Import/Export: `import_preview`, `import_sql_file`, `export_to_file`
 - History: `history_fetch_recent`, `history_search`, `history_clear_all`, `history_delete_entry`, `history_record`
 - Settings: `get_settings`, `set_settings`, `log_renderer_error`
@@ -140,5 +140,5 @@ Areas most likely to drift and require periodic refresh:
 
 ---
 
-**Last Updated**: 2026-03-19  
+**Last Updated**: 2026-03-25
 **Source of Truth for this summary**: `repomix-output.xml` + direct reads of active Windows source files

@@ -276,7 +276,7 @@ export function analyzeSQLContext(query: string, cursorPosition: number): SQLCon
 
   const { prefix, start: prefixStart, dotPrefix } = extractPrefix(textBeforeCursor);
 
-  let tableReferences = extractTableReferences(currentStatement);
+  const tableReferences = extractTableReferences(currentStatement);
   const cteNames = extractCTENames(currentStatement);
 
   for (const cteName of cteNames) {

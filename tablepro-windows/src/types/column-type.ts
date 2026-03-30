@@ -17,7 +17,7 @@ export function categorizeColumn(typeName: string): ColumnCategory {
   if (u.startsWith('_') || u.includes('ARRAY')) return 'array';
   // Date/time BEFORE integer — 'INTERVAL' contains 'INT'
   if (['DATE', 'TIME', 'TIMESTAMP', 'DATETIME', 'INTERVAL'].some(t => u.includes(t))) return 'date';
-  if (['INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'SERIAL', 'BIGSERIAL'].some(t => u.includes(t))) return 'integer';
+  if (['INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TINYINT', 'SERIAL', 'BIGSERIAL'].some(t => u.includes(t)) || u === 'OID') return 'integer';
   if (['FLOAT', 'DOUBLE', 'DECIMAL', 'NUMERIC', 'REAL', 'MONEY'].some(t => u.includes(t))) return 'float';
   if (['BOOL', 'BOOLEAN', 'BIT'].some(t => u === t || u.startsWith(t))) return 'boolean';
   if (u === 'JSON' || u === 'JSONB') return 'json';

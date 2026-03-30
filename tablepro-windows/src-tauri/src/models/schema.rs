@@ -30,6 +30,32 @@ pub struct ForeignKeyInfo {
     pub referenced_column: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineKind {
+    Function,
+    Procedure,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineInfo {
+    pub name: String,
+    pub schema: Option<String>,
+    pub kind: RoutineKind,
+    pub signature: Option<String>,
+    pub return_type: Option<String>,
+    pub is_table_valued: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineCatalog {
+    pub supported: bool,
+    pub reason: Option<String>,
+    pub items: Vec<RoutineInfo>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
