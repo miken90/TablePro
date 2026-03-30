@@ -1,333 +1,177 @@
 ---
 name: release
 description: >
-  Prepares and ships a new TablePro release — bumps version numbers in
-  project.pbxproj, finalizes CHANGELOG.md, commits, tags, and pushes.
-  Also handles separate plugin releases (Redis, Oracle, ClickHouse,
-  DuckDB). Use this skill whenever the user says "release", "bump
-  version", "ship version", "tag a release", "cut a release", or
-  provides a version number they want to release (e.g., "/release 0.5.0",
-  "/release plugin-oracle 1.0.0").
+  Prepare and ship a Windows release for TablePro. Use this skill only for
+  `tablepro-windows/` when asked to bump the Windows app version, build
+  portable or installer artifacts, cut a Windows release, or verify the Tauri
+  release pipeline.
 ---
 
-# Release Version
+# Release TablePro Windows
 
-Automate the full release pipeline for TablePro. Supports two modes:
+Use this skill only for `tablepro-windows/`.
 
-- **App release**: `/release <version>` — bumps versions, finalizes
-  changelog, commits, tags, and pushes.
-- **Plugin release**: `/release plugin-<name> <version>` — tags and
-  pushes a separate plugin bundle release.
+This release flow is driven by PowerShell scripts and the Tauri Windows build pipeline. Do not use old macOS release steps, Xcode version bumps, or SwiftLint-based gates here.
 
-## Usage
+## Source of truth
 
-```
-/release <version>              # App release (e.g., /release 0.5.0)
-/release plugin-<name> <version> # Plugin release (e.g., /release plugin-oracle 1.0.0)
-```
+Read these first:
+- `tablepro-windows/package.json`
+- `tablepro-windows/scripts/bump-version.ps1`
+- `tablepro-windows/scripts/build-release.ps1`
+- `tablepro-windows/src-tauri/tauri.conf.json`
+- `tablepro-windows/.github/workflows/windows-build.yml`
 
-## Pre-flight Checks
+## Release modes
 
-Before making any changes, verify ALL of the following. If any check
-fails, stop and tell the user what's wrong.
-
-1. **Version argument exists** — the user must provide a semver version
-   (e.g., `0.5.0`). If missing, ask for it.
-
-2. **Version is valid semver** — must match `X.Y.Z` where X, Y, Z are
-   non-negative integers. Pre-release suffixes like `-beta.1` or `-rc.1`
-   are allowed.
-
-3. **Version is newer** — compare against the current `MARKETING_VERSION`
-   in `project.pbxproj`. The new version must be greater. Read the
-   current value:
-   ```
-   Grep for "MARKETING_VERSION" in TablePro.xcodeproj/project.pbxproj
-   ```
-
-4. **Tag doesn't exist** — run `git tag -l "v<version>"` to confirm the
-   tag is available.
-
-5. **Working tree is clean** — run `git status --porcelain`. If there are
-   uncommitted changes, warn the user and ask whether to proceed (the
-   release commit will include those changes).
-
-6. **Unreleased section has content** — read `CHANGELOG.md` and verify
-   the `## [Unreleased]` section has entries. If empty, warn the user
-   that the release will have no changelog entries.
-
-7. **On main branch** — run `git branch --show-current`. Warn (but don't
-   block) if not on `main`.
-
-8. **SwiftLint passes** — run `swiftlint lint --strict`. If there are
-   any warnings or errors, spawn a Task subagent to fix all issues
-   before continuing with the release. The subagent should run
-   `swiftlint --fix` first, then manually fix any remaining issues,
-   and verify with `swiftlint lint --strict` until clean.
-
-## Release Steps
-
-### Step 1: Bump Version in project.pbxproj
-
-File: `TablePro.xcodeproj/project.pbxproj`
-
-Update the **main app target only** (Debug + Release configs = 2 lines
-each):
-
-- Set `MARKETING_VERSION` to the new version (e.g., `0.5.0`)
-- Increment `CURRENT_PROJECT_VERSION` by 1 from its current value
-
-**Do NOT touch** any other target's version lines. The pbxproj contains
-many targets beyond the main app — all with `MARKETING_VERSION = 1.0`
-and `CURRENT_PROJECT_VERSION = 1`:
-
-- **Test target** (TableProTests)
-- **TableProPluginKit** framework
-- **Bundled plugins** (included in app bundle): MySQLDriverPlugin,
-  PostgreSQLDriverPlugin, MSSQLDriverPlugin, MongoDBDriverPlugin,
-  RedisDriverPlugin, plus export/import plugins (CSV, JSON, SQL,
-  XLSX, MQL export; SQL import)
-- **Separate plugin bundles** (not included in app bundle, distributed
-  independently): OracleDriverPlugin, ClickHouseDriverPlugin,
-  SQLiteDriverPlugin, DuckDBDriverPlugin
-
-Use `replace_all: true` for each edit — the main app target's version
-values are always unique (e.g., `MARKETING_VERSION = 0.16.1` and
-`CURRENT_PROJECT_VERSION = 30`), distinct from the `1.0` / `1` used by
-all other targets, so `replace_all` safely targets only the correct
-occurrences.
-
-### Step 2: Finalize CHANGELOG.md
-
-Make these edits to `CHANGELOG.md`:
-
-1. **Convert Unreleased to versioned heading** — replace:
-   ```
-   ## [Unreleased]
-   ```
-   with:
-   ```
-   ## [Unreleased]
-
-   ## [<version>] - <YYYY-MM-DD>
-   ```
-   where `<YYYY-MM-DD>` is today's date.
-
-2. **Update footer links** — at the bottom of the file:
-
-   Replace the `[Unreleased]` compare link:
-   ```
-   [Unreleased]: https://github.com/datlechin/tablepro/compare/v<old-version>...HEAD
-   ```
-   with:
-   ```
-   [Unreleased]: https://github.com/datlechin/tablepro/compare/v<version>...HEAD
-   [<version>]: https://github.com/datlechin/tablepro/compare/v<old-version>...v<version>
-   ```
-
-   `<old-version>` is the previous release version (the one currently in
-   the `[Unreleased]` compare link).
-
-### Step 3: Commit (main repo)
-
-Stage the changed files and commit:
+From `tablepro-windows/`:
 
 ```bash
-git add TablePro.xcodeproj/project.pbxproj CHANGELOG.md docs/changelog.mdx docs/vi/changelog.mdx
-git commit -m "$(cat <<'EOF'
-release: v<version>
-EOF
-)"
+npm run build:portable
+npm run build:installer
+npm run build:release
 ```
 
-If there were other staged/unstaged changes from the pre-flight check
-that the user agreed to include, stage those too.
+Meaning:
+- `build:portable` -> portable ZIP
+- `build:installer` -> MSI + NSIS installer build
+- `build:release` -> both portable and installer outputs
 
-### Step 4: Tag
+## Pre-flight checks
+
+Before changing anything, verify all of these:
+
+1. Version was provided.
+2. Version matches strict `X.Y.Z` semver.
+   - Current bump script rejects prerelease values like `1.2.3-beta.1`.
+3. Working tree status is understood.
+   - If there are uncommitted changes, ask whether they should be included.
+4. Dependency state is healthy.
+   - `npm ci` if needed.
+5. Validation passes for current code.
+
+Run from `tablepro-windows/`:
+```bash
+npx vitest run
+npx eslint .
+npm run build
+```
+
+Run from `tablepro-windows/src-tauri/`:
+```bash
+cargo test --workspace
+cargo clippy --workspace -- -D warnings
+```
+
+If these fail, fix the source first. Do not ship around failing validation.
+
+## Step 1: Bump version
+
+Use the existing script from `tablepro-windows/`:
 
 ```bash
-git tag v<version>
+powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version 0.2.0
 ```
 
-### Step 5: Push
+This updates:
+- `tablepro-windows/package.json`
+- `tablepro-windows/src-tauri/tauri.conf.json`
+- `tablepro-windows/src-tauri/Cargo.toml`
 
-Push the commit and the tag **separately** — `--follow-tags` only pushes
-annotated tags, but `git tag` creates lightweight tags:
+Do not hand-edit those three files unless the script is broken and you are fixing the script itself.
+
+## Step 2: Build release artifacts
+
+Use the existing script from `tablepro-windows/`:
 
 ```bash
-git push origin main && git push origin v<version>
+powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Target portable
+powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Target installer
+powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Target all
 ```
 
-This triggers the CI/CD pipeline (`.github/workflows/build.yml`) which
-automatically:
-- Builds arm64 and x86_64 binaries
-- Creates DMG and ZIP artifacts
-- Signs with Sparkle EdDSA
-- Generates and commits `appcast.xml`
-- Creates the GitHub Release with release notes extracted from CHANGELOG.md
+What the script does:
+- builds the frontend with Vite
+- builds release driver DLLs
+- builds the Tauri app
+- packages portable ZIP when target includes `portable`
+- builds MSI + NSIS when target includes `installer`
 
-### Step 6: Update Documentation Changelogs
+## Expected outputs
 
-The documentation lives in the main repo under `docs/`. Two changelog
-files need a new `<Update>` entry:
+### Portable
+Expected artifact pattern:
+- `tablepro-windows/target/TablePro-<version>-x64-portable.zip`
 
-- `docs/changelog.mdx` (English)
-- `docs/vi/changelog.mdx` (Vietnamese)
+Portable staging should include:
+- `TablePro.exe`
+- `plugins/driver_*.dll`
+- optional `WebView2Loader.dll`
+- optional `resources/`
 
-**How to write the entry:**
+### Installer
+Expected artifact locations:
+- `tablepro-windows/src-tauri/target/release/bundle/msi/*.msi`
+- `tablepro-windows/src-tauri/target/release/bundle/nsis/*.exe`
 
-1. Read the new version's section from `CHANGELOG.md` (the entries you
-   finalized in Step 2).
-2. Rewrite them as a user-friendly `<Update>` block — group entries
-   under `### New Features`, `### Improvements`, `### Bug Fixes`, etc.
-   (not the raw Added/Changed/Fixed/Removed from Keep a Changelog).
-3. Write concise, user-facing descriptions (not developer-internal
-   details). Skip purely internal refactors unless they have visible
-   impact.
+## Signing and updater behavior
 
-**English format** (`docs/changelog.mdx`):
+`build-release.ps1` reads `.env` and checks signing variables.
 
-```mdx
-<Update label="<Month Day, Year>" description="v<version>">
-  ### New Features
+Important behavior:
+- if `TAURI_SIGNING_PRIVATE_KEY` or `TAURI_SIGNING_PRIVATE_KEY_PATH` is available, the build keeps updater artifacts enabled
+- if no signing key is available, the script disables updater artifacts for that local build and still allows a local installer build path
 
-  - **Feature Name**: Description
+That unsigned fallback is expected for local release testing. Do not treat it as a release-script failure by itself.
 
-  ### Improvements
+## CI verification contract
 
-  - Description
+The Windows CI workflow is:
+- `tablepro-windows/.github/workflows/windows-build.yml`
 
-  ### Bug Fixes
+It validates:
+- `cargo clippy --workspace -- -D warnings`
+- `cargo test --workspace`
+- `npx vitest run`
+- `npx eslint .`
+- `npm run build`
+- `npx tauri build`
 
-  - Description
-</Update>
-```
+Use this workflow as the release quality bar.
 
-Insert the new `<Update>` block at the top of the file, right after the
-frontmatter `---` closing delimiter (before the first existing `<Update>`).
+## Optional git flow
 
-**Vietnamese format** (`docs/vi/changelog.mdx`):
+If the user wants a tagged release, use the normal git workflow after validation and artifact generation:
+1. review changed files
+2. commit the version bump and any intended release changes
+3. create a tag if requested
+4. push branch and tag only with explicit user approval
 
-Same structure but with Vietnamese text. Use the date format
-`<Day> tháng <Month>, <Year>` (e.g., `19 tháng 2, 2026`). Translate
-feature names and descriptions to Vietnamese. Follow the style of
-existing Vietnamese entries in the file.
+Keep git steps generic unless the user asked for a full release publication flow.
 
-**Important:** These changelog files are staged and committed together
-with the release in Step 3 — no separate commit needed.
+## Final checklist
 
-### Step 7: Check for Separate Plugin Changes
+A Windows release is ready only when all are true:
+- version was bumped by `scripts/bump-version.ps1`
+- validation commands passed
+- chosen artifact target built successfully
+- expected ZIP and/or MSI/NSIS outputs exist
+- signing-key behavior is understood for the current environment
+- CI workflow expectations still match the local process
 
-After the app release is pushed, check if any **separate plugin bundles**
-(Oracle, ClickHouse, SQLite, DuckDB) have changes since their last
-release. Also check `Plugins/TableProPluginKit/` — changes there affect
-all plugins.
+## Edge cases
 
-**Detection**: For each separate plugin, find its latest tag and check
-for commits:
+- Commands must run from `tablepro-windows/` unless the command explicitly targets `src-tauri/`.
+- Do not claim prerelease semver support. The current bump script allows only `X.Y.Z`.
+- Portable and installer builds are not the same artifact. Confirm which one the user wants.
+- Release builds depend on driver DLL builds. If a new driver was added but not added to scripts, release output will be incomplete.
+- Local builds without signing keys may skip updater artifacts. That is expected.
 
-```bash
-# Separate plugins and their directory + tag-name mappings:
-#   Oracle:     Plugins/OracleDriverPlugin/     plugin-oracle
-#   ClickHouse: Plugins/ClickHouseDriverPlugin/  plugin-clickhouse
-#   SQLite:     Plugins/SQLiteDriverPlugin/      plugin-sqlite
-#   DuckDB:     Plugins/DuckDBDriverPlugin/      plugin-duckdb
+## Quick workflow
 
-# For each plugin, find the latest tag:
-LAST_TAG=$(git tag -l "plugin-<name>-v*" --sort=-version:refname | head -1)
-
-# Check for changes since that tag (include PluginKit as shared dependency):
-git log --oneline "$LAST_TAG"..HEAD -- Plugins/<PluginDir>/ Plugins/TableProPluginKit/
-```
-
-If `LAST_TAG` is empty (never released), check for changes since the
-beginning of the repo.
-
-**If changes are found**: Tell the user which plugins have changes, show
-the relevant commits, and ask if they want to release them. Suggest
-bumping the patch version from the last tag (e.g., `1.0.0` → `1.0.1`).
-If the user confirms, proceed with the plugin release steps below for
-each plugin.
-
-**If no changes**: Skip — do not release plugins unnecessarily.
-
-## Post-release Summary
-
-After all pushes, print a summary:
-
-```
-Release v<version> (build <build-number>) pushed successfully.
-
-CI will now build arm64 + x86_64, create DMG/ZIP, update appcast.xml, create GitHub Release.
-Monitor: https://github.com/datlechin/TablePro/actions
-Release: https://github.com/datlechin/TablePro/releases/tag/v<version>
-```
-
-If plugin releases were also triggered, append:
-
-```
-Plugin releases:
-- <DisplayName> v<plugin-version>: https://github.com/datlechin/TablePro/releases/tag/plugin-<name>-v<plugin-version>
-```
-
----
-
-## Plugin Releases
-
-Separate plugin bundles (Oracle, ClickHouse, SQLite, DuckDB) are released
-independently from the main app via a dedicated workflow
-(`.github/workflows/build-plugin.yml`). They are also checked
-automatically during app releases (Step 7 above).
-
-### Usage
-
-```
-/release plugin-<name> <version>
-```
-
-Example: `/release plugin-oracle 1.0.0`
-
-### Tag Format
-
-```
-plugin-<name>-v<version>
-```
-
-Examples: `plugin-oracle-v1.0.0`, `plugin-clickhouse-v1.2.0`
-
-The `<name>` must match one of the cases in the workflow's mapping:
-`oracle`, `clickhouse` (sqlite and duckdb need to be added to the
-workflow's case statement when ready).
-
-### Plugin Release Steps
-
-1. **Verify tag is available** — `git tag -l "plugin-<name>-v<version>"`
-2. **Tag** — `git tag plugin-<name>-v<version>`
-3. **Push tag** — `git push origin plugin-<name>-v<version>`
-
-No version bumps or changelog edits needed — plugin bundles keep
-`MARKETING_VERSION = 1.0` and `CURRENT_PROJECT_VERSION = 1` in pbxproj.
-The version is embedded via the tag only.
-
-### What CI Does
-
-The `build-plugin.yml` workflow:
-
-1. Extracts plugin name and version from the tag
-2. Builds ARM64 and x86_64 via `scripts/build-plugin.sh`
-3. Strips binaries, code signs, creates ZIPs with SHA-256 checksums
-4. Optionally notarizes (if `NOTARIZE_PLUGINS` var is set)
-5. Creates a GitHub Release with both arch ZIPs
-6. Updates the plugin registry (`datlechin/tablepro-plugins` repo's
-   `plugins.json`) with download URLs, SHA-256 hashes, and
-   `minAppVersion` (read from the current `MARKETING_VERSION`)
-
-### Post-plugin-release Summary
-
-```
-Plugin <DisplayName> v<version> tag pushed.
-
-CI will build arm64 + x86_64, create ZIPs, update plugin registry.
-Monitor: https://github.com/datlechin/TablePro/actions
-Release: https://github.com/datlechin/TablePro/releases/tag/plugin-<name>-v<version>
-```
+1. Confirm target version and artifact type.
+2. Run validation commands.
+3. Run `scripts/bump-version.ps1`.
+4. Run `scripts/build-release.ps1` with the requested target.
+5. Verify output files.
+6. If requested, commit/tag/push with explicit approval.
