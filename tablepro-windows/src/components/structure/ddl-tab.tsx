@@ -15,6 +15,7 @@ export function DdlTab({ sessionId, tableName, schema }: DdlTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- reset loading state on fetch */
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -29,6 +30,7 @@ export function DdlTab({ sessionId, tableName, schema }: DdlTabProps) {
         setLoading(false);
       });
   }, [sessionId, tableName, schema]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleCopy = () => {
     navigator.clipboard.writeText(ddl).then(() => {

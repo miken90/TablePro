@@ -15,6 +15,9 @@ export const connect = (config: ConnectionConfig): Promise<string> =>
 export const disconnect = (sessionId: string): Promise<void> =>
   invoke("disconnect", { sessionId });
 
+export const reconnectSession = (sessionId: string): Promise<void> =>
+  invoke("reconnect_session", { sessionId });
+
 export const getConnectionStatus = (sessionId: string): Promise<ConnectionStatus> =>
   invoke("get_connection_status", { sessionId });
 

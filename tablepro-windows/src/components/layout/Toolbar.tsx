@@ -1,4 +1,4 @@
-import { Clock, Settings, Shield, Unplug } from "lucide-react";
+import { Clock, Loader2, RefreshCw, Settings, Shield, Sparkles, Unplug } from "lucide-react";
 import { formatTagLabel, tagClassName } from "../connection/connection-tag-picker";
 import { useConnectionStore } from "../../stores/connectionStore";
 import {
@@ -18,6 +18,7 @@ interface ToolbarProps {
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
   onToggleHistory?: () => void;
+  onToggleAiChat?: () => void;
   onRunQuery?: () => void;
 }
 
@@ -45,11 +46,14 @@ const LEVEL_COLORS: Record<number, string> = {
   5: "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-400 dark:hover:bg-red-900/60",
 };
 
-export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRunQuery }: ToolbarProps) {
+export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onToggleAiChat, onRunQuery }: ToolbarProps) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const connections = useConnectionStore((s) => s.connections);
   const getStatus = useConnectionStore((s) => s.getStatus);
   const disconnect = useConnectionStore((s) => s.disconnect);
+  const reconnect = useConnectionStore((s) => s.reconnect);
+  const isReconnecting = useConnectionStore((s) => s.isReconnecting);
+  const sessionIds = useConnectionStore((s) => s.sessionIds);
   const { isExecuting, queryText, result: queryResult, execute, cancel, pendingSafeCheck, confirmSafeCheck, cancelSafeCheck } = useQueryStore();
   const safeModeLevel = useSettingsStore((s) => s.settings.safeModeLevel);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
@@ -168,6 +172,23 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
               {formatTagLabel(connection.tag)}
             </span>
           )}
+          {selectedConnectionId && status === "error" && (
+            <button
+              onClick={() => {
+                const sid = sessionIds.get(selectedConnectionId);
+                if (sid) void reconnect(sid);
+              }}
+              disabled={isReconnecting}
+              className="ml-1 rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-accent-yellow disabled:opacity-50"
+              title="Reconnect"
+              aria-label="Reconnect to database"
+            >
+              {isReconnecting
+                ? <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                : <RefreshCw size={12} aria-hidden="true" />
+              }
+            </button>
+          )}
           {selectedConnectionId && (
             <button
               onClick={() => void handleDisconnect()}
@@ -214,6 +235,15 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onRu
           aria-label="Toggle query history"
         >
           <Clock size={15} aria-hidden="true" />
+        </button>
+
+        <button
+          onClick={onToggleAiChat}
+          className="rounded p-1 text-text-secondary hover:bg-surface-muted hover:text-text-primary"
+          title="AI Chat (Ctrl+Shift+L)"
+          aria-label="Toggle AI chat"
+        >
+          <Sparkles size={15} aria-hidden="true" />
         </button>
 
         <button

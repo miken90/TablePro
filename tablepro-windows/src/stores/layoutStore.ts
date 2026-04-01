@@ -47,6 +47,7 @@ interface LayoutState {
   // Panels
   historyVisible: boolean;
   filterVisible: boolean;
+  aiChatVisible: boolean;
 
   // Overlays
   quickSwitcherOpen: boolean;
@@ -77,6 +78,7 @@ interface LayoutState {
   setInspectorWidth: (w: number) => void;
   toggleHistory: () => void;
   toggleFilter: () => void;
+  toggleAiChat: () => void;
   setQuickSwitcherOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
@@ -99,6 +101,7 @@ export const useLayoutStore = create<LayoutState>()(
       inspectorWidth: INSPECTOR_DEFAULT,
       historyVisible: false,
       filterVisible: false,
+      aiChatVisible: false,
       quickSwitcherOpen: false,
       settingsOpen: false,
       helpOpen: false,
@@ -131,12 +134,13 @@ export const useLayoutStore = create<LayoutState>()(
       setInspectorWidth: (w) => set({ inspectorWidth: clamp(w, INSPECTOR_MIN, INSPECTOR_MAX) }),
       toggleHistory: () => set((s) => ({ historyVisible: !s.historyVisible })),
       toggleFilter: () => set((s) => ({ filterVisible: !s.filterVisible })),
+      toggleAiChat: () => set((s) => ({ aiChatVisible: !s.aiChatVisible })),
       setQuickSwitcherOpen: (open) => set({ quickSwitcherOpen: open }),
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setHelpOpen: (open) => set({ helpOpen: open }),
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
       openTable: (tableName, schema) => {
-        set((state) => ({
+        set((_state) => ({
           activeTableContext: { tableName, schema },
           viewMode: "table-browse",
           structureTarget: null,

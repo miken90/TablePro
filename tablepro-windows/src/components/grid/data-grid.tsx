@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { GridHeader } from './grid-header';
 import { GridRow } from './grid-row';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { useColumnWidths, FIXED_COLS_WIDTH } from './hooks/use-column-widths';
+import { useColumnWidths } from './hooks/use-column-widths';
 import { useGridKeyboard, ROW_HEIGHT } from './hooks/use-grid-keyboard';
 import type { DataGridProps } from './data-grid-types';
 

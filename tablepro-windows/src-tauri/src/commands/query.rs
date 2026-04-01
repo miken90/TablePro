@@ -182,6 +182,22 @@ pub async fn execute_query(
             Ok(result)
         }
         Err(error) => {
+            // Safety net: detect connection-level errors and emit connection:lost
+            let error_lower = error.to_string().to_lowercase();
+            if error_lower.contains("connection")
+                || error_lower.contains("broken pipe")
+                || error_lower.contains("connection reset")
+                || error_lower.contains("not connected")
+            {
+                let _ = app.emit(
+                    "connection:lost",
+                    serde_json::json!({
+                        "sessionId": &session_id,
+                        "message": error.to_string(),
+                    }),
+                );
+            }
+
             let _ = app.emit(
                 "query:error",
                 QueryErrorEvent {

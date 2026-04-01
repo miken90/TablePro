@@ -12,6 +12,7 @@ import { SettingsView } from "../settings/settings-view";
 import { FilterPanel } from "../filter/filter-panel";
 import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
+import { AiChatPanel } from "../ai/ai-chat-panel";
 import { ShortcutsHelp } from "../shared/ShortcutsHelp";
 import { UnsavedChangesDialog } from "../shared/unsaved-changes-dialog";
 import { UpdateNotification } from "../shared/update-notification";
@@ -60,6 +61,7 @@ export function MainLayout() {
   const inspectorWidth = useLayoutStore((s) => s.inspectorWidth);
   const selectedRowIndex = useLayoutStore((s) => s.selectedRowIndex);
   const historyVisible = useLayoutStore((s) => s.historyVisible);
+  const aiChatVisible = useLayoutStore((s) => s.aiChatVisible);
   const helpOpen = useLayoutStore((s) => s.helpOpen);
   const commandPaletteOpen = useLayoutStore((s) => s.commandPaletteOpen);
 
@@ -214,6 +216,7 @@ export function MainLayout() {
         onToggleSidebar={() => useLayoutStore.getState().toggleSidebar()}
         onOpenSettings={() => useLayoutStore.getState().setSettingsOpen(true)}
         onToggleHistory={() => useLayoutStore.getState().toggleHistory()}
+        onToggleAiChat={() => useLayoutStore.getState().toggleAiChat()}
         onRunQuery={() => useLayoutStore.getState().switchToQueryMode()}
       />
 
@@ -356,6 +359,24 @@ export function MainLayout() {
               <HistoryPanel
                 onSelectQuery={handleHistorySelect}
                 onClose={() => useLayoutStore.getState().toggleHistory()}
+              />
+            </div>
+          </>
+        )}
+
+        {/* AI Chat slide-over overlay */}
+        {aiChatVisible && isConnected && (
+          <>
+            <div
+              className="absolute inset-0 z-20 bg-black/20"
+              onClick={() => useLayoutStore.getState().toggleAiChat()}
+            />
+            <div
+              className="absolute right-0 top-0 h-full w-[400px] transform shadow-panel slide-in-right"
+              style={{ zIndex: 21 }}
+            >
+              <AiChatPanel
+                onClose={() => useLayoutStore.getState().toggleAiChat()}
               />
             </div>
           </>

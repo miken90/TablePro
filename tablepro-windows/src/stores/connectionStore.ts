@@ -12,6 +12,7 @@ interface ConnectionState {
   selectedConnectionId: string | null;
   connectionStatuses: Map<string, ConnectionStatus>;
   sessionIds: Map<string, string>; // SavedConnection id → Rust session UUID
+  isReconnecting: boolean;
 
   // Actions
   loadConnections: () => Promise<void>;
@@ -19,6 +20,7 @@ interface ConnectionState {
   selectConnection: (id: string | null) => void;
   connect: (id: string, config: ConnectionConfig) => Promise<void>;
   disconnect: (id: string) => Promise<void>;
+  reconnect: (sessionId: string) => Promise<void>;
   saveConnection: (connection: SavedConnection) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
   saveGroup: (group: ConnectionGroup) => Promise<void>;
@@ -33,6 +35,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   selectedConnectionId: null,
   connectionStatuses: new Map(),
   sessionIds: new Map(),
+  isReconnecting: false,
 
   loadConnections: async () => {
     const list = await commands.listConnections();
@@ -98,6 +101,19 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     toast.info("Disconnected");
   },
 
+  reconnect: async (sessionId) => {
+    set({ isReconnecting: true });
+    try {
+      await commands.reconnectSession(sessionId);
+      // Success handled by connection:reconnected event listener
+    } catch (err) {
+      const msg = extractErrorMessage(err);
+      toast.error("Reconnect failed", { description: msg });
+    } finally {
+      set({ isReconnecting: false });
+    }
+  },
+
   saveConnection: async (connection) => {
     await commands.saveConnection(connection);
     set((s) => {
@@ -161,6 +177,22 @@ void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => 
         description: host ?? "Database connection was lost",
         duration: Infinity,
       });
+      break;
+    }
+  }
+});
+
+void listen<{ sessionId: string }>("connection:reconnected", (event) => {
+  const { sessionId } = event.payload;
+  const state = useConnectionStore.getState();
+  for (const [connId, sid] of state.sessionIds) {
+    if (sid === sessionId) {
+      useConnectionStore.setState((s) => {
+        const statuses = new Map(s.connectionStatuses);
+        statuses.set(connId, "connected");
+        return { connectionStatuses: statuses };
+      });
+      toast.success("Connection restored");
       break;
     }
   }

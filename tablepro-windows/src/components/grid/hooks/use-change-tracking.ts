@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { SortingState } from '@tanstack/react-table';
 import { useChangeStore } from '../../../stores/changeStore';
 import type { CellChange, RowChange } from '../../../stores/changeStore';

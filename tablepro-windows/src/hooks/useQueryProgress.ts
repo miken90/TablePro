@@ -47,6 +47,7 @@ export function useQueryProgress(sessionId?: string | null): QueryProgressState 
   const [state, setState] = useState<QueryProgressState>(INITIAL_STATE);
   const targetSessionId = useMemo(() => (sessionId ?? '').trim(), [sessionId]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- reset state when session changes */
   useEffect(() => {
     if (!targetSessionId) {
       setState(INITIAL_STATE);
@@ -126,6 +127,7 @@ export function useQueryProgress(sessionId?: string | null): QueryProgressState 
       }
     };
   }, [targetSessionId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return state;
 }

@@ -1,6 +1,6 @@
 # TablePro Project Roadmap
 
-> **Last Updated**: 2026-03-28
+> **Last Updated**: 2026-04-01
 > **Current State**: Windows v1.0-rc — 95% feature-complete for core workflows
 
 ## Platform Status
@@ -23,15 +23,16 @@
 | P2 — Quick Wins | 2026-03-18 | Auto-updater, URL import, tags, copy-as-SQL, ENUM picker, approx count, filter presets, create table, preview tabs | ✅ Complete |
 | UI/UX Redesign | 2026-03-19 | Full UI overhaul — run split-button, status bar, design tokens, semantic colors, welcome page, sidebar groups, tab colors | ✅ Complete |
 | Audit & Harden v2 | 2026-03-28 | SSH TOFU, graceful shutdown, export timeout, sidebar debounce, schema timeout, dirty tab confirm, ESLint, CI lint+signing | ✅ Complete |
+| v0.3.0 — Tech Debt + Health + AI | 2026-04-01 | BOM fix, ESLint cleanup, health monitor, AI foundation/IPC/schema context/settings/chat storage/chat panel/inline suggestions/polish | ✅ Complete |
 
-## Verification (2026-03-28)
+## Verification (2026-04-01)
 
 | Check | Result |
 |-------|--------|
 | `cargo clippy --workspace -D warnings` | ✅ 0 warnings |
-| `cargo test --workspace` | ✅ 157 passed |
+| `cargo test --workspace` | ✅ 167 passed |
 | `npx vitest run` | ✅ 141 passed |
-| `npx eslint .` | ✅ 0 errors, 43 warnings |
+| `npx eslint .` | ✅ 0 errors, 6 warnings |
 | `npm run build` (tsc + vite) | ✅ Clean |
 
 ---
@@ -61,6 +62,8 @@
 | **CI/CD** | GitHub Actions: clippy, tests, vitest, ESLint, Vite build, MSI/NSIS, code signing template |
 | **Auto-Updater** | Tauri updater plugin (release builds) |
 | **Polish** | Preview tabs, confirm discard dirty tabs, ping on tab switch, error boundary, graceful shutdown |
+| **AI** | Chat panel (streaming, markdown, code blocks), inline ghost text suggestions, multi-provider settings (OpenAI/OpenRouter/LMStudio/Ollama/Custom), per-feature routing, schema context injection, conversation persistence |
+| **Health** | Connection health monitor (30s ping), reconnect button, connection:lost/reconnected events |
 
 ### ❌ Not Ported — Grouped by Priority
 
@@ -71,11 +74,11 @@
 
 | # | Feature | macOS Source | Effort | Notes |
 |---|---------|-------------|--------|-------|
-| 1 | **AI Chat panel** | `Views/AIChat/`, `Core/AI/` | L | AIChatPanelView, message rendering, code blocks |
-| 2 | **AI inline suggestions** (ghost text) | `InlineSuggestionManager.swift` | L | Ghost text overlay in editor, multi-provider |
-| 3 | **AI provider config** | `AIProviderFactory.swift`, `AISettingsView.swift` | M | OpenAI, Anthropic, Gemini, Ollama + API key storage |
-| 4 | **AI schema context** | `AISchemaContext.swift` | M | Feed table/column metadata into AI prompts |
-| 5 | **Connection health monitor** (auto-reconnect) | `ConnectionHealthMonitor.swift` | M | Periodic ping + exponential backoff reconnect. Frontend listener already wired |
+| 1 | ~~**AI Chat panel**~~ | `Views/AIChat/`, `Core/AI/` | L | ✅ Done in v0.3.0 |
+| 2 | ~~**AI inline suggestions**~~ (ghost text) | `InlineSuggestionManager.swift` | L | ✅ Done in v0.3.0 |
+| 3 | ~~**AI provider config**~~ | `AIProviderFactory.swift`, `AISettingsView.swift` | M | ✅ Done in v0.3.0 |
+| 4 | ~~**AI schema context**~~ | `AISchemaContext.swift` | M | ✅ Done in v0.3.0 |
+| 5 | ~~**Connection health monitor**~~ | `ConnectionHealthMonitor.swift` | M | ✅ Done in v0.3.0 (no auto-reconnect, manual reconnect button) |
 | 6 | **Licensing system** | `LicenseManager.swift`, `LicenseAPIClient.swift`, `LicenseSignatureVerifier.swift` | L | Offline-first, signature verification, 7-day revalidation, grace period |
 | 7 | **License settings UI** | `LicenseSettingsView.swift`, `LicenseStorage.swift` | M | Activation, status display, deactivation |
 

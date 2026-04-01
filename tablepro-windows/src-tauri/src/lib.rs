@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use tauri::Manager;
 
-use commands::connection::{connect, disconnect, get_connection_status, test_connection};
+use commands::connection::{
+    connect, disconnect, get_connection_status, reconnect_session, test_connection,
+};
 use commands::data::{generate_row_sql, save_changes};
 use commands::export::export_to_file;
 use commands::filter::{delete_filter_preset, load_filter_presets, save_filter_preset};
@@ -27,9 +29,15 @@ use commands::storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
 use commands::structure::{apply_alter, create_table, generate_alter_sql_command};
+use commands::ai::{
+    ai_build_context, ai_cancel_chat, ai_chat_stream, ai_clear_all_conversations,
+    ai_create_conversation, ai_delete_conversation, ai_get_conversation, ai_inline_suggest,
+    ai_list_conversations, ai_list_models, ai_save_message, ai_test_provider,
+};
 use plugin::PluginManager;
+use services::health_monitor::HealthMonitor;
 use services::ConnectionManager;
-use storage::{ConnectionStore, FilterStore, HistoryStore, SettingsStore};
+use storage::{AiChatStore, ConnectionStore, FilterStore, HistoryStore, SettingsStore};
 use tokio::sync::Mutex;
 
 fn build_history_store() -> HistoryStore {
@@ -93,6 +101,8 @@ pub fn run() {
 
     builder
         .manage(Mutex::new(connection_manager))
+        .manage(Mutex::new(HealthMonitor::new()))
+        .manage(Mutex::new(commands::ai::AiCancelState::new()))
         .manage(Mutex::new(SettingsStore::new()))
         .manage(Mutex::new({
             let mut store = ConnectionStore::new();
@@ -111,6 +121,20 @@ pub fn run() {
                 tracing::warn!("Failed to load filter presets: {e}");
             }
             store
+        }))
+        .manage(Mutex::new({
+            match AiChatStore::new() {
+                Ok(store) => {
+                    if let Err(e) = store.cleanup_old_for_async(30) {
+                        tracing::warn!("AI chat cleanup failed: {e}");
+                    }
+                    store
+                }
+                Err(e) => {
+                    tracing::error!("Failed to init AI chat store: {e}");
+                    AiChatStore::new_in_memory().expect("in-memory AI chat store")
+                }
+            }
         }))
         .setup(|app| {
             // Set the window icon explicitly — bundle.icon only applies to built
@@ -134,6 +158,7 @@ pub fn run() {
             connect,
             disconnect,
             get_connection_status,
+            reconnect_session,
             // query
             execute_query,
             fetch_rows,
@@ -184,11 +209,29 @@ pub fn run() {
             save_filter_preset,
             load_filter_presets,
             delete_filter_preset,
+            // ai
+            ai_chat_stream,
+            ai_list_models,
+            ai_test_provider,
+            ai_cancel_chat,
+            ai_inline_suggest,
+            ai_build_context,
+            ai_create_conversation,
+            ai_save_message,
+            ai_list_conversations,
+            ai_get_conversation,
+            ai_delete_conversation,
+            ai_clear_all_conversations,
         ])
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::CloseRequested { .. } => {
                     tracing::info!("Window CloseRequested: {}", window.label());
+                    // Stop health monitor first
+                    let hm_state = window.state::<Mutex<HealthMonitor>>();
+                    if let Ok(mut hm) = hm_state.try_lock() {
+                        hm.stop_all();
+                    }
                     let state = window.state::<Mutex<ConnectionManager>>();
                     let lock_result = state.try_lock();
                     if let Ok(mut guard) = lock_result {

@@ -62,7 +62,7 @@ describe('editorStore', () => {
 
   it('setActiveTab changes activeTabId', () => {
     const id1 = useEditorStore.getState().addTab('A');
-    const id2 = useEditorStore.getState().addTab('B');
+    useEditorStore.getState().addTab('B');
     useEditorStore.getState().setActiveTab(id1);
     expect(useEditorStore.getState().activeTabId).toBe(id1);
   });
@@ -213,7 +213,7 @@ describe('editorStore persistence', () => {
 
   // The partialize function as defined in editorStore.ts — mirrors the persist config.
   // We test the exact same logic to ensure serialization behaves correctly.
-  function partialize(state: { tabs: any[]; activeTabId: string | null }) {
+  function partialize(state: { tabs: { id: string; title: string; content: string }[]; activeTabId: string | null }) {
     return {
       tabs: state.tabs.map((t) => ({
         id: t.id,

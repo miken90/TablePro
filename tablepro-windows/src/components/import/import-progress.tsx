@@ -16,6 +16,7 @@ export function ImportProgress({ isImporting, onComplete }: ImportProgressProps)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const unlistenRef = useRef<(() => void) | null>(null);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- reset state on import start */
   useEffect(() => {
     if (!isImporting) return;
 
@@ -55,6 +56,7 @@ export function ImportProgress({ isImporting, onComplete }: ImportProgressProps)
       unlistenRef.current?.();
     };
   }, [isImporting, onComplete]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
 

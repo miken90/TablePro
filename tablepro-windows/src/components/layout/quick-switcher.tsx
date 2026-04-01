@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Search, X, Database } from "lucide-react";
 import { useSchemaStore } from "../../stores/schemaStore";
 
@@ -54,14 +54,17 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
     | { kind: "all-schemas" }
     | { kind: "table"; idx: number };
 
-  const items: Item[] = [];
+  const items = useMemo(() => {
+    const result: Item[] = [];
+    if (hasSchemas) {
+      result.push({ kind: "all-schemas" });
+      filteredSchemas.forEach((s) => result.push({ kind: "schema", schema: s }));
+    }
+    filteredTables.forEach((_, idx) => result.push({ kind: "table", idx }));
+    return result;
+  }, [hasSchemas, filteredSchemas, filteredTables]);
 
-  if (hasSchemas) {
-    items.push({ kind: "all-schemas" });
-    filteredSchemas.forEach((s) => items.push({ kind: "schema", schema: s }));
-  }
-  filteredTables.forEach((_, idx) => items.push({ kind: "table", idx }));
-
+  /* eslint-disable react-hooks/set-state-in-effect -- reset state on open */
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -69,10 +72,13 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
+  /* eslint-disable react-hooks/set-state-in-effect -- reset cursor on query change */
   useEffect(() => {
     setCursor(0);
   }, [query]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const selectItem = useCallback(
     (itemIdx: number) => {

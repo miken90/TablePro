@@ -97,14 +97,17 @@ export function useGridActions({
     return () => { worker.terminate(); filterWorkerRef.current = null; };
   }, []);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- sync filter worker on result change */
   useEffect(() => {
     if (filterWorkerRef.current && result && !isTableMode)
       filterWorkerRef.current.postMessage({ type: 'set-rows', rows: result.rows });
     setQueryFilteredIndices(null);
     setQuerySearchTerm('');
   }, [result, isTableMode]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const prevTableRef = useRef(tableName);
+  /* eslint-disable react-hooks/set-state-in-effect -- reset selection on table switch */
   useEffect(() => {
     if (prevTableRef.current !== tableName) {
       setSelection(EMPTY_SELECTION);
@@ -112,6 +115,7 @@ export function useGridActions({
     }
     prevTableRef.current = tableName;
   }, [tableName]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleQueryQuickSearch = useCallback((term: string, _whereClause: string) => {
     setQuerySearchTerm(term);
