@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working in this repository.
 
 ## Role & Responsibilities
 
-Your role is to analyze user requirements, delegate tasks to appropriate specialized agents, and ensure cohesive delivery that matches repository architecture and current tool availability.
+Your role is to analyze requirements, delegate to available specialized agents, and keep implementation aligned with this repo's active target: Windows.
 
 ## Workflow Inheritance
 
@@ -17,223 +17,119 @@ Your role is to analyze user requirements, delegate tasks to appropriate special
 **IMPORTANT:** Analyze the skills catalog and activate relevant skills during the task.
 **IMPORTANT:** Follow `%USERPROFILE%/.claude/rules/development-rules.md` strictly.
 **IMPORTANT:** Before planning or implementation, always read `./README.md` first.
-**IMPORTANT:** When delegating implementation work, only use agent types that actually exist in the current toolset.
+**IMPORTANT:** When delegating implementation work, only use agent types that exist in the current toolset.
 **IMPORTANT:** Sacrifice grammar for concision in reports. List unresolved questions at the end.
 
-## Project Overview
+## Target Scope (Windows-first)
 
-TablePro is a native macOS database client (SwiftUI + AppKit) — a fast, lightweight alternative to TablePlus. macOS 14.0+, Swift 5.9, Universal Binary (arm64 + x86_64).
+This repo has two platform codebases, but implementation default is Windows:
 
-- **Source**: `TablePro/` — `Core/` (business logic, services), `Views/` (UI), `Models/` (data structures), `ViewModels/`, `Extensions/`, `Theme/`
-- **Plugins**: `Plugins/` — 8 `.tableplugin` bundles (MySQL, PostgreSQL, SQLite, ClickHouse, MSSQL, MongoDB, Redis, Oracle) + `TableProPluginKit` shared framework
-- **C bridges**: Each plugin contains its own C bridge module (e.g., `Plugins/MySQLDriverPlugin/CMariaDB/`, `Plugins/PostgreSQLDriverPlugin/CLibPQ/`)
-- **Static libs**: `Libs/` — pre-built `libmariadb*.a`, `libpq*.a`, etc. (Git LFS tracked)
-- **SPM deps**: CodeEditSourceEditor (`main` branch, tree-sitter editor), Sparkle (2.8.1, auto-update), OracleNIO. Managed via Xcode, no `Package.swift`.
+- **Primary implementation target:** `tablepro-windows/`
+- **Reference-only upstream:** `TablePro/` (macOS Swift/AppKit)
 
-## Build & Development Commands
+Rules:
+1. Implement new features, fixes, tests, and release work in `tablepro-windows/` by default.
+2. Use `TablePro/` only to inspect behavior and parity when porting features.
+3. Do not run macOS/Xcode build, test, lint, or release flows unless the user explicitly asks for macOS work.
+
+## Project Overview (Windows app)
+
+`tablepro-windows/` is a Tauri v2 desktop app using:
+- Rust backend (`tablepro-windows/src-tauri/`)
+- React + TypeScript frontend (`tablepro-windows/src/`)
+- Windows DLL plugin drivers (`tablepro-windows/src-tauri/driver-*`)
+
+## Build, Test, and Release Commands (Default)
+
+Run from `tablepro-windows/` unless noted.
 
 ```bash
-# Build (development) — -skipPackagePluginValidation required for SwiftLint plugin in CodeEditSourceEditor
-xcodebuild -project TablePro.xcodeproj -scheme TablePro -configuration Debug build -skipPackagePluginValidation
+# Install deps
+npm ci
 
-# Clean build
-xcodebuild -project TablePro.xcodeproj -scheme TablePro clean
+# Frontend dev/build
+npm run dev
+npm run build
 
-# Build and run
-xcodebuild -project TablePro.xcodeproj -scheme TablePro -configuration Debug build -skipPackagePluginValidation && open build/Debug/TablePro.app
+# Frontend quality
+npx vitest run
+npx eslint .
 
-# Release builds
-scripts/build-release.sh arm64|x86_64|both
+# Tauri dev/build
+npm run dev:tauri
+npm run build:debug
+npx tauri build
 
-# Lint & format
-swiftlint lint                    # Check issues
-swiftlint --fix                   # Auto-fix
-swiftformat .                     # Format code
-
-# Tests
-xcodebuild -project TablePro.xcodeproj -scheme TablePro test -skipPackagePluginValidation
-xcodebuild -project TablePro.xcodeproj -scheme TablePro test -skipPackagePluginValidation -only-testing:TableProTests/TestClassName
-xcodebuild -project TablePro.xcodeproj -scheme TablePro test -skipPackagePluginValidation -only-testing:TableProTests/TestClassName/testMethodName
-
-# DMG
-scripts/create-dmg.sh
+# Release artifacts (PowerShell wrappers)
+npm run build:portable
+npm run build:installer
+npm run build:release
 ```
+
+Rust commands run from `tablepro-windows/src-tauri/`:
+
+```bash
+cargo test --workspace
+cargo clippy --workspace -- -D warnings
+```
+
+Version bump (from `tablepro-windows/`):
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version X.Y.Z
+```
+
+## Windows Architecture Snapshot
+
+- **Host app:** Tauri commands/services in `tablepro-windows/src-tauri/src/commands` and `.../services`
+- **Plugin runtime:** DLL loading and ABI bridge in `tablepro-windows/src-tauri/src/plugin/`
+- **Plugin SDK:** `tablepro-windows/src-tauri/plugin-sdk/`
+- **Driver crates:** `tablepro-windows/src-tauri/driver-postgres`, `driver-mysql`, `driver-mssql`, `driver-sqlite`
+- **Frontend app:** React UI and state in `tablepro-windows/src/`
+- **Windows CI:** `tablepro-windows/.github/workflows/windows-build.yml`
+
+## Porting Flow (macOS parity as reference)
+
+When asked to port a feature:
+1. Inspect `TablePro/` for expected behavior, edge cases, and UX intent.
+2. Map behavior to existing Windows architecture (`tablepro-windows/`).
+3. Implement only in Windows paths unless user explicitly asks for macOS edits.
+4. Add/adjust Rust and/or TS tests in Windows codebase.
+5. Validate with Windows commands above.
 
 ## Code Search Priority
 
-- **Prefer `ccc` first** for semantic/conceptual code search, architecture discovery, related-code exploration, and cross-file understanding.
-- Use the `ccc` skill or `ccc search` before falling back to `Grep`/`Glob` when the task is not a simple exact filename/string/symbol lookup.
-- Use `Grep`/`Glob` directly only for exact string, symbol, or file-name lookups where semantic indexing is unnecessary.
-- If `ccc` is not initialized for this repo, run `ccc init -f`, then `ccc index`, then retry the search.
-- In Windows Bash environments, use `PYTHONIOENCODING=utf-8 ccc ...` if encoding issues appear.
-
-## Architecture
-
-### Plugin System
-
-All database drivers are `.tableplugin` bundles loaded at runtime by `PluginManager` (`Core/Plugins/`):
-
-- **TableProPluginKit** (`Plugins/TableProPluginKit/`) — shared framework with `PluginDatabaseDriver`, `DriverPlugin`, `TableProPlugin` protocols and transfer types (`PluginQueryResult`, `PluginColumnInfo`, etc.)
-- **PluginDriverAdapter** (`Core/Plugins/PluginDriverAdapter.swift`) — bridges `PluginDatabaseDriver` → `DatabaseDriver` protocol
-- **DatabaseDriverFactory** (`Core/Database/DatabaseDriver.swift`) — looks up plugins via `DatabaseType.pluginTypeId`
-- **DatabaseManager** (`Core/Database/DatabaseManager.swift`) — connection pool, lifecycle, primary interface for views/coordinators
-- **ConnectionHealthMonitor** — 30s ping, auto-reconnect with exponential backoff
-
-Plugin bundles under `Plugins/`:
-
-| Plugin                 | Database Types       | C Bridge             |
-| ---------------------- | -------------------- | -------------------- |
-| MySQLDriverPlugin      | MySQL, MariaDB       | CMariaDB             |
-| PostgreSQLDriverPlugin | PostgreSQL, Redshift | CLibPQ               |
-| SQLiteDriverPlugin     | SQLite               | (Foundation sqlite3) |
-| ClickHouseDriverPlugin | ClickHouse           | (URLSession HTTP)    |
-| MSSQLDriverPlugin      | SQL Server           | CFreeTDS             |
-| MongoDBDriverPlugin    | MongoDB              | CLibMongoc           |
-| RedisDriverPlugin      | Redis                | CRedis               |
-| OracleDriverPlugin     | Oracle               | OracleNIO (SPM)      |
-
-When adding a new driver: create a new plugin bundle under `Plugins/`, implement `DriverPlugin` + `PluginDatabaseDriver`, add target to pbxproj. See `docs/development/plugin-system/` for details.
-
-When adding a new method to the driver protocol: add to `PluginDatabaseDriver` (with default implementation), then update `PluginDriverAdapter` to bridge it to `DatabaseDriver`.
-
-### Editor Architecture (CodeEditSourceEditor)
-
-- **`SQLEditorTheme`** — single source of truth for editor colors/fonts
-- **`TableProEditorTheme`** — adapter to CodeEdit's `EditorTheme` protocol
-- **`CompletionEngine`** — framework-agnostic; **`SQLCompletionAdapter`** bridges to CodeEdit's `CodeSuggestionDelegate`
-- **`EditorTabBar`** — pure SwiftUI tab bar
-- Cursor model: `cursorPositions: [CursorPosition]` (multi-cursor via CodeEditSourceEditor)
-
-### Change Tracking Flow
-
-1. User edits cell → `DataChangeManager` records change
-2. User clicks Save → `SQLStatementGenerator` produces INSERT/UPDATE/DELETE
-3. `DataChangeUndoManager` provides undo/redo
-4. `AnyChangeManager` abstracts over concrete manager for protocol-based usage
-
-### Main Coordinator Pattern
-
-`MainContentCoordinator` is the central coordinator, split across 7+ extension files in `Views/Main/Extensions/` (e.g., `+Alerts`, `+Filtering`, `+Pagination`, `+RowOperations`). When adding coordinator functionality, add a new extension file rather than growing the main file.
-
-### Source Organization
-
-`Core/Services/` is split into domain subdirectories:
-
-| Subdirectory      | Contents                                                               |
-| ----------------- | ---------------------------------------------------------------------- |
-| `Export/`         | ExportService, ImportService, XLSXWriter                               |
-| `Formatting/`     | SQLFormatterService, DateFormattingService                             |
-| `Infrastructure/` | AppNotifications, DeeplinkHandler, WindowOpener, UpdaterBridge, etc.   |
-| `Licensing/`      | LicenseManager, LicenseAPIClient, LicenseSignatureVerifier             |
-| `Query/`          | SQLDialectProvider, TableQueryBuilder, RowParser, RowOperationsManager |
-
-`Models/` is split into: `AI/`, `Connection/`, `Database/`, `Export/`, `Query/`, `Settings/`, `UI/`, `Schema/`, `ClickHouse/`
-
-`Core/Utilities/` is split into: `Connection/`, `SQL/`, `File/`, `UI/`
-
-`Core/QuerySupport/` contains MongoDB and Redis query builders/statement generators (non-driver query logic).
-
-### Storage Patterns
-
-| What                 | How              | Where                                       |
-| -------------------- | ---------------- | ------------------------------------------- |
-| Connection passwords | Keychain         | `ConnectionStorage`                         |
-| User preferences     | UserDefaults     | `AppSettingsStorage` / `AppSettingsManager` |
-| Query history        | SQLite FTS5      | `QueryHistoryStorage`                       |
-| Tab state            | JSON persistence | `TabPersistenceService` / `TabStateStorage` |
-| Filter presets       | —                | `FilterSettingsStorage`                     |
-
-### Logging
-
-Use OSLog, never `print()`:
-
-```swift
-import os
-private static let logger = Logger(subsystem: "com.TablePro", category: "ComponentName")
-```
-
-## Code Style
-
-**Authoritative sources**: `.swiftlint.yml` and `.swiftformat` — check those files for the full rule set. Key points that aren't obvious from config:
-
-- **4 spaces** indentation (never tabs except Makefile/pbxproj)
-- **120 char** target line length (SwiftFormat); SwiftLint warns at 180, errors at 300
-- **K&R braces**, LF line endings, no semicolons, no trailing commas
-- **Imports**: system frameworks alphabetically → third-party → local, blank line after imports
-- **Access control**: always explicit (`private`, `internal`, `public`). Specify on extension, not individual members.
-- **No force unwrapping/casting** — use `guard let`, `if let`, `as?`
-- **Acronyms as words**: `JsonEncoder` not `JSONEncoder` (except SDK types)
-- **No unnecessary comments**: Don't add comments that restate what the code already says. Only comment to explain non-obvious "why" reasoning or clarify genuinely complex logic.
-- **Extension access modifiers on the extension itself**:
-    ```swift
-    // Good
-    public extension NSEvent {
-        var semanticKeyCode: KeyCode? { ... }
-    }
-    ```
-
-### SwiftLint Limits
-
-| Metric                | Warning | Error |
-| --------------------- | ------- | ----- |
-| File length           | 1200    | 1800  |
-| Type body             | 1100    | 1500  |
-| Function body         | 160     | 250   |
-| Cyclomatic complexity | 40      | 60    |
-
-When approaching limits: extract into `TypeName+Category.swift` extension files in an `Extensions/` subfolder. Group by domain logic, not arbitrary line counts.
+- Prefer `ccc` first for semantic and cross-file discovery.
+- Use `Grep`/`Glob` for exact symbol or path lookups.
+- If needed: `ccc init -f`, `ccc index`, then `ccc search`.
+- In Windows Bash with encoding issues: `PYTHONIOENCODING=utf-8 ccc ...`.
 
 ## Mandatory Rules
 
-These are **non-negotiable** — never skip them:
-
-1. **CHANGELOG.md**: Update under `[Unreleased]` section (Added/Fixed/Changed) for new features and notable changes. But do **not** add a "Fixed" entry for fixing something that is itself still unreleased — if a feature under `[Unreleased]` has a bug, just fix it without adding another CHANGELOG entry. "Fixed" entries are only for bugs in already-released features. Documentation-only changes (`docs/`) do **not** need a CHANGELOG entry.
-
-2. **Localization**: Use `String(localized:)` for new user-facing strings in computed properties, AppKit code, alerts, and error descriptions. SwiftUI view literals (`Text("literal")`, `Button("literal")`) auto-localize. Do NOT localize technical terms (font names, database types, SQL keywords, encoding names).
-
-3. **Documentation**: Update docs in `docs/` (Mintlify-based) when adding/changing features. Key mappings:
-    - New keyboard shortcuts → `docs/features/keyboard-shortcuts.mdx`
-    - UI/feature changes → relevant `docs/features/*.mdx` page
-    - Settings changes → `docs/customization/settings.mdx`
-    - Database driver changes → `docs/databases/*.mdx`
-    - Update both English (`docs/`) and Vietnamese (`docs/vi/`) pages
-
-4. **Test-first correctness**: When tests fail, fix the **source code** — never adjust tests to match incorrect output. Tests define expected behavior.
-
-5. **Lint after changes**: Run `swiftlint lint --strict` to verify compliance.
-
-6. **Commit messages**: Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/). Single line only, no description body. Examples: `docs: fix installation instructions for unsigned app`, `fix: prevent crash on empty query result`, `feat: add CSV export`.
+1. **CHANGELOG.md:** Update `[Unreleased]` for notable shipped-facing changes. Documentation-only changes do not require CHANGELOG updates.
+2. **Test-first correctness:** If tests fail, fix source behavior. Do not change tests to match broken behavior.
+3. **Windows validation:** For Windows implementation changes, run relevant checks from this doc (`vitest`, `eslint`, `cargo test`, `cargo clippy`, `npm run build`).
+4. **Commit messages:** Use Conventional Commits, single-line subject.
 
 ## Agent Execution Strategy
 
-- **Plans must include edge cases.** When creating implementation plans, identify edge cases, thread safety concerns, and boundary conditions. Include them as explicit checklist items in the plan — don't defer discovery to code review.
-- **Implementation includes self-review.** Before committing, agents must check: thread safety (lock coverage, race conditions), all code paths (loops, early returns, between iterations), error handling, and flag/state reset logic. This eliminates the review→fix→review cycle.
-- **Tests are part of implementation, not a separate step.** When implementing a feature, write tests in the same commit or immediately after — don't wait for a separate `/write-tests` invocation. The implementation agent should include test writing in its scope.
-- **Always use available specialized agents** for implementation work. Use the Agent tool (not subagents/tasks) to delegate coding to agents that exist in the current toolset (e.g., `fullstack-developer`, `feature-dev:code-architect`, `code-simplifier`).
-- **Always parallelize** independent tasks. Launch multiple agents in a single message.
-- **Main context = orchestrator only.** Read files, launch agents, summarize results, update tracking. Never do heavy implementation directly.
-- **Agent prompts must be self-contained.** Include file paths, the specific problem, and clear instructions.
-- **Use worktree isolation** (`isolation: "worktree"`) for agents making code changes. This keeps the main branch clean and allows parallel work without conflicts.
-- **Implementation standards** (apply to ALL new features and refactors): Clean architecture, correct macOS/Apple platform approach, proper design patterns, no backward compatibility hacks, easy to maintain and extensible. Always include these requirements in agent prompts.
-
-## Performance Pitfalls
-
-These have caused real production bugs — be aware when working in editor/autocomplete/persistence code:
-
-- **Never use `string.count`** on large strings — O(n) in Swift. Use `(string as NSString).length` for O(1).
-- **Never use `string.index(string.startIndex, offsetBy:)` in loops** on bridged NSStrings — O(n) per call. Use `(string as NSString).character(at:)` for O(1) random access.
-- **Never call `ensureLayout(forCharacterRange:)`** — defeats `allowsNonContiguousLayout`. Let layout manager queries trigger lazy local layout.
-- **SQL dumps can have single lines with millions of characters** — cap regex/highlight ranges at 10k chars.
-- **Tab persistence**: `QueryTab.toPersistedTab()` truncates queries >500KB to prevent JSON freeze. `TabStateStorage.saveLastQuery()` skips writes >500KB.
-
-## Writing Style (Docs & Marketing Copy)
-
-Write like a developer, not a marketing AI. Be specific (numbers, tech names) over generic adjectives. Vary sentence rhythm. Cut filler.
-
-**Banned words**: seamless, robust, comprehensive, intuitive, effortless, powerful (as filler), streamlined, leverage, elevate, harness, supercharge, unlock, unleash, dive into, game-changer, empower, delve. No "Absolutely!" / "Ready to dive in?" openers.
-
-**Em dashes**: minimize; use colons or periods instead. Use hyphens (-) in `<title>` tags, never em dashes (—).
+- Plans must include edge cases, state transitions, and failure paths.
+- Implementation includes self-review (thread safety, error handling, state reset, retries/timeouts where relevant).
+- Tests are part of implementation, not an afterthought.
+- Delegate implementation to available specialized agents.
+- Parallelize independent tasks.
+- Keep prompts self-contained with explicit file paths and acceptance criteria.
+- Use worktree isolation for code-changing agents.
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/build.yml`) triggered by `v*` tags: lint → build arm64 → build x86_64 → release (DMG/ZIP + Sparkle signatures). Release notes auto-extracted from `CHANGELOG.md`.
+Windows pipeline source of truth:
+- `tablepro-windows/.github/workflows/windows-build.yml`
+
+Current CI quality bar includes:
+- `cargo clippy --workspace -- -D warnings`
+- `cargo test --workspace`
+- `npx vitest run`
+- `npx eslint .`
+- `npm run build`
+- `npx tauri build`

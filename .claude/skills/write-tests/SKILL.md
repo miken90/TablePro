@@ -10,6 +10,8 @@ description: >
 
 Use this skill only for `tablepro-windows/`.
 
+`TablePro/` (macOS) is reference-only context for parity. Do not run Xcode/macOS test flows from this skill unless explicitly requested.
+
 This app has 2 test tracks:
 - TypeScript tests with Vitest under `tablepro-windows/src/**/*.test.ts`
 - Rust tests with `cargo test --workspace` under `tablepro-windows/src-tauri/`

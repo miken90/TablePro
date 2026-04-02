@@ -175,6 +175,7 @@ These are **non-negotiable** — never skip them:
 ## Python Scripts (Skills)
 
 When running Python scripts from skills, use the venv Python interpreter:
+- **Windows (default in this repo workflow):** `~/.claude/skills/.venv/Scripts/python.exe scripts/xxx.py`
 - **Linux/macOS:** `skills/.venv/bin/python3 scripts/xxx.py`
 
 **IMPORTANT:** When scripts fail, try to fix them directly.
