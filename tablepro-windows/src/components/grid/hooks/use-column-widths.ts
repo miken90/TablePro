@@ -83,6 +83,7 @@ export function useColumnWidths({ result }: UseColumnWidthsProps): UseColumnWidt
 
   // Auto-fit all columns on initial data load
   const autoFitDoneRef = useRef<string>('');
+  /* eslint-disable react-hooks/set-state-in-effect -- one-time auto-fit on data load */
   useEffect(() => {
     if (!result || result.columns.length === 0 || rows.length === 0) return;
     const fingerprint = result.columns.map(c => c.name).join(',');
@@ -116,6 +117,7 @@ export function useColumnWidths({ result }: UseColumnWidthsProps): UseColumnWidt
     }
     setColumnWidths(newWidths);
   }, [result, rows]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleHideColumn = useCallback((colName: string) => {
     setHiddenColumns(prev => new Set([...prev, colName]));

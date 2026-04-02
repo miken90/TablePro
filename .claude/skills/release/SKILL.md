@@ -11,6 +11,8 @@ description: >
 
 Use this skill only for `tablepro-windows/`.
 
+`TablePro/` (macOS) is upstream reference only in this repo workflow. You may inspect macOS behavior for parity checks, but do not run macOS/Xcode release steps unless explicitly requested.
+
 This release flow is driven by PowerShell scripts and the Tauri Windows build pipeline. Do not use old macOS release steps, Xcode version bumps, or SwiftLint-based gates here.
 
 ## Source of truth

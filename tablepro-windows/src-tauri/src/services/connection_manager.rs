@@ -117,6 +117,13 @@ impl ConnectionManager {
             .ok_or(AppError::NotConnected)
     }
 
+    /// Update the status of a session (used by health monitor).
+    pub fn set_status(&mut self, id: &str, status: ConnectionStatus) {
+        if let Some(conn) = self.connections.get_mut(id) {
+            conn.status = status;
+        }
+    }
+
     /// Switch the database for an existing session.
     ///
     /// PostgreSQL (and others) require a new connection to change databases.

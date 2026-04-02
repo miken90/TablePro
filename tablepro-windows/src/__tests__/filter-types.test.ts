@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildWhereClause, UNARY_OPERATORS } from '../components/filter/filter-types';
-import type { FilterCondition, FilterLogic } from '../components/filter/filter-types';
+import type { FilterCondition } from '../components/filter/filter-types';
 
 function cond(
   overrides: Partial<FilterCondition> = {},

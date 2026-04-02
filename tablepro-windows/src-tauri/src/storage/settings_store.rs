@@ -2,6 +2,65 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::models::AppError;
+use crate::services::credential_store;
+
+/// AI provider configuration stored in settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiProviderConfigStore {
+    pub id: String,
+    pub provider_type: String,
+    pub display_name: String,
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default = "default_true")]
+    pub is_enabled: bool,
+}
+
+/// Maps an AI feature to a specific provider + model.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiFeatureRouteStore {
+    pub feature: String,
+    pub provider_id: String,
+    #[serde(default)]
+    pub model: String,
+}
+
+/// AI-related settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSettingsConfig {
+    #[serde(default)]
+    pub providers: Vec<AiProviderConfigStore>,
+    #[serde(default)]
+    pub feature_routing: Vec<AiFeatureRouteStore>,
+    #[serde(default = "default_max_schema_tables")]
+    pub max_schema_tables: u32,
+    #[serde(default = "default_true")]
+    pub enable_inline_suggestions: bool,
+}
+
+impl Default for AiSettingsConfig {
+    fn default() -> Self {
+        Self {
+            providers: Vec::new(),
+            feature_routing: Vec::new(),
+            max_schema_tables: 20,
+            enable_inline_suggestions: true,
+        }
+    }
+}
+
+fn default_max_schema_tables() -> u32 {
+    20
+}
+fn default_true() -> bool {
+    true
+}
 
 /// All user-facing application preferences.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +83,8 @@ pub struct AppSettings {
     pub word_wrap: bool,
     #[serde(default = "default_date_format")]
     pub date_format: String,
+    #[serde(default)]
+    pub ai: AiSettingsConfig,
 }
 
 fn default_safe_mode_level() -> u32 {
@@ -50,6 +111,7 @@ impl Default for AppSettings {
             tab_size: 4,
             word_wrap: false,
             date_format: "iso".to_string(),
+            ai: AiSettingsConfig::default(),
         }
     }
 }
@@ -102,8 +164,18 @@ impl SettingsStore {
             move || Ok(std::fs::read_to_string(&path)?)
         })?;
 
-        self.settings = serde_json::from_str(&data)?;
+        let mut settings: AppSettings = serde_json::from_str(&data)?;
+        let needs_migration = Self::decrypt_ai_keys(&mut settings)?;
+        self.settings = settings;
         tracing::info!("Settings loaded from {}", path.display());
+
+        if needs_migration {
+            tracing::info!("Detected plaintext AI API keys; migrating to encrypted format");
+            if let Err(e) = self.save() {
+                tracing::warn!("Failed to auto-migrate AI API keys: {e}");
+            }
+        }
+
         Ok(())
     }
 
@@ -111,7 +183,9 @@ impl SettingsStore {
     pub fn save(&self) -> Result<(), AppError> {
         let path = Self::settings_path()?;
         let log_path = path.clone();
-        let data = serde_json::to_string_pretty(&self.settings)?;
+        let mut to_persist = self.settings.clone();
+        Self::encrypt_ai_keys(&mut to_persist)?;
+        let data = serde_json::to_string_pretty(&to_persist)?;
 
         Self::run_blocking_io(move || {
             if let Some(parent) = path.parent() {
@@ -122,6 +196,31 @@ impl SettingsStore {
         })?;
 
         tracing::info!("Settings saved to {}", log_path.display());
+        Ok(())
+    }
+
+    /// Decrypt API keys in-place after loading. Returns true if any were
+    /// plaintext (legacy) and need re-saving in encrypted form.
+    fn decrypt_ai_keys(settings: &mut AppSettings) -> Result<bool, AppError> {
+        let mut needs_migration = false;
+        for provider in &mut settings.ai.providers {
+            if provider.api_key.is_empty() {
+                continue;
+            }
+            let was_encrypted = credential_store::is_encrypted(&provider.api_key);
+            provider.api_key = credential_store::decrypt_secret(&provider.api_key)?;
+            if !was_encrypted {
+                needs_migration = true;
+            }
+        }
+        Ok(needs_migration)
+    }
+
+    /// Encrypt API keys in a cloned settings before persisting.
+    fn encrypt_ai_keys(settings: &mut AppSettings) -> Result<(), AppError> {
+        for provider in &mut settings.ai.providers {
+            provider.api_key = credential_store::encrypt_secret(&provider.api_key)?;
+        }
         Ok(())
     }
 

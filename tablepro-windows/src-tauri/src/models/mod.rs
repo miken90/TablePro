@@ -1,8 +1,13 @@
+pub mod ai;
 pub mod connection;
 pub mod error;
 pub mod query;
 pub mod schema;
 
+pub use ai::{
+    AiChatMessage, AiChatRequest, AiFeature, AiFeatureRoute, AiProviderConfig, AiStreamChunk,
+    ChatRole, ProviderType, TokenUsage,
+};
 pub use connection::{ConnectionConfig, ConnectionGroup, ConnectionStatus, SavedConnection};
 pub use error::AppError;
 pub use query::{ColumnInfo, QueryResult};

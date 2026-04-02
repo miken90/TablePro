@@ -1,5 +1,7 @@
 # Plugin Settings — Progress Tracking
 
+> Reference-only note: this document describes the upstream macOS plugin system and historical progress in `TablePro/` and `Plugins/`. Use it only for parity/reference. Do not treat it as the default implementation target for this repository.
+
 Analysis date: 2026-03-11 (updated).
 
 ## Current State Summary

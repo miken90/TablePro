@@ -5,6 +5,27 @@ All notable changes to TablePro will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- AI Chat panel: slide-over panel (Ctrl+Shift+L) with streaming responses, markdown rendering, code blocks with Copy/Insert-to-Editor buttons, conversation management
+- AI Inline Suggestions: ghost text completions in SQL editor via custom CodeMirror 6 ViewPlugin — 500ms debounce, Tab to accept, Esc to dismiss
+- AI Provider Settings: multi-provider configuration (OpenAI, OpenRouter, LM Studio, Ollama, Custom) with per-feature routing (Chat, Explain Query, Fix Error, Inline Suggestions)
+- AI Schema Context: automatic database schema injection into AI prompts with configurable table limit
+- AI Chat Storage: SQLite persistence for conversations with 30-day auto-cleanup
+- Connection Health Monitor: backend 30-second ping loop with connection:lost/reconnected events, reconnect button in toolbar
+
+### Changed
+
+- Ctrl+Shift+L shortcut reassigned from filter panel to AI chat panel
+- ESLint warnings reduced from 87 to 6
+
+### Fixed
+
+- BOM encoding in bump-version.ps1 output files (Set-Content → WriteAllText)
+- Dynamic import in ConnectionForm.tsx converted to static import
+
 ## [0.2.0] - 2026-04-01
 
 ### Added

@@ -2,29 +2,29 @@
 
 ## Repository summary
 
-This summary is generated from current repository structure and a fresh Repomix snapshot (`repomix-output.xml`, generated 2026-03-25).
+This summary reflects current repository structure and a fresh Repomix snapshot generated on 2026-04-02.
 
-### Repomix snapshot (2026-03-25)
+### Repomix snapshot (2026-04-02)
 
-- Packed files: **1,426**
-- Total tokens: **11,872,698**
+- Packed files: **1,444**
+- Total tokens: **11,915,787**
 - Output file: `repomix-output.xml`
 - Security exclusions reported by repomix: 3 test files
-- Largest token contributors are vendored/parser sources under `LocalPackages/CodeEditLanguages/.../parser.c`
+- Largest token contributors are bundled parser sources under `LocalPackages/CodeEditLanguages/.../parser.c`
 
-> Practical note: token distribution is dominated by bundled parser sources; this inflates whole-repo token counts for LLM analysis.
+> Practical note: whole-repo token size is heavily inflated by vendored parser code.
 
 ## Top-level structure
 
 ```text
 TablePro/
 ├── tablepro-windows/        # Active Windows app (Tauri v2 + Rust + React)
-├── TablePro/                # macOS app source (reference for behavior/parity)
-├── Plugins/                 # macOS plugin-related sources and SDK pieces
-├── Libs/                    # Shared/vendor libraries used by macOS stack
-├── docs/                    # Documentation (Mintlify content + engineering markdown)
-├── plans/                   # Plans, reports, implementation tracking artifacts
-├── scripts/                 # Utility/build scripts
+├── TablePro/                # Upstream/reference macOS app source
+├── Plugins/                 # Upstream/reference macOS plugin sources + shared plugin kit
+├── Libs/                    # Upstream/reference native/static libraries
+├── docs/                    # Product and engineering docs
+├── plans/                   # Planning artifacts and reports
+├── scripts/                 # Build/release utilities
 ├── CHANGELOG.md
 ├── README.md
 └── AGENTS.md
@@ -37,66 +37,48 @@ TablePro/
 ```text
 src-tauri/src/
 ├── lib.rs                   # Tauri setup, state injection, command registration
-├── main.rs                  # Entry point
-├── commands/                # 14 files — export (3), import, query, connection, filter, structure, data, ...
-│   ├── export.rs            # Export orchestration + helpers
-│   ├── export_formats.rs    # CSV/JSON/SQL format generators
-│   ├── export_writers.rs    # File write + XLSX writer
-│   ├── filter.rs            # Filter preset CRUD commands
-│   ├── structure.rs         # Create table command
-│   └── data.rs              # Row SQL generation command
-├── services/                # 13 files — modularized by domain
-│   ├── import_service.rs    # Import types + preview/execute
-│   ├── import_parser.rs     # In-memory SQL statement scanner
-│   ├── import_streamer.rs   # BufReader-based streaming parser
-│   ├── sql_generator.rs     # SQL generation orchestrator
-│   ├── sql_generator_ops.rs # INSERT/UPDATE/DELETE builders
-│   ├── sql_quoting.rs       # Per-driver identifier quoting
-│   ├── ddl_generator.rs     # Per-driver CREATE TABLE DDL generation
-│   ├── ssh_tunnel.rs        # SSH tunnel manager
-│   ├── ssh_tunnel_core.rs   # Active tunnel connection logic
-│   ├── ssh_config.rs        # SSH config types + builders
-│   ├── credential_store.rs  # DPAPI encrypt/decrypt for passwords
-│   └── connection_manager.rs # Session registry
-├── plugin/                  # 6 files — adapter split into FFI helpers
-│   ├── adapter.rs           # Core PluginDriverAdapter
-│   ├── adapter_ffi_helpers.rs # FFI conversion utilities
-│   └── adapter_ffi_list_converters.rs # List/schema FFI converters
-├── storage/                 # ConnectionStore, SettingsStore, HistoryStore, FilterStore
-└── models/                  # Shared app/domain models and AppError
+├── main.rs
+├── commands/                # Connection/query/schema/import/export/history/filter/settings/data/structure/ai
+├── services/                # Connection manager, health monitor, AI, import/export helpers, SQL generators, SSH
+├── plugin/                  # Plugin manager + FFI adapter layers
+├── storage/                 # Connection/settings/history/filter/AI chat persistence
+└── models/                  # App/domain models + AppError
 ```
 
-Key runtime facts verified in source:
+Verified runtime facts:
 
 - Commands are registered centrally in `src-tauri/src/lib.rs`
-- Query/schema/data flows use **`session_id`** and `ConnectionManager` access through `tokio::sync::Mutex`
-- Plugin host loads DLLs via `PluginManager` with:
+- Query/schema/data flows are session-based (`session_id`)
+- Health monitor and reconnect command are wired (`services/health_monitor.rs`, `commands/connection.rs`)
+- AI command surface is wired in backend (`commands/ai.rs`)
+- Plugin host loads DLLs through `PluginManager` with:
   - host-allocated `PluginVTable`
   - `tablepro_plugin_init`
   - `tablepro_plugin_metadata`
   - `API_VERSION` compatibility check
-  - plugin directory discovery near executable with fallback to executable directory
+  - plugin discovery near executable with fallback scanning for `driver_*` / `driver-*`
 
 ### Frontend (`tablepro-windows/src/`)
 
 ```text
 src/
 ├── App.tsx
-├── components/              # Layout, editor, grid, filter, inspector, settings, structure, etc.
-├── stores/                  # Zustand stores (connection/query/schema/change/editor/filter/...)
-├── ipc/                     # Typed `invoke` wrappers, filter-commands, and error helpers
-├── editor/                  # SQL editor utilities and language helpers
-├── hooks/                   # useAutoUpdater, useQueryProgress, etc.
+├── components/              # Layout/editor/grid/filter/inspector/settings/AI/shared
+├── stores/                  # Zustand stores (connection/query/schema/change/editor/filter/history/settings/ai)
+├── ipc/                     # Typed invoke wrappers + command helpers
+├── hooks/                   # useAutoUpdater, useConnectionEvents, useQueryProgress, etc.
+├── editor/
 ├── types/
-├── utils/                   # connection-url-parser, etc.
-└── styles/
+└── utils/
 ```
 
-Key frontend state facts verified in source:
+Verified frontend state facts:
 
-- Saved connection ID -> runtime session UUID mapping is stored in `connectionStore` (`sessionIds` map)
-- Editor tabs are persisted through Zustand `persist` (`tablepro-editor-tabs` in localStorage)
-- History panel state/actions are in `stores/history.ts` and call backend `history_*` commands
+- Saved connection ID -> runtime session UUID mapping is in `connectionStore.sessionIds`
+- Editor tabs persist via Zustand `persist` (`tablepro-editor-tabs`)
+- History state/actions are in `stores/history.ts`
+- Update checks are handled in `hooks/useAutoUpdater.ts` (release builds)
+- AI UI/state are implemented under `components/ai/` and `stores/aiStore.ts`
 
 ## Storage and persistence (current behavior)
 
@@ -106,19 +88,22 @@ Key frontend state facts verified in source:
 - Groups: `config_dir/TablePro/groups.json`
 - Filter presets: `config_dir/TablePro/filter-presets.json`
 - History DB: `data_dir/TablePro/history.sqlite3`
-- History schema objects: `history` table + `history_fts` virtual table + triggers
-- Tab persistence: frontend localStorage via Zustand middleware
+- AI chat DB: `data_dir/TablePro/ai_chat.sqlite3`
 
-Security reality from current code:
+### Frontend
 
-- Saved connection secrets (`password`, `ssh_password`, `ssh_key_passphrase`) are persisted as `dpapi:`-prefixed encrypted payloads via `services/credential_store.rs` and decrypted on load in `storage/connection_store.rs`
-- Legacy plaintext values are still readable on load and auto-migrated to DPAPI format during persistence
+- Editor tabs: localStorage via Zustand persistence middleware
+
+Security reality from code:
+
+- Saved connection secrets (`password`, `ssh_password`, `ssh_key_passphrase`) are persisted as `dpapi:`-prefixed encrypted payloads via `services/credential_store.rs`
+- Legacy plaintext values are migrated to DPAPI format during persistence
 
 ## Command surface summary (backend)
 
 Current command groups registered in `lib.rs`:
 
-- Connection: `test_connection`, `connect`, `disconnect`, `get_connection_status`
+- Connection: `test_connection`, `connect`, `disconnect`, `get_connection_status`, `reconnect_session`
 - Query: `execute_query`, `fetch_rows`, `fetch_count`, `cancel_query`
 - Schema: `fetch_tables`, `fetch_columns`, `fetch_indexes`, `fetch_foreign_keys`, `fetch_routines`, `fetch_databases`, `fetch_ddl`, `switch_database`, `fetch_schemas`, `fetch_enum_values`, `fetch_approximate_count`
 - Storage: `list/save/delete_connection`, group CRUD
@@ -127,18 +112,19 @@ Current command groups registered in `lib.rs`:
 - Structure: `create_table`, `generate_alter_sql_command`, `apply_alter`
 - Import/Export: `import_preview`, `import_sql_file`, `export_to_file`
 - History: `history_fetch_recent`, `history_search`, `history_clear_all`, `history_delete_entry`, `history_record`
-- Settings: `get_settings`, `set_settings`, `log_renderer_error`
+- Settings/diagnostics: `get_settings`, `set_settings`, `log_renderer_error`
+- AI: chat stream/cancel, inline suggestions, schema context, model/provider probes, conversation CRUD
 
 ## Documentation stale-risk map
 
-Areas most likely to drift and require periodic refresh:
+Areas most likely to drift:
 
 1. Plugin ABI and loader sequence (`plugin/manager.rs`, `plugin/adapter.rs`)
-2. Query command signatures (`commands/query.rs`)
-3. Storage/security claims (`storage/connection_store.rs`, `storage/history_store.rs`, frontend stores)
-4. Frontend file naming and component tree changes in `src/components/**`
+2. Tauri command registration (`lib.rs`)
+3. Storage/security claims (`storage/connection_store.rs`, `services/credential_store.rs`, `storage/ai_chat_store.rs`)
+4. Frontend store/component paths under `src/stores/**` and `src/components/**`
 
 ---
 
-**Last Updated**: 2026-03-25
-**Source of Truth for this summary**: `repomix-output.xml` + direct reads of active Windows source files
+**Last Updated**: 2026-04-02  
+**Source of Truth for this summary**: `repomix-output.xml` + direct reads of `tablepro-windows/` and docs

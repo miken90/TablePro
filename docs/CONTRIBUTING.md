@@ -42,6 +42,7 @@ If a command reports issues, fix them before opening PR.
 
 - Use direct, technical language
 - Keep claims aligned with code in `tablepro-windows/`
+- Treat macOS source/docs as upstream/reference unless the doc explicitly targets macOS behavior
 - If behavior is not implemented yet, label it **planned**
 - Do not claim credential encryption at rest for saved Windows connections unless implementation changes
 - Use valid relative links only

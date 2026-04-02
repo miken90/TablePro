@@ -47,7 +47,7 @@ export function useGridNavigation({
       const coord = { row: newRowId, col: newCol };
       return { active: coord, anchor: coord, extent: coord, mode: 'cell' };
     });
-  }, [getDisplayIdx, getLogicalRowId, displayRowCount, visibleColCount]);
+  }, [getDisplayIdx, getLogicalRowId, displayRowCount, visibleColCount, setSelection]);
 
   const moveNext = useCallback(() => {
     setSelection(prev => {
@@ -62,7 +62,7 @@ export function useGridNavigation({
       const coord = { row: newRowId, col: newCol };
       return { active: coord, anchor: coord, extent: coord, mode: 'cell' };
     });
-  }, [getDisplayIdx, getLogicalRowId, displayRowCount, visibleColCount]);
+  }, [getDisplayIdx, getLogicalRowId, displayRowCount, visibleColCount, setSelection]);
 
   const movePrev = useCallback(() => {
     setSelection(prev => {
@@ -77,17 +77,17 @@ export function useGridNavigation({
       const coord = { row: newRowId, col: newCol };
       return { active: coord, anchor: coord, extent: coord, mode: 'cell' };
     });
-  }, [getDisplayIdx, getLogicalRowId, displayRowCount, visibleColCount]);
+  }, [getDisplayIdx, getLogicalRowId, visibleColCount, setSelection]);
 
   const moveToFirst = useCallback(() => {
     const coord = { row: getLogicalRowId(0), col: 0 };
     setSelection({ active: coord, anchor: coord, extent: coord, mode: 'cell' });
-  }, [getLogicalRowId]);
+  }, [getLogicalRowId, setSelection]);
 
   const moveToLast = useCallback(() => {
     const coord = { row: getLogicalRowId(displayRowCount - 1), col: visibleColCount - 1 };
     setSelection({ active: coord, anchor: coord, extent: coord, mode: 'cell' });
-  }, [getLogicalRowId, displayRowCount, visibleColCount]);
+  }, [getLogicalRowId, displayRowCount, visibleColCount, setSelection]);
 
   const moveToRowStart = useCallback(() => {
     setSelection(prev => {
@@ -95,7 +95,7 @@ export function useGridNavigation({
       const coord = { row: active.row, col: 0 };
       return { active: coord, anchor: coord, extent: coord, mode: 'cell' };
     });
-  }, [getLogicalRowId]);
+  }, [getLogicalRowId, setSelection]);
 
   const moveToRowEnd = useCallback(() => {
     setSelection(prev => {
@@ -103,7 +103,7 @@ export function useGridNavigation({
       const coord = { row: active.row, col: visibleColCount - 1 };
       return { active: coord, anchor: coord, extent: coord, mode: 'cell' };
     });
-  }, [getLogicalRowId, visibleColCount]);
+  }, [getLogicalRowId, visibleColCount, setSelection]);
 
   const moveActivePage = useCallback((direction: number, visibleRowCount: number) => {
     setSelection(prev => {
@@ -114,12 +114,12 @@ export function useGridNavigation({
       const coord = { row: newRowId, col: active.col };
       return { active: coord, anchor: coord, extent: coord, mode: 'cell' };
     });
-  }, [getDisplayIdx, getLogicalRowId, displayRowCount]);
+  }, [getDisplayIdx, getLogicalRowId, displayRowCount, setSelection]);
 
   const startEditingActive = useCallback(() => {
     if (!selection.active || !tableName) return;
     setEditingCell({ rowIdx: selection.active.row, colIdx: selection.active.col });
-  }, [selection.active, tableName]);
+  }, [selection.active, tableName, setEditingCell]);
 
   // --- Range/extend selection ---
   const [isDragging, setIsDragging] = useState(false);
@@ -131,7 +131,7 @@ export function useGridNavigation({
       active: { row: rowId, col },
       mode: 'range',
     }));
-  }, []);
+  }, [setSelection]);
 
   const extendActive = useCallback((dx: number, dy: number) => {
     setSelection(prev => {
@@ -145,20 +145,20 @@ export function useGridNavigation({
       const newExtent = { row: newRowId, col: newCol };
       return { active: newExtent, anchor, extent: newExtent, mode: 'range' };
     });
-  }, [getDisplayIdx, getLogicalRowId, displayRowCount, visibleColCount]);
+  }, [getDisplayIdx, getLogicalRowId, displayRowCount, visibleColCount, setSelection]);
 
   const beginDrag = useCallback((rowId: number, col: number) => {
     setIsDragging(true);
     const coord = { row: rowId, col };
     setSelection({ active: coord, anchor: coord, extent: coord, mode: 'range' });
-  }, []);
+  }, [setSelection]);
 
   const updateDrag = useCallback((rowId: number, col: number) => {
     setSelection(prev => {
       if (!prev.anchor) return prev;
       return { ...prev, extent: { row: rowId, col }, active: { row: rowId, col }, mode: 'range' };
     });
-  }, []);
+  }, [setSelection]);
 
   const endDrag = useCallback(() => {
     setIsDragging(false);
@@ -169,20 +169,20 @@ export function useGridNavigation({
       }
       return prev;
     });
-  }, []);
+  }, [setSelection]);
 
   const selectColumn = useCallback((col: number) => {
     const anchor = { row: getLogicalRowId(0), col };
     const extent = { row: getLogicalRowId(displayRowCount - 1), col };
     setSelection({ active: anchor, anchor, extent, mode: 'column' });
-  }, [getLogicalRowId, displayRowCount]);
+  }, [getLogicalRowId, displayRowCount, setSelection]);
 
   const selectAll = useCallback(() => {
     if (displayRowCount === 0 || visibleColCount === 0) return;
     const anchor = { row: getLogicalRowId(0), col: 0 };
     const extent = { row: getLogicalRowId(displayRowCount - 1), col: visibleColCount - 1 };
     setSelection({ active: anchor, anchor, extent, mode: 'range' });
-  }, [getLogicalRowId, displayRowCount, visibleColCount]);
+  }, [getLogicalRowId, displayRowCount, visibleColCount, setSelection]);
 
   useEffect(() => {
     if (!isDragging) return;

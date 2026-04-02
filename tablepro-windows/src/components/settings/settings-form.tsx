@@ -113,10 +113,12 @@ export function TextInput({
   value,
   onChange,
   placeholder,
+  className: extraClass,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  className?: string;
 }) {
   return (
     <input
@@ -124,7 +126,60 @@ export function TextInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-32 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+      className={`rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 ${extraClass ?? "w-32"}`}
     />
+  );
+}
+
+/** Password input */
+export function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <input
+      type="password"
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-40 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+    />
+  );
+}
+
+/** Range slider with value display */
+export function Slider({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="range"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1.5 w-24 cursor-pointer accent-blue-600"
+      />
+      <span className="min-w-[2ch] text-right text-xs text-zinc-600 dark:text-zinc-400">
+        {value}
+      </span>
+    </div>
   );
 }

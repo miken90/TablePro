@@ -43,7 +43,7 @@ export function useGridClipboard(p: {
   const handleCellDoubleClick = useCallback((rowIdx: number, colIdx: number) => {
     if (!tableName) { navigator.clipboard.writeText(getRowByLogicalId(rowIdx)?.[colIdx] ?? '').catch(() => {}); return; }
     setEditingCell({ rowIdx, colIdx });
-  }, [tableName, getRowByLogicalId]);
+  }, [tableName, getRowByLogicalId, setEditingCell]);
   const handleCellCommit = useCallback((rowIdx: number, colIdx: number, newValue: string | null) => {
     if (!result) return;
     const col = result.columns[colIdx];
@@ -51,9 +51,9 @@ export function useGridClipboard(p: {
     if (oldValue === newValue) { setEditingCell(null); return; }
     recordCellChange({ rowIndex: rowIdx, columnIndex: colIdx, columnName: col.name, oldValue, newValue }, getRowByLogicalId(rowIdx) ?? []);
     setEditingCell(null);
-  }, [result, recordCellChange, getRowByLogicalId]);
+  }, [result, recordCellChange, getRowByLogicalId, setEditingCell]);
 
-  const handleCellCancel = useCallback(() => setEditingCell(null), []);
+  const handleCellCancel = useCallback(() => setEditingCell(null), [setEditingCell]);
 
   const handleCellContextMenu = useCallback(
     (event: React.MouseEvent<HTMLDivElement>, rowIdx: number, colIdx: number, cellValue: string | null, row: (string | null)[]) => {
@@ -63,7 +63,7 @@ export function useGridClipboard(p: {
         setSelection({ active: coord, anchor: coord, extent: coord, mode: 'cell' });
       }
       setContextMenu({ x: event.clientX, y: event.clientY, rowIndex: rowIdx, colIndex: colIdx, cellValue, row });
-    }, [selectionRect, getDisplayIdx],
+    }, [selectionRect, getDisplayIdx, setSelection],
   );
 
   const copySelectedRowsSql = useCallback(async (outputFormat: RowSqlFormat) => {
@@ -131,13 +131,13 @@ export function useGridClipboard(p: {
     recordCellChange({ rowIndex: contextMenu.rowIndex, columnIndex: contextMenu.colIndex, columnName: col.name, oldValue, newValue: null },
       getRowByLogicalId(contextMenu.rowIndex) ?? []);
     closeContextMenu();
-  }, [contextMenu, result, getEffectiveCellValue, recordCellChange, closeContextMenu]);
+  }, [contextMenu, result, getEffectiveCellValue, recordCellChange, closeContextMenu, getRowByLogicalId]);
 
   const editContextCell = useCallback(() => {
     if (!contextMenu || !tableName) return;
     setEditingCell({ rowIdx: contextMenu.rowIndex, colIdx: contextMenu.colIndex });
     closeContextMenu();
-  }, [contextMenu, tableName, closeContextMenu]);
+  }, [contextMenu, tableName, closeContextMenu, setEditingCell]);
 
   const copySelection = useCallback(async () => {
     if (!result || !selection.mode) return;

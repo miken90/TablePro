@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useLayoutStore } from "../stores/layoutStore";
 import { resolveActiveQuerySessionId, useQueryStore } from "../stores/queryStore";
-import { useConnectionStore } from "../stores/connectionStore";
 import { useEditorStore } from "../stores/editorStore";
 import { useCommandStore } from "./useCommandRegistry";
 

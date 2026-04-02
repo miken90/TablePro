@@ -13,6 +13,7 @@ export const fontCompartment = new Compartment();
 export const vimCompartment = new Compartment();
 export const dialectCompartment = new Compartment();
 export const highlightCompartment = new Compartment();
+export const aiSuggestionCompartment = new Compartment();
 
 /** Reconfigure font family and size in-place (preserves undo history). */
 export function reconfigureFont(
@@ -51,5 +52,15 @@ export function reconfigureHighlight(
 ): void {
   view.dispatch({
     effects: highlightCompartment.reconfigure(highlightExtension),
+  });
+}
+
+/** Reconfigure AI inline suggestions on/off in-place. */
+export function reconfigureAiSuggestion(
+  view: EditorView,
+  aiExtension: Extension,
+): void {
+  view.dispatch({
+    effects: aiSuggestionCompartment.reconfigure(aiExtension),
   });
 }

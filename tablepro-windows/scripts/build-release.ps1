@@ -115,8 +115,25 @@ try {
     Import-DotEnvFile ".env"
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
+function Assert-VersionConsistency {
+    $pkgVersion = (Get-Content "package.json" -Raw | ConvertFrom-Json).version
+    $tauriVersion = (Get-Content "src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json).version
+    $cargoContent = Get-Content "src-tauri\Cargo.toml" -Raw
+    if ($cargoContent -match '(?m)^version\s*=\s*"([^"]+)"') {
+        $cargoVersion = $Matches[1]
+    } else {
+        throw "Could not parse version from Cargo.toml"
+    }
+
+    if ($pkgVersion -ne $tauriVersion -or $pkgVersion -ne $cargoVersion) {
+        throw "Version mismatch: package.json=$pkgVersion, tauri.conf.json=$tauriVersion, Cargo.toml=$cargoVersion. Run scripts\bump-version.ps1 to fix."
+    }
+    Write-Host "[release] Version consistency OK: $pkgVersion" -ForegroundColor Green
+}
+
     $conf = Get-Content "src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
     $version = $conf.version
+    Assert-VersionConsistency
     $arch = "x64"
     $releaseDir = "src-tauri\target\release"
     $bundleDir = Join-Path $releaseDir "bundle"

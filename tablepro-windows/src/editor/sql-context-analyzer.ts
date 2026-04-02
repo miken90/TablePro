@@ -142,8 +142,6 @@ const TABLE_REF_PATTERNS: RegExp[] = [
 
 const ALTER_TABLE_RE = /\bALTER\s+TABLE\s+[`"']?(\w+)[`"']?/i;
 
-const SUBQUERY_DETECT_RE = /^\s*(?:SELECT|INSERT|UPDATE|DELETE)\b/i;
-
 const SQL_KEYWORDS_SET = new Set([
   'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'NATURAL',
   'JOIN', 'ON', 'AND', 'OR', 'WHERE', 'SELECT', 'FROM', 'AS',

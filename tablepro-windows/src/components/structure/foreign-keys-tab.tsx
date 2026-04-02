@@ -14,6 +14,7 @@ export function ForeignKeysTab({ sessionId, tableName, schema }: ForeignKeysTabP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- reset loading state on fetch */
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -28,6 +29,7 @@ export function ForeignKeysTab({ sessionId, tableName, schema }: ForeignKeysTabP
         setLoading(false);
       });
   }, [sessionId, tableName, schema]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (loading) {
     return <div className="p-3 text-xs text-zinc-400">Loading foreign keys…</div>;

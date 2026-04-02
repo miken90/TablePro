@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { ConnectionConfig, SavedConnection } from "../../types/connection";
 import { extractErrorMessage } from "../../ipc/error";
+import { testConnection } from "../../ipc/commands";
 import {
   DB_PLACEHOLDERS,
   DB_TYPES,
@@ -65,7 +66,6 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
     setTestResult(null);
     setError(null);
     try {
-      const { testConnection } = await import("../../ipc/commands");
       await testConnection(config);
       setTestResult("Connection test succeeded!");
     } catch (err) {

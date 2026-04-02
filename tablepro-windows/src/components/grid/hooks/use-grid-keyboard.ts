@@ -102,6 +102,7 @@ export function useGridKeyboard({
   }, [editingCell, onMoveActive, onExtendActive, onMoveNext, onMovePrev, onMoveToFirst, onMoveToLast, onMoveToRowStart, onMoveToRowEnd, onMoveActivePage, onStartEditingActive, onClearSelection, onSelectAll, parentRef]);
 
   // Auto-scroll active cell into view
+  /* eslint-disable react-hooks/exhaustive-deps -- intentionally granular: only scroll on row/col change */
   useEffect(() => {
     if (!selection?.active || !parentRef.current) return;
 
@@ -127,6 +128,7 @@ export function useGridKeyboard({
       scrollEl.scrollLeft = right - scrollEl.clientWidth;
     }
   }, [selection?.active?.row, selection?.active?.col, visibleColumns, resolvedWidths, virtualizer, rowIds, parentRef]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // --- Drag auto-scroll ---
   const autoScrollRef = useRef<number | null>(null);

@@ -16,6 +16,7 @@ import {
   vimCompartment,
   dialectCompartment,
   highlightCompartment,
+  aiSuggestionCompartment,
   reconfigureFont,
   reconfigureVim,
   reconfigureDialect,
@@ -29,6 +30,7 @@ import { formatEditorContent } from "../../editor/sql-formatter";
 import { allStatements, statementAtCursor } from "../../editor/statement-scanner";
 import { statementHighlighter } from "../../editor/statement-highlighter";
 import { errorMarkerField, setErrorMark } from "../../editor/error-marker";
+import { createAiInlineSuggestExtension } from "../../editor/ai-inline-suggest";
 import {
   parseErrorPosition,
   pgCharOffsetToDocOffset,
@@ -209,11 +211,17 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         runtime.placeholder("-- Write SQL here\n-- Ctrl+Enter to execute"),
         // Configurable: vim mode (in compartment)
         vimCompartment.of(settings.vimMode ? runtime.createVimExtension() : []),
+        // Configurable: AI inline suggestions (in compartment)
+        aiSuggestionCompartment.of(
+          settings.ai.enableInlineSuggestions && settings.ai.providers.some((p) => p.isEnabled)
+            ? createAiInlineSuggestExtension()
+            : [],
+        ),
         // Change listener
         updateListener,
       ];
     },
-    [dialect, settings.editorFont, settings.editorFontSize, settings.vimMode, updateTabContent, setQueryText, execute],
+    [dialect, settings.editorFont, settings.editorFontSize, settings.vimMode, settings.ai.enableInlineSuggestions, settings.ai.providers, updateTabContent, setQueryText, execute],
   );
 
   // Create EditorView once after runtime lazy-load completes
@@ -254,6 +262,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
     void initializeEditor();
 
+    const stateMap = stateMapRef.current;
     return () => {
       cancelled = true;
       const view = viewRef.current;
@@ -261,7 +270,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
       const currentTabId = useEditorStore.getState().activeTabId;
       if (currentTabId) {
-        stateMapRef.current.set(currentTabId, view.state as EditorState);
+        stateMap.set(currentTabId, view.state as EditorState);
       }
 
       view.destroy();
@@ -306,7 +315,6 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
     reconfigureFont(view, runtime.createEditorFontTheme(settings.editorFont, settings.editorFontSize));
     reconfigureVim(view, settings.vimMode ? runtime.createVimExtension() : []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorRuntime, settings.editorFont, settings.editorFontSize, settings.vimMode]);
 
   // Reconfigure dialect via compartment when it changes
@@ -316,7 +324,6 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
     if (!view || !runtime) return;
 
     reconfigureDialect(view, runtime.sql({ dialect: resolveDialect(runtime, dialect) }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorRuntime, dialect]);
 
   // Reconfigure syntax highlighting when dark mode changes

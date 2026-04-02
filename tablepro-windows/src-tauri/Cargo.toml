@@ -39,6 +39,10 @@ flate2 = "1"
 russh = "0.45"
 russh-keys = "0.45"
 base64 = "0.22"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest-eventsource = "0.6"
+futures = "0.3"
+bytes = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-dpapi = "0.2"

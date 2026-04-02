@@ -16,6 +16,8 @@ autoTrigger:
 
 Use this skill only for `tablepro-windows/`.
 
+`TablePro/` (macOS) is upstream reference only. Use it for behavior/parity research when porting, but implement and validate engine work only in Windows paths unless explicitly asked otherwise.
+
 This app loads database drivers as Windows DLL plugins through the Rust host under `src-tauri/`. A new engine is not just a new crate. It must be wired through the plugin ABI, host loader, frontend connection types, and build scripts.
 
 ## Source of truth

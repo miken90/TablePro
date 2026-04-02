@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use crate::models::{AppError, ConnectionGroup, SavedConnection};
-
-#[path = "../services/credential_store.rs"]
-mod credential_store;
+use crate::services::credential_store;
 
 /// Persists saved connections and groups to `%APPDATA%/TablePro/`.
 pub struct ConnectionStore {

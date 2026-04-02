@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::models::{AppError, ConnectionConfig, ConnectionStatus};
 use crate::plugin::DatabaseDriver;
+use crate::services::health_monitor::HealthMonitor;
 use crate::services::ssh_tunnel::SshTunnelManager;
 use crate::services::ConnectionManager;
 
@@ -60,8 +61,10 @@ pub async fn test_connection(
 /// re-acquired briefly to insert the finished connection.
 #[tauri::command]
 pub async fn connect(
+    app: AppHandle,
     config: ConnectionConfig,
     manager: State<'_, Mutex<ConnectionManager>>,
+    health_monitor: State<'_, Mutex<HealthMonitor>>,
 ) -> Result<String, AppError> {
     // Both SSH and non-SSH paths: grab plugin_manager, release lock.
     let plugin_manager = {
@@ -130,6 +133,20 @@ pub async fn connect(
     }
 
     tracing::info!(session_id = %session_id, db_type = %config.db_type, ssh = config.ssh_enabled, "Session opened");
+
+    // Start health monitoring (skip SQLite — local file, no network)
+    if config.db_type != "sqlite" {
+        let mut hm = health_monitor.lock().await;
+        hm.start_monitoring(
+            session_id.clone(),
+            Arc::clone(&driver),
+            config.db_type.clone(),
+            config.host.clone(),
+            config.database.clone(),
+            app,
+        );
+    }
+
     Ok(session_id)
 }
 
@@ -138,7 +155,12 @@ pub async fn connect(
 pub async fn disconnect(
     session_id: String,
     manager: State<'_, Mutex<ConnectionManager>>,
+    health_monitor: State<'_, Mutex<HealthMonitor>>,
 ) -> Result<(), AppError> {
+    {
+        let mut hm = health_monitor.lock().await;
+        hm.stop_monitoring(&session_id);
+    }
     let mut mgr = manager.lock().await;
     mgr.disconnect(&session_id)
 }
@@ -151,4 +173,65 @@ pub async fn get_connection_status(
 ) -> Result<ConnectionStatus, AppError> {
     let mgr = manager.lock().await;
     Ok(mgr.get_status(&session_id))
+}
+
+/// Reconnect a failed session using its stored config.
+#[tauri::command]
+pub async fn reconnect_session(
+    app: AppHandle,
+    session_id: String,
+    manager: State<'_, Mutex<ConnectionManager>>,
+    health_monitor: State<'_, Mutex<HealthMonitor>>,
+) -> Result<(), AppError> {
+    // Stop any existing monitoring
+    {
+        let mut hm = health_monitor.lock().await;
+        hm.stop_monitoring(&session_id);
+    }
+
+    // Get config + plugin manager, then release lock
+    let (config, plugin_manager) = {
+        let mgr = manager.lock().await;
+        let config = mgr.get_config(&session_id)?.clone();
+        let pm = mgr.plugin_manager();
+        (config, pm)
+    };
+
+    // Disconnect old driver
+    {
+        let mut mgr = manager.lock().await;
+        let _ = mgr.disconnect(&session_id);
+    }
+
+    // Create new driver + connect (no lock held)
+    let driver: Arc<dyn DatabaseDriver> =
+        Arc::from(plugin_manager.create_driver(&config.db_type, &config)?);
+    driver.connect().await?;
+
+    // Insert new connection
+    {
+        let mut mgr = manager.lock().await;
+        mgr.insert_connection(session_id.clone(), Arc::clone(&driver), config.clone());
+    }
+
+    // Restart health monitoring (skip SQLite)
+    if config.db_type != "sqlite" {
+        let mut hm = health_monitor.lock().await;
+        hm.start_monitoring(
+            session_id.clone(),
+            Arc::clone(&driver),
+            config.db_type.clone(),
+            config.host.clone(),
+            config.database.clone(),
+            app.clone(),
+        );
+    }
+
+    let _ = app.emit(
+        "connection:reconnected",
+        serde_json::json!({ "sessionId": session_id }),
+    );
+
+    tracing::info!(session_id = %session_id, "Session reconnected");
+    Ok(())
 }

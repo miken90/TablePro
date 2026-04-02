@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Play, ChevronDown, Loader2, Square, FileText, FileSpreadsheet, ListOrdered } from "lucide-react";
+import { Play, ChevronDown, Square, FileText, FileSpreadsheet, ListOrdered } from "lucide-react";
 
 interface RunSplitButtonProps {
   onRun: () => void;

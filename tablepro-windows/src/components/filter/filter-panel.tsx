@@ -32,7 +32,7 @@ export function FilterPanel({ tabId, tableName, columns, compact }: FilterPanelP
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const [presetsLoading, setPresetsLoading] = useState(false);
 
-  const conditions = tabState?.conditions ?? [];
+  const conditions = useMemo(() => tabState?.conditions ?? [], [tabState?.conditions]);
   const logic = tabState?.logic ?? 'AND';
 
   const selectedPreset = useMemo(

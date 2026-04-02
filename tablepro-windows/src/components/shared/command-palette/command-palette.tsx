@@ -16,9 +16,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const { getFilteredCommands, getRecentCommands, executeCommand } = useCommandStore();
 
   // Reset search when opened
+  /* eslint-disable react-hooks/set-state-in-effect -- reset state on open */
   useEffect(() => {
     if (open) setQuery('');
   }, [open]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const filtered = getFilteredCommands(query);
   const recentCmds = getRecentCommands();

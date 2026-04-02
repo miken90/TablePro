@@ -15,7 +15,7 @@ export function useMainLayoutShortcuts() {
       }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "L") {
         e.preventDefault();
-        ls().toggleFilter();
+        ls().toggleAiChat();
       }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "I") {
         e.preventDefault();

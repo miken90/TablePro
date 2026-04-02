@@ -23,6 +23,7 @@ export function ExportProgress({ isExporting, onComplete }: ExportProgressProps)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- reset state on export start */
   useEffect(() => {
     if (!isExporting) return;
 
@@ -57,7 +58,8 @@ export function ExportProgress({ isExporting, onComplete }: ExportProgressProps)
       if (timerRef.current) clearInterval(timerRef.current);
       unlistenRef.current?.();
     };
-  }, [isExporting]);
+  }, [isExporting, onComplete]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
 

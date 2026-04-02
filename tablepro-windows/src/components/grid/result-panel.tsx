@@ -5,7 +5,7 @@ import { useConnectionStore } from '../../stores/connectionStore';
 import { useChangeStore } from '../../stores/changeStore';
 import { useInspectorStore } from '../../stores/inspectorStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
-import type { ColumnInfo, QueryResult } from '../../types/query';
+import type { ColumnInfo } from '../../types/query';
 import { DataGrid } from './data-grid';
 import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
@@ -85,7 +85,7 @@ export function ResultPanel({
   });
   const {
     changesSnapshot, hasChanges, isSaving, saveError, dismissSaveError,
-    handleSave, recordCellChange, getEffectiveCellValue,
+    handleSave, getEffectiveCellValue,
     changeMap, cellOverrides,
   } = changeTracking;
 
@@ -127,7 +127,7 @@ export function ResultPanel({
     getEffectiveCellValue, onRowSelectProp,
   });
   const {
-    selectedRows, selection, selectionRect, selectCell, selectRow, clearSelection,
+    selectedRows, selection, selectionRect, selectCell, selectRow,
     handleRowSelect,
     editingCell, handleCellDoubleClick, handleCellCommit, handleCellCancel,
     contextMenu, handleCellContextMenu, closeContextMenu,
@@ -138,8 +138,8 @@ export function ResultPanel({
     handleQueryQuickSearch, handleQueryQuickSearchClear,
     quickSearchTerm, handleQuickSearch, handleQuickSearchClear,
     handleFkNavigate, showExport, setShowExport,
-    copySelection, copySelectedRowsTsv, pasteIntoSelectedRows,
-    isDragging, extendTo, extendActive, beginDrag, updateDrag, endDrag,
+    copySelection, pasteIntoSelectedRows,
+    isDragging, extendTo, extendActive, beginDrag, updateDrag,
     selectColumn, selectAll,
   } = gridActions;
 
@@ -163,12 +163,14 @@ export function ResultPanel({
   }, [onSaveRef, handleSave]);
 
   // Auto-switch to Messages tab on error
+  /* eslint-disable react-hooks/set-state-in-effect -- auto-switch tab on error */
   useEffect(() => {
     if (error && !isTableMode && error !== lastAutoSwitchedErrorRef.current) {
       lastAutoSwitchedErrorRef.current = error;
       setActiveTab('messages');
     }
   }, [error, isTableMode]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentFkColumns = tableName ? fkMap[tableName] : undefined;
 

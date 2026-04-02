@@ -177,6 +177,7 @@ export function ColumnsTab({ sessionId, tableName, schema }: ColumnsTabProps) {
     discardAll();
   }, [sessionId, tableName, schema, discardAll]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- reset loading state on fetch */
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -191,6 +192,7 @@ export function ColumnsTab({ sessionId, tableName, schema }: ColumnsTabProps) {
         setLoading(false);
       });
   }, [sessionId, tableName, schema]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleAddColumn = useCallback(() => {
     const newCol: ColumnDefinition = {

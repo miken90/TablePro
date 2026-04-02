@@ -19,21 +19,23 @@ $root = Split-Path -Parent $PSScriptRoot
 $pkgPath = Join-Path $root "package.json"
 $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
 $pkg.version = $Version
-$pkg | ConvertTo-Json -Depth 10 | Set-Content $pkgPath -Encoding UTF8
+$json = $pkg | ConvertTo-Json -Depth 10
+[IO.File]::WriteAllText($pkgPath, $json)
 Write-Host "Updated package.json -> $Version"
 
 # tauri.conf.json
 $tauriPath = Join-Path $root "src-tauri" "tauri.conf.json"
 $tauri = Get-Content $tauriPath -Raw | ConvertFrom-Json
 $tauri.version = $Version
-$tauri | ConvertTo-Json -Depth 10 | Set-Content $tauriPath -Encoding UTF8
+$json = $tauri | ConvertTo-Json -Depth 10
+[IO.File]::WriteAllText($tauriPath, $json)
 Write-Host "Updated tauri.conf.json -> $Version"
 
 # Cargo.toml (workspace root)
 $cargoPath = Join-Path $root "src-tauri" "Cargo.toml"
 $cargo = Get-Content $cargoPath -Raw
 $cargo = $cargo -replace '(?m)^(version\s*=\s*")[^"]*(")', "`${1}$Version`${2}"
-Set-Content $cargoPath $cargo -Encoding UTF8
+[IO.File]::WriteAllText($cargoPath, $cargo)
 Write-Host "Updated Cargo.toml -> $Version"
 
 Write-Host "`nVersion bumped to $Version across all files."
