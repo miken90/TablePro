@@ -2,51 +2,49 @@
 
 ## 1. Purpose
 
-These standards define how to keep TablePro code and docs maintainable while matching the current repository structure.
+These standards keep TablePro code and documentation maintainable and aligned with current repository reality.
 
 Scope:
 
 - Active implementation: `tablepro-windows/` (Rust + TypeScript)
-- Reference implementation: `TablePro/` (Swift, read-only in Windows tasks)
-- Documentation: `docs/`
+- Stable reference implementation: `TablePro/` (Swift)
+- Documentation set: `docs/`
 
 ## 2. Ground rules
 
 - Keep changes small, explicit, and testable
-- Prefer existing modules over new abstractions
-- Match existing naming/casing in each language
-- Avoid speculative documentation; only document verified behavior
+- Reuse existing modules before introducing new abstractions
+- Match naming/casing conventions already used in each language area
+- Document only behavior verified in source
+- Distinguish implemented behavior from planned work in all docs
 
 ## 3. Repository-aware structure expectations
 
 ### 3.1 Windows backend (`tablepro-windows/src-tauri/src/`)
 
-Current module layout:
+Current layout:
 
 ```text
 src-tauri/src/
 ├── lib.rs
 ├── main.rs
-├── commands/          # export.rs, export_formats.rs, export_writers.rs, import.rs, ...
+├── commands/          # connection/query/schema/import/export/history/filter/settings/data/structure/ai
 ├── models/
-├── plugin/            # adapter.rs, adapter_ffi_helpers.rs, adapter_ffi_list_converters.rs, ...
-├── services/          # import_service.rs, import_parser.rs, import_streamer.rs,
-│                      # sql_generator.rs, sql_generator_ops.rs, sql_quoting.rs,
-│                      # ssh_tunnel.rs, ssh_tunnel_core.rs, ssh_config.rs,
-│                      # credential_store.rs, connection_manager.rs
-└── storage/
+├── plugin/            # manager.rs, adapter.rs, FFI helper modules
+├── services/          # connection_manager, health_monitor, ai, ssh, import/export/sql helpers
+└── storage/           # connection/settings/history/filter/ai chat stores
 ```
 
-Notes:
+Rules:
 
-- Command handlers live in `commands/*.rs`
-- Session orchestration is in `services/connection_manager.rs`
-- Plugin host behavior is in `plugin/manager.rs` and `plugin/adapter.rs`
-- Persistence backends are under `storage/`
+- Keep Tauri command handlers in `commands/*.rs`
+- Keep cross-command orchestration in `services/*.rs`
+- Keep persistence concerns isolated in `storage/*.rs`
+- Register commands centrally in `lib.rs`
 
 ### 3.2 Windows frontend (`tablepro-windows/src/`)
 
-Current module layout:
+Current layout:
 
 ```text
 src/
@@ -57,133 +55,138 @@ src/
 ├── ipc/
 ├── stores/
 ├── styles/
-└── types/
+├── types/
+└── utils/
 ```
 
-Notes:
+Rules:
 
-- Store filenames are camelCase (for example `connectionStore.ts`, `queryStore.ts`)
-- Component names are mixed PascalCase / kebab-case; do not rename for style-only changes
-- Keep import paths and naming consistent with existing files
+- Keep IPC invocation in typed wrappers (`src/ipc/commands.ts`)
+- Keep state by domain in `stores/*`
+- Keep heavy view composition in components; move shared logic to hooks/stores
+- Avoid style-only renames for mixed historical filenames unless part of a scoped cleanup
 
 ## 4. File size and modularity guidance
 
-- Prefer code files under ~200 LOC when practical
-- Mandatory docs cap: keep docs markdown files under 800 LOC
-- If a file grows too large, split by responsibility, not by arbitrary line count
+- Prefer code files under ~200 LOC where practical
+- Keep docs markdown files under 800 LOC
+- Split by responsibility boundaries, not arbitrary line count
 
 ## 5. Rust standards (Windows backend)
 
 ### 5.1 Error handling
 
 - Return `Result<T, AppError>` across command/service boundaries
-- Do not use `unwrap()` on runtime/user-controlled data paths
-- Use typed error variants over opaque strings when possible
+- Avoid `unwrap()` in runtime/user-controlled paths
+- Prefer typed error variants over opaque string-only errors
 
 ### 5.2 Async and locking
 
-- Use `tokio` async patterns end-to-end
-- Keep mutex lock scope minimal; clone/get required state, then release lock before long awaits
-- Wrap **all** blocking file I/O and SQLite calls in `tokio::task::spawn_blocking` or `block_in_place`
-- Never call `std::fs::*` directly on Tauri async command handlers
+- Use async `tokio` patterns end-to-end
+- Keep mutex lock scope minimal
+- Move file and SQLite operations into `spawn_blocking` or `block_in_place`
+- Do not run `std::fs::*` directly in long-running async command paths
 
-### 5.3 SQL identifier quoting
+### 5.3 SQL and command safety
 
-- Use `services/sql_quoting::quote_identifier(name, driver_type)` for all dynamic identifiers
-- Per-driver quoting: PostgreSQL `"…"`, MySQL `` `…` ``, MSSQL `[…]`
+- Use `services/sql_quoting::quote_identifier(name, driver_type)` for dynamic identifiers
+- Preserve `session_id` command contract in query/schema/data paths
+- Keep query cancellation/reconnect paths explicit (`cancel_query`, `reconnect_session`)
 
-### 5.3 Logging
+### 5.4 Logging and observability
 
 - Use `tracing` macros (`info!`, `warn!`, `error!`, `debug!`)
-- Avoid `println!` for production paths
+- Avoid `println!` in production paths
+- Keep frontend-visible event names stable (`query:*`, `connection:lost`, `connection:reconnected`)
 
-### 5.4 FFI/plugin boundary
+### 5.5 FFI/plugin boundary
 
-- Keep ABI structs/types consistent with `tablepro_plugin_sdk`
+- Keep ABI structs aligned with `tablepro_plugin_sdk`
 - Respect vtable lifecycle and pointer ownership contracts
-- Guard FFI calls where panic propagation could cross boundary
+- Guard FFI calls when panic propagation could cross boundaries
 
 ## 6. TypeScript/React standards (Windows frontend)
 
 ### 6.1 Types and IPC
 
-- Keep `invoke` calls inside typed wrappers in `src/ipc/commands.ts`
-- Prefer explicit interface/type definitions in `src/types/`
-- Avoid `any` except where unavoidable interop forces it
+- Prefer explicit interfaces/types in `src/types/`
+- Keep `invoke` usage inside IPC wrappers
+- Avoid `any` except unavoidable interop boundaries
 
 ### 6.2 Store design
 
-- Keep Zustand stores focused by domain (connection/query/schema/history/settings)
-- Keep state/action naming explicit (`loadX`, `saveX`, `setX`)
-- Persist only data that should survive restart (for example editor tabs)
+- Keep Zustand stores domain-scoped (`connection`, `query`, `schema`, `history`, `settings`, `ai`)
+- Use explicit action names (`loadX`, `saveX`, `setX`, `connect`, `disconnect`, `reconnect`)
+- Persist only restart-safe state (tabs, selected lightweight preferences)
 
-### 6.3 Components
+### 6.3 Components and hooks
 
-- Functional components with hooks only
-- Lift cross-feature state into stores when needed
-- Keep large layout components readable by extracting UI subcomponents
+- Functional components with hooks
+- Lift cross-feature state to stores
+- Keep large pages readable by extracting subcomponents and hooks
 
 ## 7. Security and data handling standards
 
-### 7.1 Documentation accuracy requirement
+### 7.1 Implementation-backed security claims
 
-Security claims in docs must match implementation.
+Security claims in docs must match code.
 
-Current implementation reality:
+Current verified behavior:
 
-- Connection secrets are encrypted at rest using Windows DPAPI (`services/credential_store.rs`)
-- Encrypted values stored with `dpapi:` prefix in `connections.json`
-- Legacy plaintext values are auto-migrated to encrypted format on save
+- Connection secrets are encrypted at rest with Windows DPAPI (`services/credential_store.rs`)
+- Encrypted values use `dpapi:` prefix in persisted JSON
+- Legacy plaintext values are auto-migrated on save
 
 ### 7.2 Secret hygiene
 
-- Never commit credentials, tokens, private keys, `.env*` secrets
+- Never commit credentials, tokens, private keys, or `.env*` secrets
 - Avoid logging sensitive connection fields
 
 ## 8. Testing and verification standards
 
-Before finalizing implementation changes (outside docs-only tasks):
+For implementation changes (non-doc tasks):
 
-- Rust lint: `cargo clippy` (via project-required command context)
-- TS lint: `eslint` on frontend sources
-- Run relevant tests for touched modules
+- Run relevant Rust checks/tests for touched backend modules
+- Run relevant TypeScript lint/tests for touched frontend modules
 
-For docs updates:
+For docs changes:
 
 - Run docs validation: `node $HOME/.claude/scripts/validate-docs.cjs docs/`
 - Fix broken links/path references before completion
 
 ## 9. Documentation standards for this repository
 
-- Keep docs specific and implementation-backed
-- Use current parameter names (`session_id` in backend commands)
-- Distinguish **implemented** vs **planned** with clear wording
-- Avoid generic marketing language in engineering docs
+- Keep documentation specific, source-backed, and concise
+- Use current command parameter names (`session_id`)
+- Mark planned work as planned; do not present it as implemented
+- Remove stale references instead of leaving unresolved placeholders
 
-Required docs to keep synchronized:
+Core docs that must stay synchronized:
 
 - `docs/project-overview-pdr.md`
 - `docs/project-roadmap.md`
 - `docs/codebase-summary.md`
 - `docs/system-architecture.md`
 - `docs/code-standards.md`
+- `README.md`
 
 ## 10. Commit and review expectations
 
 - Use conventional commit prefixes (`feat:`, `fix:`, `docs:`, etc.)
-- Keep commit message single-line in this repo workflow
-- Include changelog/doc updates when behavior changes
+- Keep commit message single-line in this repository workflow
+- Docs-only changes usually do not require `CHANGELOG.md` updates
 
-## 11. Stale-risk checklist for reviewers
+## 11. Stale-risk checklist
 
 When reviewing docs/code alignment, verify these first:
 
-1. Plugin ABI entrypoints and discovery paths (`plugin/manager.rs`)
-2. Query command signatures (`commands/query.rs`)
-3. Storage claims (`storage/connection_store.rs`, `storage/history_store.rs`, editor persistence)
-4. Frontend store/component filenames under `src/stores` and `src/components`
+1. `src-tauri/src/lib.rs` command registration and managed state
+2. `src-tauri/src/plugin/manager.rs` ABI entrypoints and discovery paths
+3. `src-tauri/src/commands/query.rs` and `commands/connection.rs` signatures/events
+4. `src-tauri/src/storage/*.rs` and frontend store persistence/security details
+5. `tablepro-windows/package.json` + `src-tauri/tauri.conf.json` version consistency
 
 ---
 
-**Last Updated**: 2026-03-18  
+**Last Updated**: 2026-04-02  
 **Applies to**: Current repository state

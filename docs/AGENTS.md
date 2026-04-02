@@ -16,6 +16,7 @@ Do not modify application source code in docs tasks.
 Keep documentation synchronized with current repository behavior, especially:
 
 - Windows runtime in `tablepro-windows/`
+- macOS `TablePro/` only when explicitly documenting upstream/reference behavior
 - Plugin ABI and discovery flow
 - Session-based IPC command contracts
 - Actual storage and security behavior

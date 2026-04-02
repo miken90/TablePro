@@ -5,7 +5,7 @@
 <h1 align="center">TablePro</h1>
 
 <p align="center">
-  A fast, native database client for macOS and Windows with built-in AI assistant.
+  Database client with Windows as the active implementation target and macOS as upstream reference in this repo.
 </p>
 
 <p align="center">
@@ -30,68 +30,40 @@
 
 ## About
 
-TablePro is a native database client available on **macOS** and **Windows**. Connect to MySQL, MariaDB, PostgreSQL, SQLite, MongoDB, Redis, SQL Server, Redshift, Oracle, ClickHouse, and DuckDB. Features include a SQL editor with autocomplete, inline cell editing, AI assistance, data export/import, SSH tunneling, and a modular plugin system.
+TablePro is a desktop database client with two platform codebases in this repository:
 
-**macOS v0.17.0** is stable and production-ready. The **Windows implementation** (Tauri v2 + Rust + React) is active in this repository, with release/stabilization work ongoing.
+- `TablePro/`: macOS app (upstream/reference in this repo workflow)
+- `tablepro-windows/`: Windows app (active implementation target)
 
-## Features
+The Windows app is built with Tauri v2 + Rust + React/TypeScript and already includes core workflows: session-based query execution, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, auto-updater integration, AI chat, inline AI suggestions, and connection health monitoring.
 
-- **SQL Editor**: CodeMirror with Vim/Emacs keybindings, syntax highlighting, full-text query history
-- **Inline Editing**: Point-and-click cell editing with automatic SQL generation (INSERT/UPDATE/DELETE)
-- **Change Tracking**: Record all edits before committing, with undo/redo support
-- **Data Export/Import**: CSV, JSON, SQL, XLSX formats with schema auto-detection
-- **SSH Tunneling**: Secure access to remote databases
-- **SSL/TLS Support**: Encrypted connections with certificate management
-- **AI Assistant** (macOS): SQL generation, query optimization suggestions
-- **Plugin System**: Extensible architecture for database drivers and export formats
-- **Query History**: Full-text search with timestamp filtering
-- **Multi-Tab Editor**: Persistent tab state across sessions
+## Platform Status
 
-## Install
+| Platform | Runtime status | Version signal in repo |
+|---|---|---|
+| macOS | Stable upstream/reference app in this repo workflow | `CHANGELOG.md` latest macOS release notes |
+| Windows | Active pre-release implementation target | `tablepro-windows/package.json` and `src-tauri/tauri.conf.json` currently `0.2.0` |
+| Linux | Planned | No production target in this repo yet |
 
-### macOS (Stable)
+## Windows Feature Snapshot (implemented)
 
-```bash
-brew install --cask tablepro
-```
+- Connection management: save/list/delete, group management, session-based connect/disconnect
+- Drivers currently wired for Windows runtime: PostgreSQL, MySQL, SQL Server, SQLite
+- Query workflows: execute, cancel, paginated table browsing, progress events
+- Data workflows: staged cell edits, SQL generation, save changes
+- Import/Export: SQL import preview + execute, CSV/JSON/SQL/XLSX export
+- Security: DPAPI encryption for saved connection secrets, SSH host key verification (TOFU)
+- AI: chat panel (streaming), inline suggestions, provider/model settings, schema-aware context
+- Reliability: health monitor with `connection:lost` / `connection:reconnected` events and reconnect action
+- Updates: Tauri updater plugin enabled in release builds
 
-Or download from [GitHub Releases](https://github.com/datlechin/tablepro/releases).
+## Development Documentation
 
-### Windows (In Development)
-
-Windows support is coming soon. Pre-release builds will be available as v0.18+ releases.
-
-## Architecture
-
-| Platform | Status | Tech Stack |
-|----------|--------|-----------|
-| **macOS** | ✅ Stable (v0.17) | SwiftUI + AppKit, native plugin bundles |
-| **Windows** | 🔄 In Progress | Tauri v2, Rust backend, React frontend, C-ABI plugins |
-| **Linux** | 📋 Planned | Tauri v2 (same as Windows) |
-
-**Database Drivers**: PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Redis, SQL Server, Oracle, ClickHouse, DuckDB, Redshift
-
-## Documentation
-
-Full documentation available at [docs.tablepro.app](https://docs.tablepro.app). For development guidelines, see:
-- [Project Overview & PDR](docs/project-overview-pdr.md) — Product vision, goals, requirements
-- [Codebase Summary](docs/codebase-summary.md) — Repository structure and architecture
-- [Code Standards](docs/code-standards.md) — Development guidelines (Rust, TypeScript, Swift)
-- [System Architecture](docs/system-architecture.md) — Technical design and data flows
-- [Project Roadmap](docs/project-roadmap.md) — Release plan and milestones
-
-## Sponsors
-
-Thanks to these amazing people for supporting TablePro:
-
-- **[Dwarves Foundation](https://dwarves.foundation/?ref=tablepro)**
-- **[Nimbus](https://getnimbus.io?ref=tablepro)**
-- **[Huy TQ](https://github.com/imhuytq)** — Apple Developer Program sponsor
-- **[Unikorn](https://unikorn.vn?ref=tablepro)**
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=datlechin/TablePro&type=Date)](https://star-history.com/#datlechin/TablePro&Date)
+- [Project Overview & PDR](docs/project-overview-pdr.md)
+- [Codebase Summary](docs/codebase-summary.md)
+- [System Architecture](docs/system-architecture.md)
+- [Code Standards](docs/code-standards.md)
+- [Project Roadmap](docs/project-roadmap.md)
 
 ## License
 

@@ -44,6 +44,7 @@ node $HOME/.claude/scripts/validate-docs.cjs docs/
 ## Documentation rules for this repository
 
 - Keep implementation claims evidence-based
+- Treat `TablePro/` and macOS-oriented docs under `docs/development/` as upstream/reference context unless a doc explicitly targets macOS
 - Mark roadmap items as planned until code exists
 - Keep each markdown file under 800 lines
 - Prefer relative links that resolve inside `docs/`

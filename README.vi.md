@@ -5,7 +5,7 @@
 <h1 align="center">TablePro</h1>
 
 <p align="center">
-  Ứng dụng quản lý cơ sở dữ liệu native cho macOS với trợ lý AI.
+  Ứng dụng quản lý cơ sở dữ liệu với Windows là mục tiêu implement chính và macOS là upstream reference trong repo này.
 </p>
 
 <p align="center">
@@ -26,27 +26,48 @@
 
 ## Giới thiệu
 
-TablePro là ứng dụng quản lý database native cho macOS. Kết nối MySQL, MariaDB, PostgreSQL, SQLite, MongoDB, Redis, SQL Server và Redshift. Có trình soạn SQL với autocomplete, chỉnh sửa trực tiếp và hỗ trợ AI.
+Repository này có 2 codebase nền tảng:
 
-## Cài đặt
+- `TablePro/`: ứng dụng macOS (upstream/reference trong workflow hiện tại)
+- `tablepro-windows/`: ứng dụng Windows đang được implement tích cực
 
-```bash
-brew install --cask tablepro
-```
+Bản Windows dùng Tauri v2 + Rust + React/TypeScript và đã có các workflow chính: query theo session, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, auto-updater, AI chat, inline AI suggestions và connection health monitoring.
 
-Hoặc tải DMG từ [GitHub Releases](https://github.com/datlechin/tablepro/releases).
+## Trạng thái nền tảng
 
-## Tài liệu
+| Nền tảng | Trạng thái trong repo | Tín hiệu version |
+|---|---|---|
+| macOS | Dòng sản phẩm ổn định, dùng làm upstream/reference trong workflow repo này | `CHANGELOG.md` |
+| Windows | Bản pre-release đang được phát triển chính | `tablepro-windows/package.json` và `src-tauri/tauri.conf.json` |
+| Linux | Kế hoạch tương lai | Chưa có target production trong repo |
 
-Tài liệu đầy đủ tại [docs.tablepro.app](https://docs.tablepro.app).
+## Tóm tắt tính năng Windows đã implement
+
+- Quản lý connection: save/list/delete, group management, connect/disconnect theo session
+- Driver hiện có trên Windows: PostgreSQL, MySQL, SQL Server, SQLite
+- Query workflow: execute, cancel, paginated table browsing, progress events
+- Data workflow: staged cell edits, SQL generation, save changes
+- Import/Export: preview + import SQL, export CSV/JSON/SQL/XLSX
+- Security: mã hóa DPAPI cho secret đã lưu, SSH host key verification (TOFU)
+- AI: chat panel streaming, inline suggestions, provider/model settings, schema-aware context
+- Reliability: health monitor với sự kiện `connection:lost` / `connection:reconnected` và reconnect action
+- Updates: Tauri updater plugin cho release builds
+
+## Tài liệu phát triển
+
+- [Project Overview & PDR](docs/project-overview-pdr.md)
+- [Codebase Summary](docs/codebase-summary.md)
+- [System Architecture](docs/system-architecture.md)
+- [Code Standards](docs/code-standards.md)
+- [Project Roadmap](docs/project-roadmap.md)
 
 ## Nhà tài trợ
 
-Cảm ơn những người tuyệt vời đã hỗ trợ TablePro:
+Cảm ơn những người đã hỗ trợ TablePro:
 
 - **[Dwarves Foundation](https://dwarves.foundation/?ref=tablepro)**
 - **[Nimbus](https://getnimbus.io?ref=tablepro)**
-- **[Huy TQ](https://github.com/imhuytq)** — Tài trợ Apple Developer Program
+- **[Huy TQ](https://github.com/imhuytq)** — tài trợ Apple Developer Program
 - **[Unikorn](https://unikorn.vn?ref=tablepro)**
 
 ## Lịch sử Star

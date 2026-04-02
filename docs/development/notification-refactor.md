@@ -1,5 +1,7 @@
 # NotificationCenter Refactor Plan
 
+> Reference-only note: this is a historical/upstream macOS refactor document for Swift/AppKit/SwiftUI code under `TablePro/`. Use it for parity/reference only. Do not treat it as the active implementation plan for `tablepro-windows/`.
+
 ## Problem
 
 TablePro uses ~40 custom `NotificationCenter` notifications for cross-component communication. This creates:

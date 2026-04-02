@@ -1,170 +1,104 @@
 # TablePro Project Roadmap
 
-> **Last Updated**: 2026-04-01
-> **Current State**: Windows v1.0-rc — 95% feature-complete for core workflows
+> **Last Updated**: 2026-04-02
+> **Roadmap Baseline**: Windows pre-release branch with manifest version `0.2.0`
 
 ## Platform Status
 
 | Platform | Status | Stack |
-|----------|--------|-------|
-| **macOS** | Stable release | SwiftUI + AppKit + Swift plugin bundles |
-| **Windows** | v1.0-rc (active) | Tauri v2 + Rust + React/TypeScript + DLL plugins |
-| **Linux** | Planned | Same Tauri stack as Windows |
+|---|---|---|
+| macOS | Stable upstream/reference line for parity checks | SwiftUI + AppKit + native plugin bundles |
+| Windows | Active implementation target (pre-release) | Tauri v2 + Rust + React/TypeScript + DLL plugins |
+| Linux | Planned | Intended to follow the Tauri stack |
 
----
-
-## Completed Sprints (Windows)
+## Recent completed work (Windows)
 
 | Sprint | Date | Scope | Status |
-|--------|------|-------|--------|
-| P0 — Core Port | 2026-03-12 | Foundation, plugin loader, 4 drivers, CRUD, editor, history, filter, inspector | ✅ Complete |
-| P1 — Feature Parity | 2026-03-16 | SSH tunnel, SQL import, XLSX export, groups, schema switching, FK nav, safe mode, shortcuts | ✅ Complete |
-| Optimize & Harden v1 | 2026-03-18 | DPAPI encryption, SQL quoting, async I/O, OOM fixes, modularization | ✅ Complete |
-| P2 — Quick Wins | 2026-03-18 | Auto-updater, URL import, tags, copy-as-SQL, ENUM picker, approx count, filter presets, create table, preview tabs | ✅ Complete |
-| UI/UX Redesign | 2026-03-19 | Full UI overhaul — run split-button, status bar, design tokens, semantic colors, welcome page, sidebar groups, tab colors | ✅ Complete |
-| Audit & Harden v2 | 2026-03-28 | SSH TOFU, graceful shutdown, export timeout, sidebar debounce, schema timeout, dirty tab confirm, ESLint, CI lint+signing | ✅ Complete |
-| v0.3.0 — Tech Debt + Health + AI | 2026-04-01 | BOM fix, ESLint cleanup, health monitor, AI foundation/IPC/schema context/settings/chat storage/chat panel/inline suggestions/polish | ✅ Complete |
+|---|---|---|---|
+| P0 - Core Port | 2026-03-12 | Foundation runtime, plugin loader, initial drivers, query/editor basics | Complete |
+| P1 - Feature Parity Batch | 2026-03-16 | SSH tunnel, SQL import, XLSX export, groups, schema switching, safe mode, shortcuts | Complete |
+| Optimize & Harden v1 | 2026-03-18 | DPAPI secret encryption, SQL quoting fixes, async I/O hardening, modularization | Complete |
+| P2 - Quick Wins | 2026-03-18 | Auto-updater integration, URL import, tags, copy-as-SQL, filter presets, create table/alter flows | Complete |
+| UI/UX Redesign | 2026-03-19 | Layout refresh, status bar, semantic tokens, sidebar grouping, tab colors | Complete |
+| Audit & Harden v2 | 2026-03-28 | SSH TOFU, graceful shutdown path, export timeout, schema timeout, lint/CI improvements | Complete |
+| v0.3.0 development stream | 2026-04-01 | AI chat + inline suggestions + provider routing + schema context + health monitor + reconnect flow | Complete |
 
-## Verification (2026-04-01)
+## Current Windows capability map (implemented)
 
-| Check | Result |
-|-------|--------|
-| `cargo clippy --workspace -D warnings` | ✅ 0 warnings |
-| `cargo test --workspace` | ✅ 167 passed |
-| `npx vitest run` | ✅ 141 passed |
-| `npx eslint .` | ✅ 0 errors, 6 warnings |
-| `npm run build` (tsc + vite) | ✅ Clean |
+| Area | Current state |
+|---|---|
+| Drivers | PostgreSQL, MySQL, SQL Server, SQLite wired in Windows runtime |
+| Connection | Save/list/delete, test, connect/disconnect, groups, tags/colors, session-based runtime IDs |
+| Query | Execute/cancel, paginated browse, progress events, approximate count |
+| Data grid | Inline edit, staged changes, undo/redo, save changes, copy-as-SQL, enum picker, FK navigation |
+| Editor | Syntax highlight, autocomplete, formatting, Vim mode, multi-tab with persistence |
+| Import/Export | SQL/SQL.gz import preview+execute; CSV/JSON/SQL/XLSX export |
+| Structure | Columns/indexes/FKs/DDL, create table flow, alter table generation/apply |
+| History | SQLite + FTS search, recent queries, delete/clear |
+| Security | DPAPI for stored secrets, SSH known_hosts TOFU verification |
+| Reliability | Connection health monitor (30s ping), reconnect command, shutdown cleanup |
+| AI | Chat streaming, inline suggestions, provider/model settings, schema-context support, conversation persistence |
+| Updater | Tauri updater plugin for release builds |
 
----
+## Remaining roadmap (planned)
 
-## Current Feature Matrix: macOS → Windows
+### v1.1 - Post-launch parity and licensing
 
-### ✅ Fully Ported (core workflows — ship-ready)
+| Priority | Item | Notes |
+|---|---|---|
+| High | Licensing backend + signature verification | Parity with macOS licensing model |
+| High | License settings UI | Activation/deactivation and status display |
+| Medium | Health monitor auto-reconnect policy tuning | Current reconnect is user-triggered |
 
-| Category | Features |
-|----------|----------|
-| **Drivers** | PostgreSQL, MySQL, MSSQL, SQLite (4/10) |
-| **Connection** | Connect/disconnect, test, save/delete, URL import, groups, tags, colors, database switching, schema switching, startup commands, environment badges |
-| **Query** | Execute single/all, cancel, paginated fetch, progress events, approximate count |
-| **Data Grid** | Virtual scroll, column resize/sort, row selection, cell editing, change tracking, undo/redo, save changes, visual indicators, copy-as-SQL, ENUM picker, FK navigation |
-| **SQL Editor** | Syntax highlighting, schema-aware autocomplete, Vim mode, formatting, multi-tab, toggle comment, select-next, statement detection |
-| **Sidebar** | Table/view/function/procedure tree, column expansion, search filter (deferred), database dropdown, schema dropdown, context menu |
-| **Export** | CSV, JSON, SQL, XLSX with progress + streaming + timeout fallback |
-| **Import** | SQL/SQL.gz with preview, transaction wrap, FK disable, progress |
-| **Structure** | Columns, indexes, foreign keys, DDL view, create table wizard, alter table |
-| **Inspector** | Row detail panel (both query and table-browse modes) |
-| **Filter** | Quick filter bar, WHERE clause builder, filter presets save/load/delete |
-| **History** | SQLite FTS5 search, recent queries, delete/clear |
-| **Settings** | General, editor, appearance (light/dark/system), safe mode (6 levels) |
-| **Security** | DPAPI password encryption, SSH TOFU known_hosts |
-| **SSH** | Tunnel (password + key file), known_hosts fingerprint verification |
-| **Shortcuts** | Full keyboard shortcut coverage + help dialog (F1) |
-| **CI/CD** | GitHub Actions: clippy, tests, vitest, ESLint, Vite build, MSI/NSIS, code signing template |
-| **Auto-Updater** | Tauri updater plugin (release builds) |
-| **Polish** | Preview tabs, confirm discard dirty tabs, ping on tab switch, error boundary, graceful shutdown |
-| **AI** | Chat panel (streaming, markdown, code blocks), inline ghost text suggestions, multi-provider settings (OpenAI/OpenRouter/LMStudio/Ollama/Custom), per-feature routing, schema context injection, conversation persistence |
-| **Health** | Connection health monitor (30s ping), reconnect button, connection:lost/reconnected events |
+### v1.2 - Driver expansion
 
-### ❌ Not Ported — Grouped by Priority
+| Priority | Item | Notes |
+|---|---|---|
+| High | MongoDB driver | Different document/grid workflow complexity |
+| High | Redis driver | Key-value and TTL workflows |
+| Medium | Oracle driver | OCI dependencies and packaging constraints |
+| Medium | ClickHouse driver | HTTP protocol and metadata differences |
+| Medium | DuckDB driver | File-based analytics workflow |
+| Low | Redshift variant support | PostgreSQL-compatible with metadata differences |
 
-#### v1.0 Blockers (0 items)
-> None — all v1 requirements met.
+### v1.3 - Platform polish
 
-#### v1.1 — High-Value Parity (post-launch)
+| Priority | Item | Notes |
+|---|---|---|
+| High | Move tab persistence from localStorage to backend file persistence | Better crash resilience + larger payload handling |
+| High | IPC payload chunking/streaming for very large result sets | Reduce single-payload pressure |
+| Medium | SSH agent auth + ssh config parsing | Pageant/OpenSSH agent parity |
+| Medium | Deep-link URL scheme | `tablepro://` style launch flows |
+| Medium | Sidebar virtualization | Large-schema performance improvements |
+| Low | Custom keyboard shortcut mapping | User-configurable bindings |
 
-| # | Feature | macOS Source | Effort | Notes |
-|---|---------|-------------|--------|-------|
-| 1 | ~~**AI Chat panel**~~ | `Views/AIChat/`, `Core/AI/` | L | ✅ Done in v0.3.0 |
-| 2 | ~~**AI inline suggestions**~~ (ghost text) | `InlineSuggestionManager.swift` | L | ✅ Done in v0.3.0 |
-| 3 | ~~**AI provider config**~~ | `AIProviderFactory.swift`, `AISettingsView.swift` | M | ✅ Done in v0.3.0 |
-| 4 | ~~**AI schema context**~~ | `AISchemaContext.swift` | M | ✅ Done in v0.3.0 |
-| 5 | ~~**Connection health monitor**~~ | `ConnectionHealthMonitor.swift` | M | ✅ Done in v0.3.0 (no auto-reconnect, manual reconnect button) |
-| 6 | **Licensing system** | `LicenseManager.swift`, `LicenseAPIClient.swift`, `LicenseSignatureVerifier.swift` | L | Offline-first, signature verification, 7-day revalidation, grace period |
-| 7 | **License settings UI** | `LicenseSettingsView.swift`, `LicenseStorage.swift` | M | Activation, status display, deactivation |
+### v2.0 - Platform expansion
 
-#### v1.2 — Driver Expansion
+| Priority | Item | Notes |
+|---|---|---|
+| High | Linux packaging (AppImage/deb/rpm) | CI/release matrix expansion |
+| Medium | Plugin distribution/registry workflow | Download/install/update plugins |
+| Low | Windows file association for `.sqlite` | Optional OS integration |
 
-| # | Driver | macOS Plugin | Effort | Notes |
-|---|--------|-------------|--------|-------|
-| 8 | **MongoDB** | `MongoDBDriverPlugin/` | XL | NoSQL key-value browsing, document editing, different grid paradigm |
-| 9 | **Redis** | `RedisDriverPlugin/` | L | Key-value browsing, TTL, CLI mode |
-| 10 | **Oracle** | `OracleDriverPlugin/` | L | OCI-based, separate installer |
-| 11 | **ClickHouse** | `ClickHouseDriverPlugin/` | M | HTTP protocol, query progress, parts view (`ClickHousePartsView.swift`) |
-| 12 | **DuckDB** | `DuckDBDriverPlugin/` | M | File-based, CSV/Parquet query |
-| 13 | **Redshift** | (via PostgreSQL variant) | S | Wire-compatible with PG, minor metadata differences |
-
-#### v1.3 — Platform Polish
-
-| # | Feature | macOS Source | Effort | Notes |
-|---|---------|-------------|--------|-------|
-| 14 | **Tab state → %APPDATA%** | `TabDiskActor.swift` | M | Replace localStorage with IPC-backed file persistence |
-| 15 | **IPC payload chunking** | — | L | Stream large result sets via Tauri events instead of single JSON |
-| 16 | **SSH agent auth** (Pageant) | `SSHTunnelManager.swift` | M | Windows Pageant/OpenSSH agent integration |
-| 17 | **SSH config parser** | `SSHConfigParser.swift` | M | Parse `~/.ssh/config` for host aliases |
-| 18 | **Multi-hop SSH** (ProxyJump) | — | M | Chain tunnels |
-| 19 | **Deep link URL scheme** | `AppDelegate+ConnectionHandler.swift` | M | `tablepro://connect?host=...` |
-| 20 | **Sidebar virtualization** | — | M | `@tanstack/react-virtual` for 500+ tables (dep already installed) |
-| 21 | **Connection URL export** | — | S | Copy connection as URL string |
-| 22 | **Custom keyboard shortcuts** | `KeyboardSettingsView.swift`, `ShortcutRecorderView.swift` | M | User-configurable key bindings |
-| 23 | **MQL export** | `MQLExportPlugin/` | S | MongoDB insertMany syntax (requires MongoDB driver) |
-| 24 | **Sidebar table operations** | `TableOperationDialog.swift` | S | Truncate, drop, rename from context menu |
-| 25 | **Data grid settings** | `DataGridSettingsView.swift` | S | Row height, font size, null display |
-| 26 | **History settings** | `HistorySettingsView.swift` | S | Max entries, auto-clear, retention |
-| 27 | **Multi-row edit** | `MultiRowEditState.swift` | M | Batch edit selected rows |
-
-#### v2.0 — Platform Expansion
-
-| # | Feature | Effort | Notes |
-|---|---------|--------|-------|
-| 28 | **Linux packaging** (AppImage/deb/rpm) | L | Same Tauri codebase, CI matrix expansion |
-| 29 | **Plugin marketplace** | XL | Download/install driver plugins from registry |
-| 30 | **Windows file association** (.sqlite) | S | Registry entry for double-click .sqlite opens TablePro |
-
-### ➖ macOS-Only (NOT porting)
-
-| Feature | Reason |
-|---------|--------|
-| NSWindow native tabs | Windows has custom tab bar |
-| .tableplugin bundle format | Windows uses .dll + PluginVTable |
-| Sparkle auto-updater | Tauri updater replaces it |
-| Touch ID | Future: Windows Hello |
-| NSVisualEffectView vibrancy | Windows uses own styling |
-| Homebrew Cask | Windows has MSI/NSIS |
-| Onboarding flow | `OnboardingContentView.swift` — different UX paradigm on Windows |
-
----
-
-## Milestone Timeline
-
-```
-v1.0 (Now)     ████████████████████████████████████ 100% — SHIP READY
-                All core workflows, 4 drivers, SSH, security, CI
-
-v1.1 (Q2 2026) ░░░░░░░░░░░░░░░░ AI + Licensing + Health Monitor
-                #1-7: AI chat/inline/providers + license system + auto-reconnect
-
-v1.2 (Q3 2026) ░░░░░░░░░░░░ Driver Expansion
-                #8-13: MongoDB, Redis, Oracle, ClickHouse, DuckDB, Redshift
-
-v1.3 (Q3 2026) ░░░░░░░░ Platform Polish
-                #14-27: SSH agent, deep links, virtualization, custom shortcuts
-
-v2.0 (Q4 2026) ░░░░ Linux + Plugin Marketplace
-                #28-30: Linux packaging, marketplace, file associations
-```
-
----
-
-## Decision Log
+## Decision log (updated)
 
 | Date | Decision | Rationale |
-|------|----------|-----------|
-| 2026-03-12 | Tauri v2 + Rust for Windows | Cross-platform, native perf, same plugin model |
-| 2026-03-16 | `russh` over `ssh2` | Pure Rust, no C deps, 16x faster build, async-native |
-| 2026-03-16 | `rust_xlsxwriter` for XLSX | Pure Rust, streaming, good perf |
-| 2026-03-18 | DPAPI for credential encryption | Windows-native, no external deps |
-| 2026-03-18 | Defer MongoDB/Redis to v1.2 | Different grid paradigm, XL effort |
-| 2026-03-18 | Defer AI features to v1.1 | Needs provider config UI + API key management first |
-| 2026-03-28 | v1.0 ship-ready declared | 157 Rust tests + 141 TS tests + 0 clippy warnings |
-| 2026-03-28 | Tab state stays in localStorage for v1.0 | Low risk, survives restarts |
-| 2026-03-28 | ESLint warnings allowed (not blocking) | 43 warnings are non-critical (unused vars, react-compiler rules) |
+|---|---|---|
+| 2026-03-12 | Use Tauri v2 + Rust for Windows app | Native runtime + shared cross-platform path |
+| 2026-03-16 | Use `russh` for SSH tunnel stack | Pure Rust, async-native integration |
+| 2026-03-18 | Encrypt saved credentials with DPAPI | Native Windows-at-rest secret protection |
+| 2026-03-18 | Keep session-based backend command model | Stable runtime identity independent of saved IDs |
+| 2026-04-01 | Ship AI + health monitor in current stream | Features are implemented and no longer roadmap-only |
+| 2026-04-02 | Keep roadmap baseline tied to manifest version `0.2.0` | Avoid mismatch between docs and app metadata |
+
+## Tracking notes
+
+- This roadmap intentionally separates implemented state from planned backlog.
+- If command surfaces or release versioning changes, update this file with evidence from:
+  - `tablepro-windows/package.json`
+  - `tablepro-windows/src-tauri/tauri.conf.json`
+  - `tablepro-windows/src-tauri/src/lib.rs`
+
+---
+
+**Document Status**: Active
