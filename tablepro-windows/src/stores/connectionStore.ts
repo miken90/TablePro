@@ -12,7 +12,8 @@ interface ConnectionState {
   selectedConnectionId: string | null;
   connectionStatuses: Map<string, ConnectionStatus>;
   sessionIds: Map<string, string>; // SavedConnection id → Rust session UUID
-  isReconnecting: boolean;
+  /** Per-connection reconnect guard — prevents double-tap reconnect. */
+  reconnectingIds: Set<string>;
 
   // Actions
   loadConnections: () => Promise<void>;
@@ -20,13 +21,15 @@ interface ConnectionState {
   selectConnection: (id: string | null) => void;
   connect: (id: string, config: ConnectionConfig) => Promise<void>;
   disconnect: (id: string) => Promise<void>;
-  reconnect: (sessionId: string) => Promise<void>;
+  reconnect: (connectionId: string) => Promise<void>;
   saveConnection: (connection: SavedConnection) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
   saveGroup: (group: ConnectionGroup) => Promise<void>;
   deleteGroup: (id: string) => Promise<void>;
   getStatus: (id: string) => ConnectionStatus;
   getSessionId: (id: string) => string | undefined;
+  /** Check if a specific connection is currently reconnecting. */
+  isConnectionReconnecting: (id: string) => boolean;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
@@ -35,7 +38,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   selectedConnectionId: null,
   connectionStatuses: new Map(),
   sessionIds: new Map(),
-  isReconnecting: false,
+  reconnectingIds: new Set(),
 
   loadConnections: async () => {
     const list = await commands.listConnections();
@@ -92,25 +95,56 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       statuses.set(id, "disconnected");
       const sessionIds = new Map(s.sessionIds);
       sessionIds.delete(id);
+      const reconnectingIds = new Set(s.reconnectingIds);
+      reconnectingIds.delete(id);
       return {
         connectionStatuses: statuses,
         sessionIds,
+        reconnectingIds,
         selectedConnectionId: s.selectedConnectionId === id ? null : s.selectedConnectionId,
       };
     });
     toast.info("Disconnected");
   },
 
-  reconnect: async (sessionId) => {
-    set({ isReconnecting: true });
+  reconnect: async (connectionId: string) => {
+    const state = get();
+    const sessionId = state.sessionIds.get(connectionId);
+    if (!sessionId) {
+      toast.error("Reconnect failed", { description: "No active session for this connection" });
+      return;
+    }
+
+    // Guard: prevent double-tap reconnect for the same connection
+    if (state.reconnectingIds.has(connectionId)) {
+      return;
+    }
+
+    set((s) => {
+      const reconnectingIds = new Set(s.reconnectingIds);
+      reconnectingIds.add(connectionId);
+      const statuses = new Map(s.connectionStatuses);
+      statuses.set(connectionId, "connecting");
+      return { reconnectingIds, connectionStatuses: statuses };
+    });
+
     try {
       await commands.reconnectSession(sessionId);
-      // Success handled by connection:reconnected event listener
+      // Success state is set by the connection:reconnected event listener
     } catch (err) {
+      set((s) => {
+        const statuses = new Map(s.connectionStatuses);
+        statuses.set(connectionId, "error");
+        return { connectionStatuses: statuses };
+      });
       const msg = extractErrorMessage(err);
       toast.error("Reconnect failed", { description: msg });
     } finally {
-      set({ isReconnecting: false });
+      set((s) => {
+        const reconnectingIds = new Set(s.reconnectingIds);
+        reconnectingIds.delete(connectionId);
+        return { reconnectingIds };
+      });
     }
   },
 
@@ -159,9 +193,10 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   getStatus: (id) => get().connectionStatuses.get(id) ?? "disconnected",
   getSessionId: (id) => get().sessionIds.get(id),
+  isConnectionReconnecting: (id) => get().reconnectingIds.has(id),
 }));
 
-// Auto-subscribe to connection:lost events from Rust backend
+// Auto-subscribe to connection events from Rust backend
 if (typeof window !== "undefined") {
 void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => {
   const { sessionId, host } = event.payload;
@@ -171,7 +206,12 @@ void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => 
       useConnectionStore.setState((s) => {
         const statuses = new Map(s.connectionStatuses);
         statuses.set(connId, "error");
-        return { connectionStatuses: statuses };
+        // Clear reconnecting flag — if a reconnect was in flight and the
+        // connection was lost again, the guard must be reset so the user
+        // can retry.
+        const reconnectingIds = new Set(s.reconnectingIds);
+        reconnectingIds.delete(connId);
+        return { connectionStatuses: statuses, reconnectingIds };
       });
       toast.error("Connection lost", {
         description: host ?? "Database connection was lost",
@@ -190,7 +230,9 @@ void listen<{ sessionId: string }>("connection:reconnected", (event) => {
       useConnectionStore.setState((s) => {
         const statuses = new Map(s.connectionStatuses);
         statuses.set(connId, "connected");
-        return { connectionStatuses: statuses };
+        const reconnectingIds = new Set(s.reconnectingIds);
+        reconnectingIds.delete(connId);
+        return { connectionStatuses: statuses, reconnectingIds };
       });
       toast.success("Connection restored");
       break;

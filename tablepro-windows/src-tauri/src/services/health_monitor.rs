@@ -34,7 +34,11 @@ impl HealthMonitor {
         }
     }
 
-    /// Begin monitoring a session. No-op if already monitored.
+    /// Begin monitoring a session.
+    ///
+    /// If a previous monitoring task for this session has already finished
+    /// (e.g. after a connection-loss ping failure), the stale entry is cleaned
+    /// up automatically so monitoring can restart after reconnect.
     #[allow(clippy::too_many_arguments)]
     pub fn start_monitoring(
         &mut self,
@@ -45,8 +49,13 @@ impl HealthMonitor {
         database: String,
         app_handle: AppHandle,
     ) {
-        if self.sessions.contains_key(&session_id) {
-            return;
+        // Clean up finished monitoring task so reconnect can re-register.
+        if let Some((_, handle)) = self.sessions.get(&session_id) {
+            if handle.is_finished() {
+                self.sessions.remove(&session_id);
+            } else {
+                return; // still actively monitoring
+            }
         }
 
         let (stop_tx, mut stop_rx) = watch::channel(false);

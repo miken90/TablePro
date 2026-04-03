@@ -137,13 +137,15 @@ export function ResultToolbar({
               Export
             </button>
             <span className="text-[10px] text-text-muted">
-              {filteredTotal != null && filteredTotal !== total
-                ? `${filteredTotal} of ${total} rows`
-                : isTableMode
-                  ? (typeof approximateCount === 'number' && approximateCount > 0
-                    ? `~${approximateCount.toLocaleString()} rows`
-                    : `${total.toLocaleString()} rows`)
-                  : `${total} rows`}
+              {result.truncated && result.totalRowCount != null
+                ? `${result.rows.length.toLocaleString()} of ${result.totalRowCount.toLocaleString()} rows (truncated)`
+                : filteredTotal != null && filteredTotal !== total
+                  ? `${filteredTotal} of ${total} rows`
+                  : isTableMode
+                    ? (typeof approximateCount === 'number' && approximateCount > 0
+                      ? `~${approximateCount.toLocaleString()} rows`
+                      : `${total.toLocaleString()} rows`)
+                    : `${total} rows`}
               {result.affectedRows > 0 && ` · ${result.affectedRows} affected`}
               {' · '}
               {result.executionTimeMs.toFixed(1)}ms

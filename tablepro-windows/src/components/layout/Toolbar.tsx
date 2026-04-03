@@ -52,8 +52,9 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
   const getStatus = useConnectionStore((s) => s.getStatus);
   const disconnect = useConnectionStore((s) => s.disconnect);
   const reconnect = useConnectionStore((s) => s.reconnect);
-  const isReconnecting = useConnectionStore((s) => s.isReconnecting);
-  const sessionIds = useConnectionStore((s) => s.sessionIds);
+  const isReconnecting = useConnectionStore((s) =>
+    selectedConnectionId ? s.reconnectingIds.has(selectedConnectionId) : false,
+  );
   const { isExecuting, queryText, result: queryResult, execute, cancel, pendingSafeCheck, confirmSafeCheck, cancelSafeCheck } = useQueryStore();
   const safeModeLevel = useSettingsStore((s) => s.settings.safeModeLevel);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
@@ -174,10 +175,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
           )}
           {selectedConnectionId && status === "error" && (
             <button
-              onClick={() => {
-                const sid = sessionIds.get(selectedConnectionId);
-                if (sid) void reconnect(sid);
-              }}
+              onClick={() => void reconnect(selectedConnectionId)}
               disabled={isReconnecting}
               className="ml-1 rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-accent-yellow disabled:opacity-50"
               title="Reconnect"

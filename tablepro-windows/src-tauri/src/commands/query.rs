@@ -8,6 +8,20 @@ use crate::models::{AppError, QueryResult};
 use crate::services::ConnectionManager;
 use crate::services::sql_quoting::quote_identifier;
 
+/// Maximum rows returned by `execute_query` before truncation.
+///
+/// The plugin ABI (`PluginVTable::execute`) returns a complete `FfiQueryResult`
+/// from the DLL — there is no cursor or chunking API in the current plugin SDK
+/// (API_VERSION = 1). Every row the driver produces is materialised in memory,
+/// serialised to JSON, and sent over the Tauri IPC bridge as a single message.
+///
+/// True streaming would require an ABI v2 that exposes a cursor-based
+/// `fetch_next_chunk(handle, max_rows) -> FfiQueryResult` on the vtable, plus
+/// a corresponding chunked IPC channel on the Tauri side. Until that work lands
+/// (targeted for Phase 02 driver-substrate), this hard cap prevents the single
+/// IPC payload from crashing or hanging the WebView.
+const MAX_RESULT_ROWS: usize = 50_000;
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct QueryStartedEvent {
@@ -152,12 +166,27 @@ pub async fn execute_query(
     let elapsed_ms = started_at.elapsed().as_millis() as u64;
 
     match execute_result {
-        Ok(result) => {
+        Ok(mut result) => {
+            let original_row_count = result.rows.len();
             let row_count = if result.affected_rows > 0 {
                 result.affected_rows as usize
             } else {
-                result.rows.len()
+                original_row_count
             };
+
+            // Truncate oversized result sets to prevent WebView crashes.
+            if original_row_count > MAX_RESULT_ROWS {
+                tracing::warn!(
+                    session_id = %session_id,
+                    query_id = %query_id,
+                    original_row_count,
+                    max = MAX_RESULT_ROWS,
+                    "Result truncated to fit IPC payload limit"
+                );
+                result.rows.truncate(MAX_RESULT_ROWS);
+                result.truncated = true;
+                result.total_row_count = Some(original_row_count);
+            }
 
             let cell_count = result.rows.len() * result.columns.len();
             if cell_count > 500_000 {

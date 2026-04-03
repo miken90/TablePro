@@ -94,5 +94,7 @@ pub(super) fn convert_query_result(
         rows,
         affected_rows,
         execution_time_ms: 0.0,
+        truncated: false,
+        total_row_count: None,
     })
 }
