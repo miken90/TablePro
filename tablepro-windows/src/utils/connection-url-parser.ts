@@ -37,9 +37,10 @@ export function parseConnectionUrl(url: string): Partial<ConnectionConfig> {
   }
 
   const database = parsed.pathname.replace(/^\//, "");
-  const port = parsed.port ? Number(parsed.port) : DEFAULT_PORTS[dbType];
+  const isSrv = protocol === "mongodb+srv";
+  const port = parsed.port ? Number(parsed.port) : (isSrv ? 27017 : DEFAULT_PORTS[dbType]);
 
-  return {
+  const result: Partial<ConnectionConfig> = {
     dbType,
     host: parsed.hostname || "localhost",
     port,
@@ -47,4 +48,10 @@ export function parseConnectionUrl(url: string): Partial<ConnectionConfig> {
     password: decodeURIComponent(parsed.password || ""),
     database: decodeURIComponent(database),
   };
+
+  if (dbType === "mongodb") {
+    result.useSrv = isSrv;
+  }
+
+  return result;
 }

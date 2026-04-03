@@ -1,10 +1,11 @@
-import { Boxes, Code, Table2 } from "lucide-react";
+import { Boxes, Code, Database, Table2 } from "lucide-react";
 import type { TabType } from "../../stores/editorStore";
 
 const icons: Record<TabType, React.ElementType> = {
   query: Code,
   table: Table2,
   structure: Boxes,
+  mongoQuery: Database,
 };
 
 interface TabIconProps {

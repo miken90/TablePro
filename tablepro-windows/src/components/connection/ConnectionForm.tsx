@@ -110,6 +110,7 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
   };
 
   const isSqlite = config.dbType === "sqlite";
+  const isMongodb = config.dbType === "mongodb";
   const placeholders = DB_PLACEHOLDERS[config.dbType] ?? { user: "", database: "" };
   const groupList = Array.from(groups.values()).sort((a, b) => a.order - b.order);
 
@@ -164,6 +165,55 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
         <Field label="Database File">
           <input value={config.database} onChange={(e) => updateConfig({ database: e.target.value })} placeholder={placeholders.database} className={inputCls} />
         </Field>
+      ) : isMongodb ? (
+        <>
+          {/* SRV toggle */}
+          <div className="flex items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={config.useSrv ?? false}
+                onChange={(e) => updateConfig({ useSrv: e.target.checked })}
+              />
+              Use SRV (mongodb+srv://)
+            </label>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <Field label="Host">
+                <input value={config.host} onChange={(e) => updateConfig({ host: e.target.value })} placeholder="localhost" className={inputCls} />
+              </Field>
+            </div>
+            <Field label="Port">
+              <input
+                type="number"
+                value={config.port}
+                onChange={(e) => updateConfig({ port: Number(e.target.value) })}
+                className={inputCls}
+                disabled={config.useSrv}
+                title={config.useSrv ? "Port is resolved via SRV DNS lookup" : undefined}
+              />
+            </Field>
+          </div>
+
+          <Field label="Database">
+            <input value={config.database} onChange={(e) => updateConfig({ database: e.target.value })} placeholder={placeholders.database} className={inputCls} />
+          </Field>
+
+          <Field label="User">
+            <input value={config.user} onChange={(e) => updateConfig({ user: e.target.value })} placeholder={placeholders.user} className={inputCls} />
+          </Field>
+
+          <Field label="Password">
+            <input
+              type="password"
+              value={config.password}
+              onChange={(e) => updateConfig({ password: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
+        </>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2">

@@ -13,6 +13,7 @@ import { FilterPanel } from "../filter/filter-panel";
 import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { AiChatPanel } from "../ai/ai-chat-panel";
+import { MongodbQueryPanel } from "../mongodb/mongodb-query-panel";
 import { ShortcutsHelp } from "../shared/ShortcutsHelp";
 import { UnsavedChangesDialog } from "../shared/unsaved-changes-dialog";
 import { UpdateNotification } from "../shared/update-notification";
@@ -25,6 +26,7 @@ import { useEditorStore } from "../../stores/editorStore";
 import { resolveActiveQuerySessionId, useQueryStore } from "../../stores/queryStore";
 import { useInspectorStore } from "../../stores/inspectorStore";
 import { useChangeStore } from "../../stores/changeStore";
+import { useSchemaStore } from "../../stores/schemaStore";
 import {
   useLayoutStore,
   SIDEBAR_MIN,
@@ -46,6 +48,8 @@ export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
   const activeTabId = useEditorStore((s) => s.activeTabId);
+  const capabilities = useSchemaStore((s) => s.capabilities);
+  const isDocumentDb = capabilities.supportsCollections && !capabilities.supportsSqlEditor;
 
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
   const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
@@ -250,7 +254,7 @@ export function MainLayout() {
         )}
 
         <main id="main-content" className="flex flex-1 flex-col overflow-hidden">
-          {structureTarget && selectedConnectionId && getSessionId(selectedConnectionId) ? (
+          {!isDocumentDb && structureTarget && selectedConnectionId && getSessionId(selectedConnectionId) ? (
             <TableStructureView
               sessionId={getSessionId(selectedConnectionId)!}
               tableName={structureTarget.tableName}
@@ -270,8 +274,8 @@ export function MainLayout() {
                 tabId={filterTabId}
                 tableName={activeTableContext.tableName}
                 columns={filterColumns}
-                onSave={() => requestSaveRef.current?.()}
-                onAddRow={() => addRowRef.current?.()}
+                onSave={isDocumentDb ? () => {} : () => requestSaveRef.current?.()}
+                onAddRow={isDocumentDb ? undefined : () => addRowRef.current?.()}
               />
               <div className="flex-1 overflow-hidden">
                 <ResultPanel
@@ -297,32 +301,46 @@ export function MainLayout() {
                 onBeforeTabSwitch={handleBeforeTabSwitch}
                 onAfterClose={handleAfterClose}
               />
-              {filterVisible && (
+              {!isDocumentDb && filterVisible && (
                 <FilterPanel tabId={filterTabId} columns={filterColumns} />
               )}
                 <div className="editor-results-container flex flex-1 flex-col overflow-hidden">
-                  <div style={{ height: `${editorHeightPercent}%` }} className="flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-hidden">
-                      <SqlEditor />
-                    </div>
-                    <EditorStatusBar />
-                  </div>
-                  <div
-                    className="group h-1.5 cursor-row-resize bg-border-subtle hover:bg-accent-blue flex items-center justify-center"
-                    onMouseDown={handleEditorResize}
-                  >
-                    <div className="flex gap-1 opacity-40 group-hover:opacity-70">
-                      <span className="h-1 w-1 rounded-full bg-current" />
-                      <span className="h-1 w-1 rounded-full bg-current" />
-                      <span className="h-1 w-1 rounded-full bg-current" />
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <ResultPanel
-                      sessionId={sessionId}
-                      onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
-                    />
-                  </div>
+                  {isDocumentDb ? (
+                    <>
+                      <MongodbQueryPanel />
+                      <div className="flex-1 overflow-hidden">
+                        <ResultPanel
+                          sessionId={sessionId}
+                          onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ height: `${editorHeightPercent}%` }} className="flex flex-col overflow-hidden">
+                        <div className="flex-1 overflow-hidden">
+                          <SqlEditor />
+                        </div>
+                        <EditorStatusBar />
+                      </div>
+                      <div
+                        className="group h-1.5 cursor-row-resize bg-border-subtle hover:bg-accent-blue flex items-center justify-center"
+                        onMouseDown={handleEditorResize}
+                      >
+                        <div className="flex gap-1 opacity-40 group-hover:opacity-70">
+                          <span className="h-1 w-1 rounded-full bg-current" />
+                          <span className="h-1 w-1 rounded-full bg-current" />
+                          <span className="h-1 w-1 rounded-full bg-current" />
+                        </div>
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <ResultPanel
+                          sessionId={sessionId}
+                          onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
             </>
           )}

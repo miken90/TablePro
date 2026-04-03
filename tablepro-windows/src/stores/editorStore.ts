@@ -10,7 +10,7 @@ import {
   type PersistedTab,
 } from "./tab-state-persistence";
 
-export type TabType = 'query' | 'table' | 'structure';
+export type TabType = 'query' | 'table' | 'structure' | 'mongoQuery';
 
 export interface EditorTab {
   id: string;
@@ -40,6 +40,7 @@ interface EditorState {
   addTab: (title?: string) => string;
   addPreviewTab: (title: string) => string;
   addTableTab: (tableName: string, schema?: string | null) => string;
+  addMongoQueryTab: (title?: string) => string;
   promoteTab: (id: string) => void;
   closeTab: (id: string) => void;
   closeOtherTabs: (id: string) => void;
@@ -323,6 +324,24 @@ export const useEditorStore = create<EditorState>()(
           connectionId: connId,
           tableName,
           tableSchema: schema ?? undefined,
+        };
+        set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));
+        return id;
+      },
+
+      /** Create a MongoDB query tab. */
+      addMongoQueryTab: (title) => {
+        const id = generateTabId();
+        const connId = useConnectionStore.getState().selectedConnectionId ?? undefined;
+        const newTab: EditorTab = {
+          id,
+          title: title ?? `Mongo Query ${get().tabs.length + 1}`,
+          content: "",
+          isDirty: false,
+          isPreview: false,
+          isPinned: false,
+          type: 'mongoQuery',
+          connectionId: connId,
         };
         set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));
         return id;

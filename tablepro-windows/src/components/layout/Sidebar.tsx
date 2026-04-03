@@ -1,4 +1,4 @@
-import { Search, Database, Plus, Table2, Eye, Braces, ScrollText } from "lucide-react";
+import { Search, Database, Plus, Table2, Eye, Braces, ScrollText, FolderOpen } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback, useDeferredValue } from "react";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useConnectionStore } from "../../stores/connectionStore";
@@ -10,6 +10,7 @@ import { CreateTableWizard } from "../structure/create-table-wizard";
 import { EnvironmentBadge } from "../connection/environment-badge";
 import { ConnectionStatusIndicator } from "../connection/connection-status-indicator";
 import { ConnectionGroup } from "../connection/connection-group";
+import * as commands from "../../ipc/commands";
 
 interface SidebarProps {
   onViewStructure?: (tableName: string, schema?: string | null) => void;
@@ -37,11 +38,13 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     currentSchema,
     routineCatalog,
     isLoading,
+    capabilities,
     fetchDatabases,
     fetchSchema,
     fetchSchemas,
     selectDatabase,
     setCurrentSchema,
+    setCapabilities,
   } = useSchemaStore();
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
@@ -52,6 +55,8 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   const sessionId = selectedConnectionId ? sessionIds.get(selectedConnectionId) : undefined;
   const activeConnection = selectedConnectionId ? connections.get(selectedConnectionId) : undefined;
   const configDatabase = activeConnection?.config?.database;
+  const dbType = activeConnection?.config?.dbType;
+  const isDocumentDb = capabilities.supportsCollections && !capabilities.supportsSqlEditor;
 
   const activeTableIdentity = useMemo(() => {
     if (activeTableContext) {
@@ -79,6 +84,15 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     },
     [activeTableIdentity],
   );
+
+  // Load driver capabilities when connection changes
+  useEffect(() => {
+    if (dbType) {
+      void commands.getDriverCapabilities(dbType).then(setCapabilities).catch(() => {
+        // Fall back to defaults — SQL capabilities assumed
+      });
+    }
+  }, [dbType, setCapabilities]);
 
   // Fetch database list when session changes
   useEffect(() => {
@@ -277,19 +291,21 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter tables…"
-            aria-label="Filter tables"
+            placeholder={isDocumentDb ? "Filter collections\u2026" : "Filter tables\u2026"}
+            aria-label={isDocumentDb ? "Filter collections" : "Filter tables"}
             className="flex-1 bg-transparent text-xs text-text-primary outline-none placeholder:text-text-muted"
           />
         </div>
-        <button
-          onClick={() => setWizardOpen(true)}
-          disabled={!sessionId}
-          className="mt-2 flex w-full items-center justify-center gap-1 rounded border border-border bg-surface-elevated px-2 py-1 text-xs text-text-primary hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus size={12} aria-hidden="true" />
-          New Table
-        </button>
+        {capabilities.supportsDdl && (
+          <button
+            onClick={() => setWizardOpen(true)}
+            disabled={!sessionId}
+            className="mt-2 flex w-full items-center justify-center gap-1 rounded border border-border bg-surface-elevated px-2 py-1 text-xs text-text-primary hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={12} aria-hidden="true" />
+            New Table
+          </button>
+        )}
       </div>
 
       {/* Database selector */}
@@ -336,7 +352,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
       )}
 
       {/* Tree */}
-      <div className="flex-1 overflow-y-auto" role="tree" aria-label="Tables">
+      <div className="flex-1 overflow-y-auto" role="tree" aria-label={isDocumentDb ? "Collections" : "Tables"}>
         {isLoading && (
           <div className="p-3 text-xs text-text-muted" aria-live="polite">Loading…</div>
         )}
@@ -348,7 +364,12 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
         )}
         {(filteredTables.length > 0 || routineCatalog?.supported) && (
           <>
-            <SidebarObjectGroup label="Tables" icon={Table2} count={grouped.tables.length} defaultExpanded>
+            <SidebarObjectGroup
+              label={isDocumentDb ? "Collections" : "Tables"}
+              icon={isDocumentDb ? FolderOpen : Table2}
+              count={grouped.tables.length}
+              defaultExpanded
+            >
               {grouped.tables.map((table) => (
                 <SidebarTableNode
                   key={`${table.schema ?? ""}.${table.name}`}
@@ -357,13 +378,13 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                   onToggle={() => toggleTable(table.name)}
                   sessionId={sessionId ?? null}
                   isActive={isTableActive(table.name, table.schema)}
-                  onViewStructure={onViewStructure}
+                  onViewStructure={capabilities.supportsStructureView ? onViewStructure : undefined}
                   onOpenTable={onOpenTable}
                   onOpenPreviewTable={onOpenPreviewTable}
                 />
               ))}
             </SidebarObjectGroup>
-            {grouped.views.length > 0 && (
+            {!isDocumentDb && grouped.views.length > 0 && (
               <SidebarObjectGroup label="Views" icon={Eye} count={grouped.views.length}>
                 {grouped.views.map((table) => (
                   <SidebarTableNode
@@ -380,7 +401,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                 ))}
               </SidebarObjectGroup>
             )}
-            {routineCatalog?.supported && (
+            {!isDocumentDb && routineCatalog?.supported && (
               <>
                 <SidebarObjectGroup label="Functions" icon={Braces} count={routinesGrouped.functions.length}>
                   {routinesGrouped.functions.map((routine) => (

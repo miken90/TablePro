@@ -16,6 +16,8 @@ export interface ConnectionConfig {
   dbType: string;
   sslMode: string;
   startupCommands?: string;
+  /** MongoDB: use mongodb+srv:// protocol (DNS SRV lookup) */
+  useSrv?: boolean;
   // SSH tunnel fields
   sshEnabled: boolean;
   sshHost: string;

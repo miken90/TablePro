@@ -59,6 +59,8 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
   const safeModeLevel = useSettingsStore((s) => s.settings.safeModeLevel);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
   const clearSchema = useSchemaStore((s) => s.clearSchema);
+  const capabilities = useSchemaStore((s) => s.capabilities);
+  const isDocumentDb = capabilities.supportsCollections && !capabilities.supportsSqlEditor;
   const editorViewRef = useEditorViewRef();
 
   const connection = selectedConnectionId ? connections.get(selectedConnectionId) : null;
@@ -213,18 +215,20 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
 
         <div className="flex-1" />
 
-        {/* Run split-button */}
-        <RunSplitButton
-          onRun={handleRun}
-          onRunAll={handleRunAll}
-          onExplain={handleExplain}
-          onExportCsv={() => {/* Export dialog handled at ResultPanel level */}}
-          onCancel={handleStop}
-          isExecuting={isExecuting}
-          disabled={!resolveActiveQuerySessionId() || !queryText.trim()}
-          dbType={connection?.config?.dbType}
-          hasResult={!!queryResult}
-        />
+        {/* Run split-button — hidden for document databases (MongoDB uses its own query panel) */}
+        {!isDocumentDb && (
+          <RunSplitButton
+            onRun={handleRun}
+            onRunAll={handleRunAll}
+            onExplain={handleExplain}
+            onExportCsv={() => {/* Export dialog handled at ResultPanel level */}}
+            onCancel={handleStop}
+            isExecuting={isExecuting}
+            disabled={!resolveActiveQuerySessionId() || !queryText.trim()}
+            dbType={connection?.config?.dbType}
+            hasResult={!!queryResult}
+          />
+        )}
 
         <button
           onClick={onToggleHistory}
