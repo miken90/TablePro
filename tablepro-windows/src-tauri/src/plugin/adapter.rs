@@ -8,7 +8,7 @@ mod adapter_ffi_list_converters;
 use async_trait::async_trait;
 use tablepro_plugin_sdk::{DriverConfig, DriverHandle, FfiStr, PluginVTable};
 
-use crate::models::{AppError, ColumnInfo, ForeignKeyInfo, IndexInfo, QueryResult, TableInfo};
+use crate::models::{AppError, ColumnInfo, DriverCapabilities, ForeignKeyInfo, IndexInfo, QueryResult, TableInfo};
 use crate::plugin::DatabaseDriver;
 use adapter_ffi_helpers::{convert_query_result, ffi_result_to_rust, ffi_string_to_rust};
 use adapter_ffi_list_converters::{
@@ -25,6 +25,7 @@ pub struct PluginDriverAdapter {
     vtable: *const PluginVTable,
     handle: *mut DriverHandle,
     type_id: String,
+    capabilities: DriverCapabilities,
 }
 
 // SAFETY: PluginDriverAdapter is used exclusively through &self async methods
@@ -42,6 +43,7 @@ impl PluginDriverAdapter {
         vtable: *mut PluginVTable,
         config: &crate::models::ConnectionConfig,
         type_id: &str,
+        capabilities: DriverCapabilities,
     ) -> Result<Self, AppError> {
         let host = FfiStr::from(config.host.as_str());
         let user = FfiStr::from(config.user.as_str());
@@ -74,6 +76,7 @@ impl PluginDriverAdapter {
             vtable,
             handle,
             type_id: type_id.to_string(),
+            capabilities,
         })
     }
 
@@ -275,8 +278,7 @@ impl DatabaseDriver for PluginDriverAdapter {
     }
 
     fn supports_schemas(&self) -> bool {
-        // Determined at runtime from type_id convention; override when needed.
-        matches!(self.type_id.as_str(), "postgres" | "mssql")
+        self.capabilities.supports_schemas
     }
 
     fn supports_transactions(&self) -> bool {

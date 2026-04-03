@@ -1,4 +1,5 @@
 import type { ConnectionConfig } from "../../types/connection";
+import type { DriverInfo } from "../../types/capability";
 
 export const DB_TYPES = ["postgres", "mysql", "mssql", "sqlite"];
 export const SSL_MODES = ["disable", "prefer", "require", "verify-ca", "verify-full"];
@@ -16,6 +17,23 @@ export const DB_PLACEHOLDERS: Record<string, { user: string; database: string }>
   mssql: { user: "sa", database: "master" },
   sqlite: { user: "", database: "/path/to/database.db" },
 };
+
+/** Build DB_TYPES list from loaded drivers, falling back to hardcoded list. */
+export function getDbTypes(drivers: DriverInfo[] | null): string[] {
+  if (drivers && drivers.length > 0) {
+    return drivers.map((d) => d.typeId);
+  }
+  return DB_TYPES;
+}
+
+/** Get default port for a given dbType, using driver metadata if available. */
+export function getDefaultPort(dbType: string, drivers: DriverInfo[] | null): number {
+  if (drivers) {
+    const driver = drivers.find((d) => d.typeId === dbType);
+    if (driver) return driver.defaultPort;
+  }
+  return DEFAULT_PORTS[dbType] ?? 0;
+}
 
 export const DEFAULT_CONNECTION_CONFIG: ConnectionConfig = {
   host: "localhost",

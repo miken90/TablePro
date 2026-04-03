@@ -1,0 +1,13 @@
+{
+  "engine": "mssql",
+  "displayName": "Microsoft SQL Server",
+  "capabilities": {
+    "supportsSqlEditor": true,
+    "supportsSchemas": true,
+    "supportsCollections": false,
+    "supportsDdl": true,
+    "supportsInlineEdit": true,
+    "supportsImportExport": true,
+    "supportsStructureView": true
+  }
+}

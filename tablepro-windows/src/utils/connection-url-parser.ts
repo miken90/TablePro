@@ -6,12 +6,15 @@ const PROTOCOL_TO_DB_TYPE: Record<string, string> = {
   postgres: "postgres",
   mssql: "mssql",
   sqlserver: "mssql",
+  mongodb: "mongodb",
+  "mongodb+srv": "mongodb",
 };
 
 const DEFAULT_PORTS: Record<string, number> = {
   postgres: 5432,
   mysql: 3306,
   mssql: 1433,
+  mongodb: 27017,
 };
 
 export function parseConnectionUrl(url: string): Partial<ConnectionConfig> {

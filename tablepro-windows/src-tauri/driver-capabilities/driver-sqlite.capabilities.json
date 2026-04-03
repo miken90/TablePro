@@ -1,0 +1,13 @@
+{
+  "engine": "sqlite",
+  "displayName": "SQLite",
+  "capabilities": {
+    "supportsSqlEditor": true,
+    "supportsSchemas": false,
+    "supportsCollections": false,
+    "supportsDdl": true,
+    "supportsInlineEdit": true,
+    "supportsImportExport": false,
+    "supportsStructureView": true
+  }
+}

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ConnectionConfig, ConnectionGroup, SavedConnection, ConnectionStatus } from "../types/connection";
+import type { DriverCapabilities, DriverInfo } from "../types/capability";
 import type { QueryResult } from "../types/query";
 import type { TableInfo, IndexInfo, ForeignKeyInfo, RoutineCatalog } from "../types/schema";
 import type { ColumnInfo } from "../types/query";
@@ -20,6 +21,13 @@ export const reconnectSession = (sessionId: string): Promise<void> =>
 
 export const getConnectionStatus = (sessionId: string): Promise<ConnectionStatus> =>
   invoke("get_connection_status", { sessionId });
+
+// Driver capability commands
+export const listDrivers = (): Promise<DriverInfo[]> =>
+  invoke("list_drivers");
+
+export const getDriverCapabilities = (dbType: string): Promise<DriverCapabilities> =>
+  invoke("get_driver_capabilities", { dbType });
 
 // Query commands
 export const executeQuery = (sessionId: string, sql: string, params?: string[]): Promise<QueryResult> =>

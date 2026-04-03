@@ -40,6 +40,13 @@ try {
     Get-ChildItem "$debugDir\driver_*.dll" -ErrorAction SilentlyContinue |
         ForEach-Object { Copy-Item $_.FullName "$pluginsDir\" -Force }
 
+    # 4. Copy driver capability sidecar files alongside DLLs
+    $capsDir = "src-tauri\driver-capabilities"
+    if (Test-Path $capsDir) {
+        Get-ChildItem "$capsDir\*.capabilities.json" -ErrorAction SilentlyContinue |
+            ForEach-Object { Copy-Item $_.FullName "$pluginsDir\" -Force }
+    }
+
     $sw.Stop()
     $elapsed = [math]::Round($sw.Elapsed.TotalSeconds, 1)
 

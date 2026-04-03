@@ -1,0 +1,13 @@
+{
+  "engine": "mysql",
+  "displayName": "MySQL",
+  "capabilities": {
+    "supportsSqlEditor": true,
+    "supportsSchemas": false,
+    "supportsCollections": false,
+    "supportsDdl": true,
+    "supportsInlineEdit": true,
+    "supportsImportExport": true,
+    "supportsStructureView": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "engine": "postgres",
+  "displayName": "PostgreSQL",
+  "capabilities": {
+    "supportsSqlEditor": true,
+    "supportsSchemas": true,
+    "supportsCollections": false,
+    "supportsDdl": true,
+    "supportsInlineEdit": true,
+    "supportsImportExport": true,
+    "supportsStructureView": true
+  }
+}

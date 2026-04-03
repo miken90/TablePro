@@ -9,7 +9,8 @@ use std::sync::Arc;
 use tauri::Manager;
 
 use commands::connection::{
-    connect, disconnect, get_connection_status, reconnect_session, test_connection,
+    connect, disconnect, get_connection_status, get_driver_capabilities, list_drivers,
+    reconnect_session, test_connection,
 };
 use commands::data::{generate_row_sql, save_changes};
 use commands::export::export_to_file;
@@ -90,7 +91,8 @@ pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init());
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_deep_link::init());
 
     // Only register the updater plugin in release builds — the update server
     // is not reachable during local dev and the placeholder pubkey can cause
@@ -167,6 +169,8 @@ pub fn run() {
             disconnect,
             get_connection_status,
             reconnect_session,
+            list_drivers,
+            get_driver_capabilities,
             // query
             execute_query,
             fetch_rows,

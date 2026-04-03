@@ -67,6 +67,16 @@ try {
     }
     Write-Host "[dev] Copied $($dlls.Count) driver DLL(s) to plugins/" -ForegroundColor Green
 
+    # Copy driver capability sidecar files alongside DLLs
+    $capsDir = "src-tauri/driver-capabilities"
+    if (Test-Path $capsDir) {
+        $caps = Get-ChildItem "$capsDir/*.capabilities.json" -ErrorAction SilentlyContinue
+        foreach ($cap in $caps) {
+            Copy-Item $cap.FullName $pluginsDir -Force
+        }
+        Write-Host "[dev] Copied $($caps.Count) capability sidecar(s) to plugins/" -ForegroundColor Green
+    }
+
     # 2. Start Vite dev server as a background PowerShell process
     Write-Host "[dev] Starting Vite dev server..." -ForegroundColor Cyan
     $viteProc = Start-Process -FilePath "powershell.exe" `

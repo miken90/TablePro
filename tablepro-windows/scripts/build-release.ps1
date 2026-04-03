@@ -174,6 +174,13 @@ function Assert-VersionConsistency {
         Get-ChildItem (Join-Path $releaseDir "driver_*.dll") -ErrorAction SilentlyContinue |
             ForEach-Object { Copy-Item $_.FullName $pluginsDir -Force }
 
+        # Copy driver capability sidecar files alongside DLLs
+        $capsDir = "src-tauri\driver-capabilities"
+        if (Test-Path $capsDir) {
+            Get-ChildItem "$capsDir\*.capabilities.json" -ErrorAction SilentlyContinue |
+                ForEach-Object { Copy-Item $_.FullName $pluginsDir -Force }
+        }
+
         if (Test-Path "src-tauri\resources") {
             New-Item -ItemType Directory -Path $resourcesDir -Force | Out-Null
             Copy-Item "src-tauri\resources\*" $resourcesDir -Recurse

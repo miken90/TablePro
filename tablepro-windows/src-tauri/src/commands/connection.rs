@@ -4,8 +4,8 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::models::{AppError, ConnectionConfig, ConnectionStatus};
-use crate::plugin::DatabaseDriver;
+use crate::models::{AppError, ConnectionConfig, ConnectionStatus, DriverCapabilities};
+use crate::plugin::{DatabaseDriver, PluginMetadataInfo};
 use crate::services::health_monitor::HealthMonitor;
 use crate::services::ssh_tunnel::SshTunnelManager;
 use crate::services::ConnectionManager;
@@ -234,4 +234,23 @@ pub async fn reconnect_session(
 
     tracing::info!(session_id = %session_id, "Session reconnected");
     Ok(())
+}
+
+/// Return metadata (including capabilities) for all loaded driver plugins.
+#[tauri::command]
+pub async fn list_drivers(
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<Vec<PluginMetadataInfo>, AppError> {
+    let mgr = manager.lock().await;
+    Ok(mgr.plugin_manager().list_plugins())
+}
+
+/// Return capabilities for a specific driver type.
+#[tauri::command]
+pub async fn get_driver_capabilities(
+    db_type: String,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<DriverCapabilities, AppError> {
+    let mgr = manager.lock().await;
+    Ok(mgr.plugin_manager().get_capabilities(&db_type))
 }

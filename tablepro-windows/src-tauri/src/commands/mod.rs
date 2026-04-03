@@ -14,7 +14,7 @@ pub mod storage;
 pub mod structure;
 pub mod tab_state;
 
-pub use connection::{connect, disconnect, get_connection_status, test_connection};
+pub use connection::{connect, disconnect, get_connection_status, get_driver_capabilities, list_drivers, test_connection};
 pub use data::{generate_row_sql, save_changes};
 pub use export::export_to_file;
 pub use filter::{delete_filter_preset, load_filter_presets, save_filter_preset};

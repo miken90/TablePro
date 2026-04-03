@@ -2,18 +2,21 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::path::PathBuf;
 
+use serde::Serialize;
 use tablepro_plugin_sdk::{PluginVTable, API_VERSION};
 
-use crate::models::{AppError, ConnectionConfig};
+use crate::models::{AppError, ConnectionConfig, DriverCapabilities, DriverCapabilitySidecar};
 use crate::plugin::adapter::PluginDriverAdapter;
 use crate::plugin::DatabaseDriver;
 
-/// Metadata describing a loaded plugin.
-#[derive(Debug, Clone)]
+/// Metadata describing a loaded plugin, including its capabilities.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginMetadataInfo {
     pub type_id: String,
     pub display_name: String,
     pub default_port: u16,
+    pub capabilities: DriverCapabilities,
 }
 
 /// Holds a loaded DLL and its vtable pointer.
@@ -33,13 +36,31 @@ unsafe impl Sync for LoadedPlugin {}
 pub struct PluginManager {
     plugin_dir: PathBuf,
     plugins: HashMap<String, LoadedPlugin>,
+    /// Directories to search for `<driver>.capabilities.json` sidecar files.
+    /// Populated at construction time from known locations.
+    capabilities_dirs: Vec<PathBuf>,
 }
 
 impl PluginManager {
     pub fn new(plugin_dir: PathBuf) -> Self {
+        // Build list of directories to search for sidecar capability files.
+        // 1. `driver-capabilities/` next to the executable (production layout)
+        // 2. `driver-capabilities/` inside src-tauri (dev builds via cargo tauri dev)
+        let mut capabilities_dirs = Vec::new();
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(exe_dir) = exe.parent() {
+                capabilities_dirs.push(exe_dir.join("driver-capabilities"));
+            }
+        }
+        // Dev-time: look relative to CARGO_MANIFEST_DIR if available
+        if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+            capabilities_dirs.push(PathBuf::from(manifest_dir).join("driver-capabilities"));
+        }
+
         Self {
             plugin_dir,
             plugins: HashMap::new(),
+            capabilities_dirs,
         }
     }
 
@@ -167,6 +188,10 @@ impl PluginManager {
             type_id: type_id.clone(),
             display_name,
             default_port,
+            capabilities: self.load_sidecar_capabilities(
+                &type_id,
+                path.parent().unwrap_or(std::path::Path::new(".")),
+            ),
         };
 
         tracing::info!(type_id = %type_id, "Loaded plugin from {:?}", path);
@@ -192,13 +217,61 @@ impl PluginManager {
             AppError::PluginError(format!("No plugin loaded for type '{type_id}'"))
         })?;
 
-        let adapter = unsafe { PluginDriverAdapter::new(plugin.vtable, config, type_id) }?;
+        let adapter = unsafe {
+            PluginDriverAdapter::new(
+                plugin.vtable,
+                config,
+                type_id,
+                plugin.metadata.capabilities.clone(),
+            )
+        }?;
         Ok(Box::new(adapter))
     }
 
     /// Return metadata for all successfully loaded plugins.
     pub fn list_plugins(&self) -> Vec<PluginMetadataInfo> {
         self.plugins.values().map(|p| p.metadata.clone()).collect()
+    }
+
+    /// Return capabilities for a specific driver type, or default if not loaded.
+    pub fn get_capabilities(&self, type_id: &str) -> DriverCapabilities {
+        self.plugins
+            .get(type_id)
+            .map(|p| p.metadata.capabilities.clone())
+            .unwrap_or_default()
+    }
+
+    /// Try to load a `driver-<type_id>.capabilities.json` sidecar file
+    /// from known directories. Returns `DriverCapabilities::default()` if
+    /// no sidecar is found (backward compat for drivers without one).
+    fn load_sidecar_capabilities(&self, type_id: &str, dll_dir: &std::path::Path) -> DriverCapabilities {
+        // Search order: directory containing the DLL, then configured capabilities_dirs
+        let filename = format!("driver-{type_id}.capabilities.json");
+        let search_dirs = std::iter::once(dll_dir.to_path_buf())
+            .chain(self.capabilities_dirs.iter().cloned());
+
+        for dir in search_dirs {
+            let path = dir.join(&filename);
+            if path.is_file() {
+                match std::fs::read_to_string(&path) {
+                    Ok(contents) => match serde_json::from_str::<DriverCapabilitySidecar>(&contents) {
+                        Ok(sidecar) => {
+                            tracing::info!(type_id, ?path, "Loaded driver capabilities sidecar");
+                            return sidecar.capabilities;
+                        }
+                        Err(e) => {
+                            tracing::warn!(?path, "Failed to parse capabilities sidecar: {e}");
+                        }
+                    },
+                    Err(e) => {
+                        tracing::warn!(?path, "Failed to read capabilities sidecar: {e}");
+                    }
+                }
+            }
+        }
+
+        tracing::debug!(type_id, "No capabilities sidecar found, using defaults");
+        DriverCapabilities::default()
     }
 }
 

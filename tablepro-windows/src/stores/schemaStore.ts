@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { RoutineCatalog, TableInfo } from "../types/schema";
 import type { ColumnInfo } from "../types/query";
+import type { DriverCapabilities } from "../types/capability";
+import { DEFAULT_CAPABILITIES } from "../types/capability";
 import * as commands from "../ipc/commands";
 import { extractErrorMessage } from "../ipc/error";
 
@@ -22,8 +24,11 @@ interface SchemaState {
   routineCatalog: RoutineCatalog | null;
   isLoading: boolean;
   error: string | null;
+  /** Capabilities of the currently connected driver. */
+  capabilities: DriverCapabilities;
 
   // Actions
+  setCapabilities: (capabilities: DriverCapabilities) => void;
   fetchDatabases: (sessionId: string) => Promise<void>;
   fetchSchema: (sessionId: string) => Promise<void>;
   fetchRoutines: (sessionId: string) => Promise<void>;
@@ -46,6 +51,9 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   routineCatalog: null,
   isLoading: false,
   error: null,
+  capabilities: DEFAULT_CAPABILITIES,
+
+  setCapabilities: (capabilities) => set({ capabilities }),
 
   fetchDatabases: async (sessionId) => {
     set({ isLoading: true, error: null });
@@ -68,10 +76,13 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       ]);
       let routineCatalog: RoutineCatalog | null = null;
 
-      try {
-        routineCatalog = await commands.fetchRoutines(sessionId);
-      } catch {
-        // Routine metadata should not block table loading.
+      // Only fetch routines for SQL engines that support it
+      if (get().capabilities.supportsSqlEditor) {
+        try {
+          routineCatalog = await commands.fetchRoutines(sessionId);
+        } catch {
+          // Routine metadata should not block table loading.
+        }
       }
 
       set({ tables, routineCatalog, isLoading: false });
@@ -81,6 +92,11 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   },
 
   fetchSchemas: async (sessionId) => {
+    // Skip for drivers that don't support schemas
+    if (!get().capabilities.supportsSchemas) {
+      set({ schemas: [] });
+      return;
+    }
     try {
       const schemas = await commands.fetchSchemas(sessionId);
       set({ schemas });
@@ -176,5 +192,6 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       schemas: [],
       currentSchema: null,
       routineCatalog: null,
+      capabilities: DEFAULT_CAPABILITIES,
     }),
 }));
