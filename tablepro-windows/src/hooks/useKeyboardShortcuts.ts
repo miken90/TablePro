@@ -4,6 +4,10 @@ import { useConnectionStore } from "../stores/connectionStore";
 import { useEditorStore } from "../stores/editorStore";
 import { useSchemaStore } from "../stores/schemaStore";
 
+// Bindings here must match COMMAND_DEFINITIONS in useCommandRegistry.ts.
+// This hook handles editor/tab/data keydown events; the registry is the
+// source of truth for IDs, labels, and display text.
+
 interface ShortcutHandlers {
   onRunQuery?: () => void;
   onNewTab?: () => void;

@@ -1,70 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { X } from "lucide-react";
+import {
+  COMMAND_DEFINITIONS,
+  type CommandCategory,
+} from "../../hooks/useCommandRegistry";
 
 interface ShortcutsHelpProps {
   open: boolean;
   onClose: () => void;
 }
 
-interface ShortcutEntry {
-  keys: string[];
-  description: string;
-}
-
-interface ShortcutGroup {
-  label: string;
-  items: ShortcutEntry[];
-}
-
-const SHORTCUT_GROUPS: ShortcutGroup[] = [
-  {
-    label: "Editor",
-    items: [
-      { keys: ["Ctrl", "Enter"], description: "Run query" },
-      { keys: ["Ctrl", "Shift", "Enter"], description: "Run all" },
-      { keys: ["Ctrl", "Shift", "F"], description: "Format SQL" },
-      { keys: ["Ctrl", "/"], description: "Toggle comment" },
-      { keys: ["Ctrl", "D"], description: "Select next occurrence" },
-    ],
-  },
-  {
-    label: "Tabs",
-    items: [
-      { keys: ["Ctrl", "N"], description: "New tab" },
-      { keys: ["Ctrl", "W"], description: "Close tab" },
-      { keys: ["Ctrl", "Tab"], description: "Next tab" },
-      { keys: ["Ctrl", "Shift", "Tab"], description: "Previous tab" },
-    ],
-  },
-  {
-    label: "Data Grid",
-    items: [
-      { keys: ["Ctrl", "S"], description: "Save changes" },
-      { keys: ["Ctrl", "I"], description: "Insert new row" },
-      { keys: ["Ctrl", "Z"], description: "Undo" },
-      { keys: ["Ctrl", "Shift", "Z"], description: "Redo" },
-    ],
-  },
-  {
-    label: "Navigation",
-    items: [
-      { keys: ["Ctrl", "K"], description: "Quick switcher" },
-      { keys: ["Ctrl", "Shift", "E"], description: "Toggle sidebar" },
-      { keys: ["Ctrl", "Shift", "L"], description: "Toggle filter" },
-      { keys: ["Ctrl", "Shift", "I"], description: "Toggle inspector" },
-      { keys: ["Ctrl", "H"], description: "Toggle history" },
-    ],
-  },
-  {
-    label: "General",
-    items: [
-      { keys: ["Ctrl", ","], description: "Settings" },
-      { keys: ["Ctrl", "Shift", "M"], description: "Import SQL" },
-      { keys: ["F5"], description: "Refresh schema" },
-      { keys: ["F1"], description: "This help" },
-      { keys: ["Escape"], description: "Cancel / dismiss" },
-    ],
-  },
+// Display order and labels for help groups.
+// Categories are mapped from CommandCategory to user-friendly labels.
+const HELP_SECTIONS: { category: CommandCategory; label: string }[] = [
+  { category: "Query", label: "Editor" },
+  { category: "Edit", label: "Tabs & Data" },
+  { category: "Navigation", label: "Navigation" },
+  { category: "Settings", label: "General" },
 ];
 
 export function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
@@ -79,6 +31,15 @@ export function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
+
+  const groups = useMemo(() => {
+    return HELP_SECTIONS.map((section) => ({
+      label: section.label,
+      items: COMMAND_DEFINITIONS
+        .filter((def) => def.category === section.category)
+        .map((def) => ({ keys: def.defaultBinding, description: def.label })),
+    })).filter((g) => g.items.length > 0);
+  }, []);
 
   if (!open) return null;
 
@@ -105,7 +66,7 @@ export function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
 
         {/* Shortcut groups */}
         <div className="grid grid-cols-2 gap-6 p-6">
-          {SHORTCUT_GROUPS.map((group) => (
+          {groups.map((group) => (
             <div key={group.label}>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
                 {group.label}

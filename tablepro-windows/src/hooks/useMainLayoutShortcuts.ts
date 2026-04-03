@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import { useLayoutStore } from "../stores/layoutStore";
 
+// Bindings here must match COMMAND_DEFINITIONS in useCommandRegistry.ts.
+// This hook handles the actual keydown events; the registry is the source
+// of truth for IDs, labels, and display text.
 export function useMainLayoutShortcuts() {
   useEffect(() => {
     const ls = useLayoutStore.getState;

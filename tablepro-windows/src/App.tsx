@@ -1,13 +1,31 @@
+import { useEffect } from "react";
 import "./styles/globals.css";
 import { MainLayout } from "./components/layout/MainLayout";
 import { ErrorBoundary } from "./components/shared/error-boundary";
 import { ToastProvider } from "./components/shared/toast-provider";
 import { SkipLink } from "./components/shared/skip-link";
+import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { handleDeepLinkUrl } from "./utils/deep-link-handler";
 
 export default function App() {
   queueMicrotask(() => {
     console.error("[startup] App component rendered");
   });
+
+  // Register deep-link listener once on mount.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    onOpenUrl((urls: string[]) => {
+      for (const url of urls) {
+        void handleDeepLinkUrl(url);
+      }
+    })
+      .then((fn) => { unlisten = fn; })
+      .catch((err) => {
+        console.error("[deep-link] Failed to register listener:", err);
+      });
+    return () => unlisten?.();
+  }, []);
 
   return (
     <ErrorBoundary>

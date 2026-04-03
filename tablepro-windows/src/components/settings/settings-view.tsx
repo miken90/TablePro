@@ -7,8 +7,9 @@ import { SettingsEditor } from "./settings-editor";
 import { SettingsAppearance } from "./settings-appearance";
 import { SettingsConnection } from "./settings-connection";
 import { SettingsAi } from "./settings-ai";
+import { SettingsShortcuts } from "./settings-shortcuts";
 
-const SECTIONS = ["General", "Editor", "Appearance", "Connection", "AI"] as const;
+const SECTIONS = ["General", "Editor", "Appearance", "Connection", "AI", "Shortcuts"] as const;
 type Section = (typeof SECTIONS)[number];
 
 interface SettingsViewProps {
@@ -85,6 +86,7 @@ export function SettingsView({ initialSection = "General", onClose }: SettingsVi
             {section === "Appearance" && <SettingsAppearance />}
             {section === "Connection" && <SettingsConnection />}
             {section === "AI" && <SettingsAi />}
+            {section === "Shortcuts" && <SettingsShortcuts />}
           </div>
         </div>
 
