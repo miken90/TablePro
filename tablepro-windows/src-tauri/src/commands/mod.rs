@@ -12,6 +12,7 @@ pub mod schema;
 pub mod settings;
 pub mod storage;
 pub mod structure;
+pub mod tab_state;
 
 pub use connection::{connect, disconnect, get_connection_status, test_connection};
 pub use data::{generate_row_sql, save_changes};
@@ -32,4 +33,5 @@ pub use storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
 pub use structure::{apply_alter, create_table, generate_alter_sql_command};
+pub use tab_state::{get_tab_state, mark_localstorage_migrated, set_tab_state};
 pub use ai::{ai_cancel_chat, ai_chat_stream, ai_list_models, ai_test_provider};

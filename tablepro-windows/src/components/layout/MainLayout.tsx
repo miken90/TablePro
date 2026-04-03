@@ -40,7 +40,7 @@ import { useMainLayoutShortcuts } from "../../hooks/useMainLayoutShortcuts";
 import { useMainLayoutCommands } from "../../hooks/useMainLayoutCommands";
 import { useFilterContext } from "../../hooks/useFilterContext";
 import { useTableCallbacks } from "../../hooks/useTableCallbacks";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
@@ -79,6 +79,11 @@ export function MainLayout() {
   useTheme();
   useMainLayoutShortcuts();
   useMainLayoutCommands();
+
+  // Load persisted tab state from backend on mount
+  useEffect(() => {
+    void useEditorStore.getState().initFromBackend();
+  }, []);
 
   const { filterTabId, activeWhereClause } = useFilterContext(viewMode, activeTableContext, activeTabId);
   const {

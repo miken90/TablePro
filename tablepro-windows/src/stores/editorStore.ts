@@ -1,7 +1,14 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { subscribeWithSelector } from "zustand/middleware";
 import { useConnectionStore } from "./connectionStore";
 import * as commands from "../ipc/commands";
+import {
+  loadTabState,
+  saveTabState,
+  markLocalStorageMigrated,
+  type TabStateFile,
+  type PersistedTab,
+} from "./tab-state-persistence";
 
 export type TabType = 'query' | 'table' | 'structure';
 
@@ -25,8 +32,11 @@ export interface EditorTab {
 interface EditorState {
   tabs: EditorTab[];
   activeTabId: string | null;
+  /** True once backend state has been loaded (prevents saving empty state on startup) */
+  _hydrated: boolean;
 
   // Actions
+  initFromBackend: () => Promise<void>;
   addTab: (title?: string) => string;
   addPreviewTab: (title: string) => string;
   addTableTab: (tableName: string, schema?: string | null) => string;
@@ -58,11 +68,176 @@ function syncSelectedConnectionByTabId(tabs: EditorTab[], tabId: string | null):
   }
 }
 
+/** Convert backend PersistedTab to frontend EditorTab. */
+function fromPersisted(p: PersistedTab): EditorTab {
+  return {
+    id: p.id,
+    title: p.title,
+    content: p.content,
+    isDirty: false,
+    isPreview: false,
+    isPinned: p.isPinned,
+    connectionId: p.connectionId ?? undefined,
+    type: (p.tabType as TabType) || 'query',
+    tableName: p.tableName ?? undefined,
+    tableSchema: p.tableSchema ?? undefined,
+  };
+}
+
+/** Convert frontend EditorTab to backend PersistedTab for saving. */
+function toPersisted(t: EditorTab): PersistedTab {
+  return {
+    id: t.id,
+    title: t.title,
+    content: t.content.slice(0, 100_000),
+    isPinned: t.isPinned ?? false,
+    connectionId: t.connectionId ?? null,
+    tabType: t.type ?? 'query',
+    tableName: t.tableName ?? null,
+    tableSchema: t.tableSchema ?? null,
+  };
+}
+
+/** Filter tabs: drop orphaned table tabs and tabs with missing connections. */
+function filterValidTabs(
+  tabs: EditorTab[],
+  savedConnectionIds: Set<string>,
+): EditorTab[] {
+  return tabs.filter((t) => {
+    // Remove table tabs missing tableName (orphaned)
+    if ((t.type ?? 'query') === 'table' && !t.tableName) return false;
+    // Remove tabs whose saved connection no longer exists
+    if (t.connectionId && !savedConnectionIds.has(t.connectionId)) return false;
+    return true;
+  });
+}
+
+/** Try to import tabs from localStorage (one-time migration). */
+async function migrateFromLocalStorage(): Promise<EditorTab[] | null> {
+  const raw = localStorage.getItem("tablepro-editor-tabs");
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as {
+      state?: {
+        tabs?: EditorTab[];
+        activeTabId?: string | null;
+      };
+    };
+    const tabs = parsed?.state?.tabs;
+    if (!Array.isArray(tabs) || tabs.length === 0) return null;
+
+    // Normalize migrated tabs
+    return tabs.map((t) => ({
+      ...t,
+      isDirty: false,
+      isPreview: false,
+      isPinned: t.isPinned ?? false,
+      type: t.type ?? 'query',
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/** Parse activeTabId from localStorage for migration. */
+function migrateActiveTabId(): string | null {
+  const raw = localStorage.getItem("tablepro-editor-tabs");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { state?: { activeTabId?: string | null } };
+    return parsed?.state?.activeTabId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// --- Debounced save ---
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+const SAVE_DEBOUNCE_MS = 800;
+
+function debouncedSave(): void {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const state = useEditorStore.getState();
+    if (!state._hydrated) return;
+    const file: TabStateFile = {
+      version: 1,
+      migratedFromLocalStorage: true,
+      tabs: state.tabs.map(toPersisted),
+      activeTabId: state.activeTabId,
+    };
+    void saveTabState(file).catch((err) => {
+      console.error("Failed to save tab state:", err);
+    });
+  }, SAVE_DEBOUNCE_MS);
+}
+
 export const useEditorStore = create<EditorState>()(
-  persist(
+  subscribeWithSelector(
     (set, get) => ({
       tabs: [],
       activeTabId: null,
+      _hydrated: false,
+
+      initFromBackend: async () => {
+        if (get()._hydrated) return;
+
+        let backendState: TabStateFile;
+        try {
+          backendState = await loadTabState();
+        } catch (err) {
+          console.error("Failed to load tab state from backend:", err);
+          set({ _hydrated: true });
+          return;
+        }
+
+        // Collect known saved connection IDs for validation
+        const savedConnectionIds = new Set(
+          Array.from(useConnectionStore.getState().connections.keys()),
+        );
+
+        let tabs: EditorTab[];
+        let activeTabId: string | null;
+
+        if (
+          !backendState.migratedFromLocalStorage &&
+          backendState.tabs.length === 0
+        ) {
+          // First launch after upgrade — try localStorage migration
+          const migrated = await migrateFromLocalStorage();
+          if (migrated && migrated.length > 0) {
+            tabs = filterValidTabs(migrated, savedConnectionIds);
+            activeTabId = migrateActiveTabId();
+            // Clear localStorage and mark migration done
+            localStorage.removeItem("tablepro-editor-tabs");
+            void markLocalStorageMigrated().catch((err) =>
+              console.error("Failed to mark migration:", err),
+            );
+          } else {
+            tabs = [];
+            activeTabId = null;
+          }
+        } else {
+          // Normal restore from backend
+          tabs = filterValidTabs(
+            backendState.tabs.map(fromPersisted),
+            savedConnectionIds,
+          );
+          activeTabId = backendState.activeTabId;
+        }
+
+        // Fix activeTabId if it points to a dropped tab
+        if (activeTabId && !tabs.some((t) => t.id === activeTabId)) {
+          activeTabId = tabs[0]?.id ?? null;
+        }
+
+        if (tabs.length > 0) {
+          tabCounter = tabs.length + 1;
+        }
+
+        set({ tabs, activeTabId, _hydrated: true });
+      },
 
       addTab: (title) => {
         const id = generateTabId();
@@ -266,41 +441,16 @@ export const useEditorStore = create<EditorState>()(
         }));
       },
     }),
-    {
-      name: "tablepro-editor-tabs",
-      partialize: (state) => ({
-        tabs: state.tabs.map((t) => ({
-          id: t.id,
-          title: t.title,
-          content: t.content.slice(0, 100_000),
-          isDirty: false,
-          // Don't persist preview state — rehydrate as permanent
-          isPreview: false,
-          isPinned: t.isPinned ?? false,
-          connectionId: t.connectionId,
-          type: t.type ?? 'query',
-          tableName: t.tableName,
-          tableSchema: t.tableSchema,
-        })),
-        activeTabId: state.activeTabId,
-      }),
-      onRehydrateStorage: () => (state) => {
-        if (state?.tabs.length) {
-          tabCounter = state.tabs.length + 1;
-          // Migrate: add defaults + filter orphaned table tabs
-          state.tabs = state.tabs
-            .filter((t) => {
-              // Remove table tabs missing tableName (orphaned)
-              if ((t.type ?? 'query') === 'table' && !t.tableName) return false;
-              return true;
-            })
-            .map((t) => ({
-              ...t,
-              isPinned: t.isPinned ?? false,
-              type: t.type ?? 'query',
-            }));
-        }
-      },
+  ),
+);
+
+// Auto-save on state changes (tabs + activeTabId) after hydration
+useEditorStore.subscribe(
+  (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId }),
+  () => {
+    if (useEditorStore.getState()._hydrated) {
+      debouncedSave();
     }
-  )
+  },
+  { equalityFn: Object.is },
 );

@@ -29,6 +29,7 @@ use commands::storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
 use commands::structure::{apply_alter, create_table, generate_alter_sql_command};
+use commands::tab_state::{get_tab_state, mark_localstorage_migrated, set_tab_state};
 use commands::ai::{
     ai_build_context, ai_cancel_chat, ai_chat_stream, ai_clear_all_conversations,
     ai_create_conversation, ai_delete_conversation, ai_get_conversation, ai_inline_suggest,
@@ -37,7 +38,7 @@ use commands::ai::{
 use plugin::PluginManager;
 use services::health_monitor::HealthMonitor;
 use services::ConnectionManager;
-use storage::{AiChatStore, ConnectionStore, FilterStore, HistoryStore, SettingsStore};
+use storage::{AiChatStore, ConnectionStore, FilterStore, HistoryStore, SettingsStore, TabStateStore};
 use tokio::sync::Mutex;
 
 fn build_history_store() -> HistoryStore {
@@ -104,6 +105,13 @@ pub fn run() {
         .manage(Mutex::new(HealthMonitor::new()))
         .manage(Mutex::new(commands::ai::AiCancelState::new()))
         .manage(Mutex::new(SettingsStore::new()))
+        .manage(Mutex::new({
+            let mut store = TabStateStore::new();
+            if let Err(e) = store.load() {
+                tracing::warn!("Failed to load tab state: {e}");
+            }
+            store
+        }))
         .manage(Mutex::new({
             let mut store = ConnectionStore::new();
             if let Err(e) = store.load() {
@@ -183,6 +191,10 @@ pub fn run() {
             get_settings,
             set_settings,
             log_renderer_error,
+            // tab state
+            get_tab_state,
+            set_tab_state,
+            mark_localstorage_migrated,
             // storage
             list_connections,
             save_connection,
