@@ -19,7 +19,8 @@ try {
         "src-tauri/driver-postgres/Cargo.toml",
         "src-tauri/driver-mysql/Cargo.toml",
         "src-tauri/driver-mssql/Cargo.toml",
-        "src-tauri/driver-sqlite/Cargo.toml"
+        "src-tauri/driver-sqlite/Cargo.toml",
+        "src-tauri/driver-mongodb/Cargo.toml"
     )
     foreach ($d in $drivers) {
         cargo build --manifest-path $d

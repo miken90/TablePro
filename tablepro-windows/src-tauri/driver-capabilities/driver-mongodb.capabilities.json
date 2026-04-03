@@ -1,0 +1,13 @@
+{
+  "engine": "mongodb",
+  "displayName": "MongoDB",
+  "capabilities": {
+    "supportsSqlEditor": false,
+    "supportsSchemas": false,
+    "supportsCollections": true,
+    "supportsDdl": false,
+    "supportsInlineEdit": false,
+    "supportsImportExport": false,
+    "supportsStructureView": false
+  }
+}
