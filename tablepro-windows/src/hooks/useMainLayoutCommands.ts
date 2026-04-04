@@ -2,12 +2,12 @@ import { useEffect } from "react";
 import { useLayoutStore } from "../stores/layoutStore";
 import { resolveActiveQuerySessionId, useQueryStore } from "../stores/queryStore";
 import { useEditorStore } from "../stores/editorStore";
-import { useCommandStore, COMMAND_DEFINITIONS } from "./useCommandRegistry";
+import { useCommandStore, getEffectiveBinding } from "./useCommandRegistry";
 
 /** Look up display shortcut string for a command ID from the registry. */
 function shortcutFor(id: string): string | undefined {
-  const def = COMMAND_DEFINITIONS.find((d) => d.id === id);
-  return def ? def.defaultBinding.join("+") : undefined;
+  const binding = getEffectiveBinding(id);
+  return binding ? binding.join("+") : undefined;
 }
 
 export function useMainLayoutCommands() {

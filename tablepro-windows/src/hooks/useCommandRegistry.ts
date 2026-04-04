@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type CommandCategory = 'Navigation' | 'Query' | 'Edit' | 'View' | 'Settings';
 
@@ -78,6 +79,100 @@ export function getCommandsByCategory(): Record<CommandCategory, CommandDefiniti
  */
 export function getDefaultBinding(id: string): string[] | undefined {
   return COMMAND_DEFINITIONS.find((d) => d.id === id)?.defaultBinding;
+}
+
+// ---------------------------------------------------------------------------
+// User binding overrides — persisted via zustand/persist (localStorage).
+// ---------------------------------------------------------------------------
+
+/** Canonical string for a binding, used as the key for conflict checks. */
+export function bindingToKey(binding: string[]): string {
+  return binding
+    .map((k) => k.toLowerCase())
+    .sort((a, b) => {
+      const order = ['ctrl', 'meta', 'alt', 'shift'];
+      const ai = order.indexOf(a);
+      const bi = order.indexOf(b);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.localeCompare(b);
+    })
+    .join('+');
+}
+
+/** Map of commandId → user-customized key combo (display strings). */
+export type UserBindings = Record<string, string[]>;
+
+interface ShortcutStore {
+  userBindings: UserBindings;
+  setBinding: (commandId: string, binding: string[]) => void;
+  resetBinding: (commandId: string) => void;
+  resetAllBindings: () => void;
+}
+
+export const useShortcutStore = create<ShortcutStore>()(
+  persist(
+    (set) => ({
+      userBindings: {},
+
+      setBinding: (commandId, binding) =>
+        set((s) => ({
+          userBindings: { ...s.userBindings, [commandId]: binding },
+        })),
+
+      resetBinding: (commandId) =>
+        set((s) => {
+          const next = { ...s.userBindings };
+          delete next[commandId];
+          return { userBindings: next };
+        }),
+
+      resetAllBindings: () => set({ userBindings: {} }),
+    }),
+    { name: 'tablepro-shortcut-overrides' },
+  ),
+);
+
+/**
+ * Get the effective binding for a command: user override if set, else default.
+ */
+export function getEffectiveBinding(id: string): string[] | undefined {
+  const userBinding = useShortcutStore.getState().userBindings[id];
+  if (userBinding) return userBinding;
+  return getDefaultBinding(id);
+}
+
+/**
+ * Build a map of bindingKey → commandId for all effective bindings.
+ * Used for conflict detection.
+ */
+export function getBindingMap(userBindings: UserBindings): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const def of COMMAND_DEFINITIONS) {
+    const override = userBindings[def.id];
+    const binding = override ?? def.defaultBinding;
+    map.set(bindingToKey(binding), def.id);
+  }
+  return map;
+}
+
+/**
+ * Check if a proposed binding conflicts with any existing binding.
+ * Returns the conflicting command ID, or null if no conflict.
+ */
+export function findBindingConflict(
+  commandId: string,
+  proposedBinding: string[],
+  userBindings: UserBindings,
+): string | null {
+  const key = bindingToKey(proposedBinding);
+  for (const def of COMMAND_DEFINITIONS) {
+    if (def.id === commandId) continue;
+    const effective = userBindings[def.id] ?? def.defaultBinding;
+    if (bindingToKey(effective) === key) return def.id;
+  }
+  return null;
 }
 
 export interface Command {

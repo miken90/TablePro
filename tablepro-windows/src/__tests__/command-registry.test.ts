@@ -1,9 +1,20 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   COMMAND_DEFINITIONS,
   getCommandsByCategory,
   getDefaultBinding,
+  getEffectiveBinding,
+  bindingToKey,
+  findBindingConflict,
+  getBindingMap,
+  useShortcutStore,
+  type UserBindings,
 } from "../hooks/useCommandRegistry";
+
+// Reset shortcut store between tests
+beforeEach(() => {
+  useShortcutStore.setState({ userBindings: {} });
+});
 
 describe("COMMAND_DEFINITIONS", () => {
   it("every definition has a non-empty id", () => {
@@ -74,5 +85,112 @@ describe("getDefaultBinding", () => {
 
   it("returns undefined for unknown command", () => {
     expect(getDefaultBinding("nonexistent.command")).toBeUndefined();
+  });
+});
+
+describe("bindingToKey", () => {
+  it("normalizes modifier order", () => {
+    expect(bindingToKey(["Shift", "Ctrl", "K"])).toBe("ctrl+shift+k");
+    expect(bindingToKey(["Ctrl", "Shift", "K"])).toBe("ctrl+shift+k");
+  });
+
+  it("is case-insensitive", () => {
+    expect(bindingToKey(["ctrl", "enter"])).toBe(bindingToKey(["Ctrl", "Enter"]));
+  });
+
+  it("handles single key", () => {
+    expect(bindingToKey(["F5"])).toBe("f5");
+  });
+
+  it("handles three modifiers", () => {
+    expect(bindingToKey(["Ctrl", "Alt", "Shift", "X"])).toBe("ctrl+alt+shift+x");
+  });
+});
+
+describe("getEffectiveBinding", () => {
+  it("returns default when no user override", () => {
+    expect(getEffectiveBinding("editor.run")).toEqual(["Ctrl", "Enter"]);
+  });
+
+  it("returns user override when set", () => {
+    useShortcutStore.getState().setBinding("editor.run", ["Ctrl", "Shift", "Enter"]);
+    expect(getEffectiveBinding("editor.run")).toEqual(["Ctrl", "Shift", "Enter"]);
+  });
+
+  it("returns default after reset", () => {
+    useShortcutStore.getState().setBinding("editor.run", ["Ctrl", "Shift", "Enter"]);
+    useShortcutStore.getState().resetBinding("editor.run");
+    expect(getEffectiveBinding("editor.run")).toEqual(["Ctrl", "Enter"]);
+  });
+
+  it("returns undefined for unknown command", () => {
+    expect(getEffectiveBinding("nonexistent.command")).toBeUndefined();
+  });
+});
+
+describe("findBindingConflict", () => {
+  it("returns null when no conflict", () => {
+    const result = findBindingConflict("editor.run", ["Ctrl", "Shift", "X"], {});
+    expect(result).toBeNull();
+  });
+
+  it("detects conflict with default binding", () => {
+    // Ctrl+T is the default for tabs.new
+    const result = findBindingConflict("editor.run", ["Ctrl", "T"], {});
+    expect(result).toBe("tabs.new");
+  });
+
+  it("detects conflict with user override", () => {
+    const overrides: UserBindings = { "tabs.new": ["Ctrl", "Shift", "X"] };
+    const result = findBindingConflict("editor.run", ["Ctrl", "Shift", "X"], overrides);
+    expect(result).toBe("tabs.new");
+  });
+
+  it("ignores self-conflict", () => {
+    const result = findBindingConflict("editor.run", ["Ctrl", "Enter"], {});
+    expect(result).toBeNull();
+  });
+
+  it("is case-insensitive for conflict detection", () => {
+    const result = findBindingConflict("editor.run", ["ctrl", "t"], {});
+    expect(result).toBe("tabs.new");
+  });
+});
+
+describe("getBindingMap", () => {
+  it("maps all commands with default bindings", () => {
+    const map = getBindingMap({});
+    expect(map.size).toBe(COMMAND_DEFINITIONS.length);
+  });
+
+  it("reflects user overrides", () => {
+    const overrides: UserBindings = { "editor.run": ["Ctrl", "Shift", "R"] };
+    const map = getBindingMap(overrides);
+    expect(map.get(bindingToKey(["Ctrl", "Shift", "R"]))).toBe("editor.run");
+    expect(map.get(bindingToKey(["Ctrl", "Enter"]))).toBeUndefined();
+  });
+});
+
+describe("useShortcutStore", () => {
+  it("starts with empty user bindings", () => {
+    expect(Object.keys(useShortcutStore.getState().userBindings)).toHaveLength(0);
+  });
+
+  it("setBinding adds a binding", () => {
+    useShortcutStore.getState().setBinding("editor.run", ["Ctrl", "R"]);
+    expect(useShortcutStore.getState().userBindings["editor.run"]).toEqual(["Ctrl", "R"]);
+  });
+
+  it("resetBinding removes a binding", () => {
+    useShortcutStore.getState().setBinding("editor.run", ["Ctrl", "R"]);
+    useShortcutStore.getState().resetBinding("editor.run");
+    expect(useShortcutStore.getState().userBindings["editor.run"]).toBeUndefined();
+  });
+
+  it("resetAllBindings clears all", () => {
+    useShortcutStore.getState().setBinding("editor.run", ["Ctrl", "R"]);
+    useShortcutStore.getState().setBinding("tabs.new", ["Ctrl", "N"]);
+    useShortcutStore.getState().resetAllBindings();
+    expect(Object.keys(useShortcutStore.getState().userBindings)).toHaveLength(0);
   });
 });

@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import {
   COMMAND_DEFINITIONS,
   type CommandCategory,
+  useShortcutStore,
 } from "../../hooks/useCommandRegistry";
 
 interface ShortcutsHelpProps {
@@ -11,7 +12,6 @@ interface ShortcutsHelpProps {
 }
 
 // Display order and labels for help groups.
-// Categories are mapped from CommandCategory to user-friendly labels.
 const HELP_SECTIONS: { category: CommandCategory; label: string }[] = [
   { category: "Query", label: "Editor" },
   { category: "Edit", label: "Tabs & Data" },
@@ -20,6 +20,8 @@ const HELP_SECTIONS: { category: CommandCategory; label: string }[] = [
 ];
 
 export function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
+  const userBindings = useShortcutStore((s) => s.userBindings);
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -37,9 +39,13 @@ export function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
       label: section.label,
       items: COMMAND_DEFINITIONS
         .filter((def) => def.category === section.category)
-        .map((def) => ({ keys: def.defaultBinding, description: def.label })),
+        .map((def) => ({
+          keys: userBindings[def.id] ?? def.defaultBinding,
+          description: def.label,
+          isCustom: def.id in userBindings,
+        })),
     })).filter((g) => g.items.length > 0);
-  }, []);
+  }, [userBindings]);
 
   if (!open) return null;
 
@@ -79,7 +85,11 @@ export function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
                       {item.keys.map((key, i) => (
                         <kbd
                           key={i}
-                          className="rounded border border-neutral-600 bg-neutral-800 px-1.5 py-0.5 font-mono text-xs text-neutral-300"
+                          className={`rounded border px-1.5 py-0.5 font-mono text-xs ${
+                            item.isCustom
+                              ? "border-blue-600 bg-blue-900/40 text-blue-300"
+                              : "border-neutral-600 bg-neutral-800 text-neutral-300"
+                          }`}
                         >
                           {key}
                         </kbd>
