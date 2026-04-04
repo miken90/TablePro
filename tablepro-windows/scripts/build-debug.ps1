@@ -20,7 +20,8 @@ try {
         "src-tauri/driver-mysql/Cargo.toml",
         "src-tauri/driver-mssql/Cargo.toml",
         "src-tauri/driver-sqlite/Cargo.toml",
-        "src-tauri/driver-mongodb/Cargo.toml"
+        "src-tauri/driver-mongodb/Cargo.toml",
+        "src-tauri/driver-redis/Cargo.toml"
     )
     foreach ($d in $drivers) {
         cargo build --manifest-path $d

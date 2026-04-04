@@ -1,0 +1,13 @@
+{
+  "engine": "redis",
+  "displayName": "Redis",
+  "capabilities": {
+    "supportsSqlEditor": false,
+    "supportsSchemas": false,
+    "supportsCollections": false,
+    "supportsDdl": false,
+    "supportsInlineEdit": true,
+    "supportsImportExport": false,
+    "supportsStructureView": false
+  }
+}

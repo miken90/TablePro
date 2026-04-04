@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "plugin-sdk", "driver-postgres", "driver-mysql", "driver-mssql", "driver-sqlite", "driver-mongodb"]
+members = [".", "plugin-sdk", "driver-postgres", "driver-mysql", "driver-mssql", "driver-sqlite", "driver-mongodb", "driver-redis"]
 resolver = "2"
 
 [package]

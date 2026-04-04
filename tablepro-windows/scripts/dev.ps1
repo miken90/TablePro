@@ -61,6 +61,9 @@ try {
     cargo build --manifest-path src-tauri/driver-mongodb/Cargo.toml
     if ($LASTEXITCODE -ne 0) { throw "driver-mongodb build failed (exit $LASTEXITCODE)" }
 
+    cargo build --manifest-path src-tauri/driver-redis/Cargo.toml
+    if ($LASTEXITCODE -ne 0) { throw "driver-redis build failed (exit $LASTEXITCODE)" }
+
     # Copy built DLLs to plugins/ directory (where the app loads them from)
     $pluginsDir = "src-tauri/target/debug/plugins"
     if (-not (Test-Path $pluginsDir)) { New-Item -ItemType Directory -Path $pluginsDir | Out-Null }
