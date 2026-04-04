@@ -10,7 +10,7 @@ import {
   type PersistedTab,
 } from "./tab-state-persistence";
 
-export type TabType = 'query' | 'table' | 'structure' | 'mongoQuery';
+export type TabType = 'query' | 'table' | 'structure' | 'mongoQuery' | 'redisCommand';
 
 export interface EditorTab {
   id: string;
@@ -41,6 +41,7 @@ interface EditorState {
   addPreviewTab: (title: string) => string;
   addTableTab: (tableName: string, schema?: string | null) => string;
   addMongoQueryTab: (title?: string) => string;
+  addRedisCommandTab: (title?: string) => string;
   promoteTab: (id: string) => void;
   closeTab: (id: string) => void;
   closeOtherTabs: (id: string) => void;
@@ -341,6 +342,24 @@ export const useEditorStore = create<EditorState>()(
           isPreview: false,
           isPinned: false,
           type: 'mongoQuery',
+          connectionId: connId,
+        };
+        set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));
+        return id;
+      },
+
+      /** Create a Redis command tab. */
+      addRedisCommandTab: (title) => {
+        const id = generateTabId();
+        const connId = useConnectionStore.getState().selectedConnectionId ?? undefined;
+        const newTab: EditorTab = {
+          id,
+          title: title ?? `Redis ${get().tabs.length + 1}`,
+          content: "",
+          isDirty: false,
+          isPreview: false,
+          isPinned: false,
+          type: 'redisCommand',
           connectionId: connId,
         };
         set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));

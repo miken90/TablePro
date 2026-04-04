@@ -100,4 +100,51 @@ describe("parseConnectionUrl", () => {
     });
     expect(result.useSrv).toBe(false);
   });
+
+  // Redis URL parsing tests
+  it("parses redis:// url with default port", () => {
+    const result = parseConnectionUrl("redis://:secret@redis.example.com/0");
+    expect(result).toMatchObject({
+      dbType: "redis",
+      host: "redis.example.com",
+      port: 6379,
+      password: "secret",
+      database: "0",
+    });
+    expect(result.tlsEnabled).toBe(false);
+  });
+
+  it("parses redis:// url with explicit port", () => {
+    const result = parseConnectionUrl("redis://localhost:6380/2");
+    expect(result).toMatchObject({
+      dbType: "redis",
+      host: "localhost",
+      port: 6380,
+      database: "2",
+    });
+    expect(result.tlsEnabled).toBe(false);
+  });
+
+  it("parses rediss:// url and sets tlsEnabled", () => {
+    const result = parseConnectionUrl("rediss://:password@secure.redis.io/0");
+    expect(result).toMatchObject({
+      dbType: "redis",
+      host: "secure.redis.io",
+      port: 6379,
+      password: "password",
+      database: "0",
+    });
+    expect(result.tlsEnabled).toBe(true);
+  });
+
+  it("parses redis:// url without auth or database", () => {
+    const result = parseConnectionUrl("redis://localhost");
+    expect(result).toMatchObject({
+      dbType: "redis",
+      host: "localhost",
+      port: 6379,
+      database: "",
+    });
+    expect(result.tlsEnabled).toBe(false);
+  });
 });

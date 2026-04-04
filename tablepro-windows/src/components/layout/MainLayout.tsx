@@ -14,6 +14,7 @@ import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { AiChatPanel } from "../ai/ai-chat-panel";
 import { MongodbQueryPanel } from "../mongodb/mongodb-query-panel";
+import { RedisCommandPanel } from "../redis/redis-command-panel";
 import { ShortcutsHelp } from "../shared/ShortcutsHelp";
 import { UnsavedChangesDialog } from "../shared/unsaved-changes-dialog";
 import { UpdateNotification } from "../shared/update-notification";
@@ -47,9 +48,12 @@ import { useState, useCallback, useRef, useEffect } from "react";
 export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
+  const connections = useConnectionStore((s) => s.connections);
   const activeTabId = useEditorStore((s) => s.activeTabId);
   const capabilities = useSchemaStore((s) => s.capabilities);
   const isDocumentDb = capabilities.supportsCollections && !capabilities.supportsSqlEditor;
+  const activeConnection = selectedConnectionId ? connections.get(selectedConnectionId) : undefined;
+  const isKeyValueDb = activeConnection?.config?.dbType === "redis";
 
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
   const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
@@ -254,7 +258,7 @@ export function MainLayout() {
         )}
 
         <main id="main-content" className="flex flex-1 flex-col overflow-hidden">
-          {!isDocumentDb && structureTarget && selectedConnectionId && getSessionId(selectedConnectionId) ? (
+          {!isDocumentDb && !isKeyValueDb && structureTarget && selectedConnectionId && getSessionId(selectedConnectionId) ? (
             <TableStructureView
               sessionId={getSessionId(selectedConnectionId)!}
               tableName={structureTarget.tableName}
@@ -301,11 +305,21 @@ export function MainLayout() {
                 onBeforeTabSwitch={handleBeforeTabSwitch}
                 onAfterClose={handleAfterClose}
               />
-              {!isDocumentDb && filterVisible && (
+              {!isDocumentDb && !isKeyValueDb && filterVisible && (
                 <FilterPanel tabId={filterTabId} columns={filterColumns} />
               )}
                 <div className="editor-results-container flex flex-1 flex-col overflow-hidden">
-                  {isDocumentDb ? (
+                  {isKeyValueDb ? (
+                    <>
+                      <RedisCommandPanel />
+                      <div className="flex-1 overflow-hidden">
+                        <ResultPanel
+                          sessionId={sessionId}
+                          onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
+                        />
+                      </div>
+                    </>
+                  ) : isDocumentDb ? (
                     <>
                       <MongodbQueryPanel />
                       <div className="flex-1 overflow-hidden">

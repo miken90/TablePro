@@ -1,7 +1,7 @@
 import type { ConnectionConfig } from "../../types/connection";
 import type { DriverInfo } from "../../types/capability";
 
-export const DB_TYPES = ["postgres", "mysql", "mssql", "sqlite", "mongodb"];
+export const DB_TYPES = ["postgres", "mysql", "mssql", "sqlite", "mongodb", "redis"];
 export const SSL_MODES = ["disable", "prefer", "require", "verify-ca", "verify-full"];
 
 export const DEFAULT_PORTS: Record<string, number> = {
@@ -10,6 +10,7 @@ export const DEFAULT_PORTS: Record<string, number> = {
   mssql: 1433,
   sqlite: 0,
   mongodb: 27017,
+  redis: 6379,
 };
 
 export const DB_PLACEHOLDERS: Record<string, { user: string; database: string }> = {
@@ -18,6 +19,7 @@ export const DB_PLACEHOLDERS: Record<string, { user: string; database: string }>
   mssql: { user: "sa", database: "master" },
   sqlite: { user: "", database: "/path/to/database.db" },
   mongodb: { user: "", database: "admin" },
+  redis: { user: "", database: "0" },
 };
 
 /** Build DB_TYPES list from loaded drivers, falling back to hardcoded list. */

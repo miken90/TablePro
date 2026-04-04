@@ -18,6 +18,10 @@ export interface ConnectionConfig {
   startupCommands?: string;
   /** MongoDB: use mongodb+srv:// protocol (DNS SRV lookup) */
   useSrv?: boolean;
+  /** Redis: enable TLS encryption */
+  tlsEnabled?: boolean;
+  /** Redis: path to CA certificate file for TLS verification */
+  tlsCaCertPath?: string;
   // SSH tunnel fields
   sshEnabled: boolean;
   sshHost: string;

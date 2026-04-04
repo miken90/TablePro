@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { ConnectionConfig, SavedConnection } from "../../types/connection";
 import { extractErrorMessage } from "../../ipc/error";
@@ -111,6 +112,7 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
 
   const isSqlite = config.dbType === "sqlite";
   const isMongodb = config.dbType === "mongodb";
+  const isRedis = config.dbType === "redis";
   const placeholders = DB_PLACEHOLDERS[config.dbType] ?? { user: "", database: "" };
   const groupList = Array.from(groups.values()).sort((a, b) => a.order - b.order);
 
@@ -213,6 +215,91 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
               className={inputCls}
             />
           </Field>
+        </>
+      ) : isRedis ? (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <Field label="Host">
+                <input value={config.host} onChange={(e) => updateConfig({ host: e.target.value })} placeholder="localhost" className={inputCls} />
+              </Field>
+            </div>
+            <Field label="Port">
+              <input
+                type="number"
+                value={config.port}
+                onChange={(e) => updateConfig({ port: Number(e.target.value) })}
+                className={inputCls}
+              />
+            </Field>
+          </div>
+
+          <Field label="Password">
+            <input
+              type="password"
+              value={config.password}
+              onChange={(e) => updateConfig({ password: e.target.value })}
+              placeholder="(optional)"
+              className={inputCls}
+            />
+          </Field>
+
+          <Field label="Database (0-15)">
+            <input
+              value={config.database}
+              onChange={(e) => updateConfig({ database: e.target.value })}
+              placeholder="0"
+              className={inputCls}
+              title="Redis database index (0-15)"
+            />
+          </Field>
+
+          {/* TLS toggle + CA cert */}
+          <div className="rounded border border-zinc-200 dark:border-zinc-600">
+            <button
+              type="button"
+              onClick={() => updateConfig({ tlsEnabled: !(config.tlsEnabled ?? false) })}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700/50"
+            >
+              <span
+                className={`inline-block h-3.5 w-7 rounded-full transition-colors ${
+                  config.tlsEnabled ? "bg-blue-500" : "bg-zinc-300 dark:bg-zinc-600"
+                }`}
+              />
+              <span>TLS / SSL</span>
+            </button>
+
+            {config.tlsEnabled && (
+              <div className="border-t border-zinc-200 px-3 pb-3 pt-2 dark:border-zinc-600">
+                <Field label="CA Certificate (optional)">
+                  <div className="flex gap-1">
+                    <input
+                      value={config.tlsCaCertPath ?? ""}
+                      onChange={(e) => updateConfig({ tlsCaCertPath: e.target.value })}
+                      placeholder="/path/to/ca.crt"
+                      className={`${inputCls} flex-1`}
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const path = await openFilePicker({
+                          filters: [
+                            { name: "Certificate", extensions: ["crt", "pem", "cer"] },
+                            { name: "All Files", extensions: ["*"] },
+                          ],
+                        });
+                        if (path) updateConfig({ tlsCaCertPath: path as string });
+                      }}
+                      className={secondaryBtn}
+                      title="Browse for CA certificate"
+                    >
+                      …
+                    </button>
+                  </div>
+                </Field>
+              </div>
+            )}
+          </div>
         </>
       ) : (
         <>

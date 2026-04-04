@@ -57,6 +57,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   const configDatabase = activeConnection?.config?.database;
   const dbType = activeConnection?.config?.dbType;
   const isDocumentDb = capabilities.supportsCollections && !capabilities.supportsSqlEditor;
+  const isKeyValueDb = dbType === "redis";
 
   const activeTableIdentity = useMemo(() => {
     if (activeTableContext) {
@@ -291,8 +292,8 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder={isDocumentDb ? "Filter collections\u2026" : "Filter tables\u2026"}
-            aria-label={isDocumentDb ? "Filter collections" : "Filter tables"}
+            placeholder={isKeyValueDb ? "Filter keys\u2026" : isDocumentDb ? "Filter collections\u2026" : "Filter tables\u2026"}
+            aria-label={isKeyValueDb ? "Filter keys" : isDocumentDb ? "Filter collections" : "Filter tables"}
             className="flex-1 bg-transparent text-xs text-text-primary outline-none placeholder:text-text-muted"
           />
         </div>
@@ -352,7 +353,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
       )}
 
       {/* Tree */}
-      <div className="flex-1 overflow-y-auto" role="tree" aria-label={isDocumentDb ? "Collections" : "Tables"}>
+      <div className="flex-1 overflow-y-auto" role="tree" aria-label={isKeyValueDb ? "Keys" : isDocumentDb ? "Collections" : "Tables"}>
         {isLoading && (
           <div className="p-3 text-xs text-text-muted" aria-live="polite">Loading…</div>
         )}
@@ -365,7 +366,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
         {(filteredTables.length > 0 || routineCatalog?.supported) && (
           <>
             <SidebarObjectGroup
-              label={isDocumentDb ? "Collections" : "Tables"}
+              label={isKeyValueDb ? "Keys" : isDocumentDb ? "Collections" : "Tables"}
               icon={isDocumentDb ? FolderOpen : Table2}
               count={grouped.tables.length}
               defaultExpanded
@@ -384,7 +385,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                 />
               ))}
             </SidebarObjectGroup>
-            {!isDocumentDb && grouped.views.length > 0 && (
+            {!isDocumentDb && !isKeyValueDb && grouped.views.length > 0 && (
               <SidebarObjectGroup label="Views" icon={Eye} count={grouped.views.length}>
                 {grouped.views.map((table) => (
                   <SidebarTableNode
@@ -401,7 +402,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                 ))}
               </SidebarObjectGroup>
             )}
-            {!isDocumentDb && routineCatalog?.supported && (
+            {!isDocumentDb && !isKeyValueDb && routineCatalog?.supported && (
               <>
                 <SidebarObjectGroup label="Functions" icon={Braces} count={routinesGrouped.functions.length}>
                   {routinesGrouped.functions.map((routine) => (

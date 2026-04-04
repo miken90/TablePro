@@ -64,6 +64,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
   const editorViewRef = useEditorViewRef();
 
   const connection = selectedConnectionId ? connections.get(selectedConnectionId) : null;
+  const isKeyValueDb = connection?.config?.dbType === "redis";
   const status = selectedConnectionId ? getStatus(selectedConnectionId) : "disconnected";
 
   const statusColors: Record<string, string> = {
@@ -215,8 +216,8 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
 
         <div className="flex-1" />
 
-        {/* Run split-button — hidden for document databases (MongoDB uses its own query panel) */}
-        {!isDocumentDb && (
+        {/* Run split-button — hidden for document/key-value databases (they use their own panels) */}
+        {!isDocumentDb && !isKeyValueDb && (
           <RunSplitButton
             onRun={handleRun}
             onRunAll={handleRunAll}

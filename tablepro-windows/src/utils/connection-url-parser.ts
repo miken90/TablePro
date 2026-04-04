@@ -8,6 +8,8 @@ const PROTOCOL_TO_DB_TYPE: Record<string, string> = {
   sqlserver: "mssql",
   mongodb: "mongodb",
   "mongodb+srv": "mongodb",
+  redis: "redis",
+  rediss: "redis",
 };
 
 const DEFAULT_PORTS: Record<string, number> = {
@@ -15,6 +17,7 @@ const DEFAULT_PORTS: Record<string, number> = {
   mysql: 3306,
   mssql: 1433,
   mongodb: 27017,
+  redis: 6379,
 };
 
 export function parseConnectionUrl(url: string): Partial<ConnectionConfig> {
@@ -51,6 +54,10 @@ export function parseConnectionUrl(url: string): Partial<ConnectionConfig> {
 
   if (dbType === "mongodb") {
     result.useSrv = isSrv;
+  }
+
+  if (dbType === "redis") {
+    result.tlsEnabled = protocol === "rediss";
   }
 
   return result;
