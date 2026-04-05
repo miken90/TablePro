@@ -35,7 +35,7 @@ TablePro is a desktop database client with two platform codebases in this reposi
 - `TablePro/`: macOS app (upstream/reference in this repo workflow)
 - `tablepro-windows/`: Windows app (active implementation target)
 
-The Windows app is built with Tauri v2 + Rust + React/TypeScript and already includes core workflows: session-based query execution, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, auto-updater integration, AI chat, inline AI suggestions, and connection health monitoring.
+The Windows app is built with Tauri v2 + Rust + React/TypeScript and includes: session-based query execution, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, auto-updater, AI chat + inline AI, connection health monitoring, driver capability substrate, command registry with customizable shortcuts, deep-link support, and 6 database drivers (PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis).
 
 ## Platform Status
 
@@ -47,14 +47,21 @@ The Windows app is built with Tauri v2 + Rust + React/TypeScript and already inc
 
 ## Windows Feature Snapshot (implemented)
 
-- Connection management: save/list/delete, group management, session-based connect/disconnect
-- Drivers currently wired for Windows runtime: PostgreSQL, MySQL, SQL Server, SQLite
-- Query workflows: execute, cancel, paginated table browsing, progress events
+- Connection management: save/list/delete, group management, session-based connect/disconnect, per-connection reconnect guard
+- Drivers: PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis (6 total, loaded as DLL plugins)
+- Driver capability substrate: sidecar `.capabilities.json` files per driver, frontend gating via `listDrivers`/`getDriverCapabilities`
+- Query workflows: execute, cancel, paginated table browsing, progress events, payload guardrails (`MAX_RESULT_ROWS = 50,000` truncation)
+- MongoDB workflows: find() with JSON filter/sort/limit, collection browser, BSON-to-row flattening, sample-based column discovery
+- Redis workflows: CLI command panel (40+ operations), SCAN-based key browsing, all data types, TLS support, database switching
 - Data workflows: staged cell edits, SQL generation, save changes
 - Import/Export: SQL import preview + execute, CSV/JSON/SQL/XLSX export
 - Security: DPAPI encryption for saved connection secrets, SSH host key verification (TOFU)
 - AI: chat panel (streaming), inline suggestions, provider/model settings, schema-aware context
-- Reliability: health monitor with `connection:lost` / `connection:reconnected` events and reconnect action
+- Reliability: health monitor with `connection:lost` / `connection:reconnected` events, per-connection reconnect action
+- Tab state persistence: backend JSON file (`%APPDATA%/TablePro/tab-state.json`) with one-time localStorage migration
+- Command registry: 21 namespaced commands, customizable keyboard shortcuts with conflict detection and swap
+- Quick switcher: grouped/ranked results (tables, views, collections, databases, schemas, recent queries), fuzzy scoring
+- Deep-links: `tablepro://open/connection/{id}` protocol for saved connections
 - Updates: Tauri updater plugin enabled in release builds
 
 ## Development Documentation

@@ -7,24 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-04
+
 ### Added
 
-- AI Chat panel: slide-over panel (Ctrl+Shift+L) with streaming responses, markdown rendering, code blocks with Copy/Insert-to-Editor buttons, conversation management
-- AI Inline Suggestions: ghost text completions in SQL editor via custom CodeMirror 6 ViewPlugin — 500ms debounce, Tab to accept, Esc to dismiss
-- AI Provider Settings: multi-provider configuration (OpenAI, OpenRouter, LM Studio, Ollama, Custom) with per-feature routing (Chat, Explain Query, Fix Error, Inline Suggestions)
-- AI Schema Context: automatic database schema injection into AI prompts with configurable table limit
-- AI Chat Storage: SQLite persistence for conversations with 30-day auto-cleanup
-- Connection Health Monitor: backend 30-second ping loop with connection:lost/reconnected events, reconnect button in toolbar
+- MongoDB driver: connect, browse databases/collections, find() with JSON filter/sort/limit, BSON flattening
+- Redis driver: connect with optional TLS, SCAN-based key browser, CLI command panel, support for all data types (string, hash, list, set, sorted set, stream)
+- Driver capability substrate: sidecar JSON metadata per driver DLL, capability-aware UI gating
+- Centralized command registry: 21 namespaced command definitions, ShortcutsHelp derived from registry
+- Customizable keyboard shortcuts: click-to-rebind with conflict detection, persistent user overrides
+- Quick switcher rebuild: grouped/ranked results (tables, views, collections, databases, schemas, recent queries)
+- Deep-link protocol: `tablepro://open/connection/{id}` for opening saved connections
+- Tab state persistence: backend JSON file (`tab-state.json`) replacing localStorage, one-time migration
+- Payload-size guardrails: 50k row truncation with `truncated` flag and UI indicator
+- Redis database selector in sidebar header (db0-db15)
+- MongoDB connection form with SRV toggle, mongodb:// and mongodb+srv:// URL parsing
+- Redis connection form with TLS toggle, CA cert path, redis:// and rediss:// URL parsing
+- Settings shortcuts section (read-only display of all bindings)
 
 ### Changed
 
-- Ctrl+Shift+L shortcut reassigned from filter panel to AI chat panel
-- ESLint warnings reduced from 87 to 6
+- Tab persistence moved from browser localStorage to backend-managed JSON file in Tauri app_data_dir
+- Connection reconnect tracking changed from global boolean to per-connection Set
+- Plugin manager now loads capability sidecar files alongside driver DLLs
+- Schema store gates fetchSchemas/fetchRoutines behind driver capability checks
+- Health monitor cleans up stale entries via JoinHandle.is_finished() check
 
 ### Fixed
 
-- BOM encoding in bump-version.ps1 output files (Set-Content → WriteAllText)
-- Dynamic import in ConnectionForm.tsx converted to static import
+- Shortcut drift: 5 mismatches between ShortcutsHelp and runtime bindings corrected
+- Health monitor stale session entries blocking reconnect monitoring
+- Tab state race condition: loadConnections() now called before validating restored tabs
 
 ## [0.2.0] - 2026-04-01
 

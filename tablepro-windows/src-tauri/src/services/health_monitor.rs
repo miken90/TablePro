@@ -62,33 +62,59 @@ impl HealthMonitor {
 
         let sid = session_id.clone();
         let handle = tokio::spawn(async move {
+            let mut is_lost = false;
+
             loop {
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(PING_INTERVAL_SECS)) => {
-                        if let Err(e) = driver.ping().await {
-                            // Update status via AppHandle state access
-                            {
-                                let state = app_handle.state::<Mutex<ConnectionManager>>();
-                                let mut mgr = state.lock().await;
-                                mgr.set_status(
-                                    &sid,
-                                    ConnectionStatus::Failed(format!("Connection lost: {e}")),
+                        match driver.ping().await {
+                            Err(e) if !is_lost => {
+                                // First failure: mark as lost, emit event
+                                is_lost = true;
+                                {
+                                    let state = app_handle.state::<Mutex<ConnectionManager>>();
+                                    let mut mgr = state.lock().await;
+                                    mgr.set_status(
+                                        &sid,
+                                        ConnectionStatus::Failed(format!("Connection lost: {e}")),
+                                    );
+                                }
+
+                                let _ = app_handle.emit(
+                                    "connection:lost",
+                                    serde_json::json!({
+                                        "sessionId": sid,
+                                        "host": host,
+                                        "database": database,
+                                        "dbType": db_type,
+                                        "message": e.to_string(),
+                                    }),
                                 );
+
+                                tracing::warn!(session_id = %sid, "Connection lost: {e}");
                             }
+                            Err(_) => {
+                                // Still lost, keep waiting
+                            }
+                            Ok(()) if is_lost => {
+                                // Recovered: mark as connected, emit event
+                                is_lost = false;
+                                {
+                                    let state = app_handle.state::<Mutex<ConnectionManager>>();
+                                    let mut mgr = state.lock().await;
+                                    mgr.set_status(&sid, ConnectionStatus::Connected);
+                                }
 
-                            let _ = app_handle.emit(
-                                "connection:lost",
-                                serde_json::json!({
-                                    "sessionId": sid,
-                                    "host": host,
-                                    "database": database,
-                                    "dbType": db_type,
-                                    "message": e.to_string(),
-                                }),
-                            );
+                                let _ = app_handle.emit(
+                                    "connection:reconnected",
+                                    serde_json::json!({ "sessionId": sid }),
+                                );
 
-                            tracing::warn!(session_id = %sid, "Connection lost: {e}");
-                            break;
+                                tracing::info!(session_id = %sid, "Connection recovered");
+                            }
+                            Ok(()) => {
+                                // Healthy, continue monitoring
+                            }
                         }
                     }
                     changed = stop_rx.changed() => {

@@ -194,7 +194,10 @@ export const useEditorStore = create<EditorState>()(
           return;
         }
 
-        // Collect known saved connection IDs for validation
+        // Ensure saved connections are loaded before validating tabs
+        if (useConnectionStore.getState().connections.size === 0) {
+          await useConnectionStore.getState().loadConnections();
+        }
         const savedConnectionIds = new Set(
           Array.from(useConnectionStore.getState().connections.keys()),
         );
