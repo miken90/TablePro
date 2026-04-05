@@ -277,3 +277,21 @@ export const exportToFile = (
   options: ExportOptions,
 ): Promise<ExportResult> =>
   invoke('export_to_file', { sessionId, sql, format, filePath, options });
+
+// EXPLAIN query types
+export interface ExplainNode {
+  operation: string;
+  detail: string;
+  cost: number | null;
+  rows: number | null;
+  children: ExplainNode[];
+}
+
+export interface ExplainResult {
+  format: string;
+  raw: string;
+  nodes: ExplainNode[];
+}
+
+export const explainQuery = (sessionId: string, sql: string): Promise<ExplainResult> =>
+  invoke('explain_query', { sessionId, sql });

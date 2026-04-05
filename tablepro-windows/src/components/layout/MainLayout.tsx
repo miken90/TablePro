@@ -25,6 +25,7 @@ import { EditorViewProvider } from "../../contexts/editor-view-context";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { resolveActiveQuerySessionId, useQueryStore } from "../../stores/queryStore";
+import { ExplainPanel } from "../editor/explain-panel";
 import { useInspectorStore } from "../../stores/inspectorStore";
 import { useChangeStore } from "../../stores/changeStore";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -210,6 +211,7 @@ export function MainLayout() {
   });
 
   const queryResult = useQueryStore((s) => s.result);
+  const explainResult = useQueryStore((s) => s.explainResult);
   const inspectorStoreColumns = useInspectorStore((s) => s.columns);
   const inspectorStoreRow = useInspectorStore((s) => s.row);
 
@@ -347,11 +349,21 @@ export function MainLayout() {
                           <span className="h-1 w-1 rounded-full bg-current" />
                         </div>
                       </div>
-                      <div className="flex-1 overflow-hidden">
-                        <ResultPanel
-                          sessionId={sessionId}
-                          onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
-                        />
+                      <div className="flex-1 overflow-hidden flex flex-col">
+                        {explainResult && (
+                          <div className="max-h-[40%] overflow-hidden">
+                            <ExplainPanel
+                              result={explainResult}
+                              onClose={() => useQueryStore.setState({ explainResult: null })}
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1 overflow-hidden">
+                          <ResultPanel
+                            sessionId={sessionId}
+                            onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
+                          />
+                        </div>
                       </div>
                     </>
                   )}

@@ -21,3 +21,48 @@ export function extractErrorMessage(err: unknown): string {
   }
   return String(err);
 }
+
+// --- Error Classification ---
+
+export interface ClassifiedError {
+  kind: string;
+  message: string;
+  hint: string | null;
+  recoverable: boolean;
+}
+
+const KIND_HINTS: Record<string, { hint: string; recoverable: boolean }> = {
+  DatabaseError:  { hint: "Check if the database server is running and accessible", recoverable: false },
+  NotConnected:   { hint: "Try reconnecting to the database", recoverable: true },
+  PluginError:    { hint: "Check if the database driver is installed correctly", recoverable: false },
+  IoError:        { hint: "Check file permissions and disk space", recoverable: false },
+};
+
+const MESSAGE_PATTERNS: { pattern: RegExp; hint: string; recoverable: boolean }[] = [
+  { pattern: /connection refused/i,       hint: "Check if the server is running on the correct host and port", recoverable: true },
+  { pattern: /auth(entication|orization)\s*(failed|denied|error)/i, hint: "Check your username and password", recoverable: false },
+  { pattern: /password/i,                 hint: "Check your username and password", recoverable: false },
+  { pattern: /timed?\s*out/i,             hint: "The operation timed out. Try again or check server load", recoverable: true },
+  { pattern: /no\s*such\s*(host|address)/i, hint: "Check if the server is running on the correct host and port", recoverable: true },
+];
+
+/** Classify an error into kind, message, hint, and recoverability. */
+export function classifyError(err: unknown): ClassifiedError {
+  const message = extractErrorMessage(err);
+  const kind = isTauriError(err) ? err.kind : "Unknown";
+
+  // Check kind-based hints first
+  const kindHint = KIND_HINTS[kind];
+  if (kindHint) {
+    return { kind, message, hint: kindHint.hint, recoverable: kindHint.recoverable };
+  }
+
+  // Check message patterns
+  for (const { pattern, hint, recoverable } of MESSAGE_PATTERNS) {
+    if (pattern.test(message)) {
+      return { kind, message, hint, recoverable };
+    }
+  }
+
+  return { kind, message, hint: null, recoverable: false };
+}

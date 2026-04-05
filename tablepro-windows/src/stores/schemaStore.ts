@@ -4,7 +4,7 @@ import type { ColumnInfo } from "../types/query";
 import type { DriverCapabilities } from "../types/capability";
 import { DEFAULT_CAPABILITIES } from "../types/capability";
 import * as commands from "../ipc/commands";
-import { extractErrorMessage } from "../ipc/error";
+import { classifyError } from "../ipc/error";
 
 export interface FkRef {
   refTable: string;
@@ -61,7 +61,8 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       const databases = await commands.fetchDatabases(sessionId);
       set({ databases, isLoading: false });
     } catch (err) {
-      set({ error: extractErrorMessage(err), isLoading: false });
+      const classified = classifyError(err);
+      set({ error: classified.hint ? `${classified.message} — ${classified.hint}` : classified.message, isLoading: false });
     }
   },
 
@@ -87,7 +88,8 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
       set({ tables, routineCatalog, isLoading: false });
     } catch (err) {
-      set({ error: extractErrorMessage(err), isLoading: false });
+      const classified = classifyError(err);
+      set({ error: classified.hint ? `${classified.message} — ${classified.hint}` : classified.message, isLoading: false });
     }
   },
 
@@ -111,7 +113,8 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       const routineCatalog = await commands.fetchRoutines(sessionId);
       set({ routineCatalog });
     } catch (err) {
-      set({ error: extractErrorMessage(err), routineCatalog: null });
+      const classified = classifyError(err);
+      set({ error: classified.hint ? `${classified.message} — ${classified.hint}` : classified.message, routineCatalog: null });
     }
   },
 
@@ -174,7 +177,8 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       // Fetch schemas after switching database (fire-and-forget)
       get().fetchSchemas(sessionId);
     } catch (err) {
-      set({ error: extractErrorMessage(err), isLoading: false });
+      const classified = classifyError(err);
+      set({ error: classified.hint ? `${classified.message} — ${classified.hint}` : classified.message, isLoading: false });
     }
   },
 

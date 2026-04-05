@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import type { QueryResult } from "../types/query";
+import type { ExplainResult } from "../ipc/commands";
 import * as commands from "../ipc/commands";
-import { extractErrorMessage } from "../ipc/error";
+import { classifyError } from "../ipc/error";
 import { useConnectionStore } from "./connectionStore";
 import { useEditorStore } from "./editorStore";
 import { useQueryLogStore } from "./queryLogStore";
@@ -74,6 +75,10 @@ interface QueryState {
   durationMs: number | null;
   /** Set when safe mode requires confirmation before executing */
   pendingSafeCheck: PendingSafeCheck | null;
+  /** EXPLAIN query result */
+  explainResult: ExplainResult | null;
+  /** Whether an EXPLAIN query is in flight */
+  isExplaining: boolean;
 
   // Actions
   setQueryText: (text: string) => void;
@@ -83,6 +88,7 @@ interface QueryState {
   cancelSafeCheck: () => void;
   cancel: (sessionId: string) => Promise<void>;
   clearResult: () => void;
+  runExplain: (sessionId: string, sql: string) => Promise<void>;
 }
 
 function getDisplayRowCount(result: QueryResult): number {
@@ -191,7 +197,11 @@ async function runQuery(
     });
   } catch (err) {
     const elapsedMs = Date.now() - startMs;
-    const errorMsg = extractErrorMessage(err);
+    const classified = classifyError(err);
+    const errorMsg = classified.message;
+    const description = classified.hint
+      ? `${errorMsg}\n${classified.hint}`
+      : errorMsg;
     set({
       error: errorMsg,
       isExecuting: false,
@@ -204,7 +214,7 @@ async function runQuery(
     });
     commands.historyRecord(sql, null, elapsedMs, 0, "error").catch(() => {});
     toast.dismiss(loadingId);
-    toast.error("Query failed", { description: errorMsg, duration: Infinity });
+    toast.error("Query failed", { description, duration: Infinity });
   }
 }
 
@@ -216,6 +226,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   activeConnectionId: null,
   durationMs: null,
   pendingSafeCheck: null,
+  explainResult: null,
+  isExplaining: false,
 
   setQueryText: (text) => set({ queryText: text }),
 
@@ -263,5 +275,24 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     set({ isExecuting: false });
   },
 
-  clearResult: () => set({ result: null, error: null, durationMs: null }),
+  clearResult: () => set({ result: null, error: null, durationMs: null, explainResult: null }),
+
+  runExplain: async (sessionId, sql) => {
+    set({ isExplaining: true, explainResult: null, error: null });
+    const loadingId = toast.loading("Analyzing query plan...");
+    try {
+      const result = await commands.explainQuery(sessionId, sql);
+      set({ explainResult: result, isExplaining: false });
+      toast.dismiss(loadingId);
+      toast.success("Explain complete");
+    } catch (err) {
+      const classified = classifyError(err);
+      const description = classified.hint
+        ? `${classified.message}\n${classified.hint}`
+        : classified.message;
+      set({ isExplaining: false, error: classified.message });
+      toast.dismiss(loadingId);
+      toast.error("Explain failed", { description, duration: Infinity });
+    }
+  },
 }));

@@ -1,0 +1,40 @@
+{
+  "error": {
+    "somethingWentWrong": "Something went wrong",
+    "tryAgain": "Try Again",
+    "hint": "Hint",
+    "queryFailed": "Query failed",
+    "connectionFailed": "Connection failed",
+    "reconnectFailed": "Reconnect failed",
+    "unknownError": "An unknown error occurred",
+    "hints": {
+      "databaseError": "Check if the database server is running and accessible",
+      "notConnected": "Try reconnecting to the database",
+      "pluginError": "Check if the database driver is installed correctly",
+      "ioError": "Check file permissions and disk space",
+      "connectionRefused": "Check if the server is running on the correct host and port",
+      "authFailure": "Check your username and password",
+      "timeout": "The operation timed out. Try again or check server load"
+    }
+  },
+  "explain": {
+    "title": "Explain Plan",
+    "treeView": "Tree",
+    "rawView": "Raw",
+    "operation": "Operation",
+    "detail": "Detail",
+    "cost": "Cost",
+    "rows": "Rows",
+    "noResult": "No explain result available",
+    "running": "Analyzing query plan...",
+    "expensiveNode": "Expensive operation",
+    "expandAll": "Expand All",
+    "collapseAll": "Collapse All",
+    "button": "Explain",
+    "shortcut": "Ctrl+Shift+X"
+  },
+  "toast": {
+    "queryExecuted": "Query executed",
+    "queryBlocked": "Query blocked"
+  }
+}

@@ -76,6 +76,17 @@ export function useMainLayoutCommands() {
         },
       },
       {
+        id: "editor.explain",
+        label: "Explain Query",
+        shortcut: shortcutFor("editor.explain"),
+        category: "Query" as const,
+        action: () => {
+          const { queryText } = useQueryStore.getState();
+          const sid = resolveActiveQuerySessionId();
+          if (sid && queryText.trim()) void useQueryStore.getState().runExplain(sid, queryText);
+        },
+      },
+      {
         id: "editor.formatSql",
         label: "Format SQL",
         shortcut: shortcutFor("editor.formatSql"),

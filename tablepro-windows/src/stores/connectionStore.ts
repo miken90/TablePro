@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
-import { extractErrorMessage } from "../ipc/error";
+import { classifyError } from "../ipc/error";
 
 interface ConnectionState {
   connections: Map<string, SavedConnection>;
@@ -79,8 +79,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         return { connectionStatuses: statuses };
       });
       toast.dismiss(loadingId);
-      const msg = extractErrorMessage(err);
-      toast.error("Connection failed", { description: msg, duration: Infinity });
+      const classified = classifyError(err);
+      const description = classified.hint
+        ? `${classified.message}\n${classified.hint}`
+        : classified.message;
+      toast.error("Connection failed", { description, duration: Infinity });
       throw err;
     }
   },
@@ -137,8 +140,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         statuses.set(connectionId, "error");
         return { connectionStatuses: statuses };
       });
-      const msg = extractErrorMessage(err);
-      toast.error("Reconnect failed", { description: msg });
+      const classified = classifyError(err);
+      const description = classified.hint
+        ? `${classified.message}\n${classified.hint}`
+        : classified.message;
+      toast.error("Reconnect failed", { description });
     } finally {
       set((s) => {
         const reconnectingIds = new Set(s.reconnectingIds);
