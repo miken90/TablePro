@@ -14,6 +14,7 @@ enum SessionStateFactory {
         let tabManager: QueryTabManager
         let changeManager: DataChangeManager
         let filterStateManager: FilterStateManager
+        let columnVisibilityManager: ColumnVisibilityManager
         let toolbarState: ConnectionToolbarState
         let coordinator: MainContentCoordinator
     }
@@ -24,7 +25,9 @@ enum SessionStateFactory {
     ) -> SessionState {
         let tabMgr = QueryTabManager()
         let changeMgr = DataChangeManager()
+        changeMgr.databaseType = connection.type
         let filterMgr = FilterStateManager()
+        let colVisMgr = ColumnVisibilityManager()
         let toolbarSt = ConnectionToolbarState(connection: connection)
 
         // Eagerly populate version + state from existing session to avoid flash
@@ -40,12 +43,14 @@ enum SessionStateFactory {
         toolbarSt.hasCompletedSetup = true
 
         // Redis: set initial database name eagerly to avoid toolbar flash
-        if connection.type == .redis {
+        if connection.type.pluginTypeId == "Redis" {
             let dbIndex = connection.redisDatabase ?? Int(connection.database) ?? 0
             toolbarSt.databaseName = String(dbIndex)
         }
 
-        // Initialize single tab based on payload
+        // Initialize single tab based on payload.
+        // For isConnectionOnly (Cmd+T new tab), create a default query tab eagerly
+        // so MainContentView doesn't flash "No tabs open" before initializeAndRestoreTabs runs.
         if let payload, !payload.isConnectionOnly {
             switch payload.tabType {
             case .table:
@@ -66,8 +71,13 @@ enum SessionStateFactory {
                     if let index = tabMgr.selectedTabIndex {
                         tabMgr.tabs[index].isView = payload.isView
                         tabMgr.tabs[index].isEditable = !payload.isView
+                        tabMgr.tabs[index].schemaName = payload.schemaName
                         if payload.showStructure {
                             tabMgr.tabs[index].showStructure = true
+                        }
+                        if let initialFilter = payload.initialFilterState {
+                            tabMgr.tabs[index].filterState = initialFilter
+                            filterMgr.restoreFromTabState(initialFilter)
                         }
                     }
                 } else {
@@ -76,9 +86,16 @@ enum SessionStateFactory {
             case .query:
                 tabMgr.addTab(
                     initialQuery: payload.initialQuery,
+                    databaseName: payload.databaseName ?? connection.database,
+                    sourceFileURL: payload.sourceFileURL
+                )
+            case .createTable:
+                tabMgr.addCreateTableTab(
                     databaseName: payload.databaseName ?? connection.database
                 )
             }
+        } else if payload?.isNewTab == true {
+            tabMgr.addTab(databaseName: payload?.databaseName ?? connection.database)
         }
 
         let coord = MainContentCoordinator(
@@ -86,6 +103,7 @@ enum SessionStateFactory {
             tabManager: tabMgr,
             changeManager: changeMgr,
             filterStateManager: filterMgr,
+            columnVisibilityManager: colVisMgr,
             toolbarState: toolbarSt
         )
 
@@ -93,6 +111,7 @@ enum SessionStateFactory {
             tabManager: tabMgr,
             changeManager: changeMgr,
             filterStateManager: filterMgr,
+            columnVisibilityManager: colVisMgr,
             toolbarState: toolbarSt,
             coordinator: coord
         )

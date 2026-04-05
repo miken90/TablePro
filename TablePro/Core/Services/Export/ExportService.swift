@@ -62,11 +62,17 @@ final class ExportService {
 
     var state = ExportState()
 
-    private let driver: DatabaseDriver
+    private let driver: DatabaseDriver?
     private let databaseType: DatabaseType
 
     init(driver: DatabaseDriver, databaseType: DatabaseType) {
         self.driver = driver
+        self.databaseType = databaseType
+    }
+
+    /// Convenience initializer for query results export (no driver needed).
+    init(databaseType: DatabaseType) {
+        self.driver = nil
         self.databaseType = databaseType
     }
 
@@ -120,8 +126,12 @@ final class ExportService {
             currentProgress = nil
         }
 
+        guard let driver else {
+            throw ExportError.notConnected
+        }
+
         // Fetch total row counts
-        state.totalRows = await fetchTotalRowCount(for: tables)
+        state.totalRows = await fetchTotalRowCount(for: tables, driver: driver)
 
         // Create data source adapter
         let dataSource = ExportDataSourceAdapter(driver: driver, databaseType: databaseType)
@@ -183,15 +193,95 @@ final class ExportService {
         state.progress = 1.0
     }
 
+    // MARK: - Query Results Export
+
+    func exportQueryResults(
+        rowBuffer: RowBuffer,
+        config: ExportConfiguration,
+        to url: URL
+    ) async throws {
+        guard let plugin = PluginManager.shared.exportPlugins[config.formatId] else {
+            throw ExportError.formatNotFound(config.formatId)
+        }
+
+        let totalRows = rowBuffer.rows.count
+        state = ExportState(isExporting: true, totalTables: 1, totalRows: totalRows)
+        isCancelled = false
+
+        defer {
+            state.isExporting = false
+            isCancelled = false
+            state.statusMessage = ""
+            currentProgress = nil
+        }
+
+        let dataSource = QueryResultExportDataSource(
+            rowBuffer: rowBuffer,
+            databaseType: databaseType,
+            driver: driver
+        )
+
+        let progress = PluginExportProgress()
+        currentProgress = progress
+        progress.setTotalRows(totalRows)
+
+        let pendingUpdate = ProgressUpdateCoalescer()
+        progress.onUpdate = { [weak self] table, index, rows, total, status in
+            let shouldDispatch = pendingUpdate.markPending()
+            if shouldDispatch {
+                Task { @MainActor [weak self] in
+                    pendingUpdate.clearPending()
+                    guard let self else { return }
+                    self.state.currentTable = table
+                    self.state.currentTableIndex = index
+                    self.state.processedRows = rows
+                    if total > 0 {
+                        self.state.progress = Double(rows) / Double(total)
+                    }
+                    if !status.isEmpty {
+                        self.state.statusMessage = status
+                    }
+                }
+            }
+        }
+
+        let exportTable = PluginExportTable(
+            name: config.fileName,
+            databaseName: "",
+            tableType: "query",
+            optionValues: plugin.defaultTableOptionValues()
+        )
+
+        do {
+            try await plugin.export(
+                tables: [exportTable],
+                dataSource: dataSource,
+                destination: url,
+                progress: progress
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            state.errorMessage = error.localizedDescription
+            throw error
+        }
+
+        let pluginWarnings = plugin.warnings
+        if !pluginWarnings.isEmpty {
+            state.warningMessage = pluginWarnings.joined(separator: "\n")
+        }
+
+        state.progress = 1.0
+    }
+
     // MARK: - Row Count Fetching
 
-    private func fetchTotalRowCount(for tables: [ExportTableItem]) async -> Int {
+    private func fetchTotalRowCount(for tables: [ExportTableItem], driver: DatabaseDriver) async -> Int {
         guard !tables.isEmpty else { return 0 }
 
         var total = 0
         var failedCount = 0
 
-        if databaseType == .mongodb || databaseType == .redis {
+        if PluginManager.shared.editorLanguage(for: databaseType) != .sql {
             for table in tables {
                 do {
                     if let count = try await driver.fetchApproximateRowCount(table: table.name) {
@@ -218,10 +308,10 @@ final class ExportService {
             let unionParts = batch.map { table -> String in
                 let tableRef: String
                 if table.databaseName.isEmpty {
-                    tableRef = databaseType.quoteIdentifier(table.name)
+                    tableRef = driver.quoteIdentifier(table.name)
                 } else {
-                    let quotedDb = databaseType.quoteIdentifier(table.databaseName)
-                    let quotedTable = databaseType.quoteIdentifier(table.name)
+                    let quotedDb = driver.quoteIdentifier(table.databaseName)
+                    let quotedTable = driver.quoteIdentifier(table.name)
                     tableRef = "\(quotedDb).\(quotedTable)"
                 }
                 return "SELECT COUNT(*) AS c FROM \(tableRef)"
@@ -240,10 +330,10 @@ final class ExportService {
                     do {
                         let tableRef: String
                         if table.databaseName.isEmpty {
-                            tableRef = databaseType.quoteIdentifier(table.name)
+                            tableRef = driver.quoteIdentifier(table.name)
                         } else {
-                            let quotedDb = databaseType.quoteIdentifier(table.databaseName)
-                            let quotedTable = databaseType.quoteIdentifier(table.name)
+                            let quotedDb = driver.quoteIdentifier(table.databaseName)
+                            let quotedTable = driver.quoteIdentifier(table.name)
                             tableRef = "\(quotedDb).\(quotedTable)"
                         }
                         let result = try await driver.execute(query: "SELECT COUNT(*) FROM \(tableRef)")

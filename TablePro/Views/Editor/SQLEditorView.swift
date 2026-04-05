@@ -19,15 +19,21 @@ struct SQLEditorView: View {
     @Binding var cursorPositions: [CursorPosition]
     var schemaProvider: SQLSchemaProvider?
     var databaseType: DatabaseType?
+    var connectionId: UUID?
     @Binding var vimMode: VimMode
     var onCloseTab: (() -> Void)?
     var onExecuteQuery: (() -> Void)?
+    var onAIExplain: ((String) -> Void)?
+    var onAIOptimize: ((String) -> Void)?
+    var onSaveAsFavorite: ((String) -> Void)?
+    var onFormatSQL: (() -> Void)?
 
     @State private var editorState = SourceEditorState()
     @State private var completionAdapter: SQLCompletionAdapter?
     @State private var coordinator = SQLEditorCoordinator()
     @State private var editorReady = false
     @State private var editorConfiguration = makeConfiguration()
+    @State private var favoritesObserver: NSObjectProtocol?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -35,7 +41,7 @@ struct SQLEditorView: View {
             if editorReady {
             SourceEditor(
                 $text,
-                language: databaseType == .mongodb ? .javascript : databaseType == .redis ? .bash : .sql,
+                language: PluginManager.shared.editorLanguage(for: databaseType ?? .mysql).treeSitterLanguage,
                 configuration: editorConfiguration,
                 state: $editorState,
                 coordinators: [coordinator],
@@ -53,7 +59,7 @@ struct SQLEditorView: View {
                 if let controller = coordinator.controller {
                     let currentString = controller.textView.string as NSString
                     let bindingString = text as NSString
-                    if currentString.length != bindingString.length || currentString != bindingString {
+                    if currentString.length != bindingString.length {
                         return
                     }
                 }
@@ -74,6 +80,12 @@ struct SQLEditorView: View {
                     }
                 }
             }
+            .onChange(of: connectionId) { _, _ in
+                if let schemaProvider, let completionAdapter {
+                    completionAdapter.updateSchemaProvider(schemaProvider, databaseType: databaseType)
+                }
+                setupFavoritesObserver()
+            }
             .onChange(of: colorScheme) {
                 editorConfiguration = Self.makeConfiguration()
             }
@@ -90,6 +102,11 @@ struct SQLEditorView: View {
                 coordinator.schemaProvider = schemaProvider
                 coordinator.onCloseTab = onCloseTab
                 coordinator.onExecuteQuery = onExecuteQuery
+                coordinator.onAIExplain = onAIExplain
+                coordinator.onAIOptimize = onAIOptimize
+                coordinator.onSaveAsFavorite = onSaveAsFavorite
+                coordinator.onFormatSQL = onFormatSQL
+                setupFavoritesObserver()
             }
         } else {
             Color(nsColor: .textBackgroundColor)
@@ -100,15 +117,56 @@ struct SQLEditorView: View {
                     coordinator.schemaProvider = schemaProvider
                     coordinator.onCloseTab = onCloseTab
                     coordinator.onExecuteQuery = onExecuteQuery
+                    coordinator.onAIExplain = onAIExplain
+                    coordinator.onAIOptimize = onAIOptimize
+                    coordinator.onSaveAsFavorite = onSaveAsFavorite
+                    coordinator.onFormatSQL = onFormatSQL
+                    setupFavoritesObserver()
                     editorReady = true
                 }
             }
         }
         .onDisappear {
+            teardownFavoritesObserver()
             coordinator.destroy()
+            completionAdapter = nil
         }
         .onChange(of: coordinator.vimMode) { _, newMode in
             vimMode = newMode
+        }
+    }
+
+    // MARK: - Favorites
+
+    private func setupFavoritesObserver() {
+        teardownFavoritesObserver()
+        refreshFavoriteKeywords()
+        let adapter = completionAdapter
+        let connId = connectionId
+        favoritesObserver = NotificationCenter.default.addObserver(
+            forName: .sqlFavoritesDidUpdate,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                let keywords = await SQLFavoriteManager.shared.fetchKeywordMap(connectionId: connId)
+                adapter?.updateFavoriteKeywords(keywords)
+            }
+        }
+    }
+
+    private func refreshFavoriteKeywords() {
+        let connId = connectionId
+        Task { @MainActor in
+            let keywords = await SQLFavoriteManager.shared.fetchKeywordMap(connectionId: connId)
+            completionAdapter?.updateFavoriteKeywords(keywords)
+        }
+    }
+
+    private func teardownFavoritesObserver() {
+        if let observer = favoritesObserver {
+            NotificationCenter.default.removeObserver(observer)
+            favoritesObserver = nil
         }
     }
 
@@ -118,18 +176,18 @@ struct SQLEditorView: View {
         SourceEditorConfiguration(
             appearance: .init(
                 theme: TableProEditorTheme.make(),
-                font: SQLEditorTheme.font,
-                wrapLines: SQLEditorTheme.wordWrap,
-                tabWidth: SQLEditorTheme.tabWidth
+                font: ThemeEngine.shared.editorFonts.font,
+                wrapLines: ThemeEngine.shared.wordWrap,
+                tabWidth: ThemeEngine.shared.tabWidth
             ),
             behavior: .init(
-                indentOption: .spaces(count: SQLEditorTheme.tabWidth)
+                indentOption: .spaces(count: ThemeEngine.shared.tabWidth)
             ),
             layout: .init(
                 contentInsets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
             ),
             peripherals: .init(
-                showGutter: SQLEditorTheme.showLineNumbers,
+                showGutter: ThemeEngine.shared.showLineNumbers,
                 showMinimap: false,
                 showFoldingRibbon: false
             )

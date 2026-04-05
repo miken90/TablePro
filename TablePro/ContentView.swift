@@ -8,6 +8,7 @@
 import AppKit
 import os
 import SwiftUI
+import TableProPluginKit
 
 struct ContentView: View {
     private static let logger = Logger(subsystem: "com.TablePro", category: "ContentView")
@@ -17,6 +18,7 @@ struct ContentView: View {
     let payload: EditorTabPayload?
 
     @State private var currentSession: ConnectionSession?
+    @State private var closingSessionId: UUID?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showNewConnectionSheet = false
     @State private var showEditConnectionSheet = false
@@ -39,16 +41,31 @@ struct ContentView: View {
         if let tableName = payload?.tableName {
             defaultTitle = tableName
         } else if let connectionId = payload?.connectionId,
-                  let connection = ConnectionStorage.shared.loadConnections().first(where: { $0.id == connectionId }) {
-            switch connection.type {
-            case .mongodb: defaultTitle = "MQL Query"
-            case .redis: defaultTitle = "Redis CLI"
-            default: defaultTitle = "SQL Query"
-            }
+                  let connection = DatabaseManager.shared.activeSessions[connectionId]?.connection {
+            let langName = PluginManager.shared.queryLanguageName(for: connection.type)
+            defaultTitle = "\(langName) Query"
         } else {
             defaultTitle = "SQL Query"
         }
         _windowTitle = State(initialValue: defaultTitle)
+
+        // For Cmd+T (new tab), the session already exists. Resolve synchronously
+        // to avoid the "Connecting..." flash while waiting for async onChange.
+        var resolvedSession: ConnectionSession?
+        if let connectionId = payload?.connectionId {
+            resolvedSession = DatabaseManager.shared.activeSessions[connectionId]
+        }
+        _currentSession = State(initialValue: resolvedSession)
+
+        if let session = resolvedSession {
+            _rightPanelState = State(initialValue: RightPanelState())
+            _sessionState = State(initialValue: SessionStateFactory.create(
+                connection: session.connection, payload: payload
+            ))
+        } else {
+            _rightPanelState = State(initialValue: nil)
+            _sessionState = State(initialValue: nil)
+        }
     }
 
     var body: some View {
@@ -72,6 +89,7 @@ struct ContentView: View {
             // Right sidebar toggle is handled by MainContentView (has the binding)
             // Left sidebar toggle uses native NSSplitViewController.toggleSidebar via responder chain
             .onChange(of: DatabaseManager.shared.currentSessionId, initial: true) { _, newSessionId in
+                guard closingSessionId == nil else { return }
                 let ourConnectionId = payload?.connectionId
                 if ourConnectionId != nil {
                     guard newSessionId == ourConnectionId else { return }
@@ -94,64 +112,19 @@ struct ContentView: View {
                         }
                         AppState.shared.isConnected = true
                         AppState.shared.safeModeLevel = session.connection.safeModeLevel
-                        AppState.shared.isMongoDB = session.connection.type == .mongodb
-                        AppState.shared.isRedis = session.connection.type == .redis
+                        AppState.shared.editorLanguage = PluginManager.shared.editorLanguage(for: session.connection.type)
+                        AppState.shared.currentDatabaseType = session.connection.type
+                        AppState.shared.supportsDatabaseSwitching = PluginManager.shared.supportsDatabaseSwitching(
+                            for: session.connection.type)
                     }
                 } else {
                     currentSession = nil
                     columnVisibility = .detailOnly
                 }
             }
-            .onChange(of: DatabaseManager.shared.connectionStatusVersion, initial: true) { _, _ in
-                let sessions = DatabaseManager.shared.activeSessions
-                let connectionId = payload?.connectionId ?? currentSession?.id ?? DatabaseManager.shared.currentSessionId
-                guard let sid = connectionId else {
-                    if currentSession != nil { currentSession = nil }
-                    return
-                }
-                guard let newSession = sessions[sid] else {
-                    if currentSession?.id == sid {
-                        rightPanelState?.teardown()
-                        rightPanelState = nil
-                        sessionState?.coordinator.teardown()
-                        sessionState = nil
-                        currentSession = nil
-                        columnVisibility = .detailOnly
-                        AppState.shared.isConnected = false
-                        AppState.shared.safeModeLevel = .silent
-                        AppState.shared.isMongoDB = false
-                        AppState.shared.isRedis = false
-
-                        // Close all native tab windows for this connection and
-                        // force AppKit to deallocate them instead of pooling.
-                        let tabbingId = "com.TablePro.main.\(sid.uuidString)"
-                        DispatchQueue.main.async {
-                            for window in NSApp.windows where window.tabbingIdentifier == tabbingId {
-                                window.isReleasedWhenClosed = true
-                                window.close()
-                            }
-                        }
-                    }
-                    return
-                }
-                if let existing = currentSession,
-                   existing.isContentViewEquivalent(to: newSession) {
-                    return
-                }
-                currentSession = newSession
-                if rightPanelState == nil {
-                    rightPanelState = RightPanelState()
-                }
-                if sessionState == nil {
-                    sessionState = SessionStateFactory.create(
-                        connection: newSession.connection,
-                        payload: payload
-                    )
-                }
-                AppState.shared.isConnected = true
-                AppState.shared.safeModeLevel = newSession.connection.safeModeLevel
-                AppState.shared.isMongoDB = newSession.connection.type == .mongodb
-                AppState.shared.isRedis = newSession.connection.type == .redis
+            .task { handleConnectionStatusChange() }
+            .onReceive(NotificationCenter.default.publisher(for: .connectionStatusDidChange)) { _ in
+                handleConnectionStatusChange()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
                 // Only process notifications for our own window to avoid every
@@ -159,7 +132,8 @@ struct ContentView: View {
                 // Match by checking if the window is registered for our connectionId
                 // in WindowLifecycleMonitor (subtitle may not be set yet on first appear).
                 guard let notificationWindow = notification.object as? NSWindow,
-                      notificationWindow.identifier?.rawValue.contains("main") == true,
+                      let windowId = notificationWindow.identifier?.rawValue,
+                      windowId == "main" || windowId.hasPrefix("main-"),
                       let connectionId = payload?.connectionId
                 else { return }
 
@@ -178,13 +152,21 @@ struct ContentView: View {
                 if let session = DatabaseManager.shared.activeSessions[connectionId] {
                     AppState.shared.isConnected = true
                     AppState.shared.safeModeLevel = session.connection.safeModeLevel
-                    AppState.shared.isMongoDB = session.connection.type == .mongodb
-                    AppState.shared.isRedis = session.connection.type == .redis
+                    AppState.shared.editorLanguage = PluginManager.shared.editorLanguage(for: session.connection.type)
+                    AppState.shared.currentDatabaseType = session.connection.type
+                    AppState.shared.supportsDatabaseSwitching = PluginManager.shared.supportsDatabaseSwitching(
+                        for: session.connection.type)
                 } else {
                     AppState.shared.isConnected = false
                     AppState.shared.safeModeLevel = .silent
-                    AppState.shared.isMongoDB = false
-                    AppState.shared.isRedis = false
+                    AppState.shared.editorLanguage = .sql
+                    AppState.shared.currentDatabaseType = nil
+                    AppState.shared.supportsDatabaseSwitching = true
+                }
+            }
+            .onChange(of: sessionState?.toolbarState.safeModeLevel) { _, newLevel in
+                if let level = newLevel {
+                    AppState.shared.safeModeLevel = level
                 }
             }
     }
@@ -193,9 +175,9 @@ struct ContentView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        if let currentSession = currentSession, let rightPanelState, let sessionState {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                // MARK: - Sidebar (Left) - Table Browser
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            // MARK: - Sidebar (Left) - Table Browser
+            if let currentSession = currentSession, let sessionState {
                 VStack(spacing: 0) {
                     SidebarView(
                         tables: sessionTablesBinding,
@@ -231,11 +213,16 @@ struct ContentView: View {
                 .searchable(
                     text: sidebarSearchTextBinding(for: currentSession.connection.id),
                     placement: .sidebar,
-                    prompt: "Filter"
+                    prompt: sidebarSearchPrompt(for: currentSession.connection.id)
                 )
                 .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 600)
-            } detail: {
-                // MARK: - Detail (Main workspace with optional right sidebar)
+            } else {
+                Color.clear
+                    .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 600)
+            }
+        } detail: {
+            // MARK: - Detail (Main workspace with optional right sidebar)
+            if let currentSession = currentSession, let rightPanelState, let sessionState {
                 HStack(spacing: 0) {
                     MainContentView(
                         connection: currentSession.connection,
@@ -266,29 +253,26 @@ struct ContentView: View {
                             tables: currentSession.tables
                         )
                         .frame(width: rightPanelState.panelWidth)
+                        .background(Color(nsColor: .windowBackgroundColor))
                         .transition(.move(edge: .trailing))
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: rightPanelState.isPresented)
-            }
-            .navigationTitle(windowTitle)
-            .navigationSubtitle(currentSession.connection.name)
-        } else {
-            VStack(spacing: 16) {
-                ProgressView()
-                    .scaleEffect(1.5)
+            } else {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.5)
 
-                Text("Connecting...")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+                    Text("Connecting...")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("TablePro")
         }
+        .navigationTitle(windowTitle)
+        .navigationSubtitle(currentSession?.connection.name ?? "")
     }
-
-    // Removed: newConnectionSheet and editConnectionSheet helpers
-    // Connection forms are now handled by the separate connection-form window
 
     // MARK: - Session State Bindings
 
@@ -348,12 +332,82 @@ struct ContentView: View {
         )
     }
 
+    private func sidebarSearchPrompt(for connectionId: UUID) -> String {
+        let state = SharedSidebarState.forConnection(connectionId)
+        switch state.selectedSidebarTab {
+        case .tables:
+            return String(localized: "Filter")
+        case .favorites:
+            return String(localized: "Filter favorites")
+        }
+    }
+
     private var sessionTableOperationOptionsBinding: Binding<[String: TableOperationOptions]> {
         createSessionBinding(
             get: { $0.tableOperationOptions },
             set: { $0.tableOperationOptions = $1 },
             defaultValue: [:]
         )
+    }
+
+    // MARK: - Connection Status
+
+    private func handleConnectionStatusChange() {
+        guard closingSessionId == nil else {
+            return
+        }
+        let sessions = DatabaseManager.shared.activeSessions
+        let connectionId = payload?.connectionId ?? currentSession?.id ?? DatabaseManager.shared.currentSessionId
+        guard let sid = connectionId else {
+            if currentSession != nil { currentSession = nil }
+            return
+        }
+        guard let newSession = sessions[sid] else {
+            if currentSession?.id == sid {
+                closingSessionId = sid
+                rightPanelState?.teardown()
+                rightPanelState = nil
+                sessionState?.coordinator.teardown()
+                sessionState = nil
+                currentSession = nil
+                columnVisibility = .detailOnly
+                AppState.shared.isConnected = false
+                AppState.shared.safeModeLevel = .silent
+                AppState.shared.editorLanguage = .sql
+                AppState.shared.currentDatabaseType = nil
+                AppState.shared.supportsDatabaseSwitching = true
+
+                // Window cleanup is handled by windowWillClose (opens welcome)
+                // and windowDidBecomeKey (hides restored orphan windows).
+                // Do NOT close windows here — it triggers SwiftUI state
+                // restoration which creates an infinite close→restore loop.
+            }
+            return
+        }
+        if let existing = currentSession,
+           existing.isContentViewEquivalent(to: newSession) {
+            return
+        }
+        currentSession = newSession
+        // Update window title on first session connect (fixes cold-launch stale title)
+        if payload?.tableName == nil, windowTitle == "SQL Query" || windowTitle.hasSuffix(" Query") {
+            windowTitle = newSession.connection.name
+        }
+        if rightPanelState == nil {
+            rightPanelState = RightPanelState()
+        }
+        if sessionState == nil {
+            sessionState = SessionStateFactory.create(
+                connection: newSession.connection,
+                payload: payload
+            )
+        }
+        AppState.shared.isConnected = true
+        AppState.shared.safeModeLevel = newSession.connection.safeModeLevel
+        AppState.shared.editorLanguage = PluginManager.shared.editorLanguage(for: newSession.connection.type)
+        AppState.shared.currentDatabaseType = newSession.connection.type
+        AppState.shared.supportsDatabaseSwitching = PluginManager.shared.supportsDatabaseSwitching(
+            for: newSession.connection.type)
     }
 
     // MARK: - Actions
@@ -389,7 +443,6 @@ struct ContentView: View {
 
         storage.deleteConnection(connection)
     }
-
 }
 
 #Preview {

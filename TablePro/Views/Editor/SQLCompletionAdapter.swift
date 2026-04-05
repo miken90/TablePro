@@ -8,14 +8,18 @@
 import AppKit
 import CodeEditSourceEditor
 import CodeEditTextView
+import os
 import SwiftUI
 
 /// Adapts the existing CompletionEngine to CodeEditSourceEditor's suggestion system
 @MainActor
 final class SQLCompletionAdapter: CodeSuggestionDelegate {
+    private static let logger = Logger(subsystem: "com.TablePro", category: "SQLCompletionAdapter")
+
     // MARK: - Properties
 
     private var completionEngine: CompletionEngine?
+    private var favoriteKeywords: [String: (name: String, query: String)] = [:]
     private var suppressNextCompletion = false
     private var currentCompletionContext: CompletionContext?
     private var debounceGeneration: UInt64 = 0
@@ -25,13 +29,30 @@ final class SQLCompletionAdapter: CodeSuggestionDelegate {
 
     init(schemaProvider: SQLSchemaProvider?, databaseType: DatabaseType? = nil) {
         if let provider = schemaProvider {
-            self.completionEngine = CompletionEngine(schemaProvider: provider, databaseType: databaseType)
+            let dialect = databaseType.flatMap { PluginManager.shared.sqlDialect(for: $0) }
+            let completions = databaseType.flatMap { PluginManager.shared.statementCompletions(for: $0) } ?? []
+            self.completionEngine = CompletionEngine(
+                schemaProvider: provider, databaseType: databaseType,
+                dialect: dialect, statementCompletions: completions
+            )
         }
     }
 
     /// Update the schema provider (e.g. when connection changes)
     func updateSchemaProvider(_ provider: SQLSchemaProvider, databaseType: DatabaseType? = nil) {
-        self.completionEngine = CompletionEngine(schemaProvider: provider, databaseType: databaseType)
+        let dialect = databaseType.flatMap { PluginManager.shared.sqlDialect(for: $0) }
+        let completions = databaseType.flatMap { PluginManager.shared.statementCompletions(for: $0) } ?? []
+        self.completionEngine = CompletionEngine(
+            schemaProvider: provider, databaseType: databaseType,
+            dialect: dialect, statementCompletions: completions
+        )
+        completionEngine?.updateFavoriteKeywords(favoriteKeywords)
+    }
+
+    /// Update favorite keywords for autocomplete expansion
+    func updateFavoriteKeywords(_ keywords: [String: (name: String, query: String)]) {
+        favoriteKeywords = keywords
+        completionEngine?.updateFavoriteKeywords(keywords)
     }
 
     // MARK: - CodeSuggestionDelegate
@@ -42,9 +63,13 @@ final class SQLCompletionAdapter: CodeSuggestionDelegate {
 
     func completionSuggestionsRequested(
         textView: TextViewController,
-        cursorPosition: CursorPosition
+        cursorPosition: CursorPosition,
+        isManualTrigger: Bool
     ) async -> (windowPosition: CursorPosition, items: [CodeSuggestionEntry])? {
-        guard let completionEngine else { return nil }
+        guard let completionEngine else {
+            Self.logger.debug("Completion skipped: no engine (schema provider was nil at init)")
+            return nil
+        }
 
         if suppressNextCompletion {
             suppressNextCompletion = false
@@ -76,11 +101,26 @@ final class SQLCompletionAdapter: CodeSuggestionDelegate {
             }
         }
 
+        await completionEngine.retrySchemaIfNeeded()
+
         guard let context = await completionEngine.getCompletions(
             text: text,
             cursorPosition: offset
         ) else {
             return nil
+        }
+
+        // Suppress noisy completions when prefix is empty in contexts where
+        // browsing all items isn't useful (e.g., after "SELECT " or "WHERE ").
+        // Manual triggers (Ctrl+Space) always show completions.
+        if !isManualTrigger && context.sqlContext.prefix.isEmpty && context.sqlContext.dotPrefix == nil {
+            switch context.sqlContext.clauseType {
+            case .from, .join, .into, .set, .insertColumns, .on,
+                 .alterTableColumn, .returning, .using, .dropObject, .createIndex:
+                break // Allow empty-prefix completions for these browseable contexts
+            default:
+                return nil
+            }
         }
 
         self.currentCompletionContext = context
@@ -96,14 +136,13 @@ final class SQLCompletionAdapter: CodeSuggestionDelegate {
         textView: TextViewController,
         cursorPosition: CursorPosition
     ) -> [CodeSuggestionEntry]? {
-        // Filter existing completions based on new cursor position
-        guard let context = currentCompletionContext else { return nil }
+        guard let context = currentCompletionContext,
+              let provider = completionEngine?.provider else { return nil }
 
         let text = textView.text
         let offset = cursorPosition.range.location
         let nsText = text as NSString
 
-        // Extract current prefix from replacement range start to cursor
         let prefixStart = context.replacementRange.location
         guard offset >= prefixStart, offset <= nsText.length else { return nil }
 
@@ -113,15 +152,9 @@ final class SQLCompletionAdapter: CodeSuggestionDelegate {
 
         guard !currentPrefix.isEmpty else { return nil }
 
-        let filtered = context.items.filter { item in
-            let filterText = item.filterText.lowercased()
-            // 3-tier matching: prefix > contains > fuzzy (consistent with initial trigger)
-            if filterText.hasPrefix(currentPrefix) { return true }
-            if filterText.contains(currentPrefix) { return true }
-            return Self.fuzzyMatch(pattern: currentPrefix, target: filterText)
-        }
+        let ranked = provider.filterAndRank(context.items, prefix: currentPrefix, context: context.sqlContext)
 
-        return filtered.isEmpty ? nil : filtered.map { SQLSuggestionEntry(item: $0) }
+        return ranked.isEmpty ? nil : ranked.map { SQLSuggestionEntry(item: $0) }
     }
 
     func completionWindowApplyCompletion(
@@ -157,22 +190,6 @@ final class SQLCompletionAdapter: CodeSuggestionDelegate {
         }
         textView.setCursorPositions([CursorPosition(range: NSRange(location: newPosition, length: 0))])
     }
-
-    // MARK: - Fuzzy Matching
-
-    nonisolated static func fuzzyMatch(pattern: String, target: String) -> Bool {
-        let nsPattern = pattern as NSString
-        let nsTarget = target as NSString
-        var patternIndex = 0
-        var targetIndex = 0
-        while patternIndex < nsPattern.length && targetIndex < nsTarget.length {
-            if nsPattern.character(at: patternIndex) == nsTarget.character(at: targetIndex) {
-                patternIndex += 1
-            }
-            targetIndex += 1
-        }
-        return patternIndex == nsPattern.length
-    }
 }
 
 // MARK: - SQLSuggestionEntry
@@ -192,6 +209,7 @@ final class SQLSuggestionEntry: CodeSuggestionEntry {
     var targetPosition: CursorPosition? { nil }
     var sourcePreview: String? { nil }
     var deprecated: Bool { false }
+    var matchedRanges: [Range<Int>] { item.matchedRanges }
 
     var image: Image {
         Image(systemName: item.kind.iconName)

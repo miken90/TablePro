@@ -38,25 +38,34 @@ enum LicenseStatus: String, Codable {
 
 /// The `data` portion of the signed license payload from the server
 struct LicensePayloadData: Codable, Equatable {
+    let billingCycle: String?
     let licenseKey: String
     let email: String
     let status: String
     let expiresAt: String?
     let issuedAt: String
+    let tier: String
 
     private enum CodingKeys: String, CodingKey {
+        case billingCycle = "billing_cycle"
         case licenseKey = "license_key"
         case email
         case status
         case expiresAt = "expires_at"
         case issuedAt = "issued_at"
+        case tier
     }
 
     /// Custom encode to explicitly write null for nil optionals.
     /// The auto-synthesized Codable uses encodeIfPresent which omits nil keys,
-    /// but PHP's json_encode includes "expires_at":null — the signed JSON must match exactly.
+    /// but PHP's json_encode includes null values — the signed JSON must match exactly.
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        if let billingCycle {
+            try container.encode(billingCycle, forKey: .billingCycle)
+        } else {
+            try container.encodeNil(forKey: .billingCycle)
+        }
         try container.encode(licenseKey, forKey: .licenseKey)
         try container.encode(email, forKey: .email)
         try container.encode(status, forKey: .status)
@@ -66,6 +75,7 @@ struct LicensePayloadData: Codable, Equatable {
             try container.encodeNil(forKey: .expiresAt)
         }
         try container.encode(issuedAt, forKey: .issuedAt)
+        try container.encode(tier, forKey: .tier)
     }
 }
 
@@ -121,6 +131,37 @@ struct LicenseAPIErrorResponse: Codable {
     let message: String
 }
 
+/// Information about a single license activation (machine)
+internal struct LicenseActivationInfo: Codable, Identifiable {
+    var id: String { machineId }
+    let machineId: String
+    let machineName: String
+    let appVersion: String
+    let osVersion: String
+    let lastValidatedAt: String?
+    let createdAt: String
+
+    private enum CodingKeys: String, CodingKey {
+        case machineId = "machine_id"
+        case machineName = "machine_name"
+        case appVersion = "app_version"
+        case osVersion = "os_version"
+        case lastValidatedAt = "last_validated_at"
+        case createdAt = "created_at"
+    }
+}
+
+/// Response from the list activations endpoint
+internal struct ListActivationsResponse: Codable {
+    let activations: [LicenseActivationInfo]
+    let maxActivations: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case activations
+        case maxActivations = "max_activations"
+    }
+}
+
 // MARK: - Cached License
 
 /// Local cached license with metadata for offline use
@@ -132,11 +173,19 @@ struct License: Codable, Equatable {
     var lastValidatedAt: Date
     var machineId: String
     var signedPayload: SignedLicensePayload
+    var tier: String
+    var billingCycle: String?
 
     /// Whether the license has expired based on expiration date
     var isExpired: Bool {
         guard let expiresAt else { return false }
         return expiresAt < Date()
+    }
+
+    /// Days until the license expires (nil for lifetime licenses)
+    var daysUntilExpiry: Int? {
+        guard let expiresAt else { return nil }
+        return Calendar.current.dateComponents([.day], from: Date(), to: expiresAt).day
     }
 
     /// Days since last successful server validation
@@ -171,7 +220,9 @@ struct License: Codable, Equatable {
             expiresAt: expiresAt,
             lastValidatedAt: Date(),
             machineId: machineId,
-            signedPayload: signedPayload
+            signedPayload: signedPayload,
+            tier: payload.tier,
+            billingCycle: payload.billingCycle
         )
     }
 }
@@ -195,27 +246,54 @@ enum LicenseError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidKey:
-            return "The license key is invalid."
+            return String(localized: "The license key is invalid.")
         case .signatureInvalid:
-            return "License signature verification failed."
+            return String(localized: "License signature verification failed.")
         case .publicKeyNotFound:
-            return "License public key not found in app bundle."
+            return String(localized: "License public key not found in app bundle.")
         case .publicKeyInvalid:
-            return "License public key is invalid."
+            return String(localized: "License public key is invalid.")
         case .activationLimitReached:
-            return "Maximum number of activations reached."
+            return String(localized: "Maximum number of activations reached.")
         case .licenseExpired:
-            return "The license has expired."
+            return String(localized: "The license has expired.")
         case .licenseSuspended:
-            return "The license has been suspended."
+            return String(localized: "The license has been suspended.")
         case .notActivated:
-            return "This machine is not activated."
+            return String(localized: "This machine is not activated.")
         case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
+            return String(localized: "Network error: \(error.localizedDescription)")
         case .serverError(let code, let message):
-            return "Server error (\(code)): \(message)"
+            return String(localized: "Server error (\(code)): \(message)")
         case .decodingError(let error):
-            return "Failed to parse server response: \(error.localizedDescription)"
+            return String(localized: "Failed to parse server response: \(error.localizedDescription)")
+        }
+    }
+
+    /// User-friendly description suitable for display in activation dialogs
+    var friendlyDescription: String {
+        switch self {
+        case .invalidKey:
+            return String(localized: "That doesn't look like a valid license key. Check for typos and try again.")
+        case .activationLimitReached:
+            return String(localized: "This license has reached its activation limit. Deactivate another Mac first.")
+        case .licenseExpired:
+            return String(localized: "This license has expired. Renew it to continue using Pro features.")
+        case .licenseSuspended:
+            return String(localized: "This license has been suspended. Contact support for help.")
+        case .networkError:
+            return String(localized: "Could not reach the license server. Check your internet connection and try again.")
+        case .serverError(let code, _):
+            if code == 422 {
+                return String(localized: "Invalid license key format. Check for typos and try again.")
+            }
+            return String(localized: "Something went wrong (error \(code)). Try again in a moment.")
+        case .signatureInvalid, .publicKeyNotFound, .publicKeyInvalid:
+            return String(localized: "License verification failed. Try updating the app to the latest version.")
+        case .notActivated:
+            return String(localized: "This machine is not activated for this license.")
+        case .decodingError:
+            return String(localized: "Could not read the server response. Try again in a moment.")
         }
     }
 }

@@ -15,12 +15,12 @@ extension TableViewCoordinator {
         guard columnId != "__rowNumber__",
               !changeManager.isRowDeleted(row) else { return false }
 
-        // MongoDB _id is immutable — block editing
-        if databaseType == .mongodb,
+        let immutable = databaseType.map { PluginManager.shared.immutableColumns(for: $0) } ?? []
+        if !immutable.isEmpty,
            columnId.hasPrefix("col_"),
            let columnIndex = Int(columnId.dropFirst(4)),
            columnIndex < rowProvider.columns.count,
-           rowProvider.columns[columnIndex] == "_id" {
+           immutable.contains(rowProvider.columns[columnIndex]) {
             return false
         }
 
@@ -34,12 +34,18 @@ extension TableViewCoordinator {
             }
             if columnIndex < rowProvider.columnTypes.count {
                 let ct = rowProvider.columnTypes[columnIndex]
-                if ct.isDateType || ct.isJsonType || ct.isEnumType || ct.isSetType { return false }
+                if ct.isDateType || ct.isJsonType || ct.isEnumType || ct.isSetType || ct.isBlobType { return false }
             }
             if let dropdownCols = dropdownColumns, dropdownCols.contains(columnIndex) {
                 return false
             }
             if let typePickerCols = typePickerColumns, typePickerCols.contains(columnIndex) {
+                return false
+            }
+
+            // Text columns containing JSON use JSON editor popover
+            if let value = rowProvider.value(atRow: row, column: columnIndex),
+               value.looksLikeJson {
                 return false
             }
 

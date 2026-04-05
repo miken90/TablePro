@@ -17,17 +17,13 @@ struct BrowsePluginsView: View {
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
 
+    private var selectedRegistryPlugin: RegistryPlugin? {
+        guard let selectedPluginId else { return nil }
+        return registryClient.manifest?.plugins.first { $0.id == selectedPluginId }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            searchAndFilterBar
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-            Divider()
-                .padding(.top, 8)
-
-            contentView
-        }
+        mainContent
         .task {
             if registryClient.fetchState == .idle {
                 await registryClient.fetchManifest()
@@ -39,133 +35,180 @@ struct BrowsePluginsView: View {
         } message: {
             Text(errorMessage)
         }
-    }
-
-    // MARK: - Search & Filter
-
-    @ViewBuilder
-    private var searchAndFilterBar: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search plugins...", text: $searchText)
-                    .textFieldStyle(.plain)
-
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(8)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    FilterChip(title: "All", isSelected: selectedCategory == nil) {
-                        selectedCategory = nil
-                    }
-
-                    ForEach(RegistryCategory.allCases) { category in
-                        FilterChip(
-                            title: category.displayName,
-                            isSelected: selectedCategory == category
-                        ) {
-                            selectedCategory = category
-                        }
-                    }
-                }
-            }
+        .onChange(of: searchText) {
+            clearSelectionIfNeeded()
+        }
+        .onChange(of: selectedCategory) {
+            clearSelectionIfNeeded()
         }
     }
 
-    // MARK: - Content
+    // MARK: - Main Content
 
     @ViewBuilder
-    private var contentView: some View {
+    private var mainContent: some View {
         switch registryClient.fetchState {
         case .idle, .loading:
-            VStack {
-                Spacer()
-                ProgressView("Loading plugins...")
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .loaded:
             let plugins = registryClient.search(query: searchText, category: selectedCategory)
-            if plugins.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Image(systemName: "puzzlepiece.extension")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text("No plugins found")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(plugins) { plugin in
-                            VStack(spacing: 0) {
-                                RegistryPluginRow(
-                                    plugin: plugin,
-                                    isInstalled: isPluginInstalled(plugin.id),
-                                    installProgress: installTracker.state(for: plugin.id),
-                                    downloadCount: downloadCountService.downloadCount(for: plugin.id),
-                                    onInstall: { installPlugin(plugin) },
-                                    onToggleDetail: {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            selectedPluginId = selectedPluginId == plugin.id ? nil : plugin.id
-                                        }
-                                    }
-                                )
-
-                                if selectedPluginId == plugin.id {
-                                    RegistryPluginDetailView(
-                                        plugin: plugin,
-                                        isInstalled: isPluginInstalled(plugin.id),
-                                        installProgress: installTracker.state(for: plugin.id),
-                                        downloadCount: downloadCountService.downloadCount(for: plugin.id),
-                                        onInstall: { installPlugin(plugin) }
-                                    )
-                                }
-
-                                Divider()
+            HSplitView {
+                VStack(spacing: 0) {
+                    HStack(spacing: 6) {
+                        TextField("Search...", text: $searchText)
+                            .textFieldStyle(.roundedBorder)
+                        Picker("", selection: $selectedCategory) {
+                            Text("All").tag(RegistryCategory?.none)
+                            ForEach(RegistryCategory.allCases) { category in
+                                Text(category.displayName).tag(RegistryCategory?.some(category))
                             }
                         }
+                        .labelsHidden()
+                        .fixedSize()
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+
+                    if plugins.isEmpty {
+                        ContentUnavailableView.search(text: searchText)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(plugins, selection: $selectedPluginId) { plugin in
+                            browseRow(plugin)
+                                .tag(plugin.id)
+                        }
+                        .listStyle(.inset)
+                    }
                 }
+                .frame(minWidth: 200, idealWidth: 240, maxWidth: 280)
+
+                detailContent
+                    .frame(minWidth: 340)
             }
 
         case .failed(let message):
-            VStack(spacing: 12) {
-                Spacer()
-                Image(systemName: "wifi.slash")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text("Failed to load plugin registry")
-                    .font(.headline)
+            ContentUnavailableView {
+                Label("Failed to Load", systemImage: "wifi.slash")
+            } description: {
                 Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } actions: {
                 Button("Try Again") {
                     Task {
                         await registryClient.fetchManifest(forceRefresh: true)
+                        await downloadCountService.fetchCounts(for: registryClient.manifest)
                     }
                 }
                 .buttonStyle(.bordered)
-                Spacer()
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: - Browse Row
+
+    @ViewBuilder
+    private func browseRow(_ plugin: RegistryPlugin) -> some View {
+        HStack(spacing: 8) {
+            PluginIconView(name: plugin.iconName ?? "puzzlepiece")
+                .font(.title3)
+                .frame(width: 24, height: 24)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(plugin.name)
+                        .lineLimit(1)
+                    if plugin.isVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(.blue)
+                            .font(.caption2)
+                    }
+                }
+
+                HStack(spacing: 4) {
+                    Text("v\(plugin.version)")
+                    Text("·")
+                    Text(plugin.author.name)
+                        .lineLimit(1)
+                    if let count = downloadCountService.downloadCount(for: plugin.id) {
+                        Text("·")
+                        Text("\(Image(systemName: "arrow.down.circle")) \(formattedCount(count))")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            rowStatusBadge(for: plugin)
+        }
+        .padding(.vertical, 2)
+    }
+
+    // MARK: - Row Status Badge
+
+    @ViewBuilder
+    private func rowStatusBadge(for plugin: RegistryPlugin) -> some View {
+        if isPluginInstalled(plugin.id) {
+            Text("Installed")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else if let progress = installTracker.state(for: plugin.id) {
+            switch progress.phase {
+            case .downloading(let fraction):
+                ProgressView(value: fraction)
+                    .frame(width: 40)
+                    .progressViewStyle(.linear)
+            case .installing:
+                ProgressView()
+                    .controlSize(.mini)
+            case .completed:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.caption)
+            case .failed:
+                Button("Retry") { installPlugin(plugin) }
+                    .controlSize(.mini)
+            }
+        } else {
+            Button("Install") { installPlugin(plugin) }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+        }
+    }
+
+    private func formattedCount(_ count: Int) -> String {
+        if count >= 1_000 {
+            return String(format: "%.1fk", Double(count) / 1_000.0)
+        }
+        return "\(count)"
+    }
+
+    // MARK: - Detail
+
+    @ViewBuilder
+    private var detailContent: some View {
+        if let selectedPlugin = selectedRegistryPlugin {
+            RegistryPluginDetailView(
+                plugin: selectedPlugin,
+                isInstalled: isPluginInstalled(selectedPlugin.id),
+                installProgress: installTracker.state(for: selectedPlugin.id),
+                downloadCount: downloadCountService.downloadCount(for: selectedPlugin.id),
+                onInstall: { installPlugin(selectedPlugin) }
+            )
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "puzzlepiece.extension")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.tertiary)
+                Text("Select a plugin to view details")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -173,16 +216,26 @@ struct BrowsePluginsView: View {
 
     private func isPluginInstalled(_ pluginId: String) -> Bool {
         pluginManager.plugins.contains { $0.id == pluginId }
+            || ThemeRegistryInstaller.shared.isInstalled(pluginId)
     }
 
     private func installPlugin(_ plugin: RegistryPlugin) {
         Task {
             installTracker.beginInstall(pluginId: plugin.id)
             do {
-                _ = try await pluginManager.installFromRegistry(plugin) { fraction in
-                    installTracker.updateProgress(pluginId: plugin.id, fraction: fraction)
-                    if fraction >= 1.0 {
-                        installTracker.markInstalling(pluginId: plugin.id)
+                if plugin.category == .theme {
+                    try await ThemeRegistryInstaller.shared.install(plugin) { fraction in
+                        installTracker.updateProgress(pluginId: plugin.id, fraction: fraction)
+                        if fraction >= 1.0 {
+                            installTracker.markInstalling(pluginId: plugin.id)
+                        }
+                    }
+                } else {
+                    _ = try await pluginManager.installFromRegistry(plugin) { fraction in
+                        installTracker.updateProgress(pluginId: plugin.id, fraction: fraction)
+                        if fraction >= 1.0 {
+                            installTracker.markInstalling(pluginId: plugin.id)
+                        }
                     }
                 }
                 installTracker.completeInstall(pluginId: plugin.id)
@@ -193,31 +246,12 @@ struct BrowsePluginsView: View {
             }
         }
     }
-}
 
-// MARK: - Filter Chip
-
-private struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    isSelected ? Color.accentColor.opacity(0.15) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 6)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1)
-                )
+    private func clearSelectionIfNeeded() {
+        guard let selectedPluginId else { return }
+        let plugins = registryClient.search(query: searchText, category: selectedCategory)
+        if !plugins.contains(where: { $0.id == selectedPluginId }) {
+            self.selectedPluginId = nil
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(isSelected ? .primary : .secondary)
     }
 }

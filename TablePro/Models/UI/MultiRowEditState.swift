@@ -10,14 +10,15 @@ import Foundation
 import Observation
 
 /// Represents the edit state for a single field across multiple rows
-struct FieldEditState {
+struct FieldEditState: Identifiable {
+    var id = UUID()
     let columnIndex: Int
     let columnName: String
     let columnTypeEnum: ColumnType
     let isLongText: Bool
 
     /// Original values from all selected rows (nil if multiple different values)
-    let originalValue: String?
+    var originalValue: String?
 
     /// Flag indicating if selected rows have different values for this field
     let hasMultipleValues: Bool
@@ -30,6 +31,12 @@ struct FieldEditState {
 
     /// Whether user has explicitly set this field to DEFAULT
     var isPendingDefault: Bool
+
+    /// Whether this field's value was truncated by column exclusion policy
+    var isTruncated: Bool = false
+
+    /// Whether full value is currently being lazy-loaded
+    var isLoadingFullValue: Bool = false
 
     var hasEdit: Bool {
         pendingValue != nil || isPendingNull || isPendingDefault
@@ -67,8 +74,9 @@ final class MultiRowEditState {
         selectedRowIndices: Set<Int>,
         allRows: [[String?]],
         columns: [String],
-        columnTypes: [ColumnType],  // Changed from [String] to [ColumnType]
-        externallyModifiedColumns: Set<Int> = []
+        columnTypes: [ColumnType],
+        externallyModifiedColumns: Set<Int> = [],
+        excludedColumnNames: Set<String> = []
     ) {
         // Check if the underlying data has changed (not just edits)
         let columnsChanged = self.columns != columns
@@ -94,8 +102,8 @@ final class MultiRowEditState {
             }
 
             // Check if all values are the same
-            let uniqueValues = Set(values.map { $0 ?? "__NULL__" })
-            let hasMultipleValues = uniqueValues.count > 1
+            let allSame = values.dropFirst().allSatisfy { $0 == values.first }
+            let hasMultipleValues = !allSame
 
             let originalValue: String?
             if hasMultipleValues {
@@ -106,16 +114,30 @@ final class MultiRowEditState {
             }
 
             // Preserve pending edits if data hasn't changed
+            var preservedId: UUID?
             var pendingValue: String?
             var isPendingNull = false
             var isPendingDefault = false
 
+            let isExcluded = excludedColumnNames.contains(columnName)
+            var preservedOriginalValue: String? = originalValue
+            var preservedIsTruncated = isExcluded
+            var preservedIsLoadingFullValue = isExcluded
+
             if !columnsChanged, !selectionChanged, colIndex < fields.count {
                 let oldField = fields[colIndex]
+                // Preserve pending edits when original data matches
                 if oldField.originalValue == originalValue && oldField.hasMultipleValues == hasMultipleValues {
+                    preservedId = oldField.id
                     pendingValue = oldField.pendingValue
                     isPendingNull = oldField.isPendingNull
                     isPendingDefault = oldField.isPendingDefault
+                }
+                // Preserve resolved truncation state — don't reset already-fetched full values
+                if isExcluded && !oldField.isTruncated && oldField.columnName == columnName {
+                    preservedOriginalValue = oldField.originalValue
+                    preservedIsTruncated = false
+                    preservedIsLoadingFullValue = false
                 }
             }
 
@@ -124,17 +146,23 @@ final class MultiRowEditState {
                 pendingValue = originalValue ?? ""
             }
 
-            newFields.append(FieldEditState(
+            var newField = FieldEditState(
                 columnIndex: colIndex,
                 columnName: columnName,
                 columnTypeEnum: columnTypeEnum,
                 isLongText: isLongText,
-                originalValue: originalValue,
+                originalValue: preservedOriginalValue,
                 hasMultipleValues: hasMultipleValues,
                 pendingValue: pendingValue,
                 isPendingNull: isPendingNull,
-                isPendingDefault: isPendingDefault
-            ))
+                isPendingDefault: isPendingDefault,
+                isTruncated: preservedIsTruncated,
+                isLoadingFullValue: preservedIsLoadingFullValue
+            )
+            if let preservedId {
+                newField.id = preservedId
+            }
+            newFields.append(newField)
         }
 
         self.fields = newFields
@@ -200,6 +228,26 @@ final class MultiRowEditState {
         }
     }
 
+    /// Apply lazy-loaded full values for previously truncated columns
+    func applyFullValues(_ fullValues: [String: String?]) {
+        for i in 0..<fields.count {
+            guard let fullValue = fullValues[fields[i].columnName] else { continue }
+            fields[i] = FieldEditState(
+                columnIndex: fields[i].columnIndex,
+                columnName: fields[i].columnName,
+                columnTypeEnum: fields[i].columnTypeEnum,
+                isLongText: fields[i].isLongText,
+                originalValue: fullValue,
+                hasMultipleValues: fields[i].hasMultipleValues,
+                pendingValue: fields[i].pendingValue,
+                isPendingNull: fields[i].isPendingNull,
+                isPendingDefault: fields[i].isPendingDefault,
+                isTruncated: false,
+                isLoadingFullValue: false
+            )
+        }
+    }
+
     /// Clear all pending edits
     func clearEdits() {
         for i in 0..<fields.count {
@@ -222,7 +270,7 @@ final class MultiRowEditState {
     /// Get all edited fields with their new values
     func getEditedFields() -> [(columnIndex: Int, columnName: String, newValue: String?)] {
         fields.compactMap { field in
-            guard field.hasEdit else { return nil }
+            guard field.hasEdit, !field.isTruncated else { return nil }
             return (field.columnIndex, field.columnName, field.effectiveValue)
         }
     }

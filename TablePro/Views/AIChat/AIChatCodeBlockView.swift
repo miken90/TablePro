@@ -14,6 +14,7 @@ struct AIChatCodeBlockView: View {
     let language: String?
 
     @State private var isCopied: Bool = false
+    @FocusedValue(\.commandActions) private var actions
 
     var body: some View {
         GroupBox {
@@ -42,7 +43,8 @@ struct AIChatCodeBlockView: View {
             Button {
                 ClipboardService.shared.writeText(code)
                 isCopied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1.5))
                     isCopied = false
                 }
             } label: {
@@ -57,10 +59,7 @@ struct AIChatCodeBlockView: View {
 
             if isInsertable {
                 Button {
-                    NotificationCenter.default.post(
-                        name: .insertQueryFromAI,
-                        object: code
-                    )
+                    actions?.insertQueryFromAI(code)
                 } label: {
                     Label(String(localized: "Insert"), systemImage: "square.and.pencil")
                         .font(.caption2)

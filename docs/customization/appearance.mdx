@@ -1,6 +1,6 @@
 ---
 title: Appearance
-description: Theme modes, accent colors, connection colors, and database type color coding
+description: Theme engine with built-in presets, custom themes, color and font customization, import/export
 ---
 
 # Appearance Settings
@@ -8,7 +8,7 @@ description: Theme modes, accent colors, connection colors, and database type co
 Configure how TablePro looks in **Settings** > **Appearance**.
 
 {/* Screenshot: Appearance settings panel */}
-<Frame caption="Appearance settings">
+<Frame caption="Appearance settings with theme editor">
   <img
     className="block dark:hidden"
     src="/images/settings-appearance.png"
@@ -21,23 +21,44 @@ Configure how TablePro looks in **Settings** > **Appearance**.
   />
 </Frame>
 
-## Theme
+## Theme Engine
 
-Three theme modes:
+TablePro ships with 9 built-in themes and supports custom themes. Community themes are available from the plugin registry. Each theme controls editor syntax colors, data grid colors, sidebar/toolbar styling, fonts, spacing, and layout tokens.
 
-| Theme | Description |
-|-------|-------------|
-| **System** | Matches macOS appearance automatically (default) |
-| **Light** | Always light |
-| **Dark** | Always dark |
+### Theme Editor Layout
 
-### System Theme
+The Appearance tab is a split view with two panels:
 
-When set to **System**, TablePro follows your macOS appearance:
+- **Left panel**: Sections for "Built-in", "Registry", and "Custom". Each row shows a color thumbnail, theme name, and source label. Select a theme to activate and edit it.
+- **Right panel**: Three tabs: Fonts, Colors, and Layout.
 
-1. Open **System Settings** > **Appearance**
-2. Choose Light, Dark, or Auto
-3. TablePro updates automatically
+At the bottom of the sidebar, an action bar provides:
+
+| Button | Action |
+|--------|--------|
+| **+** menu | New Theme, Import... |
+| **-** button | Delete selected theme (disabled for built-in and registry themes) |
+| **Gear** menu | Duplicate, Export..., Uninstall (registry themes only) |
+
+### Built-in Themes
+
+| Theme | Appearance | Based On |
+|-------|------------|----------|
+| **Default Light** | Light | macOS system colors |
+| **Default Dark** | Dark | macOS system colors |
+| **Dracula** | Dark | Dracula color scheme |
+| **Solarized Light** | Light | Ethan Schoonover's Solarized |
+| **Solarized Dark** | Dark | Ethan Schoonover's Solarized |
+| **One Dark** | Dark | Atom One Dark |
+| **GitHub Light** | Light | GitHub UI |
+| **GitHub Dark** | Dark | GitHub UI |
+| **Nord** | Dark | Arctic north-bluish palette |
+
+### Appearance Mode
+
+Pick **Light**, **Dark**, or **Auto** at the top. Light and Dark each store a separate preferred theme. Auto follows the system and switches between the two automatically.
+
+When you select a theme from the list, it becomes the preferred theme for that theme's appearance (light or dark). Selecting a dark theme while in Light mode switches to Dark mode so you see the change right away.
 
 {/* Screenshot: Side-by-side light and dark themes */}
 <Frame caption="Light vs Dark theme">
@@ -53,86 +74,17 @@ When set to **System**, TablePro follows your macOS appearance:
   />
 </Frame>
 
-### Light Theme
+## Customizing Themes
 
-- White/light gray backgrounds
-- Dark text for readability
-- Good for well-lit environments
-- Lower contrast for bright rooms
+Select a theme and edit directly. Built-in themes auto-duplicate when you change colors or layout, preserving the original. Font changes apply without duplication.
 
-### Dark Theme
+## Import, Export & Registry
 
-- Dark gray/black backgrounds
-- Light text for contrast
-- Reduces eye strain in low light
-- Lower battery usage on OLED displays
-
-<Tip>
-Dark theme works well for long sessions, especially in dim environments.
-</Tip>
-
-## Accent Color
-
-| Option | Description |
-|--------|-------------|
-| **System** | Uses your macOS accent color |
-| **Blue** | Classic blue |
-| **Purple** | Purple |
-| **Pink** | Pink |
-| **Red** | Red |
-| **Orange** | Orange |
-| **Yellow** | Yellow |
-| **Green** | Green |
-| **Graphite** | Gray/neutral |
-
-### Where Accent Color Appears
-
-- Selected items and highlights
-- Buttons and interactive elements
-- Progress indicators
-- Focus rings
-- Active tab indicators
-
-{/* Screenshot: Different accent colors applied */}
-<Frame caption="Accent color options">
-  <img
-    className="block dark:hidden"
-    src="/images/accent-colors.png"
-    alt="Accent colors"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/accent-colors-dark.png"
-    alt="Accent colors"
-  />
-</Frame>
-
-{/* Screenshot: Accent color applied to UI */}
-<Frame caption="Accent color applied to UI elements">
-  <img
-    className="block dark:hidden"
-    src="/images/accent-color-applied.png"
-    alt="Accent color applied to UI elements"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/accent-color-applied-dark.png"
-    alt="Accent color applied to UI elements"
-  />
-</Frame>
-
-### Matching macOS
-
-To use your system accent color:
-
-1. Set TablePro's accent color to **System**
-2. Open **System Settings** > **Appearance**
-3. Pick your preferred accent color
-4. TablePro updates automatically
+Export custom themes as JSON. Import from files or install from the plugin registry (**Settings > Plugins > Browse**, filter by Themes). Registry themes are read-only; duplicate to customize.
 
 ## Connection Colors
 
-Assign colors to connections for visual organization:
+Color-code connections for quick identification:
 
 | Color | Suggested Use |
 |-------|---------------|
@@ -224,111 +176,3 @@ These appear on:
   />
 </Frame>
 
-## Editor Theme
-
-SQL syntax highlighting colors:
-
-| Element | Color |
-|---------|-------|
-| Keywords | Pink |
-| Strings | Green |
-| Numbers | Blue |
-| Comments | Gray |
-| Identifiers | Default text color |
-
-Colors automatically adapt to light/dark theme.
-
-## UI Elements
-
-### Status Colors
-
-| Color | Meaning |
-|-------|---------|
-| Green | Success, connected, valid |
-| Orange | Warning, in progress, connecting |
-| Red | Error, failed, invalid |
-| Blue | Information |
-| Gray | Neutral, disconnected |
-
-### Data Type Colors
-
-In the data grid:
-
-| Type | Display |
-|------|---------|
-| NULL | Gray, italicized |
-| Boolean True | Green |
-| Boolean False | Red |
-| Numbers | Standard color |
-| Text | Standard color |
-
-## Best Practices
-
-### For Readability
-
-1. **Match environment**: Dark theme in low light, light in bright rooms
-2. **Contrast**: Make sure contrast is sufficient for your lighting
-3. **Font size**: Increase if text is hard to read
-
-### For Organization
-
-1. **Connection colors**: Pick a consistent color scheme
-2. **Environment coding**: Red=prod, green=dev, etc.
-3. **Team conventions**: Agree on color meanings with your team
-
-### For Eye Health
-
-1. **Dark theme at night**: Reduces blue light exposure
-2. **Take breaks**: Look away from screen periodically
-3. **Night Shift**: Enable macOS Night Shift for warmer colors
-
-## Accessibility
-
-### Color Blindness
-
-1. Don't rely on color alone for meaning
-2. Connection names provide text identification
-3. Icons supplement color information
-
-### High Contrast
-
-1. Use light or dark theme (not auto)
-2. Choose high-contrast accent colors (blue, green)
-3. Increase font sizes in editor settings
-
-## Troubleshooting
-
-### Theme Not Changing
-
-1. Restart TablePro after changing settings
-2. Check macOS appearance if using System theme
-3. Verify settings were saved
-
-### Colors Look Wrong
-
-1. Check display color profile in System Settings
-2. Verify monitor calibration
-3. Check True Tone settings on supported displays
-
-### Accent Color Not Applying
-
-1. Restart TablePro
-2. Set to a specific color instead of System
-3. Check for conflicting system extensions
-
-## Related Settings
-
-<CardGroup cols={2}>
-  <Card title="Editor Settings" icon="code" href="/customization/editor-settings">
-    Font and editor appearance
-  </Card>
-  <Card title="Settings Overview" icon="gear" href="/customization/settings">
-    All settings categories
-  </Card>
-  <Card title="Data Grid" icon="table" href="/features/data-grid">
-    Configure data display
-  </Card>
-  <Card title="Connections" icon="plug" href="/databases/overview">
-    Connection color settings
-  </Card>
-</CardGroup>

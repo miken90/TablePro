@@ -9,6 +9,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import TableProPluginKit
 
 // MARK: - Connection Environment
 
@@ -173,8 +174,14 @@ final class ConnectionToolbarState {
     /// Whether the current tab is a table tab (enables filter/sort actions)
     var isTableTab: Bool = false
 
-    /// Whether there are pending changes to preview
+    /// Whether the results panel is collapsed
+    var isResultsCollapsed: Bool = false
+
+    /// Whether there are pending changes (data grid or file)
     var hasPendingChanges: Bool = false
+
+    /// Whether there are pending data grid changes (for SQL preview button)
+    var hasDataPendingChanges: Bool = false
 
     /// Whether the SQL review popover is showing
     var showSQLReviewPopover: Bool = false
@@ -212,9 +219,7 @@ final class ConnectionToolbarState {
             parts.append(String(localized: "Replication lag: \(lag)s"))
         }
 
-        if safeModeLevel != .silent {
-            parts.append(safeModeLevel.displayName)
-        }
+        parts.append(safeModeLevel.displayName)
 
         return parts.joined(separator: " • ")
     }
@@ -233,15 +238,11 @@ final class ConnectionToolbarState {
     /// Update state from a DatabaseConnection model
     func update(from connection: DatabaseConnection) {
         connectionName = connection.name
-        if connection.type == .sqlite {
+        if PluginManager.shared.connectionMode(for: connection.type) == .fileBased {
             databaseName = (connection.database as NSString).lastPathComponent
-        } else if connection.type == .postgresql {
-            if let session = DatabaseManager.shared.session(for: connection.id),
-               let database = session.currentDatabase {
-                databaseName = database
-            } else {
-                databaseName = connection.database
-            }
+        } else if let session = DatabaseManager.shared.session(for: connection.id),
+                  let database = session.currentDatabase {
+            databaseName = database
         } else {
             databaseName = connection.database
         }

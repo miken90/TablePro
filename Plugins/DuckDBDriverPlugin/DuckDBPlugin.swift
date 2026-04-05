@@ -21,12 +21,15 @@ final class DuckDBPlugin: NSObject, TableProPlugin, DriverPlugin {
 
     // MARK: - UI/Capability Metadata
 
+    static let isDownloadable = true
+    static let pathFieldRole: PathFieldRole = .filePath
     static let requiresAuthentication = false
     static let connectionMode: ConnectionMode = .fileBased
     static let urlSchemes: [String] = ["duckdb"]
-    static let fileExtensions: [String] = ["duckdb", "db"]
+    static let fileExtensions: [String] = ["duckdb", "ddb"]
     static let brandColorHex = "#FFD900"
     static let supportsDatabaseSwitching = false
+    static let parameterStyle: ParameterStyle = .dollar
     static let systemDatabaseNames: [String] = ["information_schema", "pg_catalog"]
     static let databaseGroupingStrategy: GroupingStrategy = .flat
     static let columnTypesByCategory: [String: [String]] = [
@@ -44,6 +47,56 @@ final class DuckDBPlugin: NSObject, TableProPlugin, DriverPlugin {
         "Union": ["UNION"],
         "Enum": ["ENUM"]
     ]
+
+    static let sqlDialect: SQLDialectDescriptor? = SQLDialectDescriptor(
+        identifierQuote: "\"",
+        keywords: [
+            "SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "OUTER", "CROSS", "FULL",
+            "ON", "USING", "AND", "OR", "NOT", "IN", "LIKE", "ILIKE", "BETWEEN", "AS",
+            "ORDER", "BY", "GROUP", "HAVING", "LIMIT", "OFFSET", "FETCH", "FIRST", "ROWS", "ONLY",
+            "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE",
+            "CREATE", "ALTER", "DROP", "TABLE", "INDEX", "VIEW", "DATABASE", "SCHEMA",
+            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "UNIQUE", "CONSTRAINT",
+            "ADD", "MODIFY", "COLUMN", "RENAME",
+            "NULL", "IS", "ASC", "DESC", "DISTINCT", "ALL", "ANY", "SOME",
+            "CASE", "WHEN", "THEN", "ELSE", "END", "COALESCE", "NULLIF",
+            "UNION", "INTERSECT", "EXCEPT",
+            "COPY", "PRAGMA", "DESCRIBE", "SUMMARIZE", "PIVOT", "UNPIVOT",
+            "QUALIFY", "SAMPLE", "TABLESAMPLE", "RETURNING",
+            "INSTALL", "LOAD", "FORCE", "ATTACH", "DETACH",
+            "EXPORT", "IMPORT",
+            "WITH", "RECURSIVE", "MATERIALIZED",
+            "EXPLAIN", "ANALYZE",
+            "WINDOW", "OVER", "PARTITION"
+        ],
+        functions: [
+            "COUNT", "SUM", "AVG", "MAX", "MIN",
+            "LIST_AGG", "STRING_AGG", "ARRAY_AGG",
+            "CONCAT", "SUBSTRING", "LEFT", "RIGHT", "LENGTH", "LOWER", "UPPER",
+            "TRIM", "LTRIM", "RTRIM", "REPLACE", "SPLIT_PART",
+            "NOW", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+            "DATE_TRUNC", "EXTRACT", "AGE", "TO_CHAR", "TO_DATE",
+            "EPOCH_MS",
+            "ROUND", "CEIL", "CEILING", "FLOOR", "ABS", "MOD", "POW", "POWER", "SQRT",
+            "CAST",
+            "REGEXP_MATCHES", "READ_CSV", "READ_PARQUET", "READ_JSON",
+            "GLOB", "STRUCT_PACK", "LIST_VALUE", "MAP", "UNNEST",
+            "GENERATE_SERIES", "RANGE"
+        ],
+        dataTypes: [
+            "INTEGER", "BIGINT", "HUGEINT", "UHUGEINT",
+            "DOUBLE", "FLOAT", "DECIMAL",
+            "VARCHAR", "TEXT", "BLOB",
+            "BOOLEAN",
+            "DATE", "TIME", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "INTERVAL",
+            "UUID", "JSON",
+            "LIST", "MAP", "STRUCT", "UNION", "ENUM", "BIT"
+        ],
+        regexSyntax: .regexpMatches,
+        booleanLiteralStyle: .truefalse,
+        likeEscapeStyle: .explicit,
+        paginationStyle: .limit
+    )
 
     func createDriver(config: DriverConnectionConfig) -> any PluginDatabaseDriver {
         DuckDBPluginDriver(config: config)
@@ -134,7 +187,9 @@ private actor DuckDBConnectionActor {
             duckdb_destroy_result(&result)
         }
 
-        return Self.extractResult(from: &result, startTime: startTime)
+        var raw = Self.extractResult(from: &result, startTime: startTime)
+        Self.patchTzColumns(&raw, query: query, connection: conn)
+        return raw
     }
 
     func executePrepared(_ query: String, parameters: [String?]) throws -> DuckDBRawResult {
@@ -198,7 +253,9 @@ private actor DuckDBConnectionActor {
             duckdb_destroy_result(&result)
         }
 
-        return Self.extractResult(from: &result, startTime: startTime)
+        var raw = Self.extractResult(from: &result, startTime: startTime)
+        Self.patchTzColumns(&raw, query: query, connection: conn)
+        return raw
     }
 
     private static func extractResult(
@@ -211,6 +268,7 @@ private actor DuckDBConnectionActor {
 
         var columns: [String] = []
         var columnTypeNames: [String] = []
+        var columnTypes: [duckdb_type] = []
 
         for i in 0..<colCount {
             if let namePtr = duckdb_column_name(&result, i) {
@@ -220,6 +278,7 @@ private actor DuckDBConnectionActor {
             }
 
             let colType = duckdb_column_type(&result, i)
+            columnTypes.append(colType)
             columnTypeNames.append(Self.typeName(for: colType))
         }
 
@@ -241,7 +300,7 @@ private actor DuckDBConnectionActor {
                     rowData.append(String(cString: valPtr))
                     duckdb_free(valPtr)
                 } else {
-                    rowData.append(nil)
+                    rowData.append(Self.extractFallbackValue(&result, col: col, row: row, type: columnTypes[Int(col)]))
                 }
             }
 
@@ -291,15 +350,164 @@ private actor DuckDBConnectionActor {
         case DUCKDB_TYPE_UUID: return "UUID"
         case DUCKDB_TYPE_UNION: return "UNION"
         case DUCKDB_TYPE_BIT: return "BIT"
+        case DUCKDB_TYPE_TIMESTAMP_TZ: return "TIMESTAMPTZ"
+        case DUCKDB_TYPE_TIME_TZ: return "TIMETZ"
+        case DUCKDB_TYPE_TIME_NS: return "TIME_NS"
+        case DUCKDB_TYPE_UHUGEINT: return "UHUGEINT"
+        case DUCKDB_TYPE_ARRAY: return "ARRAY"
         default: return "VARCHAR"
         }
+    }
+
+    private static func extractFallbackValue(
+        _ result: inout duckdb_result, col: idx_t, row: idx_t, type: duckdb_type
+    ) -> String? {
+        switch type {
+        case DUCKDB_TYPE_TIMESTAMP, DUCKDB_TYPE_TIMESTAMP_S, DUCKDB_TYPE_TIMESTAMP_MS, DUCKDB_TYPE_TIMESTAMP_NS:
+            let ts = duckdb_value_timestamp(&result, col, row)
+            return formatTimestamp(ts)
+
+        case DUCKDB_TYPE_DATE:
+            let date = duckdb_value_date(&result, col, row)
+            let d = duckdb_from_date(date)
+            return String(format: "%04d-%02d-%02d", d.year, d.month, d.day)
+
+        case DUCKDB_TYPE_TIME, DUCKDB_TYPE_TIME_NS:
+            let time = duckdb_value_time(&result, col, row)
+            return formatTime(duckdb_from_time(time))
+
+        case DUCKDB_TYPE_BOOLEAN:
+            return duckdb_value_boolean(&result, col, row) ? "true" : "false"
+
+        case DUCKDB_TYPE_TINYINT:
+            return String(duckdb_value_int8(&result, col, row))
+        case DUCKDB_TYPE_SMALLINT:
+            return String(duckdb_value_int16(&result, col, row))
+        case DUCKDB_TYPE_INTEGER:
+            return String(duckdb_value_int32(&result, col, row))
+        case DUCKDB_TYPE_BIGINT:
+            return String(duckdb_value_int64(&result, col, row))
+        case DUCKDB_TYPE_UTINYINT:
+            return String(duckdb_value_uint8(&result, col, row))
+        case DUCKDB_TYPE_USMALLINT:
+            return String(duckdb_value_uint16(&result, col, row))
+        case DUCKDB_TYPE_UINTEGER:
+            return String(duckdb_value_uint32(&result, col, row))
+        case DUCKDB_TYPE_UBIGINT:
+            return String(duckdb_value_uint64(&result, col, row))
+        case DUCKDB_TYPE_FLOAT:
+            return String(duckdb_value_float(&result, col, row))
+        case DUCKDB_TYPE_DOUBLE:
+            return String(duckdb_value_double(&result, col, row))
+
+        case DUCKDB_TYPE_HUGEINT:
+            let h = duckdb_value_hugeint(&result, col, row)
+            return formatHugeInt(upper: h.upper, lower: h.lower)
+
+        case DUCKDB_TYPE_UHUGEINT:
+            let u = duckdb_value_uhugeint(&result, col, row)
+            return formatUHugeInt(upper: u.upper, lower: u.lower)
+
+        default:
+            return nil
+        }
+    }
+
+    /// DuckDB v1.5.0 C API: duckdb_value_varchar returns nil for TIMESTAMPTZ and TIMETZ,
+    /// and duckdb_value_is_null is unreliable for these types. The only reliable method
+    /// is re-executing the query with TZ columns cast to VARCHAR at the SQL level.
+    private static func patchTzColumns(
+        _ raw: inout DuckDBRawResult, query: String, connection: duckdb_connection
+    ) {
+        let tzTypes: Set<String> = ["TIMESTAMPTZ", "TIMETZ"]
+        let tzColIndices = raw.columnTypeNames.enumerated().compactMap { idx, name in
+            tzTypes.contains(name) ? idx : nil
+        }
+        guard !tzColIndices.isEmpty, !raw.rows.isEmpty else { return }
+
+        var castExprs: [String] = []
+        for (i, name) in raw.columns.enumerated() {
+            let escaped = name.replacingOccurrences(of: "\"", with: "\"\"")
+            if tzColIndices.contains(i) {
+                castExprs.append(
+                    "CASE WHEN \"\(escaped)\" IS NULL THEN NULL ELSE CAST(\"\(escaped)\" AS VARCHAR) END AS \"\(escaped)\""
+                )
+            } else {
+                castExprs.append("\"\(escaped)\"")
+            }
+        }
+
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            .hasSuffix(";") ? String(query.dropLast()) : query
+        let wrappedQuery = "SELECT \(castExprs.joined(separator: ", ")) FROM (\(trimmedQuery)) AS _tz_cast"
+        var patchResult = duckdb_result()
+        guard duckdb_query(connection, wrappedQuery, &patchResult) == DuckDBSuccess else { return }
+        defer { duckdb_destroy_result(&patchResult) }
+
+        let patchRowCount = min(duckdb_row_count(&patchResult), UInt64(raw.rows.count))
+        for row in 0..<patchRowCount {
+            for colIdx in tzColIndices {
+                if duckdb_value_is_null(&patchResult, idx_t(colIdx), row) {
+                    raw.rows[Int(row)][colIdx] = nil
+                } else if let ptr = duckdb_value_varchar(&patchResult, idx_t(colIdx), row) {
+                    raw.rows[Int(row)][colIdx] = String(cString: ptr)
+                    duckdb_free(ptr)
+                }
+            }
+        }
+    }
+
+    private static func formatTimestamp(_ ts: duckdb_timestamp) -> String {
+        let parts = duckdb_from_timestamp(ts)
+        let d = parts.date
+        let t = parts.time
+        let micros = t.micros % 1_000_000
+        if micros == 0 {
+            return String(
+                format: "%04d-%02d-%02d %02d:%02d:%02d",
+                d.year, d.month, d.day, t.hour, t.min, t.sec
+            )
+        }
+        return String(
+            format: "%04d-%02d-%02d %02d:%02d:%02d.%06d",
+            d.year, d.month, d.day, t.hour, t.min, t.sec, micros
+        )
+    }
+
+    private static func formatTime(_ t: duckdb_time_struct) -> String {
+        let micros = t.micros % 1_000_000
+        if micros == 0 {
+            return String(format: "%02d:%02d:%02d", t.hour, t.min, t.sec)
+        }
+        return String(format: "%02d:%02d:%02d.%06d", t.hour, t.min, t.sec, micros)
+    }
+
+    private static func formatHugeInt(upper: Int64, lower: UInt64) -> String {
+        if upper == 0 {
+            return String(lower)
+        }
+        if upper == -1, lower > Int64.max.magnitude {
+            let val = ~upper
+            let low = ~lower &+ 1
+            return "-\(formatUHugeInt(upper: UInt64(val), lower: low))"
+        }
+        return formatUHugeInt(upper: UInt64(upper), lower: lower)
+    }
+
+    private static func formatUHugeInt(upper: UInt64, lower: UInt64) -> String {
+        if upper == 0 {
+            return String(lower)
+        }
+        let upperDecimal = Decimal(upper) * Decimal(sign: .plus, exponent: 0, significand: Decimal(UInt64.max) + 1)
+        let result = upperDecimal + Decimal(lower)
+        return "\(result)"
     }
 }
 
 private struct DuckDBRawResult: Sendable {
     let columns: [String]
     let columnTypeNames: [String]
-    let rows: [[String?]]
+    var rows: [[String?]]
     let rowsAffected: Int
     let executionTime: TimeInterval
     let isTruncated: Bool
@@ -324,6 +532,7 @@ final class DuckDBPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     var serverVersion: String? { String(cString: duckdb_library_version()) }
     var supportsSchemas: Bool { true }
     var supportsTransactions: Bool { true }
+    var parameterStyle: ParameterStyle { .dollar }
 
     init(config: DriverConnectionConfig) {
         self.config = config
@@ -764,6 +973,38 @@ final class DuckDBPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
         throw DuckDBPluginError.unsupportedOperation
     }
 
+    // MARK: - EXPLAIN
+
+    func buildExplainQuery(_ sql: String) -> String? {
+        "EXPLAIN \(sql)"
+    }
+
+    // MARK: - View Templates
+
+    func createViewTemplate() -> String? {
+        "CREATE OR REPLACE VIEW view_name AS\nSELECT column1, column2\nFROM table_name\nWHERE condition;"
+    }
+
+    func editViewFallbackTemplate(viewName: String) -> String? {
+        let quoted = quoteIdentifier(viewName)
+        return "CREATE OR REPLACE VIEW \(quoted) AS\nSELECT * FROM table_name;"
+    }
+
+    // MARK: - All Tables Metadata
+
+    func allTablesMetadataSQL(schema: String?) -> String? {
+        let s = schema ?? currentSchema ?? "main"
+        return """
+        SELECT
+            table_schema as schema_name,
+            table_name as name,
+            table_type as kind
+        FROM information_schema.tables
+        WHERE table_schema = '\(s)'
+        ORDER BY table_name
+        """
+    }
+
     // MARK: - Private Helpers
 
     nonisolated private func setInterruptHandle(_ handle: duckdb_connection?) {
@@ -888,6 +1129,98 @@ final class DuckDBPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
         """
         let result = try await executeParameterized(query: query, parameters: [schema, table])
         return Set(result.rows.compactMap { $0[safe: 0] ?? nil })
+    }
+
+    // MARK: - Create Table DDL
+
+    func generateCreateTableSQL(definition: PluginCreateTableDefinition) -> String? {
+        guard !definition.columns.isEmpty else { return nil }
+
+        let schema = _currentSchema
+        let qualifiedTable = "\(quoteIdentifier(schema)).\(quoteIdentifier(definition.tableName))"
+        let pkColumns = definition.columns.filter { $0.isPrimaryKey }
+        let inlinePK = pkColumns.count == 1
+        var parts: [String] = definition.columns.map { duckdbColumnDefinition($0, inlinePK: inlinePK) }
+
+        if pkColumns.count > 1 {
+            let pkCols = pkColumns.map { quoteIdentifier($0.name) }.joined(separator: ", ")
+            parts.append("PRIMARY KEY (\(pkCols))")
+        }
+
+        for fk in definition.foreignKeys {
+            parts.append(duckdbForeignKeyDefinition(fk))
+        }
+
+        var sql = "CREATE TABLE \(qualifiedTable) (\n  " +
+            parts.joined(separator: ",\n  ") +
+            "\n);"
+
+        var indexStatements: [String] = []
+        for index in definition.indexes {
+            indexStatements.append(duckdbIndexDefinition(index, qualifiedTable: qualifiedTable))
+        }
+        if !indexStatements.isEmpty {
+            sql += "\n\n" + indexStatements.joined(separator: ";\n") + ";"
+        }
+
+        return sql
+    }
+
+    private func duckdbColumnDefinition(_ col: PluginColumnDefinition, inlinePK: Bool) -> String {
+        var dataType = col.dataType
+        if col.autoIncrement {
+            let upper = dataType.uppercased()
+            if upper == "BIGINT" || upper == "INT8" {
+                dataType = "BIGSERIAL"
+            } else {
+                dataType = "SERIAL"
+            }
+        }
+
+        var def = "\(quoteIdentifier(col.name)) \(dataType)"
+        if !col.autoIncrement {
+            if col.isNullable {
+                def += " NULL"
+            } else {
+                def += " NOT NULL"
+            }
+        }
+        if let defaultValue = col.defaultValue {
+            def += " DEFAULT \(duckdbDefaultValue(defaultValue))"
+        }
+        if inlinePK && col.isPrimaryKey {
+            def += " PRIMARY KEY"
+        }
+        return def
+    }
+
+    private func duckdbDefaultValue(_ value: String) -> String {
+        let upper = value.uppercased()
+        if upper == "NULL" || upper == "TRUE" || upper == "FALSE"
+            || upper == "CURRENT_TIMESTAMP" || upper == "NOW()"
+            || value.hasPrefix("'") || Int64(value) != nil || Double(value) != nil {
+            return value
+        }
+        return "'\(escapeStringLiteral(value))'"
+    }
+
+    private func duckdbIndexDefinition(_ index: PluginIndexDefinition, qualifiedTable: String) -> String {
+        let cols = index.columns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        let unique = index.isUnique ? "UNIQUE " : ""
+        return "CREATE \(unique)INDEX \(quoteIdentifier(index.name)) ON \(qualifiedTable) (\(cols))"
+    }
+
+    private func duckdbForeignKeyDefinition(_ fk: PluginForeignKeyDefinition) -> String {
+        let cols = fk.columns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        let refCols = fk.referencedColumns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        var def = "CONSTRAINT \(quoteIdentifier(fk.name)) FOREIGN KEY (\(cols)) REFERENCES \(quoteIdentifier(fk.referencedTable)) (\(refCols))"
+        if fk.onDelete != "NO ACTION" {
+            def += " ON DELETE \(fk.onDelete)"
+        }
+        if fk.onUpdate != "NO ACTION" {
+            def += " ON UPDATE \(fk.onUpdate)"
+        }
+        return def
     }
 
     private static let indexColumnsRegex = try? NSRegularExpression(

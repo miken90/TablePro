@@ -3,14 +3,49 @@
 //  TablePro
 
 import Foundation
+import TableProPluginKit
 
 internal struct SQLRowToStatementConverter {
     internal let tableName: String
     internal let columns: [String]
     internal let primaryKeyColumn: String?
     internal let databaseType: DatabaseType
+    private let quoteIdentifierFn: (String) -> String
+    private let escapeStringFn: (String) -> String
+
+    init(
+        tableName: String,
+        columns: [String],
+        primaryKeyColumn: String?,
+        databaseType: DatabaseType,
+        dialect: SQLDialectDescriptor? = nil,
+        quoteIdentifier: ((String) -> String)? = nil,
+        escapeStringLiteral: ((String) -> String)? = nil
+    ) {
+        self.tableName = tableName
+        self.columns = columns
+        self.primaryKeyColumn = primaryKeyColumn
+        self.databaseType = databaseType
+        self.quoteIdentifierFn = quoteIdentifier ?? quoteIdentifierFromDialect(dialect)
+        self.escapeStringFn = escapeStringLiteral ?? Self.defaultEscapeFunction(dialect: dialect)
+    }
 
     private static let maxRows = 50_000
+
+    /// Fallback escape function when no plugin driver is available.
+    /// Dialects with `requiresBackslashEscaping` get backslash escaping; others use ANSI SQL.
+    private static func defaultEscapeFunction(dialect: SQLDialectDescriptor?) -> (String) -> String {
+        if dialect?.requiresBackslashEscaping == true {
+            return { value in
+                var result = value
+                result = result.replacingOccurrences(of: "\\", with: "\\\\")
+                result = result.replacingOccurrences(of: "'", with: "''")
+                result = result.replacingOccurrences(of: "\0", with: "\\0")
+                return result
+            }
+        }
+        return SQLEscaping.escapeStringLiteral
+    }
 
     internal func generateInserts(rows: [[String?]]) -> String {
         let capped = rows.prefix(Self.maxRows)
@@ -72,26 +107,18 @@ internal struct SQLRowToStatementConverter {
             whereClause = whereParts.joined(separator: " AND ")
         }
 
-        switch databaseType {
-        case .clickhouse:
-            return "ALTER TABLE \(quotedTable) UPDATE \(setClause) WHERE \(whereClause);"
-        default:
-            return "UPDATE \(quotedTable) SET \(setClause) WHERE \(whereClause);"
-        }
+        return "UPDATE \(quotedTable) SET \(setClause) WHERE \(whereClause);"
     }
 
     private func formatValue(_ value: String?) -> String {
         guard let value else {
             return "NULL"
         }
-        var escaped = value.replacingOccurrences(of: "'", with: "''")
-        if databaseType == .mysql || databaseType == .mariadb {
-            escaped = escaped.replacingOccurrences(of: "\\", with: "\\\\")
-        }
+        let escaped = escapeStringFn(value)
         return "'\(escaped)'"
     }
 
     private func quoteColumn(_ name: String) -> String {
-        databaseType.quoteIdentifier(name)
+        quoteIdentifierFn(name)
     }
 }

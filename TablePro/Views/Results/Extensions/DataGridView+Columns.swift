@@ -28,14 +28,9 @@ extension TableViewCoordinator {
             return nil
         }
 
-        let value = rowProvider.value(atRow: row, column: columnIndex)
+        let rawValue = rowProvider.value(atRow: row, column: columnIndex)
+        let displayValue = rowProvider.displayValue(atRow: row, column: columnIndex)
         let state = visualState(for: row)
-
-        // Get column type for date formatting
-        let columnType: ColumnType? = {
-            guard columnIndex < rowProvider.columnTypes.count else { return nil }
-            return rowProvider.columnTypes[columnIndex]
-        }()
 
         let tableColumnIndex = columnIndex + 1
         let isFocused: Bool = {
@@ -48,27 +43,15 @@ extension TableViewCoordinator {
         let isDropdown = dropdownColumns?.contains(columnIndex) == true
         let isTypePicker = typePickerColumns?.contains(columnIndex) == true
 
-        let isEnumOrSet: Bool = {
-            guard columnIndex < rowProvider.columnTypes.count,
-                  columnIndex < rowProvider.columns.count else { return false }
-            let ct = rowProvider.columnTypes[columnIndex]
-            let columnName = rowProvider.columns[columnIndex]
-            guard ct.isEnumType || ct.isSetType else { return false }
-            return rowProvider.columnEnumValues[columnName]?.isEmpty == false
-        }()
-
-        let isFKColumn: Bool = {
-            guard columnIndex < rowProvider.columns.count else { return false }
-            let columnName = rowProvider.columns[columnIndex]
-            return rowProvider.columnForeignKeys[columnName] != nil
-        }()
+        let isEnumOrSet = enumOrSetColumns.contains(columnIndex)
+        let isFKColumn = fkColumns.contains(columnIndex)
 
         return cellFactory.makeDataCell(
             tableView: tableView,
             row: row,
             columnIndex: columnIndex,
-            value: value,
-            columnType: columnType,
+            displayValue: displayValue,
+            rawValue: rawValue,
             visualState: state,
             isEditable: isEditable && !state.isDeleted,
             isLargeDataset: isLargeDataset,
@@ -82,6 +65,9 @@ extension TableViewCoordinator {
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        if let provider = rowViewProvider {
+            return provider(tableView, row, self)
+        }
         let rowView = (tableView.makeView(withIdentifier: Self.rowViewIdentifier, owner: nil) as? TableRowViewWithMenu)
             ?? TableRowViewWithMenu()
         rowView.identifier = Self.rowViewIdentifier

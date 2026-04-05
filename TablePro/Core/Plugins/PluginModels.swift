@@ -12,10 +12,15 @@ struct PluginEntry: Identifiable {
     let url: URL
     let source: PluginSource
     let name: String
-    let version: String
+    var version: String
     let pluginDescription: String
     let capabilities: [PluginCapability]
     var isEnabled: Bool
+
+    let databaseTypeId: String?
+    let additionalTypeIds: [String]
+    let pluginIconName: String
+    let defaultPort: Int?
 }
 
 enum PluginSource {
@@ -24,26 +29,6 @@ enum PluginSource {
 }
 
 extension PluginEntry {
-    var driverPlugin: (any DriverPlugin.Type)? {
-        bundle.principalClass as? any DriverPlugin.Type
-    }
-
-    var iconName: String {
-        driverPlugin?.iconName ?? "puzzlepiece"
-    }
-
-    var databaseTypeId: String? {
-        driverPlugin?.databaseTypeId
-    }
-
-    var additionalTypeIds: [String] {
-        driverPlugin?.additionalDatabaseTypeIds ?? []
-    }
-
-    var defaultPort: Int? {
-        driverPlugin?.defaultPort
-    }
-
     var exportPlugin: (any ExportFormatPlugin.Type)? {
         bundle.principalClass as? any ExportFormatPlugin.Type
     }

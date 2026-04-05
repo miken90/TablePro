@@ -18,11 +18,16 @@ struct AISettingsView: View {
 
     var body: some View {
         Form {
-            providersSection
-            featureRoutingSection
-            contextSection
-            inlineSuggestionsSection
-            privacySection
+            Section {
+                Toggle(String(localized: "Enable AI Features"), isOn: $settings.enabled)
+            }
+            if settings.enabled {
+                providersSection
+                featureRoutingSection
+                contextSection
+                inlineSuggestionsSection
+                privacySection
+            }
         }
         .formStyle(.grouped)
         .sheet(item: $editingProvider) { provider in
@@ -444,9 +449,18 @@ private struct AIProviderEditorSheet: View {
             }
 
             if let error = modelFetchError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                HStack {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                    Button {
+                        fetchModels()
+                    } label: {
+                        Label("Retry", systemImage: "arrow.clockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                }
             }
         }
     }
@@ -472,7 +486,7 @@ private struct AIProviderEditorSheet: View {
                     Text("Test")
                 }
             }
-            .disabled(isTesting)
+            .disabled(isTesting || (draft.type.requiresAPIKey && editingAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
 
             if case .success = testResult {
                 Text(String(localized: "Connection successful"))
@@ -547,6 +561,11 @@ private struct AIProviderEditorSheet: View {
     // MARK: - Connection Test
 
     func testProvider() {
+        guard !editingAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draft.type.requiresAPIKey else {
+            testResult = .failure(String(localized: "API key is required"))
+            return
+        }
+
         let provider = AIProviderFactory.createProvider(for: draft, apiKey: editingAPIKey)
 
         isTesting = true

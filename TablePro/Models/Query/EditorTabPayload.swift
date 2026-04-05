@@ -21,6 +21,8 @@ internal struct EditorTabPayload: Codable, Hashable {
     internal let tableName: String?
     /// Database context (for multi-database connections)
     internal let databaseName: String?
+    /// Schema context (for multi-schema connections, e.g. PostgreSQL)
+    internal let schemaName: String?
     /// Initial SQL query (for .query tabs opened from files)
     internal let initialQuery: String?
     /// Whether this tab displays a database view (read-only)
@@ -31,6 +33,12 @@ internal struct EditorTabPayload: Codable, Hashable {
     internal let skipAutoExecute: Bool
     /// Whether this tab is a preview (temporary) tab
     internal let isPreview: Bool
+    /// Initial filter state (for FK navigation — pre-applies a WHERE filter)
+    internal let initialFilterState: TabFilterState?
+    /// Source file URL for .sql files opened from disk (used for deduplication)
+    internal let sourceFileURL: URL?
+    /// Whether this is a Cmd+T new tab (creates default tab eagerly, skips disk restoration)
+    internal let isNewTab: Bool
 
     internal init(
         id: UUID = UUID(),
@@ -38,22 +46,30 @@ internal struct EditorTabPayload: Codable, Hashable {
         tabType: TabType = .query,
         tableName: String? = nil,
         databaseName: String? = nil,
+        schemaName: String? = nil,
         initialQuery: String? = nil,
         isView: Bool = false,
         showStructure: Bool = false,
         skipAutoExecute: Bool = false,
-        isPreview: Bool = false
+        isPreview: Bool = false,
+        initialFilterState: TabFilterState? = nil,
+        sourceFileURL: URL? = nil,
+        isNewTab: Bool = false
     ) {
         self.id = id
         self.connectionId = connectionId
         self.tabType = tabType
         self.tableName = tableName
         self.databaseName = databaseName
+        self.schemaName = schemaName
         self.initialQuery = initialQuery
         self.isView = isView
         self.showStructure = showStructure
         self.skipAutoExecute = skipAutoExecute
         self.isPreview = isPreview
+        self.initialFilterState = initialFilterState
+        self.sourceFileURL = sourceFileURL
+        self.isNewTab = isNewTab
     }
 
     internal init(from decoder: Decoder) throws {
@@ -63,11 +79,15 @@ internal struct EditorTabPayload: Codable, Hashable {
         tabType = try container.decode(TabType.self, forKey: .tabType)
         tableName = try container.decodeIfPresent(String.self, forKey: .tableName)
         databaseName = try container.decodeIfPresent(String.self, forKey: .databaseName)
+        schemaName = try container.decodeIfPresent(String.self, forKey: .schemaName)
         initialQuery = try container.decodeIfPresent(String.self, forKey: .initialQuery)
         isView = try container.decodeIfPresent(Bool.self, forKey: .isView) ?? false
         showStructure = try container.decodeIfPresent(Bool.self, forKey: .showStructure) ?? false
         skipAutoExecute = try container.decodeIfPresent(Bool.self, forKey: .skipAutoExecute) ?? false
         isPreview = try container.decodeIfPresent(Bool.self, forKey: .isPreview) ?? false
+        initialFilterState = try container.decodeIfPresent(TabFilterState.self, forKey: .initialFilterState)
+        sourceFileURL = try container.decodeIfPresent(URL.self, forKey: .sourceFileURL)
+        isNewTab = try container.decodeIfPresent(Bool.self, forKey: .isNewTab) ?? false
     }
 
     /// Whether this payload is a "connection-only" payload — just a connectionId
@@ -84,10 +104,14 @@ internal struct EditorTabPayload: Codable, Hashable {
         self.tabType = tab.tabType
         self.tableName = tab.tableName
         self.databaseName = tab.databaseName
+        self.schemaName = tab.schemaName
         self.initialQuery = tab.query
         self.isView = tab.isView
         self.showStructure = tab.showStructure
         self.skipAutoExecute = skipAutoExecute
         self.isPreview = false
+        self.initialFilterState = nil
+        self.sourceFileURL = tab.sourceFileURL
+        self.isNewTab = false
     }
 }

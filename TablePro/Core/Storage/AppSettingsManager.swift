@@ -17,28 +17,47 @@ import os
 final class AppSettingsManager {
     static let shared = AppSettingsManager()
 
+    deinit {
+        if let observer = accessibilityTextSizeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+    }
+
     // MARK: - Published Settings
 
     var general: GeneralSettings {
         didSet {
             general.language.apply()
             storage.saveGeneral(general)
+            SyncChangeTracker.shared.markDirty(.settings, id: "general")
         }
     }
 
     var appearance: AppearanceSettings {
         didSet {
             storage.saveAppearance(appearance)
-            appearance.theme.apply()
+            ThemeEngine.shared.updateAppearanceAndTheme(
+                mode: appearance.appearanceMode,
+                lightThemeId: appearance.preferredLightThemeId,
+                darkThemeId: appearance.preferredDarkThemeId
+            )
+            SyncChangeTracker.shared.markDirty(.settings, id: "appearance")
         }
     }
 
     var editor: EditorSettings {
         didSet {
             storage.saveEditor(editor)
-            // Update cached theme values for thread-safe access
-            SQLEditorTheme.reloadFromSettings(editor)
+            // Update behavioral settings in ThemeEngine
+            ThemeEngine.shared.updateEditorSettings(
+                highlightCurrentLine: editor.highlightCurrentLine,
+                showLineNumbers: editor.showLineNumbers,
+                tabWidth: editor.clampedTabWidth,
+                autoIndent: editor.autoIndent,
+                wordWrap: editor.wordWrap
+            )
             notifyChange(.editorSettingsDidChange)
+            SyncChangeTracker.shared.markDirty(.settings, id: "editor")
         }
     }
 
@@ -61,6 +80,7 @@ final class AppSettingsManager {
             // Update date formatting service with new format
             DateFormattingService.shared.updateFormat(validated.dateFormat)
             notifyChange(.dataGridSettingsDidChange)
+            SyncChangeTracker.shared.markDirty(.settings, id: "dataGrid")
         }
     }
 
@@ -82,24 +102,35 @@ final class AppSettingsManager {
             storage.saveHistory(validated)
             // Apply history settings immediately (cleanup if auto-cleanup enabled)
             Task { await applyHistorySettingsImmediately() }
+            SyncChangeTracker.shared.markDirty(.settings, id: "history")
         }
     }
 
     var tabs: TabSettings {
         didSet {
             storage.saveTabs(tabs)
+            SyncChangeTracker.shared.markDirty(.settings, id: "tabs")
         }
     }
 
     var keyboard: KeyboardSettings {
         didSet {
             storage.saveKeyboard(keyboard)
+            SyncChangeTracker.shared.markDirty(.settings, id: "keyboard")
         }
     }
 
     var ai: AISettings {
         didSet {
             storage.saveAI(ai)
+            SyncChangeTracker.shared.markDirty(.settings, id: "ai")
+        }
+    }
+
+    var sync: SyncSettings {
+        didSet {
+            storage.saveSync(sync)
+            SyncChangeTracker.shared.markDirty(.settings, id: "sync")
         }
     }
 
@@ -124,13 +155,26 @@ final class AppSettingsManager {
         self.tabs = storage.loadTabs()
         self.keyboard = storage.loadKeyboard()
         self.ai = storage.loadAI()
+        self.sync = storage.loadSync()
 
-        // Apply appearance settings immediately
-        appearance.theme.apply()
+        // Apply language immediately
         general.language.apply()
 
-        // Load editor theme settings into cache (pass settings directly to avoid circular dependency)
-        SQLEditorTheme.reloadFromSettings(editor)
+        // Activate the correct theme based on appearance mode + preferred themes
+        ThemeEngine.shared.updateAppearanceAndTheme(
+            mode: appearance.appearanceMode,
+            lightThemeId: appearance.preferredLightThemeId,
+            darkThemeId: appearance.preferredDarkThemeId
+        )
+
+        // Sync editor behavioral settings to ThemeEngine
+        ThemeEngine.shared.updateEditorSettings(
+            highlightCurrentLine: editor.highlightCurrentLine,
+            showLineNumbers: editor.showLineNumbers,
+            tabWidth: editor.clampedTabWidth,
+            autoIndent: editor.autoIndent,
+            wordWrap: editor.wordWrap
+        )
 
         // Initialize DateFormattingService with current format
         DateFormattingService.shared.updateFormat(dataGrid.dateFormat)
@@ -153,7 +197,7 @@ final class AppSettingsManager {
     /// Uses NSWorkspace.accessibilityDisplayOptionsDidChangeNotification which fires when the user
     /// changes settings in System Settings > Accessibility > Display (including the Text Size slider).
     private func observeAccessibilityTextSizeChanges() {
-        lastAccessibilityScale = SQLEditorTheme.accessibilityScaleFactor
+        lastAccessibilityScale = EditorFontCache.computeAccessibilityScale()
         accessibilityTextSizeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
             object: nil,
@@ -161,15 +205,11 @@ final class AppSettingsManager {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let newScale = SQLEditorTheme.accessibilityScaleFactor
-                // Only reload if the text size scale actually changed (this notification
-                // also fires for contrast, reduce motion, etc.)
+                let newScale = EditorFontCache.computeAccessibilityScale()
                 guard abs(newScale - lastAccessibilityScale) > 0.01 else { return }
                 lastAccessibilityScale = newScale
                 Self.logger.debug("Accessibility text size changed, scale: \(newScale, format: .fixed(precision: 2))")
-                // Re-apply editor fonts with the updated accessibility scale factor
-                SQLEditorTheme.reloadFromSettings(editor)
-                // Notify the editor view to rebuild its configuration
+                ThemeEngine.shared.reloadFontCaches()
                 NotificationCenter.default.post(name: .accessibilityTextSizeDidChange, object: self)
             }
         }
@@ -191,6 +231,7 @@ final class AppSettingsManager {
         tabs = .default
         keyboard = .default
         ai = .default
+        sync = .default
         storage.resetToDefaults()
     }
 }

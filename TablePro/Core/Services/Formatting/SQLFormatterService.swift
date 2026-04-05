@@ -92,6 +92,10 @@ struct SQLFormatterService: SQLFormatterProtocol {
     }()
 
     /// WHERE condition alignment pattern: \s+(AND|OR)\s+
+    private static let majorKeywordRegex: NSRegularExpression = {
+        regex("\\b(ORDER|GROUP|HAVING|LIMIT|UNION|INTERSECT)\\b", options: .caseInsensitive)
+    }()
+
     private static let whereConditionRegex: NSRegularExpression = {
         regex("\\s+(AND|OR)\\s+", options: .caseInsensitive)
     }()
@@ -104,13 +108,13 @@ struct SQLFormatterService: SQLFormatterProtocol {
     /// Get or create the keyword uppercasing regex for a given database type
     private static func keywordRegex(for dialect: DatabaseType) -> NSRegularExpression? {
         keywordRegexLock.lock()
-        defer { keywordRegexLock.unlock() }
-
         if let cached = keywordRegexCache[dialect] {
+            keywordRegexLock.unlock()
             return cached
         }
+        keywordRegexLock.unlock()
 
-        let provider = SQLDialectFactory.createDialect(for: dialect)
+        let provider = resolveDialectProvider(for: dialect)
         let allKeywords = provider.keywords.union(provider.functions).union(provider.dataTypes)
         let escapedKeywords = allKeywords.map { NSRegularExpression.escapedPattern(for: $0) }
         let pattern = "\\b(\(escapedKeywords.joined(separator: "|")))\\b"
@@ -119,8 +123,17 @@ struct SQLFormatterService: SQLFormatterProtocol {
             return nil
         }
 
+        keywordRegexLock.lock()
+        defer { keywordRegexLock.unlock() }
+        if let cached = keywordRegexCache[dialect] {
+            return cached
+        }
         keywordRegexCache[dialect] = regex
         return regex
+    }
+
+    private static func resolveDialectProvider(for dialect: DatabaseType) -> SQLDialectProvider {
+        SQLDialectFactory.createDialect(for: dialect)
     }
 
     // MARK: - Public API
@@ -148,8 +161,7 @@ struct SQLFormatterService: SQLFormatterProtocol {
             throw SQLFormatterError.invalidCursorPosition(cursor, max: sqlLength)
         }
 
-        // Get dialect provider
-        let dialectProvider = SQLDialectFactory.createDialect(for: dialect)
+        let dialectProvider = Self.resolveDialectProvider(for: dialect)
 
         // Format the SQL
         let formatted = formatSQL(sql, dialect: dialectProvider, databaseType: dialect, options: options)
@@ -471,14 +483,14 @@ struct SQLFormatterService: SQLFormatterProtocol {
             return sql
         }
 
-        // Find end of WHERE clause
-        let majorKeywords = ["ORDER", "GROUP", "HAVING", "LIMIT", "UNION", "INTERSECT"]
+        // Find end of WHERE clause using single regex scan
+        let searchStart = whereRange.upperBound
+        let searchNSRange = NSRange(searchStart..<sql.endIndex, in: sql)
         var endIndex = sql.endIndex
 
-        for keyword in majorKeywords {
-            if let range = sql.range(of: keyword, options: .caseInsensitive, range: whereRange.upperBound..<sql.endIndex) {
-                endIndex = min(endIndex, range.lowerBound)
-            }
+        if let match = Self.majorKeywordRegex.firstMatch(in: sql, range: searchNSRange),
+           let matchRange = Range(match.range, in: sql) {
+            endIndex = matchRange.lowerBound
         }
 
         // Fix #3: Work with immutable substring

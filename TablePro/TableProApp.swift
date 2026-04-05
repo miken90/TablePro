@@ -9,6 +9,7 @@ import CodeEditTextView
 import Observation
 import Sparkle
 import SwiftUI
+import TableProPluginKit
 
 // MARK: - App State for Menu Commands
 
@@ -19,14 +20,16 @@ final class AppState {
     var isConnected: Bool = false
     var safeModeLevel: SafeModeLevel = .silent
     var isReadOnly: Bool { safeModeLevel.blocksAllWrites }
-    var isMongoDB: Bool = false
-    var isRedis: Bool = false
+    var editorLanguage: EditorLanguage = .sql
+    var currentDatabaseType: DatabaseType?
+    var supportsDatabaseSwitching: Bool = true
     var isCurrentTabEditable: Bool = false  // True when current tab is an editable table
     var hasRowSelection: Bool = false  // True when rows are selected in data grid
     var hasTableSelection: Bool = false  // True when tables are selected in sidebar
     var isHistoryPanelVisible: Bool = false  // Global history panel visibility
     var hasQueryText: Bool = false  // True when current editor has non-empty query
     var hasStructureChanges: Bool = false  // True when structure view has pending schema changes
+    var isTableTab: Bool = false  // True when current tab is a table tab (not query)
 }
 
 // MARK: - Pasteboard Commands
@@ -70,6 +73,12 @@ struct PasteboardCommands: Commands {
                 actions?.copySelectedRowsWithHeaders()
             }
             .optionalKeyboardShortcut(shortcut(for: .copyWithHeaders))
+            .disabled(!appState.hasRowSelection)
+
+            Button("Copy as JSON") {
+                actions?.copySelectedRowsAsJson()
+            }
+            .optionalKeyboardShortcut(shortcut(for: .copyAsJson))
             .disabled(!appState.hasRowSelection)
 
             Button("Paste") {
@@ -171,13 +180,19 @@ struct AppMenuCommands: Commands {
                 actions?.openDatabaseSwitcher()
             }
             .optionalKeyboardShortcut(shortcut(for: .openDatabase))
-            .disabled(!appState.isConnected || appState.isRedis)
+            .disabled(!appState.isConnected || !appState.supportsDatabaseSwitching)
+
+            Button(String(localized: "Open File...")) {
+                actions?.openSQLFile()
+            }
+            .optionalKeyboardShortcut(shortcut(for: .openFile))
+            .disabled(!appState.isConnected)
 
             Button("Switch Connection...") {
                 NotificationCenter.default.post(name: .openConnectionSwitcher, object: nil)
             }
             .optionalKeyboardShortcut(shortcut(for: .switchConnection))
-            .disabled(!appState.isConnected || appState.isRedis)
+            .disabled(!appState.isConnected)
 
             Button("Quick Switcher...") {
                 actions?.openQuickSwitcher()
@@ -193,8 +208,20 @@ struct AppMenuCommands: Commands {
             .optionalKeyboardShortcut(shortcut(for: .saveChanges))
             .disabled(!appState.isConnected || appState.isReadOnly)
 
-            Button(appState.isMongoDB ? "Preview MQL" : appState.isRedis ? "Preview Commands" : "Preview SQL") {
+            Button(String(localized: "Save As...")) {
+                actions?.saveFileAs()
+            }
+            .optionalKeyboardShortcut(shortcut(for: .saveAs))
+            .disabled(!appState.isConnected)
+
+            Button {
                 actions?.previewSQL()
+            } label: {
+                if let dbType = appState.currentDatabaseType {
+                    Text("Preview \(PluginManager.shared.queryLanguageName(for: dbType))")
+                } else {
+                    Text("Preview SQL")
+                }
             }
             .optionalKeyboardShortcut(shortcut(for: .previewSQL))
             .disabled(!appState.isConnected)
@@ -224,13 +251,28 @@ struct AppMenuCommands: Commands {
 
             Divider()
 
+            Button(String(localized: "Export Connections...")) {
+                NotificationCenter.default.post(name: .exportConnections, object: nil)
+            }
+
+            Button(String(localized: "Import Connections...")) {
+                NotificationCenter.default.post(name: .importConnections, object: nil)
+            }
+
+            Divider()
+
             Button("Export...") {
                 actions?.exportTables()
             }
             .optionalKeyboardShortcut(shortcut(for: .export))
             .disabled(!appState.isConnected)
 
-            if !appState.isMongoDB && !appState.isRedis {
+            Button("Export Results...") {
+                actions?.exportQueryResults()
+            }
+            .disabled(!appState.isConnected)
+
+            if appState.currentDatabaseType.map({ PluginManager.shared.supportsImport(for: $0) }) ?? true {
                 Button("Import...") {
                     actions?.importTables()
                 }
@@ -318,13 +360,51 @@ struct AppMenuCommands: Commands {
                 actions?.toggleFilterPanel()
             }
             .optionalKeyboardShortcut(shortcut(for: .toggleFilters))
-            .disabled(!appState.isConnected)
+            .disabled(!appState.isConnected || !appState.isTableTab)
 
             Button("Toggle History") {
                 actions?.toggleHistoryPanel()
             }
             .optionalKeyboardShortcut(shortcut(for: .toggleHistory))
             .disabled(!appState.isConnected)
+
+            Divider()
+
+            Button("Toggle Results") {
+                actions?.toggleResults()
+            }
+            .optionalKeyboardShortcut(shortcut(for: .toggleResults))
+            .disabled(!appState.isConnected)
+
+            Button("Previous Result") {
+                actions?.previousResultTab()
+            }
+            .optionalKeyboardShortcut(shortcut(for: .previousResultTab))
+            .disabled(!appState.isConnected)
+
+            Button("Next Result") {
+                actions?.nextResultTab()
+            }
+            .optionalKeyboardShortcut(shortcut(for: .nextResultTab))
+            .disabled(!appState.isConnected)
+
+            Button("Close Result Tab") {
+                actions?.closeResultTab()
+            }
+            .optionalKeyboardShortcut(shortcut(for: .closeResultTab))
+            .disabled(!appState.isConnected)
+
+            Divider()
+
+            Button("Zoom In") {
+                ThemeEngine.shared.adjustEditorFontSize(by: 1)
+            }
+            .keyboardShortcut("=", modifiers: .command)
+
+            Button("Zoom Out") {
+                ThemeEngine.shared.adjustEditorFontSize(by: -1)
+            }
+            .keyboardShortcut("-", modifiers: .command)
         }
 
         // Tab navigation shortcuts — native macOS window tabs
@@ -371,6 +451,27 @@ struct AppMenuCommands: Commands {
             .optionalKeyboardShortcut(shortcut(for: .nextTabArrows))
             .disabled(!appState.isConnected)
         }
+
+        // Help menu
+        CommandGroup(replacing: .help) {
+            Button(String(localized: "TablePro Website")) {
+                if let url = URL(string: "https://tablepro.app") { NSWorkspace.shared.open(url) }
+            }
+
+            Button(String(localized: "Documentation")) {
+                if let url = URL(string: "https://docs.tablepro.app") { NSWorkspace.shared.open(url) }
+            }
+
+            Divider()
+
+            Button("GitHub Repository") {
+                if let url = URL(string: "https://github.com/TableProApp/TablePro") { NSWorkspace.shared.open(url) }
+            }
+
+            Button(String(localized: "Sponsor TablePro")) {
+                if let url = URL(string: "https://github.com/sponsors/datlechin") { NSWorkspace.shared.open(url) }
+            }
+        }
     }
 }
 
@@ -392,17 +493,11 @@ struct TableProApp: App {
         }
     }
 
-    /// Get tint color from settings (nil for system default)
-    private var accentTint: Color? {
-        settingsManager.appearance.accentColor.tintColor
-    }
-
     var body: some Scene {
         // Welcome Window - opens on launch (must be first Window scene so SwiftUI
         // restores it by default when clicking the dock icon)
         Window("Welcome to TablePro", id: "welcome") {
             WelcomeWindowView()
-                .tint(accentTint)
                 .background(OpenWindowHandler())  // Handle window notifications from startup
         }
         .windowStyle(.hiddenTitleBar)
@@ -412,7 +507,6 @@ struct TableProApp: App {
         // Connection Form Window - opens when creating/editing a connection
         WindowGroup(id: "connection-form", for: UUID?.self) { $connectionId in
             ConnectionFormView(connectionId: connectionId ?? nil)
-                .tint(accentTint)
         }
         .windowResizability(.contentSize)
 
@@ -422,16 +516,15 @@ struct TableProApp: App {
             ContentView(payload: payload)
                 .environment(AppState.shared)
                 .background(OpenWindowHandler())
-                .tint(accentTint)
         }
         .windowStyle(.automatic)
+        .windowToolbarStyle(.unified)
         .defaultSize(width: 1_200, height: 800)
 
         // Settings Window - opens with Cmd+,
         Settings {
             SettingsView()
                 .environment(updaterBridge)
-                .tint(accentTint)
         }
 
         .commands {
@@ -454,25 +547,15 @@ extension Notification.Name {
     // Multi-listener broadcasts (Sidebar + Coordinator + StructureView)
     static let refreshData = Notification.Name("refreshData")
 
-    // Data operations (still posted by DataGrid / context menus / StructureView subscribers)
+    // Data operations (still posted by DataGrid / context menus)
     static let deleteSelectedRows = Notification.Name("deleteSelectedRows")
     static let addNewRow = Notification.Name("addNewRow")
     static let duplicateRow = Notification.Name("duplicateRow")
     static let copySelectedRows = Notification.Name("copySelectedRows")
     static let pasteRows = Notification.Name("pasteRows")
-    static let undoChange = Notification.Name("undoChange")
-    static let redoChange = Notification.Name("redoChange")
-
-    // Tab operations
-    static let newQueryTab = Notification.Name("newQueryTab")
 
     // Sidebar operations (still posted by SidebarView / ConnectionStatusView)
     static let openDatabaseSwitcher = Notification.Name("openDatabaseSwitcher")
-
-    // Structure view operations (still posted by QueryEditorView)
-    static let explainQuery = Notification.Name("explainQuery")
-    static let saveStructureChanges = Notification.Name("saveStructureChanges")
-    static let previewStructureSQL = Notification.Name("previewStructureSQL")
 
     // File opening notifications
     static let openSQLFiles = Notification.Name("openSQLFiles")
@@ -507,6 +590,8 @@ struct CheckForUpdatesView: View {
 private struct OpenWindowHandler: View {
     @Environment(\.openWindow)
     private var openWindow
+    @Environment(\.openSettings)
+    private var openSettings
 
     var body: some View {
         Color.clear
@@ -522,9 +607,11 @@ private struct OpenWindowHandler: View {
                 if let payload = notification.object as? EditorTabPayload {
                     openWindow(id: "main", value: payload)
                 } else if let connectionId = notification.object as? UUID {
-                    // Legacy: connection ID only — open default query tab
                     openWindow(id: "main", value: EditorTabPayload(connectionId: connectionId))
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openSettingsWindow)) { _ in
+                openSettings()
             }
     }
 }

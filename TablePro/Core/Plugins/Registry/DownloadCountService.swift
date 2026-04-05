@@ -11,14 +11,12 @@ final class DownloadCountService {
     static let shared = DownloadCountService()
 
     private var counts: [String: Int] = [:]
+    private var lastFetchDate: Date?
+    private static let cooldown: TimeInterval = 300 // 5 minutes
     private static let logger = Logger(subsystem: "com.TablePro", category: "DownloadCountService")
 
-    private static let cacheKey = "downloadCountsCache"
-    private static let cacheDateKey = "downloadCountsCacheDate"
-    private static let cacheTTL: TimeInterval = 3_600 // 1 hour
-
     // swiftlint:disable:next force_unwrapping
-    private static let releasesURL = URL(string: "https://api.github.com/repos/datlechin/TablePro/releases?per_page=100")!
+    private static let releasesURL = URL(string: "https://api.github.com/repos/TableProApp/TablePro/releases?per_page=100")!
 
     private let session: URLSession
 
@@ -27,8 +25,6 @@ final class DownloadCountService {
         config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 30
         self.session = URLSession(configuration: config)
-
-        loadCache()
     }
 
     // MARK: - Public
@@ -40,27 +36,25 @@ final class DownloadCountService {
     func fetchCounts(for manifest: RegistryManifest?) async {
         guard let manifest else { return }
 
-        if isCacheValid() {
-            Self.logger.debug("Using cached download counts")
+        if let lastFetchDate, Date().timeIntervalSince(lastFetchDate) < Self.cooldown {
             return
         }
 
         do {
             let releases = try await fetchReleases()
             let pluginReleases = releases.filter { $0.tagName.hasPrefix("plugin-") }
-            let urlToPluginId = buildURLMap(from: manifest)
+            let tagPrefixToPluginId = buildTagPrefixMap(from: manifest)
 
             var totals: [String: Int] = [:]
             for release in pluginReleases {
-                for asset in release.assets {
-                    if let pluginId = urlToPluginId[asset.browserDownloadUrl] {
-                        totals[pluginId, default: 0] += asset.downloadCount
-                    }
-                }
+                let tagPrefix = extractTagPrefix(from: release.tagName)
+                guard let pluginId = tagPrefixToPluginId[tagPrefix] else { continue }
+                let releaseTotal = release.assets.reduce(0) { $0 + $1.downloadCount }
+                totals[pluginId, default: 0] += releaseTotal
             }
 
             counts = totals
-            saveCache(totals)
+            lastFetchDate = Date()
             Self.logger.info("Fetched download counts for \(totals.count) plugin(s)")
         } catch {
             Self.logger.error("Failed to fetch download counts: \(error.localizedDescription)")
@@ -85,47 +79,31 @@ final class DownloadCountService {
         return try decoder.decode([GitHubRelease].self, from: data)
     }
 
-    // MARK: - URL Mapping
+    // MARK: - Tag Prefix Mapping
 
-    private func buildURLMap(from manifest: RegistryManifest) -> [String: String] {
+    private func buildTagPrefixMap(from manifest: RegistryManifest) -> [String: String] {
         var map: [String: String] = [:]
         for plugin in manifest.plugins {
-            if let binaries = plugin.binaries {
-                for binary in binaries {
-                    map[binary.downloadURL] = plugin.id
-                }
-            }
-            if let url = plugin.downloadURL {
-                map[url] = plugin.id
-            }
+            let url = plugin.binaries?.first?.downloadURL ?? plugin.downloadURL
+            guard let url else { continue }
+            guard let tagComponent = extractTagComponent(from: url) else { continue }
+            let prefix = extractTagPrefix(from: tagComponent)
+            map[prefix] = plugin.id
         }
         return map
     }
 
-    // MARK: - Cache
-
-    private func isCacheValid() -> Bool {
-        guard let cacheDate = UserDefaults.standard.object(forKey: Self.cacheDateKey) as? Date else {
-            return false
-        }
-        return Date().timeIntervalSince(cacheDate) < Self.cacheTTL
+    private func extractTagComponent(from downloadURL: String) -> String? {
+        guard let url = URL(string: downloadURL) else { return nil }
+        let components = url.pathComponents
+        guard let downloadIndex = components.firstIndex(of: "download"),
+              downloadIndex + 1 < components.count else { return nil }
+        return components[downloadIndex + 1]
     }
 
-    private func loadCache() {
-        guard isCacheValid(),
-              let data = UserDefaults.standard.data(forKey: Self.cacheKey),
-              let cached = try? JSONDecoder().decode([String: Int].self, from: data) else {
-            counts = [:]
-            return
-        }
-        counts = cached
-    }
-
-    private func saveCache(_ totals: [String: Int]) {
-        if let data = try? JSONEncoder().encode(totals) {
-            UserDefaults.standard.set(data, forKey: Self.cacheKey)
-            UserDefaults.standard.set(Date(), forKey: Self.cacheDateKey)
-        }
+    private func extractTagPrefix(from tag: String) -> String {
+        guard let range = tag.range(of: #"-v\d"#, options: .regularExpression) else { return tag }
+        return String(tag[tag.startIndex..<range.lowerBound])
     }
 }
 

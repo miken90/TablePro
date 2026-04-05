@@ -158,6 +158,8 @@ final class MainContentCommandActions {
 
         observeKeyWindowOnly(.duplicateRow) { [weak self] _ in self?.duplicateRow() }
 
+        observeKeyWindowOnly(.exportQueryResults) { [weak self] _ in self?.exportQueryResults() }
+
         // Note: .copySelectedRows and .pasteRows observers call the data-grid
         // path directly (not the public methods) to avoid an infinite loop —
         // the public methods re-post these notifications for structure view.
@@ -176,14 +178,6 @@ final class MainContentCommandActions {
             self.editingCell.wrappedValue = cell
         }
 
-        observeKeyWindowOnly(.explainQuery) { [weak self] notification in
-            if let variantRaw = notification.userInfo?["variant"] as? String,
-               let variant = ClickHouseExplainVariant(rawValue: variantRaw) {
-                self?.coordinator?.runClickHouseExplain(variant: variant)
-            } else {
-                self?.explainQuery()
-            }
-        }
         observeKeyWindowOnly(.openDatabaseSwitcher) { [weak self] _ in self?.openDatabaseSwitcher() }
     }
 
@@ -240,7 +234,7 @@ final class MainContentCommandActions {
 
     func copySelectedRows() {
         if coordinator?.tabManager.selectedTab?.showStructure == true {
-            NotificationCenter.default.post(name: .copySelectedRows, object: nil)
+            coordinator?.structureActions?.copyRows?()
         } else {
             let indices = selectedRowIndices.wrappedValue
             coordinator?.copySelectedRowsToClipboard(indices: indices)
@@ -252,9 +246,14 @@ final class MainContentCommandActions {
         coordinator?.copySelectedRowsWithHeaders(indices: indices)
     }
 
+    func copySelectedRowsAsJson() {
+        let indices = selectedRowIndices.wrappedValue
+        coordinator?.copySelectedRowsAsJson(indices: indices)
+    }
+
     func pasteRows() {
         if coordinator?.tabManager.selectedTab?.showStructure == true {
-            NotificationCenter.default.post(name: .pasteRows, object: nil)
+            coordinator?.structureActions?.pasteRows?()
         } else {
             var indices = selectedRowIndices.wrappedValue
             var cell = editingCell.wrappedValue
@@ -271,7 +270,18 @@ final class MainContentCommandActions {
         let hasPendingTableOps = !pendingTruncates.wrappedValue.isEmpty
             || !pendingDeletes.wrappedValue.isEmpty
         let hasSidebarEdits = rightPanelState.editState.hasEdits
-        return hasEditedCells || hasPendingTableOps || hasSidebarEdits
+        let hasFileDirty = coordinator?.tabManager.selectedTab?.isFileDirty ?? false
+        return hasEditedCells || hasPendingTableOps || hasSidebarEdits || hasFileDirty
+    }
+
+    // MARK: - Editor Query Loading (Group A — Called Directly)
+
+    func loadQueryIntoEditor(_ query: String) {
+        coordinator?.loadQueryIntoEditor(query)
+    }
+
+    func insertQueryFromAI(_ query: String) {
+        coordinator?.insertQueryFromAI(query)
     }
 
     // MARK: - Tab Operations (Group A — Called Directly)
@@ -286,7 +296,8 @@ final class MainContentCommandActions {
         let payload = EditorTabPayload(
             connectionId: connection.id,
             tabType: .query,
-            initialQuery: initialQuery
+            initialQuery: initialQuery,
+            isNewTab: true
         )
         WindowOpener.shared.openNativeTab(payload)
     }
@@ -330,6 +341,7 @@ final class MainContentCommandActions {
             coordinator?.tabManager.selectedTabId = nil
             AppState.shared.isCurrentTabEditable = false
             coordinator?.toolbarState.isTableTab = false
+            AppState.shared.isTableTab = false
         }
     }
 
@@ -339,9 +351,9 @@ final class MainContentCommandActions {
             return
         }
 
-        // Structure view saves are notification-based
+        // Structure view saves via direct coordinator call
         if coordinator.tabManager.selectedTab?.showStructure == true {
-            NotificationCenter.default.post(name: .saveStructureChanges, object: nil)
+            coordinator.structureActions?.saveChanges?()
             performClose()
             return
         }
@@ -364,8 +376,26 @@ final class MainContentCommandActions {
         }
     }
 
+    private func saveFileToSourceURL() {
+        guard let tab = coordinator?.tabManager.selectedTab,
+              let url = tab.sourceFileURL else { return }
+        let content = tab.query
+        Task { @MainActor in
+            do {
+                try await SQLFileService.writeFile(content: content, to: url)
+                if let index = coordinator?.tabManager.tabs.firstIndex(where: { $0.id == tab.id }) {
+                    coordinator?.tabManager.tabs[index].savedFileContent = content
+                }
+            } catch {
+                // File may have been deleted or become inaccessible
+                Self.logger.error("Failed to save file: \(error.localizedDescription)")
+                saveFileAs()
+            }
+        }
+    }
+
     private func discardAndClose() {
-        coordinator?.changeManager.clearChanges()
+        coordinator?.changeManager.clearChangesAndUndoHistory()
         pendingTruncates.wrappedValue.removeAll()
         pendingDeletes.wrappedValue.removeAll()
         rightPanelState.editState.clearEdits()
@@ -383,6 +413,10 @@ final class MainContentCommandActions {
 
     func createView() {
         coordinator?.createView()
+    }
+
+    func createNewTable() {
+        coordinator?.createNewTable()
     }
 
     // MARK: - Tab Navigation (Group A — Called Directly)
@@ -408,13 +442,13 @@ final class MainContentCommandActions {
     func saveChanges() {
         // Check if we're in structure view mode
         if coordinator?.tabManager.selectedTab?.showStructure == true {
-            // Post notification for structure view to handle
-            NotificationCenter.default.post(name: .saveStructureChanges, object: nil)
-        } else if rightPanelState.editState.hasEdits {
-            // Save sidebar edits if the right panel has pending changes
-            rightPanelState.onSave?()
-        } else {
-            // Handle data grid changes
+            coordinator?.structureActions?.saveChanges?()
+        } else if coordinator?.changeManager.hasChanges == true
+            || !pendingTruncates.wrappedValue.isEmpty
+            || !pendingDeletes.wrappedValue.isEmpty {
+            // Handle data grid changes (prioritize over sidebar edits since
+            // data grid edits are synced to sidebar editState, and the data grid
+            // path uses the correct plugin driver for statement generation)
             var truncates = pendingTruncates.wrappedValue
             var deletes = pendingDeletes.wrappedValue
             var options = tableOperationOptions.wrappedValue
@@ -426,6 +460,47 @@ final class MainContentCommandActions {
             pendingTruncates.wrappedValue = truncates
             pendingDeletes.wrappedValue = deletes
             tableOperationOptions.wrappedValue = options
+        } else if rightPanelState.editState.hasEdits {
+            // Save sidebar-only edits (edits made directly in the right panel)
+            rightPanelState.onSave?()
+        }
+        // File save: write query back to source file
+        else if let tab = coordinator?.tabManager.selectedTab,
+                tab.sourceFileURL != nil, tab.isFileDirty {
+            saveFileToSourceURL()
+        }
+        // Save As: untitled query tab with content
+        else if let tab = coordinator?.tabManager.selectedTab,
+                tab.tabType == .query, tab.sourceFileURL == nil,
+                !tab.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            saveFileAs()
+        }
+    }
+
+    func saveFileAs() {
+        guard let tab = coordinator?.tabManager.selectedTab,
+              tab.tabType == .query else { return }
+        let content = tab.query
+        let suggestedName = tab.sourceFileURL?.lastPathComponent ?? "\(tab.title).sql"
+        Task { @MainActor in
+            guard let url = await SQLFileService.showSavePanel(suggestedName: suggestedName) else { return }
+            do {
+                try await SQLFileService.writeFile(content: content, to: url)
+                if let index = coordinator?.tabManager.tabs.firstIndex(where: { $0.id == tab.id }) {
+                    coordinator?.tabManager.tabs[index].sourceFileURL = url
+                    coordinator?.tabManager.tabs[index].savedFileContent = content
+                    coordinator?.tabManager.tabs[index].title = url.deletingPathExtension().lastPathComponent
+                }
+            } catch {
+                Self.logger.error("Failed to save file: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func openSQLFile() {
+        Task { @MainActor in
+            guard let urls = await SQLFileService.showOpenPanel() else { return }
+            NotificationCenter.default.post(name: .openSQLFiles, object: urls)
         }
     }
 
@@ -435,6 +510,10 @@ final class MainContentCommandActions {
 
     func exportTables() {
         coordinator?.openExportDialog()
+    }
+
+    func exportQueryResults() {
+        coordinator?.openExportQueryResultsDialog()
     }
 
     func importTables() {
@@ -459,6 +538,39 @@ final class MainContentCommandActions {
         rightPanelState.isPresented.toggle()
     }
 
+    func toggleResults() {
+        guard let coordinator, let tabIndex = coordinator.tabManager.selectedTabIndex else { return }
+        coordinator.tabManager.tabs[tabIndex].isResultsCollapsed.toggle()
+        coordinator.toolbarState.isResultsCollapsed = coordinator.tabManager.tabs[tabIndex].isResultsCollapsed
+    }
+
+    func previousResultTab() {
+        guard let coordinator, let tabIndex = coordinator.tabManager.selectedTabIndex else { return }
+        let tab = coordinator.tabManager.tabs[tabIndex]
+        guard tab.resultSets.count > 1,
+              let currentId = tab.activeResultSetId ?? tab.resultSets.last?.id,
+              let currentIndex = tab.resultSets.firstIndex(where: { $0.id == currentId }),
+              currentIndex > 0 else { return }
+        coordinator.tabManager.tabs[tabIndex].activeResultSetId = tab.resultSets[currentIndex - 1].id
+    }
+
+    func nextResultTab() {
+        guard let coordinator, let tabIndex = coordinator.tabManager.selectedTabIndex else { return }
+        let tab = coordinator.tabManager.tabs[tabIndex]
+        guard tab.resultSets.count > 1,
+              let currentId = tab.activeResultSetId ?? tab.resultSets.last?.id,
+              let currentIndex = tab.resultSets.firstIndex(where: { $0.id == currentId }),
+              currentIndex < tab.resultSets.count - 1 else { return }
+        coordinator.tabManager.tabs[tabIndex].activeResultSetId = tab.resultSets[currentIndex + 1].id
+    }
+
+    func closeResultTab() {
+        guard let coordinator else { return }
+        let tab = coordinator.tabManager.selectedTab
+        guard let activeId = tab?.activeResultSetId ?? tab?.resultSets.last?.id else { return }
+        coordinator.closeResultSet(id: activeId)
+    }
+
     // MARK: - Database Operations (Group A — Called Directly)
 
     func openDatabaseSwitcher() {
@@ -473,7 +585,7 @@ final class MainContentCommandActions {
 
     func undoChange() {
         if coordinator?.tabManager.selectedTab?.showStructure == true {
-            NotificationCenter.default.post(name: .undoChange, object: nil)
+            coordinator?.structureActions?.undo?()
         } else {
             var indices = selectedRowIndices.wrappedValue
             coordinator?.undoLastChange(selectedRowIndices: &indices)
@@ -483,7 +595,7 @@ final class MainContentCommandActions {
 
     func redoChange() {
         if coordinator?.tabManager.selectedTab?.showStructure == true {
-            NotificationCenter.default.post(name: .redoChange, object: nil)
+            coordinator?.structureActions?.redo?()
         } else {
             coordinator?.redoLastChange()
         }
@@ -512,65 +624,8 @@ final class MainContentCommandActions {
     // MARK: Tab Broadcasts
 
     private func setupTabBroadcastObservers() {
-        observeKeyWindowOnly(.newQueryTab) { [weak self] notification in
-            let initialQuery = notification.object as? String
-            self?.newTab(initialQuery: initialQuery)
-        }
-
-        observeKeyWindowOnly(.loadQueryIntoEditor) { [weak self] notification in
-            self?.handleLoadQueryIntoEditor(notification)
-        }
-
-        observeKeyWindowOnly(.insertQueryFromAI) { [weak self] notification in
-            self?.handleInsertQueryFromAI(notification)
-        }
-    }
-
-    private func handleLoadQueryIntoEditor(_ notification: Notification) {
-        guard let query = notification.object as? String,
-              let coordinator = coordinator else { return }
-
-        // If current window's tab is a query tab, load into it
-        if let tabIndex = coordinator.tabManager.selectedTabIndex,
-           tabIndex < coordinator.tabManager.tabs.count,
-           coordinator.tabManager.tabs[tabIndex].tabType == .query {
-            coordinator.tabManager.tabs[tabIndex].query = query
-            coordinator.tabManager.tabs[tabIndex].hasUserInteraction = true
-        } else {
-            // Open a new native tab with the query
-            let payload = EditorTabPayload(
-                connectionId: connection.id,
-                tabType: .query,
-                initialQuery: query
-            )
-            WindowOpener.shared.openNativeTab(payload)
-        }
-    }
-
-    private func handleInsertQueryFromAI(_ notification: Notification) {
-        guard let query = notification.object as? String,
-              let coordinator = coordinator else { return }
-
-        // If current window's tab is a query tab, append to it
-        if let tabIndex = coordinator.tabManager.selectedTabIndex,
-           tabIndex < coordinator.tabManager.tabs.count,
-           coordinator.tabManager.tabs[tabIndex].tabType == .query {
-            let existingQuery = coordinator.tabManager.tabs[tabIndex].query
-            if existingQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                coordinator.tabManager.tabs[tabIndex].query = query
-            } else {
-                coordinator.tabManager.tabs[tabIndex].query = existingQuery + "\n\n" + query
-            }
-            coordinator.tabManager.tabs[tabIndex].hasUserInteraction = true
-        } else {
-            // Open a new native tab with the query
-            let payload = EditorTabPayload(
-                connectionId: connection.id,
-                tabType: .query,
-                initialQuery: query
-            )
-            WindowOpener.shared.openNativeTab(payload)
-        }
+        // All tab notifications (newQueryTab, loadQueryIntoEditor, insertQueryFromAI)
+        // have been replaced with direct method calls via @FocusedValue.
     }
 
     // MARK: Database Broadcasts
@@ -581,11 +636,11 @@ final class MainContentCommandActions {
 
     private func handleDatabaseDidConnect() {
         Task { @MainActor in
-            await coordinator?.loadSchema()
             if let driver = DatabaseManager.shared.driver(for: self.connection.id) {
                 coordinator?.toolbarState.databaseVersion = driver.serverVersion
             }
             coordinator?.reloadSidebar()
+            coordinator?.initRedisKeyTreeIfNeeded()
         }
     }
 
@@ -614,6 +669,11 @@ final class MainContentCommandActions {
 
         Task { @MainActor in
             for url in urls {
+                if let existingWindow = WindowLifecycleMonitor.shared.window(forSourceFile: url) {
+                    existingWindow.makeKeyAndOrderFront(nil)
+                    continue
+                }
+
                 let content = await Task.detached(priority: .userInitiated) { () -> String? in
                     do {
                         return try String(contentsOf: url, encoding: .utf8)
@@ -627,7 +687,8 @@ final class MainContentCommandActions {
                     let payload = EditorTabPayload(
                         connectionId: connection.id,
                         tabType: .query,
-                        initialQuery: content
+                        initialQuery: content,
+                        sourceFileURL: url
                     )
                     WindowOpener.shared.openNativeTab(payload)
                 }

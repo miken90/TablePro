@@ -22,7 +22,7 @@ extension MainContentView {
         var data: [(column: String, value: String?, type: String)] = []
 
         for (i, col) in tab.resultColumns.enumerated() {
-            let value = i < row.values.count ? row.values[i] : nil
+            let value = i < row.count ? row[i] : nil
             let type = i < tab.columnTypes.count ? tab.columnTypes[i].displayName : "string"
             data.append((column: col, value: value, type: type))
         }
@@ -34,7 +34,7 @@ extension MainContentView {
 
     /// Determine if sidebar should be in editable mode
     var isSidebarEditable: Bool {
-        guard !coordinator.connection.safeModeLevel.blocksAllWrites,
+        guard !coordinator.safeModeLevel.blocksAllWrites,
               let tab = coordinator.tabManager.selectedTab,
               tab.tabType == .table || tab.tableName != nil,
               !selectedRowIndices.isEmpty else {
@@ -124,4 +124,5 @@ struct PendingChangeTrigger: Equatable {
     let pendingTruncates: Set<String>
     let pendingDeletes: Set<String>
     let hasStructureChanges: Bool
+    let isFileDirty: Bool
 }

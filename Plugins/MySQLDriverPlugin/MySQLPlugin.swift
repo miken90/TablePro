@@ -20,7 +20,7 @@ final class MySQLPlugin: NSObject, TableProPlugin, DriverPlugin {
 
     static let databaseTypeId = "MySQL"
     static let databaseDisplayName = "MySQL"
-    static let iconName = "cylinder.fill"
+    static let iconName = "mysql-icon"
     static let defaultPort = 3306
     static let additionalConnectionFields: [ConnectionField] = []
     static let additionalDatabaseTypeIds: [String] = ["MariaDB"]
@@ -40,6 +40,50 @@ final class MySQLPlugin: NSObject, TableProPlugin, DriverPlugin {
         "JSON": ["JSON"],
         "Spatial": ["GEOMETRY", "POINT", "LINESTRING", "POLYGON"]
     ]
+
+    static let sqlDialect: SQLDialectDescriptor? = SQLDialectDescriptor(
+        identifierQuote: "`",
+        keywords: [
+            "SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "OUTER", "CROSS",
+            "ON", "USING", "AND", "OR", "NOT", "IN", "LIKE", "BETWEEN", "AS", "ALIAS",
+            "ORDER", "BY", "GROUP", "HAVING", "LIMIT", "OFFSET",
+            "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE",
+            "CREATE", "ALTER", "DROP", "TABLE", "INDEX", "VIEW", "DATABASE", "SCHEMA",
+            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "UNIQUE", "CONSTRAINT",
+            "ADD", "MODIFY", "CHANGE", "COLUMN", "RENAME",
+            "NULL", "IS", "ASC", "DESC", "DISTINCT", "ALL", "ANY", "SOME",
+            "CASE", "WHEN", "THEN", "ELSE", "END", "IF", "IFNULL", "COALESCE",
+            "UNION", "INTERSECT", "EXCEPT",
+            "FORCE", "USE", "IGNORE", "STRAIGHT_JOIN", "DUAL",
+            "SHOW", "DESCRIBE", "EXPLAIN"
+        ],
+        functions: [
+            "COUNT", "SUM", "AVG", "MAX", "MIN", "GROUP_CONCAT",
+            "CONCAT", "SUBSTRING", "LEFT", "RIGHT", "LENGTH", "LOWER", "UPPER",
+            "TRIM", "LTRIM", "RTRIM", "REPLACE",
+            "NOW", "CURDATE", "CURTIME", "DATE", "TIME", "YEAR", "MONTH", "DAY",
+            "DATE_ADD", "DATE_SUB", "DATEDIFF", "TIMESTAMPDIFF",
+            "ROUND", "CEIL", "FLOOR", "ABS", "MOD", "POW", "SQRT",
+            "CAST", "CONVERT"
+        ],
+        dataTypes: [
+            "INT", "INTEGER", "TINYINT", "SMALLINT", "MEDIUMINT", "BIGINT",
+            "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL",
+            "CHAR", "VARCHAR", "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT",
+            "BLOB", "TINYBLOB", "MEDIUMBLOB", "LONGBLOB",
+            "DATE", "TIME", "DATETIME", "TIMESTAMP", "YEAR",
+            "ENUM", "SET", "JSON", "BOOL", "BOOLEAN"
+        ],
+        tableOptions: [
+            "ENGINE=InnoDB", "DEFAULT CHARSET=utf8mb4", "COLLATE=utf8mb4_unicode_ci",
+            "AUTO_INCREMENT=", "COMMENT=", "ROW_FORMAT="
+        ],
+        regexSyntax: .regexp,
+        booleanLiteralStyle: .numeric,
+        likeEscapeStyle: .implicit,
+        paginationStyle: .limit,
+        requiresBackslashEscaping: true
+    )
 
     func createDriver(config: DriverConnectionConfig) -> any PluginDatabaseDriver {
         MySQLPluginDriver(config: config)

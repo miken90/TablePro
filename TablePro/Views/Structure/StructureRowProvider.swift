@@ -7,63 +7,59 @@
 //
 
 import Foundation
+import TableProPluginKit
 
 /// Provides structure entities as rows for DataGridView
 @MainActor
 final class StructureRowProvider {
+    private static let canonicalFieldOrder: [StructureColumnField] = [
+        .name, .type, .nullable, .defaultValue, .primaryKey, .autoIncrement, .comment
+    ]
+
     private let changeManager: StructureChangeManager
     private let tab: StructureTab
     private let databaseType: DatabaseType
+    private let additionalFields: Set<StructureColumnField>
 
     // Computed properties that match InMemoryRowProvider interface
-    var rows: [QueryResultRow] {
+    var rows: [[String?]] {
         switch tab {
         case .columns:
-            return changeManager.workingColumns.enumerated().map { index, column in
-                if databaseType == .mongodb || databaseType == .redis {
-                    return QueryResultRow(id: index, values: [
-                        column.name,
-                        column.dataType,
-                        column.isNullable ? "YES" : "NO",
-                    ])
+            let pluginFields = Set(PluginManager.shared.structureColumnFields(for: databaseType))
+            let fields = pluginFields.union(additionalFields)
+            let ordered = Self.canonicalFieldOrder.filter { fields.contains($0) }
+            return changeManager.workingColumns.map { column in
+                ordered.map { field -> String? in
+                    switch field {
+                    case .name: column.name
+                    case .type: column.dataType
+                    case .nullable: column.isNullable ? "YES" : "NO"
+                    case .defaultValue: column.defaultValue ?? ""
+                    case .primaryKey: column.isPrimaryKey ? "YES" : "NO"
+                    case .autoIncrement: column.autoIncrement ? "YES" : "NO"
+                    case .comment: column.comment ?? ""
+                    }
                 }
-                if databaseType == .clickhouse {
-                    return QueryResultRow(id: index, values: [
-                        column.name,
-                        column.dataType,
-                        column.isNullable ? "YES" : "NO",
-                        column.defaultValue ?? "",
-                        column.comment ?? ""
-                    ])
-                }
-                return QueryResultRow(id: index, values: [
-                    column.name,
-                    column.dataType,
-                    column.isNullable ? "YES" : "NO",
-                    column.defaultValue ?? "",
-                    column.autoIncrement ? "YES" : "NO",
-                    column.comment ?? ""
-                ])
             }
         case .indexes:
-            return changeManager.workingIndexes.enumerated().map { index, indexInfo in
-                QueryResultRow(id: index, values: [
+            return changeManager.workingIndexes.map { indexInfo in
+                [
                     indexInfo.name,
                     indexInfo.columns.joined(separator: ", "),
                     indexInfo.type.rawValue,
                     indexInfo.isUnique ? "YES" : "NO"
-                ])
+                ]
             }
         case .foreignKeys:
-            return changeManager.workingForeignKeys.enumerated().map { index, fk in
-                QueryResultRow(id: index, values: [
+            return changeManager.workingForeignKeys.map { fk in
+                [
                     fk.name,
                     fk.columns.joined(separator: ", "),
                     fk.referencedTable,
                     fk.referencedColumns.joined(separator: ", "),
                     fk.onDelete.rawValue,
                     fk.onUpdate.rawValue
-                ])
+                ]
             }
         case .ddl, .parts:
             return []
@@ -73,30 +69,10 @@ final class StructureRowProvider {
     var columns: [String] {
         switch tab {
         case .columns:
-            if databaseType == .mongodb || databaseType == .redis {
-                return [
-                    String(localized: "Name"),
-                    String(localized: "Type"),
-                    String(localized: "Nullable"),
-                ]
-            }
-            if databaseType == .clickhouse {
-                return [
-                    String(localized: "Name"),
-                    String(localized: "Type"),
-                    String(localized: "Nullable"),
-                    String(localized: "Default"),
-                    String(localized: "Comment")
-                ]
-            }
-            return [
-                String(localized: "Name"),
-                String(localized: "Type"),
-                String(localized: "Nullable"),
-                String(localized: "Default"),
-                String(localized: "Auto Inc"),
-                String(localized: "Comment")
-            ]
+            let pluginFields = Set(PluginManager.shared.structureColumnFields(for: databaseType))
+            let fields = pluginFields.union(additionalFields)
+            let ordered = Self.canonicalFieldOrder.filter { fields.contains($0) }
+            return ordered.map { $0.displayName }
         case .indexes:
             return [
                 String(localized: "Name"),
@@ -127,13 +103,14 @@ final class StructureRowProvider {
     var dropdownColumns: Set<Int> {
         switch tab {
         case .columns:
-            if databaseType == .mongodb || databaseType == .redis {
-                return [2] // Nullable (index 2) only
-            }
-            if databaseType == .clickhouse {
-                return [2] // Nullable (index 2) only, no Auto Inc
-            }
-            return [2, 4] // Nullable (index 2), Auto Inc (index 4)
+            let pluginFields = Set(PluginManager.shared.structureColumnFields(for: databaseType))
+            let fields = pluginFields.union(additionalFields)
+            let ordered = Self.canonicalFieldOrder.filter { fields.contains($0) }
+            var result: Set<Int> = []
+            if let i = ordered.firstIndex(of: .nullable) { result.insert(i) }
+            if let i = ordered.firstIndex(of: .primaryKey) { result.insert(i) }
+            if let i = ordered.firstIndex(of: .autoIncrement) { result.insert(i) }
+            return result
         case .indexes:
             return [3] // Unique (index 3)
         case .foreignKeys:
@@ -147,7 +124,11 @@ final class StructureRowProvider {
     var typePickerColumns: Set<Int> {
         switch tab {
         case .columns:
-            return [1] // Type (index 1)
+            let pluginFields = Set(PluginManager.shared.structureColumnFields(for: databaseType))
+            let fields = pluginFields.union(additionalFields)
+            let ordered = Self.canonicalFieldOrder.filter { fields.contains($0) }
+            if let i = ordered.firstIndex(of: .type) { return [i] }
+            return []
         case .indexes, .foreignKeys, .ddl, .parts:
             return []
         }
@@ -157,16 +138,22 @@ final class StructureRowProvider {
         rows.count
     }
 
-    init(changeManager: StructureChangeManager, tab: StructureTab, databaseType: DatabaseType = .mysql) {
+    init(
+        changeManager: StructureChangeManager,
+        tab: StructureTab,
+        databaseType: DatabaseType = .mysql,
+        additionalFields: Set<StructureColumnField> = []
+    ) {
         self.changeManager = changeManager
         self.tab = tab
         self.databaseType = databaseType
+        self.additionalFields = additionalFields
     }
 
     // MARK: - InMemoryRowProvider-compatible methods
 
-    func row(at index: Int) -> QueryResultRow? {
-        guard index < rows.count else { return nil }
+    func row(at index: Int) -> [String?]? {
+        guard index >= 0, index < rows.count else { return nil }
         return rows[index]
     }
 

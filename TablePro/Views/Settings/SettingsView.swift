@@ -9,7 +9,7 @@ import SwiftUI
 
 /// Settings tab identifiers for programmatic navigation
 enum SettingsTab: String {
-    case general, appearance, editor, dataGrid, keyboard, history, ai, plugins, license
+    case general, appearance, editor, dataGrid, keyboard, history, ai, plugins, sync, license
 }
 
 /// Main settings view with tab-based navigation (macOS Settings style)
@@ -17,14 +17,18 @@ struct SettingsView: View {
     @Bindable private var settingsManager = AppSettingsManager.shared
     @Environment(UpdaterBridge.self) var updaterBridge
     @AppStorage("selectedSettingsTab") private var selectedTab: String = SettingsTab.general.rawValue
-
     var body: some View {
         TabView(selection: $selectedTab) {
-            GeneralSettingsView(settings: $settingsManager.general, updaterBridge: updaterBridge)
-                .tabItem {
-                    Label("General", systemImage: "gearshape")
-                }
-                .tag(SettingsTab.general.rawValue)
+            GeneralSettingsView(
+                settings: $settingsManager.general,
+                tabSettings: $settingsManager.tabs,
+                updaterBridge: updaterBridge,
+                onResetAll: { settingsManager.resetToDefaults() }
+            )
+            .tabItem {
+                Label("General", systemImage: "gearshape")
+            }
+            .tag(SettingsTab.general.rawValue)
 
             AppearanceSettingsView(settings: $settingsManager.appearance)
                 .tabItem {
@@ -68,13 +72,20 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.plugins.rawValue)
 
+            SyncSettingsView()
+                .tabItem {
+                    Label("Sync (Pro)", systemImage: "icloud")
+                }
+                .tag(SettingsTab.sync.rawValue)
+                .requiresPro(.iCloudSync)
+
             LicenseSettingsView()
                 .tabItem {
                     Label("License", systemImage: "key")
                 }
                 .tag(SettingsTab.license.rawValue)
         }
-        .frame(width: 620, height: 500)
+        .frame(width: 720, height: 500)
     }
 }
 

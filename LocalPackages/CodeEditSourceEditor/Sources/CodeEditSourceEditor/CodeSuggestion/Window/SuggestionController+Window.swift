@@ -6,6 +6,12 @@
 //
 
 import AppKit
+import SwiftUI
+
+internal final class SuggestionPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
 
 extension SuggestionController {
     /// Will constrain the window's frame to be within the visible screen
@@ -79,27 +85,36 @@ extension SuggestionController {
         }
     }
 
+    func updateWindowSizeFromContent() {
+        guard let hostingView = window?.contentView as? NSHostingView<SuggestionContentView> else { return }
+        let fitting = hostingView.fittingSize
+        let minWidth: CGFloat = 256
+        let newSize = NSSize(width: max(fitting.width, minWidth), height: fitting.height)
+        updateWindowSize(newSize: newSize)
+    }
+
     // MARK: - Private Methods
 
-    static func makeWindow() -> NSWindow {
-        let window = NSWindow(
+    static func makeWindow() -> NSPanel {
+        let panel = SuggestionPanel(
             contentRect: .zero,
             styleMask: [.resizable, .fullSizeContentView, .nonactivatingPanel, .utilityWindow],
             backing: .buffered,
             defer: false
         )
 
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.isExcludedFromWindowsMenu = true
-        window.isReleasedWhenClosed = false
-        window.level = .popUpMenu
-        window.hasShadow = true
-        window.isOpaque = false
-        window.tabbingMode = .disallowed
-        window.hidesOnDeactivate = true
-        window.backgroundColor = .clear
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.isExcludedFromWindowsMenu = true
+        panel.isReleasedWhenClosed = false
+        panel.level = .popUpMenu
+        panel.hasShadow = true
+        panel.isOpaque = false
+        panel.tabbingMode = .disallowed
+        panel.hidesOnDeactivate = true
+        panel.backgroundColor = .clear
 
-        return window
+        return panel
     }
 }

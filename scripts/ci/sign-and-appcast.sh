@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Signs release archives and generates appcast.xml using Sparkle's
+# generate_appcast — the official tool for building Sparkle update feeds.
+#
+# Sparkle 2.9+ rejects multiple archives with the same bundle version in
+# a single directory, so we run generate_appcast once per architecture
+# and merge the resulting appcast entries.
+#
+# Usage: sign-and-appcast.sh <version>
+# Requires: SPARKLE_PRIVATE_KEY env var, artifacts/ directory with ZIPs.
+
 VERSION="${1:?Usage: sign-and-appcast.sh <version>}"
 
 if [ -z "${SPARKLE_PRIVATE_KEY:-}" ]; then
@@ -8,59 +18,24 @@ if [ -z "${SPARKLE_PRIVATE_KEY:-}" ]; then
   exit 1
 fi
 
-# Install Sparkle tools (Cask — binaries in Caskroom, not on PATH)
+# ---------------------------------------------------------------------------
+# 1. Locate Sparkle tools
+# ---------------------------------------------------------------------------
 brew list --cask sparkle &>/dev/null || brew install --cask sparkle
 SPARKLE_BIN="$(brew --caskroom)/sparkle/$(ls "$(brew --caskroom)/sparkle" | head -1)/bin"
 
-ARM64_ZIP="artifacts/TablePro-${VERSION}-arm64.zip"
-X86_64_ZIP="artifacts/TablePro-${VERSION}-x86_64.zip"
-
-# Sign each ZIP with EdDSA using sign_update
-KEY_FILE=$(mktemp)
-trap 'rm -f "$KEY_FILE"' EXIT
-echo "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
-ARM64_SIG=$("$SPARKLE_BIN/sign_update" "$ARM64_ZIP" -f "$KEY_FILE")
-X86_64_SIG=$("$SPARKLE_BIN/sign_update" "$X86_64_ZIP" -f "$KEY_FILE")
-
-# Parse signature and length from sign_update output
-# Output format: sparkle:edSignature="..." length="..."
-ARM64_ED_SIG=$(echo "$ARM64_SIG" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')
-ARM64_LENGTH=$(echo "$ARM64_SIG" | sed -n 's/.*length="\([^"]*\)".*/\1/p')
-X86_64_ED_SIG=$(echo "$X86_64_SIG" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')
-X86_64_LENGTH=$(echo "$X86_64_SIG" | sed -n 's/.*length="\([^"]*\)".*/\1/p')
-
-# Extract version info from the top-level app's Info.plist inside the ZIP
-# Use -maxdepth 3 to avoid nested framework plists (e.g. Sparkle.framework)
-TEMP_DIR=$(mktemp -d)
-unzip -q "$ARM64_ZIP" -d "$TEMP_DIR"
-INFO_PLIST=$(find "$TEMP_DIR" -maxdepth 3 -path "*/Contents/Info.plist" | head -1)
-
-if [ -n "$INFO_PLIST" ] && [ -f "$INFO_PLIST" ]; then
-  BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO_PLIST" 2>/dev/null || echo "1")
-  SHORT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST" 2>/dev/null || echo "$VERSION")
-  MIN_OS=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$INFO_PLIST" 2>/dev/null || echo "14.0")
-else
-  echo "⚠️  Could not find app Info.plist in ZIP, using defaults from tag"
-  BUILD_NUMBER="1"
-  SHORT_VERSION="$VERSION"
-  MIN_OS="14.0"
-fi
-rm -rf "$TEMP_DIR"
-
-# Extract release notes for appcast
+# ---------------------------------------------------------------------------
+# 2. Extract release notes from CHANGELOG.md → HTML
+# ---------------------------------------------------------------------------
 if [ -f release_notes.md ]; then
-    NOTES=$(cat release_notes.md)
+  NOTES=$(cat release_notes.md)
 else
-    NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+  NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
 fi
 
 if [ -z "$NOTES" ]; then
-  RELEASE_HTML="<li>Bug fixes and improvements</li>"
+  RELEASE_HTML="<ul><li>Bug fixes and improvements</li></ul>"
 else
-  # Convert markdown to simple HTML:
-  #   ### Header -> <h3>Header</h3>
-  #   - item    -> <li>item</li>
-  #   Wrap consecutive <li> runs in <ul>...</ul>
   RELEASE_HTML=$(echo "$NOTES" | sed -E \
     -e 's/^### (.+)$/<h3>\1<\/h3>/' \
     -e 's/^- (.+)$/<li>\1<\/li>/' \
@@ -78,40 +53,111 @@ else
   ')
 fi
 
-# Wrap in a styled HTML body
-DESCRIPTION_HTML="<body style=\"font-family: -apple-system, sans-serif; font-size: 13px; padding: 8px;\">${RELEASE_HTML}</body>"
+DOWNLOAD_PREFIX="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-TableProApp/TablePro}/releases/download/v${VERSION}/"
 
-# Build appcast.xml with architecture-specific items (Sparkle 2 convention)
-DOWNLOAD_PREFIX="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-datlechin/TablePro}/releases/download/v${VERSION}"
-PUB_DATE=$(date -u '+%a, %d %b %Y %H:%M:%S +0000')
+KEY_FILE=$(mktemp)
+trap 'rm -rf "$KEY_FILE"' EXIT
 
+echo "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
+
+# ---------------------------------------------------------------------------
+# 3. Generate appcast per architecture
+# ---------------------------------------------------------------------------
+# Sparkle 2.9+ does not allow two archives with the same bundle version
+# in one directory. Process each architecture separately and merge.
+
+ARCHS=("arm64" "x86_64")
+APPCAST_XMLS=()
+
+for arch in "${ARCHS[@]}"; do
+  ZIP="artifacts/TablePro-${VERSION}-${arch}.zip"
+  if [ ! -f "$ZIP" ]; then
+    echo "⚠️  Skipping $arch — $ZIP not found"
+    continue
+  fi
+
+  STAGING=$(mktemp -d)
+
+  cp "$ZIP" "$STAGING/"
+
+  # Release notes file matching archive name
+  basename="${STAGING}/TablePro-${VERSION}-${arch}"
+  echo "$RELEASE_HTML" > "${basename}.html"
+
+  # Copy existing appcast for history preservation (only for first arch)
+  if [ "${#APPCAST_XMLS[@]}" -eq 0 ] && [ -f appcast.xml ]; then
+    cp appcast.xml "$STAGING/"
+  fi
+
+  "$SPARKLE_BIN/generate_appcast" \
+    --ed-key-file "$KEY_FILE" \
+    --download-url-prefix "$DOWNLOAD_PREFIX" \
+    --embed-release-notes \
+    --maximum-versions 0 \
+    "$STAGING"
+
+  APPCAST_XMLS+=("$STAGING/appcast.xml")
+done
+
+# ---------------------------------------------------------------------------
+# 4. Merge appcast files
+# ---------------------------------------------------------------------------
+if [ "${#APPCAST_XMLS[@]}" -eq 0 ]; then
+  echo "❌ ERROR: No archives found to process"
+  exit 1
+fi
+
+if [ "${#APPCAST_XMLS[@]}" -eq 1 ]; then
+  # Single arch — use as-is
+  FINAL_APPCAST="${APPCAST_XMLS[0]}"
+else
+  # Merge: take the first appcast (has history + arm64 entry), then
+  # extract only the NEW item(s) from the second appcast and insert them.
+  FINAL_APPCAST="${APPCAST_XMLS[0]}"
+  SECOND_APPCAST="${APPCAST_XMLS[1]}"
+
+  # Extract <item>...</item> blocks for the current version from second appcast
+  ITEMS_FILE=$(mktemp)
+  awk "
+    /<item>/ { capture=1; buf=\"\" }
+    capture { buf = buf \$0 \"\\n\" }
+    /<\\/item>/ {
+      capture=0
+      if (buf ~ /<sparkle:shortVersionString>${VERSION}</) {
+        printf \"%s\", buf
+      }
+    }
+  " "$SECOND_APPCAST" > "$ITEMS_FILE"
+
+  if [ -s "$ITEMS_FILE" ]; then
+    # Find the line number of the first </item> in the base appcast and
+    # insert the second arch's item block right after it.
+    FIRST_CLOSE=$(grep -n '</item>' "$FINAL_APPCAST" | head -1 | cut -d: -f1)
+    if [ -n "$FIRST_CLOSE" ]; then
+      {
+        head -n "$FIRST_CLOSE" "$FINAL_APPCAST"
+        cat "$ITEMS_FILE"
+        tail -n +"$((FIRST_CLOSE + 1))" "$FINAL_APPCAST"
+      } > "${FINAL_APPCAST}.merged"
+      mv "${FINAL_APPCAST}.merged" "$FINAL_APPCAST"
+    fi
+  fi
+  rm -f "$ITEMS_FILE"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Fix download URLs
+# ---------------------------------------------------------------------------
+# Sparkle 2.9+ may ignore --download-url-prefix for new entries.
+# Ensure all archive URLs for this version point to the correct GitHub
+# Release download path: .../releases/download/v<VERSION>/<filename>
+sed -i '' -E "s|releases/download/(TablePro-${VERSION}-)|releases/download/v${VERSION}/\1|g" "$FINAL_APPCAST"
+
+# ---------------------------------------------------------------------------
+# 6. Copy result
+# ---------------------------------------------------------------------------
 mkdir -p appcast
-cat > appcast/appcast.xml << APPCAST_EOF
-<?xml version="1.0" standalone="yes"?>
-<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
-    <channel>
-        <title>TablePro</title>
-        <item>
-            <title>${SHORT_VERSION}</title>
-            <pubDate>${PUB_DATE}</pubDate>
-            <sparkle:version>${BUILD_NUMBER}</sparkle:version>
-            <sparkle:shortVersionString>${SHORT_VERSION}</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>${MIN_OS}</sparkle:minimumSystemVersion>
-            <description><![CDATA[${DESCRIPTION_HTML}]]></description>
-            <enclosure url="${DOWNLOAD_PREFIX}/TablePro-${VERSION}-arm64.zip" length="${ARM64_LENGTH}" type="application/octet-stream" sparkle:edSignature="${ARM64_ED_SIG}" sparkle:architectures="arm64"/>
-        </item>
-        <item>
-            <title>${SHORT_VERSION}</title>
-            <pubDate>${PUB_DATE}</pubDate>
-            <sparkle:version>${BUILD_NUMBER}</sparkle:version>
-            <sparkle:shortVersionString>${SHORT_VERSION}</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>${MIN_OS}</sparkle:minimumSystemVersion>
-            <description><![CDATA[${DESCRIPTION_HTML}]]></description>
-            <enclosure url="${DOWNLOAD_PREFIX}/TablePro-${VERSION}-x86_64.zip" length="${X86_64_LENGTH}" type="application/octet-stream" sparkle:edSignature="${X86_64_ED_SIG}" sparkle:architectures="x86_64"/>
-        </item>
-    </channel>
-</rss>
-APPCAST_EOF
+cp "$FINAL_APPCAST" appcast/appcast.xml
 
-echo "✅ Appcast generated with architecture-specific items:"
+echo "✅ Appcast generated by generate_appcast:"
 cat appcast/appcast.xml

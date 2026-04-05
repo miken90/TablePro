@@ -23,6 +23,7 @@ final class RedshiftPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     var supportsSchemas: Bool { true }
     var supportsTransactions: Bool { true }
     var serverVersion: String? { libpqConnection?.serverVersion() }
+    var parameterStyle: ParameterStyle { .dollar }
 
     init(config: DriverConnectionConfig) {
         self.config = config
@@ -156,6 +157,12 @@ final class RedshiftPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     func applyQueryTimeout(_ seconds: Int) async throws {
         let ms = seconds * 1_000
         _ = try await execute(query: "SET statement_timeout = '\(ms)'")
+    }
+
+    // MARK: - EXPLAIN
+
+    func buildExplainQuery(_ sql: String) -> String? {
+        "EXPLAIN \(sql)"
     }
 
     // MARK: - Schema
@@ -633,6 +640,26 @@ final class RedshiftPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
             query += " LC_COLLATE '\(escapedCollation)'"
         }
         _ = try await execute(query: query)
+    }
+
+    // MARK: - All Tables Metadata
+
+    func allTablesMetadataSQL(schema: String?) -> String? {
+        let s = schema ?? currentSchema ?? "public"
+        return """
+        SELECT
+            schema,
+            "table" as name,
+            'TABLE' as kind,
+            tbl_rows as estimated_rows,
+            size as size_mb,
+            pct_used,
+            unsorted,
+            stats_off
+        FROM svv_table_info
+        WHERE schema = '\(s)'
+        ORDER BY "table"
+        """
     }
 
     // MARK: - Helpers

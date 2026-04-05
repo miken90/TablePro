@@ -8,6 +8,7 @@
 import Foundation
 import Observation
 import os
+import TableProPluginKit
 
 /// View model for the AI chat panel
 @MainActor @Observable
@@ -48,6 +49,38 @@ final class AIChatViewModel {
     /// Query results summary from the active tab
     var queryResults: String?
 
+    // MARK: - AI Action Dispatch
+
+    private var queryLanguage: String {
+        guard let type = connection?.type else { return "sql" }
+        return PluginManager.shared.editorLanguage(for: type).codeBlockTag
+    }
+
+    private var queryTypeName: String {
+        guard let type = connection?.type else { return "SQL query" }
+        return "\(PluginManager.shared.queryLanguageName(for: type)) query"
+    }
+
+    func handleFixError(query: String, error: String) {
+        startNewConversation()
+        let prompt = "Fix this \(queryTypeName) error:\n\nQuery:\n```\(queryLanguage)\n\(query)\n```\n\nError: \(error)"
+        sendWithContext(prompt: prompt, feature: .fixError)
+    }
+
+    func handleExplainSelection(_ selectedText: String) {
+        guard !selectedText.isEmpty else { return }
+        startNewConversation()
+        let prompt = "Explain this \(queryTypeName):\n```\(queryLanguage)\n\(selectedText)\n```"
+        sendWithContext(prompt: prompt, feature: .explainQuery)
+    }
+
+    func handleOptimizeSelection(_ selectedText: String) {
+        guard !selectedText.isEmpty else { return }
+        startNewConversation()
+        let prompt = "Optimize this \(queryTypeName):\n```\(queryLanguage)\n\(selectedText)\n```"
+        sendWithContext(prompt: prompt, feature: .optimizeQuery)
+    }
+
     // MARK: - Constants
 
     /// Maximum number of messages to keep in memory to prevent unbounded growth
@@ -55,7 +88,9 @@ final class AIChatViewModel {
 
     // MARK: - Private
 
-    private var streamingTask: Task<Void, Never>?
+    /// nonisolated(unsafe) is required because deinit is not @MainActor-isolated,
+    /// so accessing a @MainActor property from deinit requires opting out of isolation.
+    @ObservationIgnored nonisolated(unsafe) private var streamingTask: Task<Void, Never>?
     private var streamingAssistantID: UUID?
     private var lastUsedFeature: AIFeature = .chat
     private let chatStorage = AIChatStorage.shared
@@ -66,6 +101,10 @@ final class AIChatViewModel {
 
     init() {
         loadConversations()
+    }
+
+    deinit {
+        streamingTask?.cancel()
     }
 
     // MARK: - Actions
@@ -374,6 +413,7 @@ final class AIChatViewModel {
     private func buildSystemPrompt(settings: AISettings) -> String? {
         guard let connection else { return nil }
 
+        let idQuote = PluginManager.shared.sqlDialect(for: connection.type)?.identifierQuote ?? "\""
         return AISchemaContext.buildSystemPrompt(
             databaseType: connection.type,
             databaseName: connection.database,
@@ -382,7 +422,8 @@ final class AIChatViewModel {
             foreignKeys: foreignKeysByTable,
             currentQuery: settings.includeCurrentQuery ? currentQuery : nil,
             queryResults: settings.includeQueryResults ? queryResults : nil,
-            settings: settings
+            settings: settings,
+            identifierQuote: idQuote
         )
     }
 }

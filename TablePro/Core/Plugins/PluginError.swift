@@ -10,6 +10,7 @@ enum PluginError: LocalizedError {
     case signatureInvalid(detail: String)
     case checksumMismatch
     case incompatibleVersion(required: Int, current: Int)
+    case pluginOutdated(pluginVersion: Int, requiredVersion: Int)
     case cannotUninstallBuiltIn
     case notFound
     case noCompatibleBinary
@@ -19,6 +20,7 @@ enum PluginError: LocalizedError {
     case downloadFailed(String)
     case pluginNotInstalled(String)
     case incompatibleWithCurrentApp(minimumRequired: String)
+    case invalidDescriptor(pluginId: String, reason: String)
 
     var errorDescription: String? {
         switch self {
@@ -30,6 +32,8 @@ enum PluginError: LocalizedError {
             return String(localized: "Plugin checksum does not match expected value")
         case .incompatibleVersion(let required, let current):
             return String(localized: "Plugin requires PluginKit version \(required), but app provides version \(current)")
+        case .pluginOutdated(let pluginVersion, let requiredVersion):
+            return String(localized: "Plugin was built with PluginKit version \(pluginVersion), but version \(requiredVersion) is required. Please update the plugin.")
         case .cannotUninstallBuiltIn:
             return String(localized: "Built-in plugins cannot be uninstalled")
         case .notFound:
@@ -48,6 +52,8 @@ enum PluginError: LocalizedError {
             return String(localized: "The \(databaseType) plugin is not installed. You can download it from the plugin marketplace.")
         case .incompatibleWithCurrentApp(let minimumRequired):
             return String(localized: "This plugin requires TablePro \(minimumRequired) or later")
+        case .invalidDescriptor(let pluginId, let reason):
+            return String(localized: "Plugin '\(pluginId)' has an invalid descriptor: \(reason)")
         }
     }
 }

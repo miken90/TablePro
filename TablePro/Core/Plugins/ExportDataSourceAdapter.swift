@@ -22,17 +22,10 @@ final class ExportDataSourceAdapter: PluginExportDataSource, @unchecked Sendable
 
     func fetchRows(table: String, databaseName: String, offset: Int, limit: Int) async throws -> PluginQueryResult {
         let query: String
-        switch dbType {
-        case .mongodb:
-            let escaped = escapeJSIdentifier(table)
-            if escaped.hasPrefix("[") {
-                query = "db\(escaped).find({})"
-            } else {
-                query = "db.\(escaped).find({})"
-            }
-        case .redis:
-            query = "SCAN 0 MATCH \"*\" COUNT 10000"
-        default:
+        if let pluginDriver = (driver as? PluginDriverAdapter)?.schemaPluginDriver,
+           let customQuery = pluginDriver.defaultExportQuery(table: table) {
+            query = customQuery
+        } else {
             let tableRef = qualifiedTableRef(table: table, databaseName: databaseName)
             query = "SELECT * FROM \(tableRef)"
         }
@@ -50,11 +43,11 @@ final class ExportDataSourceAdapter: PluginExportDataSource, @unchecked Sendable
     }
 
     func quoteIdentifier(_ identifier: String) -> String {
-        dbType.quoteIdentifier(identifier)
+        driver.quoteIdentifier(identifier)
     }
 
     func escapeStringLiteral(_ value: String) -> String {
-        SQLEscaping.escapeStringLiteral(value, databaseType: dbType)
+        driver.escapeStringLiteral(value)
     }
 
     func fetchApproximateRowCount(table: String, databaseName: String) async throws -> Int? {
@@ -75,21 +68,12 @@ final class ExportDataSourceAdapter: PluginExportDataSource, @unchecked Sendable
 
     private func qualifiedTableRef(table: String, databaseName: String) -> String {
         if databaseName.isEmpty {
-            return dbType.quoteIdentifier(table)
+            return driver.quoteIdentifier(table)
         } else {
-            let quotedDb = dbType.quoteIdentifier(databaseName)
-            let quotedTable = dbType.quoteIdentifier(table)
+            let quotedDb = driver.quoteIdentifier(databaseName)
+            let quotedTable = driver.quoteIdentifier(table)
             return "\(quotedDb).\(quotedTable)"
         }
-    }
-
-    private func escapeJSIdentifier(_ name: String) -> String {
-        guard let firstChar = name.first,
-              !firstChar.isNumber,
-              name.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) else {
-            return "[\"\(PluginExportUtilities.escapeJSONString(name))\"]"
-        }
-        return name
     }
 
     private func mapToPluginResult(_ result: QueryResult) -> PluginQueryResult {

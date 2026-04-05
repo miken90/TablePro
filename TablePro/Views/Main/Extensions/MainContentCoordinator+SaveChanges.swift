@@ -17,7 +17,7 @@ extension MainContentCoordinator {
         pendingDeletes: inout Set<String>,
         tableOperationOptions: inout [String: TableOperationOptions]
     ) {
-        guard !connection.safeModeLevel.blocksAllWrites else {
+        guard !safeModeLevel.blocksAllWrites else {
             if let index = tabManager.selectedTabIndex {
                 tabManager.tabs[index].errorMessage = "Cannot save changes: connection is read-only"
             }
@@ -60,7 +60,7 @@ extension MainContentCoordinator {
             return
         }
 
-        let level = connection.safeModeLevel
+        let level = safeModeLevel
         if level.requiresConfirmation {
             let sqlPreview = allStatements.map(\.sql).joined(separator: "\n")
             // Snapshot inout values before clearing — needed for executeCommitStatements
@@ -156,7 +156,7 @@ extension MainContentCoordinator {
         let dbType = connection.type
 
         // Track if FK checks were disabled (need to re-enable on failure)
-        let fkWasDisabled = dbType != .postgresql && deletedTables.union(truncatedTables).contains { tableName in
+        let fkWasDisabled = PluginManager.shared.supportsForeignKeyDisable(for: dbType) && deletedTables.union(truncatedTables).contains { tableName in
             tableOperationOptions[tableName]?.ignoreForeignKeys == true
         }
 
@@ -187,7 +187,13 @@ extension MainContentCoordinator {
                     throw DatabaseError.notConnected
                 }
 
-                try await driver.beginTransaction()
+                // Redis MULTI/EXEC is not a true transaction (no rollback on failure),
+                // so execute statements individually without wrapping.
+                let useTransaction = dbType != .redis
+
+                if useTransaction {
+                    try await driver.beginTransaction()
+                }
 
                 do {
                     for statement in validStatements {
@@ -200,8 +206,9 @@ extension MainContentCoordinator {
 
                         let executionTime = Date().timeIntervalSince(statementStartTime)
 
+                        let historySQL = statement.sql.trimmingCharacters(in: .whitespacesAndNewlines)
                         QueryHistoryManager.shared.recordQuery(
-                            query: statement.sql.trimmingCharacters(in: .whitespacesAndNewlines),
+                            query: historySQL.hasSuffix(";") ? historySQL : historySQL + ";",
                             connectionId: conn.id,
                             databaseName: conn.database,
                             executionTime: executionTime,
@@ -211,25 +218,41 @@ extension MainContentCoordinator {
                         )
                     }
 
-                    try await driver.commitTransaction()
+                    if useTransaction {
+                        try await driver.commitTransaction()
+                    }
                 } catch {
-                    try? await driver.rollbackTransaction()
+                    if useTransaction {
+                        try? await driver.rollbackTransaction()
+                    }
                     throw error
                 }
 
-                changeManager.clearChanges()
+                changeManager.clearChangesAndUndoHistory()
                 if let index = tabManager.selectedTabIndex {
                     tabManager.tabs[index].pendingChanges = TabPendingChanges()
                     tabManager.tabs[index].errorMessage = nil
                 }
 
                 if clearTableOps {
-                    // Close tabs for deleted tables
+                    // Remove tabs for deleted tables
                     if !deletedTables.isEmpty {
-                        if let currentTab = tabManager.selectedTab,
-                           let tableName = currentTab.tableName,
-                           deletedTables.contains(tableName) {
-                            NSApp.keyWindow?.close()
+                        let tabIdsToRemove = Set(
+                            tabManager.tabs
+                                .filter { $0.tabType == .table && deletedTables.contains($0.tableName ?? "") }
+                                .map(\.id)
+                        )
+
+                        if !tabIdsToRemove.isEmpty {
+                            let firstRemovedIndex = tabManager.tabs
+                                .firstIndex { tabIdsToRemove.contains($0.id) } ?? 0
+                            tabManager.tabs.removeAll { tabIdsToRemove.contains($0.id) }
+                            if !tabManager.tabs.isEmpty {
+                                let neighborIndex = min(firstRemovedIndex, tabManager.tabs.count - 1)
+                                tabManager.selectedTabId = tabManager.tabs[neighborIndex].id
+                            } else {
+                                tabManager.selectedTabId = nil
+                            }
                         }
                     }
 
@@ -275,7 +298,7 @@ extension MainContentCoordinator {
                 AlertHelper.showErrorSheet(
                     title: String(localized: "Save Failed"),
                     message: error.localizedDescription,
-                    window: NSApplication.shared.keyWindow
+                    window: contentWindow
                 )
 
                 // Restore operations on failure so user can retry

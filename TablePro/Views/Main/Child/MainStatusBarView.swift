@@ -17,8 +17,12 @@ struct MainStatusBarView: View {
 
     let tab: QueryTab?
     let filterStateManager: FilterStateManager
+    let columnVisibilityManager: ColumnVisibilityManager
+    let allColumns: [String]
     let selectedRowIndices: Set<Int>
     @Binding var showStructure: Bool
+
+    @State private var showColumnPopover = false
 
     // Pagination callbacks
     let onFirstPage: () -> Void
@@ -33,29 +37,64 @@ struct MainStatusBarView: View {
         HStack {
             // Left: Data/Structure toggle for table tabs
             if let tab = tab, tab.tabType == .table, tab.tableName != nil {
-                Picker("", selection: $showStructure) {
+                Picker(String(localized: "View Mode"), selection: $showStructure) {
                     Label("Data", systemImage: "tablecells").tag(false)
                     Label("Structure", systemImage: "list.bullet.rectangle").tag(true)
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(width: 180)
                 .controlSize(.small)
-                .offset(x: -26)
             }
 
             Spacer()
 
-            // Center: Row info (selection or pagination summary)
+            // Center: Row info (selection or pagination summary) and status message
             if let tab = tab, !tab.resultRows.isEmpty {
-                Text(rowInfoText(for: tab))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(rowInfoText(for: tab))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if let statusMessage = tab.statusMessage {
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+                        Text(statusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             Spacer()
 
-            // Right: Filters toggle and Pagination controls
+            // Right: Columns, Filters toggle and Pagination controls
             HStack(spacing: 8) {
+                // Columns visibility button (works for both table and query tabs)
+                if let tab = tab, !tab.resultColumns.isEmpty {
+                    Button {
+                        showColumnPopover.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: columnVisibilityManager.hasHiddenColumns
+                                    ? "eye.slash.circle.fill"
+                                    : "eye.circle")
+                            Text("Columns")
+                            if columnVisibilityManager.hasHiddenColumns {
+                                Text("(\(columnVisibilityManager.hiddenCount) hidden)")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .controlSize(.small)
+                    .popover(isPresented: $showColumnPopover) {
+                        ColumnVisibilityPopover(
+                            columns: allColumns,
+                            columnVisibilityManager: columnVisibilityManager
+                        )
+                    }
+                }
+
                 // Filters toggle button
                 if let tab = tab, tab.tabType == .table, tab.tableName != nil {
                     Toggle(isOn: Binding(
@@ -75,7 +114,7 @@ struct MainStatusBarView: View {
                     }
                     .toggleStyle(.button)
                     .controlSize(.small)
-                    .help("Toggle Filters (Cmd+F)")
+                    .help(String(localized: "Toggle Filters (⌘F)"))
                 }
 
                 // Pagination controls for table tabs
@@ -97,6 +136,9 @@ struct MainStatusBarView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .background(Color(nsColor: .controlBackgroundColor))
+        .onChange(of: tab?.id) { _, _ in
+            showColumnPopover = false
+        }
     }
 
     /// Generate row info text based on selection and pagination state

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import TableProPluginKit
 
 /// Provides cached database schema information for autocomplete
 actor SQLSchemaProvider {
@@ -17,6 +18,8 @@ actor SQLSchemaProvider {
     private let maxCachedTables = 50
     private var isLoading = false
     private var lastLoadError: Error?
+    private var lastRetryAttempt: Date?
+    private let retryCooldown: TimeInterval = 30
 
     // Store a weak driver reference to avoid retaining it after disconnect (MEM-9)
     private weak var cachedDriver: (any DatabaseDriver)?
@@ -82,6 +85,15 @@ actor SQLSchemaProvider {
         }
     }
 
+    func retryLoadSchemaIfNeeded() async {
+        guard lastLoadError != nil, tables.isEmpty, !isLoading else { return }
+        guard let driver = cachedDriver else { return }
+        if let last = lastRetryAttempt, Date().timeIntervalSince(last) < retryCooldown { return }
+        lastRetryAttempt = Date()
+        lastLoadError = nil
+        await loadSchema(using: driver, connection: connectionInfo)
+    }
+
     /// Check if schema is loaded
     func isSchemaLoaded() -> Bool {
         !tables.isEmpty
@@ -100,25 +112,42 @@ actor SQLSchemaProvider {
         cachedDriver = nil
     }
 
+    func invalidateTables() {
+        tables.removeAll()
+    }
+
+    func updateTables(_ newTables: [TableInfo]) {
+        tables = newTables
+    }
+
+    func fetchFreshTables() async throws -> [TableInfo]? {
+        guard let driver = cachedDriver else { return nil }
+        let fresh = try await driver.fetchTables()
+        tables = fresh
+        return fresh
+    }
+
     /// Find table name from alias
     func resolveAlias(_ aliasOrName: String, in references: [TableReference]) -> String? {
+        let lowerName = aliasOrName.lowercased()
+
         // First check if it's an alias
         for ref in references {
-            if ref.alias?.lowercased() == aliasOrName.lowercased() {
+            if ref.alias?.lowercased() == lowerName {
                 return ref.tableName
             }
         }
 
         // Then check if it's a table name directly
         for ref in references {
-            if ref.tableName.lowercased() == aliasOrName.lowercased() {
+            if ref.tableName.lowercased() == lowerName {
                 return ref.tableName
             }
         }
 
         // Finally check against known tables
         for table in tables {
-            if table.name.lowercased() == aliasOrName.lowercased() {
+            if table.name.lowercased() == lowerName {
                 return table.name
             }
         }
@@ -139,16 +168,26 @@ actor SQLSchemaProvider {
             }
         }
 
-        return AISchemaContext.buildSystemPrompt(
-            databaseType: connection.type,
-            databaseName: connection.database,
-            tables: tables,
-            columnsByTable: columnsByTable,
-            foreignKeys: [:],
-            currentQuery: nil,
-            queryResults: nil,
-            settings: settings
-        )
+        let dbType = connection.type
+        let dbName = connection.database
+        let capturedTables = tables
+        let idQuote = await MainActor.run {
+            PluginManager.shared.sqlDialect(for: dbType)?.identifierQuote ?? "\""
+        }
+
+        return await MainActor.run {
+            AISchemaContext.buildSystemPrompt(
+                databaseType: dbType,
+                databaseName: dbName,
+                tables: capturedTables,
+                columnsByTable: columnsByTable,
+                foreignKeys: [:],
+                currentQuery: nil,
+                queryResults: nil,
+                settings: settings,
+                identifierQuote: idQuote
+            )
+        }
     }
 
     // MARK: - Completion Items

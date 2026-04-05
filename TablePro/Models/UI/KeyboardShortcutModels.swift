@@ -39,8 +39,10 @@ enum ShortcutAction: String, Codable, CaseIterable, Identifiable {
     case newConnection
     case newTab
     case openDatabase
+    case openFile
     case switchConnection
     case saveChanges
+    case saveAs
     case previewSQL
     case closeTab
     case refresh
@@ -55,6 +57,7 @@ enum ShortcutAction: String, Codable, CaseIterable, Identifiable {
     case cut
     case copy
     case copyWithHeaders
+    case copyAsJson
     case paste
     case delete
     case selectAll
@@ -68,6 +71,10 @@ enum ShortcutAction: String, Codable, CaseIterable, Identifiable {
     case toggleInspector
     case toggleFilters
     case toggleHistory
+    case toggleResults
+    case previousResultTab
+    case nextResultTab
+    case closeResultTab
 
     // Tabs
     case showPreviousTabBrackets
@@ -83,15 +90,16 @@ enum ShortcutAction: String, Codable, CaseIterable, Identifiable {
 
     var category: ShortcutCategory {
         switch self {
-        case .newConnection, .newTab, .openDatabase, .switchConnection,
-             .saveChanges, .previewSQL, .closeTab, .refresh,
+        case .newConnection, .newTab, .openDatabase, .openFile, .switchConnection,
+             .saveChanges, .saveAs, .previewSQL, .closeTab, .refresh,
              .explainQuery, .export, .importData, .quickSwitcher:
             return .file
-        case .undo, .redo, .cut, .copy, .copyWithHeaders, .paste,
+        case .undo, .redo, .cut, .copy, .copyWithHeaders, .copyAsJson, .paste,
              .delete, .selectAll, .clearSelection, .addRow,
              .duplicateRow, .truncateTable:
             return .edit
-        case .toggleTableBrowser, .toggleInspector, .toggleFilters, .toggleHistory:
+        case .toggleTableBrowser, .toggleInspector, .toggleFilters, .toggleHistory,
+             .toggleResults, .previousResultTab, .nextResultTab, .closeResultTab:
             return .view
         case .showPreviousTabBrackets, .showNextTabBrackets,
              .previousTabArrows, .nextTabArrows:
@@ -106,8 +114,10 @@ enum ShortcutAction: String, Codable, CaseIterable, Identifiable {
         case .newConnection: return String(localized: "New Connection")
         case .newTab: return String(localized: "New Tab")
         case .openDatabase: return String(localized: "Open Database")
+        case .openFile: return String(localized: "Open File")
         case .switchConnection: return String(localized: "Switch Connection")
         case .saveChanges: return String(localized: "Save Changes")
+        case .saveAs: return String(localized: "Save As")
         case .previewSQL: return String(localized: "Preview SQL")
         case .closeTab: return String(localized: "Close Tab")
         case .refresh: return String(localized: "Refresh")
@@ -120,6 +130,7 @@ enum ShortcutAction: String, Codable, CaseIterable, Identifiable {
         case .cut: return String(localized: "Cut")
         case .copy: return String(localized: "Copy")
         case .copyWithHeaders: return String(localized: "Copy with Headers")
+        case .copyAsJson: return String(localized: "Copy as JSON")
         case .paste: return String(localized: "Paste")
         case .delete: return String(localized: "Delete")
         case .selectAll: return String(localized: "Select All")
@@ -131,6 +142,10 @@ enum ShortcutAction: String, Codable, CaseIterable, Identifiable {
         case .toggleInspector: return String(localized: "Toggle Inspector")
         case .toggleFilters: return String(localized: "Toggle Filters")
         case .toggleHistory: return String(localized: "Toggle History")
+        case .toggleResults: return String(localized: "Toggle Results")
+        case .previousResultTab: return String(localized: "Previous Result")
+        case .nextResultTab: return String(localized: "Next Result")
+        case .closeResultTab: return String(localized: "Close Result Tab")
         case .showPreviousTabBrackets: return String(localized: "Show Previous Tab")
         case .showNextTabBrackets: return String(localized: "Show Next Tab")
         case .previousTabArrows: return String(localized: "Previous Tab (Alt)")
@@ -402,8 +417,10 @@ struct KeyboardSettings: Codable, Equatable {
         .newConnection: KeyCombo(key: "n", command: true),
         .newTab: KeyCombo(key: "t", command: true),
         .openDatabase: KeyCombo(key: "k", command: true),
+        .openFile: KeyCombo(key: "o", command: true),
         .switchConnection: KeyCombo(key: "c", command: true, option: true),
         .saveChanges: KeyCombo(key: "s", command: true),
+        .saveAs: KeyCombo(key: "s", command: true, shift: true),
         .previewSQL: KeyCombo(key: "p", command: true, shift: true),
         .closeTab: KeyCombo(key: "w", command: true),
         .refresh: KeyCombo(key: "r", command: true),
@@ -418,6 +435,7 @@ struct KeyboardSettings: Codable, Equatable {
         .cut: KeyCombo(key: "x", command: true),
         .copy: KeyCombo(key: "c", command: true),
         .copyWithHeaders: KeyCombo(key: "c", command: true, shift: true),
+        .copyAsJson: KeyCombo(key: "j", command: true, option: true),
         .paste: KeyCombo(key: "v", command: true),
         .delete: KeyCombo(key: "delete", command: true, isSpecialKey: true),
         .selectAll: KeyCombo(key: "a", command: true),
@@ -431,6 +449,10 @@ struct KeyboardSettings: Codable, Equatable {
         .toggleInspector: KeyCombo(key: "b", command: true, shift: true),
         .toggleFilters: KeyCombo(key: "f", command: true),
         .toggleHistory: KeyCombo(key: "y", command: true),
+        .toggleResults: KeyCombo(key: "r", command: true, option: true),
+        .previousResultTab: KeyCombo(key: "[", command: true, option: true),
+        .nextResultTab: KeyCombo(key: "]", command: true, option: true),
+        .closeResultTab: KeyCombo(key: "w", command: true, shift: true),
 
         // Tabs
         .showPreviousTabBrackets: KeyCombo(key: "[", command: true, shift: true),

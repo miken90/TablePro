@@ -1,6 +1,6 @@
 ---
 title: Settings Overview
-description: All settings categories - General, Appearance, Editor, Data Grid, Tabs, Keyboard, AI, History, Plugins, and License
+description: All settings categories - General, Appearance, Editor, Data Grid, Tabs, Keyboard, AI, History, Plugins, Sync, and License
 ---
 
 # Settings Overview
@@ -25,34 +25,37 @@ Open settings via **TablePro** > **Settings** or `Cmd+,`.
 
 <CardGroup cols={2}>
   <Card title="General" icon="gear">
-    Language, startup behavior, software updates, and basic preferences
+    Language, startup behavior, updates
   </Card>
   <Card title="Appearance" icon="palette" href="/customization/appearance">
-    Theme, colors, and visual options
+    Themes, colors, and fonts
   </Card>
   <Card title="Editor" icon="code" href="/customization/editor-settings">
-    SQL editor font, size, and behavior
+    SQL editor configuration
   </Card>
   <Card title="Data Grid" icon="table">
-    Row height, date formats, and display
+    Row height, date format, display
   </Card>
   <Card title="Tabs" icon="rectangle-on-rectangle">
     Tab reuse behavior
   </Card>
   <Card title="Keyboard" icon="keyboard" href="/features/keyboard-shortcuts#customizing-shortcuts">
-    Customize keyboard shortcuts
+    Custom shortcuts
   </Card>
   <Card title="AI" icon="sparkles" href="/features/ai-chat">
-    AI provider configuration and chat settings
+    AI provider setup
   </Card>
   <Card title="History" icon="clock-rotate-left">
-    Query history retention settings
+    History retention
   </Card>
   <Card title="Plugins" icon="puzzle-piece">
-    Manage database driver plugins
+    Manage drivers
+  </Card>
+  <Card title="Sync" icon="cloud" href="/features/icloud-sync">
+    iCloud sync (Pro)
   </Card>
   <Card title="License" icon="key">
-    License activation and management
+    License activation
   </Card>
 </CardGroup>
 
@@ -65,6 +68,7 @@ Open settings via **TablePro** > **Settings** or `Cmd+,`.
 | **System** | Follow macOS system language (default) |
 | **English** | English |
 | **Tiếng Việt** | Vietnamese |
+| **Türkçe** | Turkish |
 
 <Note>
 Changing the language requires restarting TablePro.
@@ -129,7 +133,7 @@ Also available from the **TablePro** menu > **Check for Updates...**.
 |---------|---------|-------------|
 | **Share anonymous usage data** | On | Sends anonymous stats (OS version, architecture, locale, database types) every 24 hours |
 
-Fully anonymous: no personal information, queries, or database content is transmitted. Toggle off at any time.
+No personal information, queries, or database content is transmitted. Toggle off at any time.
 
 {/* Screenshot: General settings panel */}
 <Frame caption="General settings">
@@ -146,6 +150,19 @@ Fully anonymous: no personal information, queries, or database content is transm
 </Frame>
 
 ## Data Grid Settings
+
+### Font
+
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| **Font family** | System Mono | System Mono, SF Mono, Menlo, Monaco, Courier New | Monospace font for data grid cells |
+| **Font size** | 13 pt | 10-18 pt | Text size in data grid cells |
+
+Affects all data grid cells, including NULL placeholders and cell editing overlays. A live preview is shown in the settings panel.
+
+<Tip>
+The data grid font is independent of the SQL editor font. You can use different fonts and sizes for each.
+</Tip>
 
 ### Row Height
 
@@ -205,6 +222,13 @@ Larger page sizes use more memory but show more data at once.
 |--------|-------------|
 | **On** | Zebra striping for easier scanning |
 | **Off** | Uniform background color |
+
+### Row Numbers
+
+| Option | Description |
+|--------|-------------|
+| **On** | Show row number column (`#`) as the first column |
+| **Off** | Hide the row number column |
 
 ### Auto-Show Inspector
 
@@ -267,9 +291,19 @@ Enable this for single-tab browsing, similar to TablePlus's default behavior.
 |---------|---------|-------------|
 | **Enable preview tabs** | On | Single-clicking a table opens a temporary tab that gets replaced on next click |
 
-When enabled, single-clicking a table in the sidebar opens a preview tab. The preview tab is replaced when you click a different table. Double-clicking a table or interacting with the preview tab (sorting, filtering, editing) makes it permanent.
+Single-clicking a table opens a preview tab that gets replaced on next click. Double-clicking or interacting with the tab (sorting, filtering, editing) makes it permanent.
 
-Preview tabs show "Preview" in the window subtitle and are not persisted across app restarts.
+Preview tabs show "Preview" in the subtitle and are not persisted across restarts.
+
+### Tab Grouping
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Group all connections in one window** | Off | Tabs from different connections share the same window instead of opening separate windows |
+
+By default, each database connection opens its own window — tabs for the same connection are grouped together, while different connections get separate windows. Enable this setting to group all tabs into a single window regardless of which connection they belong to.
+
+The setting takes effect for newly opened connections. Existing windows keep their current grouping until closed.
 
 ## Keyboard Settings
 
@@ -359,30 +393,39 @@ Manage database driver plugins from the **Plugins** tab in Settings.
 
 ### Installed Plugins
 
-TablePro ships with 8 built-in database driver plugins:
+Split-view: plugin list on the left, details on the right. Each row shows version, capability, and source (built-in or user-installed). Filter by name using the search field.
 
-| Plugin | Database Types | Default Port |
-|--------|---------------|--------------|
-| MySQL | MySQL, MariaDB | 3306 |
-| PostgreSQL | PostgreSQL, Redshift | 5432 |
-| SQLite | SQLite | -- |
-| ClickHouse | ClickHouse | 8123 |
-| SQL Server | SQL Server | 1433 |
-| MongoDB | MongoDB | 27017 |
-| Redis | Redis | 6379 |
-| Oracle | Oracle | 1521 |
+TablePro ships with 3 built-in database driver plugins (MySQL, PostgreSQL, SQLite) and 3 built-in export plugins (CSV, JSON, SQL). Additional plugins are available from the plugin registry and can be installed from the Browse tab or downloaded automatically when you select a database type:
 
-Each plugin has a toggle to enable or disable it. Disabled plugins hide their database type from the connection dialog and prevent connections to that database type.
+| Plugin | Database Types | Default Port | Distribution |
+|--------|---------------|--------------|--------------|
+| MySQL | MySQL, MariaDB | 3306 | Built-in |
+| PostgreSQL | PostgreSQL, Redshift | 5432 | Built-in |
+| SQLite | SQLite | -- | Built-in |
+| ClickHouse | ClickHouse | 8123 | Registry |
+| SQL Server | SQL Server | 1433 | Registry |
+| MongoDB | MongoDB | 27017 | Registry |
+| Redis | Redis | 6379 | Registry |
+| DuckDB | DuckDB | -- | Registry |
+| Oracle | Oracle | 1521 | Registry |
+
+Toggle plugins on/off in the detail pane. Disabled plugins hide their database type from the connection dialog.
 
 ### Plugin Details
 
-Click a plugin to view its details: version, bundle ID, supported capabilities, database type, and default port. Driver plugins can provide custom settings panels that appear in this detail view.
+Select a plugin to view version, bundle ID, capabilities, database type, and default port. Driver plugins can provide custom settings panels in this view.
+
+### Browse plugins
+
+The **Browse** tab uses the same split-view. Each row shows version, author, download count, and install status. Filter by name or category. Click a plugin for details, or install directly from the list.
 
 ### Installing Third-Party Plugins
 
-1. Click **Install from File...**
+1. Click the **+** button below the plugin list
 2. Select a `.zip` archive containing a `.tableplugin` bundle
 3. TablePro verifies the code signature and installs the plugin
+
+You can also drag and drop a `.tableplugin` or `.zip` file onto the Plugins settings view to install it.
 
 <Warning>
 Only install plugins from sources you trust. TablePro checks the code signature of sideloaded plugins but cannot guarantee their behavior.
@@ -390,7 +433,7 @@ Only install plugins from sources you trust. TablePro checks the code signature 
 
 ### Uninstalling Plugins
 
-User-installed plugins show an **Uninstall** button in the plugin details view. Built-in plugins cannot be uninstalled, only disabled.
+Select a user-installed plugin and click **-**, or use **Uninstall** in the detail pane. Built-in plugins can only be disabled, not uninstalled.
 
 ### Advanced Settings
 
@@ -400,6 +443,62 @@ Some settings are available via `defaults write` for advanced users:
 |---------|---------|-------------|
 | Custom plugin registry | `defaults write com.TablePro com.TablePro.customRegistryURL <url>` | Use a private plugin registry |
 | Clear custom registry | `defaults delete com.TablePro com.TablePro.customRegistryURL` | Revert to default registry |
+
+## Sync settings
+
+Manage iCloud sync from the **Sync** tab in Settings. This is a Pro feature.
+
+### iCloud Sync toggle
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **iCloud Sync** | Off | Enable or disable iCloud sync across all Macs |
+
+### Status
+
+| Element | Description |
+|---------|-------------|
+| **iCloud Account** | Shows the current iCloud account status |
+| **Last Sync** | Timestamp of the most recent sync |
+| **Sync Now** | Manually trigger a sync |
+
+### Sync categories
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Connections** | On | Sync connection details (not passwords) |
+| **Groups & Tags** | On | Sync connection organization, including nested group hierarchy |
+| **App Settings** | On | Sync all 8 settings categories |
+| **Query History** | On | Sync query history |
+
+### History limit
+
+| Option | Description |
+|--------|-------------|
+| **100** | Sync last 100 queries |
+| **500** | Sync last 500 queries |
+| **1,000** | Sync last 1,000 queries |
+| **Unlimited** | Sync all query history |
+
+<Note>
+Passwords are never synced. They remain in each Mac's local Keychain.
+</Note>
+
+See [iCloud Sync](/features/icloud-sync) for full details on conflict resolution, sync behavior, and troubleshooting.
+
+{/* Screenshot: Sync settings */}
+<Frame caption="Sync settings: iCloud sync configuration">
+  <img
+    className="block dark:hidden"
+    src="/images/settings-sync.png"
+    alt="Sync settings"
+  />
+  <img
+    className="hidden dark:block"
+    src="/images/settings-sync-dark.png"
+    alt="Sync settings"
+  />
+</Frame>
 
 ## License Settings
 
@@ -425,7 +524,7 @@ Deactivating frees up the activation slot for use on a different machine.
 
 ### Offline Use
 
-TablePro validates your license locally using a cryptographic signature. No internet needed for day-to-day use after activation. The app re-validates with the server every 7 days.
+License validation is local (cryptographic signature). No internet needed after activation. Re-validates with the server every 7 days.
 
 {/* Screenshot: License settings */}
 <Frame caption="License activation and management">
@@ -467,80 +566,8 @@ Then restart TablePro.
 Resetting preferences does not affect saved connections or query history.
 </Warning>
 
-## Settings by Feature
-
-### Connection-Related
-
-| Setting | Location | Description |
-|---------|----------|-------------|
-| Language | General | App display language |
-| Startup behavior | General | What to do on launch |
-| Query timeout | General | Maximum query execution time |
-| Auto-check updates | General | Check for updates automatically |
-| Share analytics | General | Share anonymous usage data |
-| Auto-reconnect | Connections | Reconnect on disconnect |
-| Safe Mode | Connections | Per-connection query execution controls |
-
-### Editor-Related
-
-| Setting | Location | Description |
-|---------|----------|-------------|
-| Font family | Editor | Monospace font choice |
-| Font size | Editor | Text size (11--18 pt, clamped to range) |
-| Line numbers | Editor | Show/hide line numbers |
-| Word wrap | Editor | Wrap long lines |
-| Tab width | Editor | Spaces per tab (1--16) |
-| Vim mode | Editor | Enable Vim keybindings (Normal/Insert/Visual modes) in the SQL editor |
-
-See [Editor Settings](/customization/editor-settings) for details.
-
-### Display-Related
-
-| Setting | Location | Description |
-|---------|----------|-------------|
-| Theme | Appearance | Light/Dark/System |
-| Accent color | Appearance | UI accent color |
-| Row height | Data Grid | Grid row height |
-| Date format | Data Grid | Date display format |
-
-See [Appearance](/customization/appearance) for details.
-
-### Keyboard-Related
-
-| Setting | Location | Description |
-|---------|----------|-------------|
-| Shortcut bindings | Keyboard | Customize menu keyboard shortcuts |
-| Reset to Defaults | Keyboard | Restore all shortcuts to original values |
-
-### Filter-Related
-
-| Setting | Location | Description |
-|---------|----------|-------------|
-| Default column | Filters | Column pre-selected for new filters (Raw SQL, Primary Key, Any Column) |
-| Default operator | Filters | Operator pre-selected for new filters |
-| Panel state | Filters | Filter panel behavior on open (Hidden, Always Show, Restore Last) |
-
-See [Filtering](/features/filtering) for details.
-
 ## Keyboard Shortcut
 
 | Action | Shortcut |
 |--------|----------|
 | Open Settings | `Cmd+,` |
-
-## Related Pages
-
-<CardGroup cols={2}>
-  <Card title="Appearance" icon="palette" href="/customization/appearance">
-    Theme and color settings
-  </Card>
-  <Card title="Editor Settings" icon="code" href="/customization/editor-settings">
-    SQL editor configuration
-  </Card>
-  <Card title="Query History" icon="clock-rotate-left" href="/features/query-history">
-    History feature details
-  </Card>
-  <Card title="Data Grid" icon="table" href="/features/data-grid">
-    Data grid features
-  </Card>
-</CardGroup>

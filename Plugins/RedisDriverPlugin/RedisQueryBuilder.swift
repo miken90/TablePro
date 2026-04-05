@@ -43,28 +43,15 @@ struct RedisQueryBuilder {
         return buildBaseQuery(namespace: namespace, limit: limit)
     }
 
-    /// Build a SCAN command for quick search (pattern match on key names)
-    func buildQuickSearchQuery(
-        namespace: String,
-        searchText: String,
-        limit: Int = 200
-    ) -> String {
-        let escapedSearch = escapeGlobChars(searchText)
-        let pattern: String
-        if namespace.isEmpty {
-            pattern = "*\(escapedSearch)*"
-        } else {
-            pattern = "\(namespace)*\(escapedSearch)*"
-        }
-        return "SCAN 0 MATCH \"\(pattern)\" COUNT \(limit)"
-    }
-
-    /// Build a count command for a namespace
+    /// Build a count command for a namespace.
+    /// When a namespace filter is active, DBSIZE would overcount because it
+    /// returns the total key count for the entire database. We use a SCAN-based
+    /// approach instead; note the returned count is approximate since SCAN may
+    /// return duplicates across iterations and new keys may appear mid-scan.
     func buildCountQuery(namespace: String) -> String {
         if namespace.isEmpty {
             return "DBSIZE"
         }
-        // For a specific namespace, we use SCAN to count matching keys
         return "SCAN 0 MATCH \"\(namespace)*\" COUNT 10000"
     }
 

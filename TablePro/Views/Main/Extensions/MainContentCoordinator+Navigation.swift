@@ -8,6 +8,7 @@
 import AppKit
 import Foundation
 import os
+import TableProPluginKit
 
 private let navigationLogger = Logger(subsystem: "com.TablePro", category: "MainContentCoordinator+Navigation")
 
@@ -15,10 +16,14 @@ extension MainContentCoordinator {
     // MARK: - Table Tab Opening
 
     func openTableTab(_ tableName: String, showStructure: Bool = false, isView: Bool = false) {
+        let navigationModel = PluginMetadataRegistry.shared.snapshot(
+            forTypeId: connection.type.pluginTypeId
+        )?.navigationModel ?? .standard
+
         // Get current database name from active session (may differ from connection default after Cmd+K switch)
         let currentDatabase: String
-        if connection.type == .redis {
-            // Extract db index from table name "db3" → "3"
+        if navigationModel == .inPlace {
+            // In-place navigation: extract db index from table name "db3" → "3"
             guard tableName.hasPrefix("db"), Int(String(tableName.dropFirst(2))) != nil else {
                 return
             }
@@ -28,6 +33,8 @@ extension MainContentCoordinator {
         } else {
             currentDatabase = connection.database
         }
+
+        let currentSchema = DatabaseManager.shared.session(for: connectionId)?.currentSchema
 
         // Fast path: if this table is already the active tab in the same database, skip all work
         if let current = tabManager.selectedTab,
@@ -55,8 +62,10 @@ extension MainContentCoordinator {
 
         // Check if another native window tab already has this table open — switch to it
         if let keyWindow = NSApp.keyWindow {
+            let ownWindows = Set(WindowLifecycleMonitor.shared.windows(for: connectionId).map { ObjectIdentifier($0) })
             let tabbedWindows = keyWindow.tabbedWindows ?? [keyWindow]
-            for window in tabbedWindows where window.title == tableName {
+            for window in tabbedWindows
+                where window.title == tableName && ownWindows.contains(ObjectIdentifier(window)) {
                 window.makeKeyAndOrderFront(nil)
                 return
             }
@@ -85,13 +94,17 @@ extension MainContentCoordinator {
             if let tabIndex = tabManager.selectedTabIndex {
                 tabManager.tabs[tabIndex].isView = isView
                 tabManager.tabs[tabIndex].isEditable = !isView
+                tabManager.tabs[tabIndex].schemaName = currentSchema
                 tabManager.tabs[tabIndex].pagination.reset()
                 AppState.shared.isCurrentTabEditable = !isView && tableName.isEmpty == false
                 toolbarState.isTableTab = true
+                AppState.shared.isTableTab = true
             }
-            // Redis needs selectRedisDatabaseAndQuery to ensure the correct
+            // In-place navigation needs selectRedisDatabaseAndQuery to ensure the correct
             // database is SELECTed and session state is updated before querying.
-            if connection.type == .redis, let dbIndex = Int(currentDatabase) {
+            restoreColumnLayoutForTable(tableName)
+            restoreFiltersForTable(tableName)
+            if navigationModel == .inPlace, let dbIndex = Int(currentDatabase) {
                 selectRedisDatabaseAndQuery(dbIndex)
             } else {
                 runQuery()
@@ -99,18 +112,26 @@ extension MainContentCoordinator {
             return
         }
 
-        // Redis databases navigate in-place (replace current tab) rather than
-        // opening new native window tabs, matching TablePlus behavior.
-        if connection.type == .redis {
+        // In-place navigation: replace current tab content rather than
+        // opening new native window tabs (e.g. Redis database switching).
+        if navigationModel == .inPlace {
+            if let oldTab = tabManager.selectedTab, let oldTableName = oldTab.tableName {
+                filterStateManager.saveLastFilters(for: oldTableName)
+            }
             if tabManager.replaceTabContent(
                 tableName: tableName,
-                databaseType: .redis,
-                databaseName: currentDatabase
+                databaseType: connection.type,
+                databaseName: currentDatabase,
+                schemaName: currentSchema
             ) {
+                filterStateManager.clearAll()
                 if let tabIndex = tabManager.selectedTabIndex {
                     tabManager.tabs[tabIndex].pagination.reset()
                     toolbarState.isTableTab = true
+                AppState.shared.isTableTab = true
                 }
+                restoreColumnLayoutForTable(tableName)
+                restoreFiltersForTable(tableName)
                 if let dbIndex = Int(currentDatabase) {
                     selectRedisDatabaseAndQuery(dbIndex)
                 }
@@ -118,23 +139,27 @@ extension MainContentCoordinator {
             return
         }
 
-        // Preview tab mode: reuse or create a preview tab instead of a new native window
-        if AppSettingsManager.shared.tabs.enablePreviewTabs {
-            openPreviewTab(tableName, isView: isView, databaseName: currentDatabase, showStructure: showStructure)
-            return
-        }
-
-        // If current tab has unsaved changes, open in a new native tab instead of replacing
-        if changeManager.hasChanges {
+        // If current tab has unsaved changes, active filters, or sorting, open in a new native tab
+        let hasActiveWork = changeManager.hasChanges
+            || filterStateManager.hasAppliedFilters
+            || (tabManager.selectedTab?.sortState.isSorting ?? false)
+        if hasActiveWork {
             let payload = EditorTabPayload(
                 connectionId: connection.id,
                 tabType: .table,
                 tableName: tableName,
                 databaseName: currentDatabase,
+                schemaName: currentSchema,
                 isView: isView,
                 showStructure: showStructure
             )
             WindowOpener.shared.openNativeTab(payload)
+            return
+        }
+
+        // Preview tab mode: reuse or create a preview tab instead of a new native window
+        if AppSettingsManager.shared.tabs.enablePreviewTabs {
+            openPreviewTab(tableName, isView: isView, databaseName: currentDatabase, schemaName: currentSchema, showStructure: showStructure)
             return
         }
 
@@ -144,6 +169,7 @@ extension MainContentCoordinator {
             tabType: .table,
             tableName: tableName,
             databaseName: currentDatabase,
+            schemaName: currentSchema,
             isView: isView,
             showStructure: showStructure
         )
@@ -154,7 +180,8 @@ extension MainContentCoordinator {
 
     func openPreviewTab(
         _ tableName: String, isView: Bool = false,
-        databaseName: String = "", showStructure: Bool = false
+        databaseName: String = "", schemaName: String? = nil,
+        showStructure: Bool = false
     ) {
         // Check if a preview window already exists for this connection
         if let preview = WindowLifecycleMonitor.shared.previewWindow(for: connectionId) {
@@ -166,44 +193,96 @@ extension MainContentCoordinator {
                     preview.window.makeKeyAndOrderFront(nil)
                     return
                 }
+                if let oldTab = previewCoordinator.tabManager.selectedTab,
+                   let oldTableName = oldTab.tableName {
+                    previewCoordinator.filterStateManager.saveLastFilters(for: oldTableName)
+                }
                 previewCoordinator.tabManager.replaceTabContent(
                     tableName: tableName,
                     databaseType: connection.type,
                     isView: isView,
                     databaseName: databaseName,
+                    schemaName: schemaName,
                     isPreview: true
                 )
+                previewCoordinator.filterStateManager.clearAll()
                 if let tabIndex = previewCoordinator.tabManager.selectedTabIndex {
                     previewCoordinator.tabManager.tabs[tabIndex].showStructure = showStructure
                     previewCoordinator.tabManager.tabs[tabIndex].pagination.reset()
                     AppState.shared.isCurrentTabEditable = !isView && !tableName.isEmpty
                     previewCoordinator.toolbarState.isTableTab = true
+                    AppState.shared.isTableTab = true
                 }
                 preview.window.makeKeyAndOrderFront(nil)
+                previewCoordinator.restoreColumnLayoutForTable(tableName)
+                previewCoordinator.restoreFiltersForTable(tableName)
                 previewCoordinator.runQuery()
                 return
             }
         }
 
-        // No preview window exists but current tab is already a preview: replace in-place
-        if let selectedTab = tabManager.selectedTab, selectedTab.isPreview {
+        // No preview window exists but current tab can be reused: replace in-place.
+        // This covers: preview tabs, non-preview table tabs with no active work,
+        // and empty/default query tabs (no user-entered content).
+        let isReusableTab: Bool = {
+            guard let tab = tabManager.selectedTab else { return false }
+            if tab.isPreview { return true }
+            // Table tab with no active work
+            if tab.tabType == .table && !changeManager.hasChanges
+                && !filterStateManager.hasAppliedFilters && !tab.sortState.isSorting {
+                return true
+            }
+            // Empty/default query tab (no user content, no results, never executed)
+            if tab.tabType == .query && tab.lastExecutedAt == nil
+                && tab.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return true
+            }
+            return false
+        }()
+        if let selectedTab = tabManager.selectedTab, isReusableTab {
             // Skip if already showing this table
             if selectedTab.tableName == tableName, selectedTab.databaseName == databaseName {
                 return
+            }
+            // If preview tab has active work, promote it and open new tab instead
+            let previewHasWork = changeManager.hasChanges
+                || filterStateManager.hasAppliedFilters
+                || selectedTab.sortState.isSorting
+            if previewHasWork {
+                promotePreviewTab()
+                let payload = EditorTabPayload(
+                    connectionId: connection.id,
+                    tabType: .table,
+                    tableName: tableName,
+                    databaseName: databaseName,
+                    schemaName: schemaName,
+                    isView: isView,
+                    showStructure: showStructure
+                )
+                WindowOpener.shared.openNativeTab(payload)
+                return
+            }
+            if let oldTableName = selectedTab.tableName {
+                filterStateManager.saveLastFilters(for: oldTableName)
             }
             tabManager.replaceTabContent(
                 tableName: tableName,
                 databaseType: connection.type,
                 isView: isView,
                 databaseName: databaseName,
+                schemaName: schemaName,
                 isPreview: true
             )
+            filterStateManager.clearAll()
             if let tabIndex = tabManager.selectedTabIndex {
                 tabManager.tabs[tabIndex].showStructure = showStructure
                 tabManager.tabs[tabIndex].pagination.reset()
                 AppState.shared.isCurrentTabEditable = !isView && !tableName.isEmpty
                 toolbarState.isTableTab = true
+                AppState.shared.isTableTab = true
             }
+            restoreColumnLayoutForTable(tableName)
+            restoreFiltersForTable(tableName)
             runQuery()
             return
         }
@@ -214,6 +293,7 @@ extension MainContentCoordinator {
             tabType: .table,
             tableName: tableName,
             databaseName: databaseName,
+            schemaName: schemaName,
             isView: isView,
             showStructure: showStructure,
             isPreview: true
@@ -243,138 +323,25 @@ extension MainContentCoordinator {
         WindowOpener.shared.openNativeTab(payload)
     }
 
+    private func currentSchemaName(fallback: String) -> String {
+        if let schemaDriver = DatabaseManager.shared.driver(for: connectionId) as? SchemaSwitchable,
+           let schema = schemaDriver.escapedSchema {
+            return schema
+        }
+        return fallback
+    }
+
     private func allTablesMetadataSQL() -> String? {
-        switch connection.type {
-        case .postgresql:
-            let schema = (DatabaseManager.shared.driver(for: connectionId) as? SchemaSwitchable)?.escapedSchema ?? "public"
-            return """
-            SELECT
-                schemaname as schema,
-                relname as name,
-                'TABLE' as kind,
-                n_live_tup as estimated_rows,
-                pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) as total_size,
-                pg_size_pretty(pg_relation_size(schemaname||'.'||relname)) as data_size,
-                pg_size_pretty(pg_indexes_size(schemaname||'.'||relname)) as index_size,
-                obj_description((schemaname||'.'||relname)::regclass) as comment
-            FROM pg_stat_user_tables
-            WHERE schemaname = '\(schema)'
-            ORDER BY relname
-            """
-        case .redshift:
-            let schema = (DatabaseManager.shared.driver(for: connectionId) as? SchemaSwitchable)?.escapedSchema ?? "public"
-            return """
-            SELECT
-                schema,
-                "table" as name,
-                'TABLE' as kind,
-                tbl_rows as estimated_rows,
-                size as size_mb,
-                pct_used,
-                unsorted,
-                stats_off
-            FROM svv_table_info
-            WHERE schema = '\(schema)'
-            ORDER BY "table"
-            """
-        case .clickhouse:
-            return """
-            SELECT
-                database as `schema`,
-                name,
-                engine as kind,
-                total_rows as estimated_rows,
-                formatReadableSize(total_bytes) as total_size,
-                comment
-            FROM system.tables
-            WHERE database = currentDatabase()
-            ORDER BY name
-            """
-        case .mysql, .mariadb:
-            return """
-            SELECT
-                TABLE_SCHEMA as `schema`,
-                TABLE_NAME as name,
-                TABLE_TYPE as kind,
-                IFNULL(CCSA.CHARACTER_SET_NAME, '') as charset,
-                TABLE_COLLATION as collation,
-                TABLE_ROWS as estimated_rows,
-                CONCAT(ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2), ' MB') as total_size,
-                CONCAT(ROUND(DATA_LENGTH / 1024 / 1024, 2), ' MB') as data_size,
-                CONCAT(ROUND(INDEX_LENGTH / 1024 / 1024, 2), ' MB') as index_size,
-                TABLE_COMMENT as comment
-            FROM information_schema.TABLES
-            LEFT JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY CCSA
-                ON TABLE_COLLATION = CCSA.COLLATION_NAME
-            WHERE TABLE_SCHEMA = DATABASE()
-            ORDER BY TABLE_NAME
-            """
-        case .sqlite:
-            return """
-            SELECT
-                '' as schema,
-                name,
-                type as kind,
-                '' as charset,
-                '' as collation,
-                '' as estimated_rows,
-                '' as total_size,
-                '' as data_size,
-                '' as index_size,
-                '' as comment
-            FROM sqlite_master
-            WHERE type IN ('table', 'view')
-            AND name NOT LIKE 'sqlite_%'
-            ORDER BY name
-            """
-        case .mssql:
-            return """
-            SELECT
-                s.name as schema_name,
-                t.name as name,
-                CASE WHEN v.object_id IS NOT NULL THEN 'VIEW' ELSE 'TABLE' END as kind,
-                p.rows as estimated_rows,
-                CAST(ROUND(SUM(a.total_pages) * 8 / 1024.0, 2) AS VARCHAR) + ' MB' as total_size
-            FROM sys.tables t
-            INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-            INNER JOIN sys.indexes i ON t.object_id = i.object_id AND i.index_id IN (0, 1)
-            INNER JOIN sys.partitions p ON i.object_id = p.object_id AND i.index_id = p.index_id
-            INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
-            LEFT JOIN sys.views v ON t.object_id = v.object_id
-            GROUP BY s.name, t.name, p.rows, v.object_id
-            ORDER BY t.name
-            """
-        case .oracle:
-            let schema = (DatabaseManager.shared.driver(for: connectionId) as? SchemaSwitchable)?.escapedSchema ?? "SYSTEM"
-            return """
-            SELECT
-                OWNER as schema_name,
-                TABLE_NAME as name,
-                'TABLE' as kind,
-                NUM_ROWS as estimated_rows
-            FROM ALL_TABLES
-            WHERE OWNER = '\(schema)'
-            ORDER BY TABLE_NAME
-            """
-        case .duckdb:
-            let schema = (DatabaseManager.shared.driver(for: connectionId) as? SchemaSwitchable)?.escapedSchema ?? "main"
-            return """
-            SELECT
-                table_schema as schema_name,
-                table_name as name,
-                table_type as kind
-            FROM information_schema.tables
-            WHERE table_schema = '\(schema)'
-            ORDER BY table_name
-            """
-        case .mongodb:
+        let editorLang = PluginManager.shared.editorLanguage(for: connection.type)
+        // Non-SQL databases: open a command tab instead
+        if editorLang == .javascript {
             tabManager.addTab(
                 initialQuery: "db.runCommand({\"listCollections\": 1, \"nameOnly\": false})",
                 databaseName: connection.database
             )
             runQuery()
             return nil
-        case .redis:
+        } else if editorLang == .bash {
             tabManager.addTab(
                 initialQuery: "SCAN 0 MATCH * COUNT 100",
                 databaseName: connection.database
@@ -382,6 +349,11 @@ extension MainContentCoordinator {
             runQuery()
             return nil
         }
+
+        // SQL databases: delegate to plugin driver
+        guard let driver = DatabaseManager.shared.driver(for: connectionId) else { return nil }
+        let schema = (driver as? SchemaSwitchable)?.escapedSchema
+        return (driver as? PluginDriverAdapter)?.allTablesMetadataSQL(schema: schema)
     }
 
     // MARK: - Database Switching
@@ -393,7 +365,11 @@ extension MainContentCoordinator {
     private func closeSiblingNativeWindows() {
         guard let keyWindow = NSApp.keyWindow else { return }
         let siblings = keyWindow.tabbedWindows ?? []
+        let ownWindows = Set(WindowLifecycleMonitor.shared.windows(for: connectionId).map { ObjectIdentifier($0) })
         for sibling in siblings where sibling !== keyWindow {
+            // Only close windows belonging to this connection to avoid
+            // destroying tabs from other connections when groupAllConnectionTabs is ON
+            guard ownWindows.contains(ObjectIdentifier(sibling)) else { continue }
             sibling.close()
         }
     }
@@ -428,92 +404,41 @@ extension MainContentCoordinator {
         await Task.yield()
 
         do {
-            // For MySQL/MariaDB/ClickHouse, use USE command
-            if connection.type == .mysql || connection.type == .mariadb || connection.type == .clickhouse {
-                _ = try await driver.execute(query: "USE `\(database)`")
-
-                DatabaseManager.shared.updateSession(connectionId) { session in
-                    session.currentDatabase = database
-                }
-
-                await loadSchema()
-
-                reloadSidebar()
-            } else if connection.type == .postgresql {
+            let pm = PluginManager.shared
+            if pm.requiresReconnectForDatabaseSwitch(for: connection.type) {
+                // PostgreSQL: full reconnection required for database switch
                 DatabaseManager.shared.updateSession(connectionId) { session in
                     session.connection.database = database
                     session.currentDatabase = database
                     session.currentSchema = nil
                 }
-
+                AppSettingsStorage.shared.saveLastSchema(nil, for: connectionId)
                 await DatabaseManager.shared.reconnectSession(connectionId)
-
-                await loadSchema()
-
-                reloadSidebar()
-            } else if connection.type == .redshift {
+            } else if pm.supportsSchemaSwitching(for: connection.type) {
+                // Redshift, Oracle: schema switching
                 guard let schemaDriver = driver as? SchemaSwitchable else { return }
                 try await schemaDriver.switchSchema(to: database)
-
                 DatabaseManager.shared.updateSession(connectionId) { session in
                     session.currentSchema = database
                 }
-
-                await loadSchema()
-
-                reloadSidebar()
-            } else if connection.type == .oracle {
-                guard let schemaDriver = driver as? SchemaSwitchable else { return }
-                try await schemaDriver.switchSchema(to: database)
-
-                DatabaseManager.shared.updateSession(connectionId) { session in
-                    session.currentSchema = database
-                }
-
-                await loadSchema()
-
-                reloadSidebar()
-            } else if connection.type == .mssql {
+            } else {
+                // All others (MySQL, MariaDB, ClickHouse, MSSQL, MongoDB, Redis, etc.)
                 if let adapter = driver as? PluginDriverAdapter {
                     try await adapter.switchDatabase(to: database)
                 }
-
+                let grouping = pm.databaseGroupingStrategy(for: connection.type)
                 DatabaseManager.shared.updateSession(connectionId) { session in
                     session.currentDatabase = database
-                    session.currentSchema = "dbo"
+                    // Schema-grouped databases (e.g. MSSQL) need currentSchema
+                    // reset to the plugin default (e.g. "dbo") on database switch.
+                    if grouping == .bySchema {
+                        session.currentSchema = pm.defaultSchemaName(for: connection.type)
+                    }
                 }
-                AppSettingsStorage.shared.saveLastDatabase(database, for: connectionId)
-
-                await loadSchema()
-
-                reloadSidebar()
-            } else if connection.type == .mongodb {
-                if let adapter = driver as? PluginDriverAdapter {
-                    try await adapter.switchDatabase(to: database)
-                }
-
-                DatabaseManager.shared.updateSession(connectionId) { session in
-                    session.currentDatabase = database
-                }
-
-                await loadSchema()
-
-                reloadSidebar()
-            } else if connection.type == .redis {
-                guard let dbIndex = Int(database) else { return }
-
-                if let adapter = driver as? PluginDriverAdapter {
-                    try await adapter.switchDatabase(to: String(dbIndex))
-                }
-
-                DatabaseManager.shared.updateSession(connectionId) { session in
-                    session.currentDatabase = database
-                }
-
-                await loadSchema()
-
-                reloadSidebar()
             }
+            AppSettingsStorage.shared.saveLastDatabase(database, for: connectionId)
+            await loadSchema()
+            reloadSidebar()
         } catch {
             // Restore toolbar to previous database on failure
             toolbarState.databaseName = previousDatabase
@@ -524,14 +449,14 @@ extension MainContentCoordinator {
             AlertHelper.showErrorSheet(
                 title: String(localized: "Database Switch Failed"),
                 message: error.localizedDescription,
-                window: NSApplication.shared.keyWindow
+                window: contentWindow
             )
         }
     }
 
     /// Switch to a different PostgreSQL schema (used for URL-based schema selection)
     func switchSchema(to schema: String) async {
-        guard connection.type == .postgresql else { return }
+        guard PluginManager.shared.supportsSchemaSwitching(for: connection.type) else { return }
         guard let driver = DatabaseManager.shared.driver(for: connectionId) else { return }
 
         // Clear stale filter state from previous schema
@@ -557,6 +482,7 @@ extension MainContentCoordinator {
             DatabaseManager.shared.updateSession(connectionId) { session in
                 session.currentSchema = schema
             }
+            AppSettingsStorage.shared.saveLastSchema(schema, for: connectionId)
 
             await loadSchema()
 
@@ -570,7 +496,7 @@ extension MainContentCoordinator {
             AlertHelper.showErrorSheet(
                 title: String(localized: "Schema Switch Failed"),
                 message: error.localizedDescription,
-                window: NSApplication.shared.keyWindow
+                window: contentWindow
             )
         }
     }
@@ -580,23 +506,95 @@ extension MainContentCoordinator {
     /// Select a Redis database index and then run the query.
     /// Redis sidebar clicks go through openTableTab (sync), so we need a Task
     /// to call the async selectDatabase before executing the query.
+    /// Cancels any previous in-flight switch to prevent race conditions
+    /// from rapid sidebar clicks.
     private func selectRedisDatabaseAndQuery(_ dbIndex: Int) {
+        cancelRedisDatabaseSwitchTask()
+
         let connId = connectionId
         let database = String(dbIndex)
-        Task { @MainActor in
+        redisDatabaseSwitchTask = Task { @MainActor [weak self] in
+            guard let self else { return }
             do {
                 if let adapter = DatabaseManager.shared.driver(for: connId) as? PluginDriverAdapter {
                     try await adapter.switchDatabase(to: String(dbIndex))
                 }
             } catch {
-                navigationLogger.error("Failed to SELECT Redis db\(dbIndex): \(error.localizedDescription, privacy: .public)")
+                if !Task.isCancelled {
+                    navigationLogger.error("Failed to SELECT Redis db\(dbIndex): \(error.localizedDescription, privacy: .public)")
+                }
                 return
             }
+            guard !Task.isCancelled else { return }
             DatabaseManager.shared.updateSession(connId) { session in
                 session.currentDatabase = database
             }
             toolbarState.databaseName = database
             executeTableTabQueryDirectly()
+
+            let separator = connection.additionalFields["redisSeparator"] ?? ":"
+            if sidebarViewModel?.redisKeyTreeViewModel == nil {
+                let vm = RedisKeyTreeViewModel()
+                sidebarViewModel?.redisKeyTreeViewModel = vm
+                let sidebarState = SharedSidebarState.forConnection(connId)
+                sidebarState.redisKeyTreeViewModel = vm
+            }
+            Task {
+                await self.sidebarViewModel?.redisKeyTreeViewModel?.loadKeys(
+                    connectionId: connId,
+                    database: database,
+                    separator: separator
+                )
+            }
         }
+    }
+
+    func initRedisKeyTreeIfNeeded() {
+        guard connection.type == .redis else { return }
+        let sidebarState = SharedSidebarState.forConnection(connectionId)
+        guard sidebarState.redisKeyTreeViewModel == nil else { return }
+
+        let vm = RedisKeyTreeViewModel()
+        sidebarState.redisKeyTreeViewModel = vm
+        sidebarViewModel?.redisKeyTreeViewModel = vm
+
+        let connId = connectionId
+        let database = toolbarState.databaseName
+        let separator = connection.additionalFields["redisSeparator"] ?? ":"
+        Task {
+            await vm.loadKeys(connectionId: connId, database: database, separator: separator)
+        }
+    }
+
+    // MARK: - Redis Key Tree Navigation
+
+    func browseRedisNamespace(_ prefix: String) {
+        let separator = connection.additionalFields["redisSeparator"] ?? ":"
+        let escapedPrefix = prefix.replacingOccurrences(of: "\"", with: "\\\"")
+        let query = "SCAN 0 MATCH \"\(escapedPrefix)*\" COUNT 200"
+        let title = prefix.hasSuffix(separator) ? String(prefix.dropLast(separator.count)) : prefix
+        tabManager.addTab(initialQuery: query, title: title)
+        runQuery()
+    }
+
+    func openRedisKey(_ keyName: String, keyType: String) {
+        let escapedKey = keyName.replacingOccurrences(of: "\"", with: "\\\"")
+        let query: String
+        switch keyType.lowercased() {
+        case "hash":
+            query = "HGETALL \"\(escapedKey)\""
+        case "list":
+            query = "LRANGE \"\(escapedKey)\" 0 -1"
+        case "set":
+            query = "SMEMBERS \"\(escapedKey)\""
+        case "zset":
+            query = "ZRANGE \"\(escapedKey)\" 0 -1 WITHSCORES"
+        case "stream":
+            query = "XRANGE \"\(escapedKey)\" - +"
+        default:
+            query = "GET \"\(escapedKey)\""
+        }
+        tabManager.addTab(initialQuery: query, title: keyName)
+        runQuery()
     }
 }

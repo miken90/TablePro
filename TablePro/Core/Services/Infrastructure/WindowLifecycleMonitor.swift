@@ -9,19 +9,22 @@
 
 import AppKit
 import Foundation
+import OSLog
 
 @MainActor
 internal final class WindowLifecycleMonitor {
+    private static let logger = Logger(subsystem: "com.TablePro", category: "WindowLifecycleMonitor")
     internal static let shared = WindowLifecycleMonitor()
 
     private struct Entry {
         let connectionId: UUID
-        let window: NSWindow
+        weak var window: NSWindow?
         var observer: NSObjectProtocol?
         var isPreview: Bool = false
     }
 
     private var entries: [UUID: Entry] = [:]
+    private var sourceFileWindows: [URL: UUID] = [:]
 
     private init() {}
 
@@ -40,6 +43,9 @@ internal final class WindowLifecycleMonitor {
     internal func register(window: NSWindow, connectionId: UUID, windowId: UUID, isPreview: Bool = false) {
         // Remove any existing entry for this windowId to avoid duplicate observers
         if let existing = entries[windowId] {
+            if existing.window !== window {
+                Self.logger.warning("Re-registering windowId \(windowId) with a different NSWindow")
+            }
             if let observer = existing.observer {
                 NotificationCenter.default.removeObserver(observer)
             }
@@ -66,6 +72,7 @@ internal final class WindowLifecycleMonitor {
 
     /// Remove the UUID mapping for a window.
     internal func unregisterWindow(for windowId: UUID) {
+        unregisterSourceFiles(for: windowId)
         guard let entry = entries.removeValue(forKey: windowId) else { return }
 
         if let observer = entry.observer {
@@ -77,55 +84,69 @@ internal final class WindowLifecycleMonitor {
 
     /// Return all live windows for a connection.
     internal func windows(for connectionId: UUID) -> [NSWindow] {
-        entries.values
+        purgeStaleEntries()
+        return entries.values
             .filter { $0.connectionId == connectionId }
-            .map(\.window)
+            .compactMap(\.window)
     }
 
     /// Check if other live windows exist for a connection, excluding a specific windowId.
     internal func hasOtherWindows(for connectionId: UUID, excluding windowId: UUID) -> Bool {
-        entries.contains { key, value in
+        purgeStaleEntries()
+        return entries.contains { key, value in
             key != windowId && value.connectionId == connectionId
         }
     }
 
     /// All connection IDs that currently have registered windows.
     internal func allConnectionIds() -> Set<UUID> {
-        Set(entries.values.map(\.connectionId))
+        purgeStaleEntries()
+        return Set(entries.values.map(\.connectionId))
     }
 
     /// Find the first visible window for a connection.
     internal func findWindow(for connectionId: UUID) -> NSWindow? {
-        entries.values
+        purgeStaleEntries()
+        return entries.values
             .filter { $0.connectionId == connectionId }
-            .map(\.window)
+            .compactMap(\.window)
             .first { $0.isVisible }
     }
 
     /// Look up the connectionId for a given windowId.
     internal func connectionId(for windowId: UUID) -> UUID? {
-        entries[windowId]?.connectionId
+        purgeStaleEntries()
+        return entries[windowId]?.connectionId
     }
 
     /// Check if any windows are registered for a connection.
     internal func hasWindows(for connectionId: UUID) -> Bool {
-        entries.values.contains { $0.connectionId == connectionId }
+        purgeStaleEntries()
+        return entries.values.contains { $0.connectionId == connectionId }
     }
 
-    /// Check if a specific window is still registered
+    /// Check if a specific window is still registered (with a live NSWindow reference).
     internal func isRegistered(windowId: UUID) -> Bool {
-        entries[windowId] != nil
+        guard entries[windowId] != nil else { return false }
+        purgeStaleEntries()
+        return entries[windowId] != nil
     }
 
     /// Find the first preview window for a connection.
     internal func previewWindow(for connectionId: UUID) -> (windowId: UUID, window: NSWindow)? {
-        entries.first { $0.value.connectionId == connectionId && $0.value.isPreview }
-            .map { ($0.key, $0.value.window) }
+        purgeStaleEntries()
+        for (windowId, entry) in entries {
+            guard entry.connectionId == connectionId, entry.isPreview else { continue }
+            guard let window = entry.window else { continue }
+            return (windowId, window)
+        }
+        return nil
     }
 
     /// Look up the NSWindow for a given windowId.
     internal func window(for windowId: UUID) -> NSWindow? {
-        entries[windowId]?.window
+        purgeStaleEntries()
+        return entries[windowId]?.window
     }
 
     /// Update the preview flag for a registered window.
@@ -133,7 +154,43 @@ internal final class WindowLifecycleMonitor {
         entries[windowId]?.isPreview = isPreview
     }
 
+    // MARK: - Source File Tracking
+
+    internal func registerSourceFile(_ url: URL, windowId: UUID) {
+        sourceFileWindows[url] = windowId
+    }
+
+    internal func unregisterSourceFile(_ url: URL) {
+        sourceFileWindows.removeValue(forKey: url)
+    }
+
+    internal func unregisterSourceFiles(for windowId: UUID) {
+        sourceFileWindows = sourceFileWindows.filter { $0.value != windowId }
+    }
+
+    internal func window(forSourceFile url: URL) -> NSWindow? {
+        guard let windowId = sourceFileWindows[url] else { return nil }
+        guard let window = entries[windowId]?.window else {
+            sourceFileWindows.removeValue(forKey: url)
+            return nil
+        }
+        return window
+    }
+
     // MARK: - Private
+
+    /// Remove entries whose window has already been deallocated.
+    private func purgeStaleEntries() {
+        let staleIds = entries.compactMap { key, value -> UUID? in
+            value.window == nil ? key : nil
+        }
+        for windowId in staleIds {
+            let entry = entries.removeValue(forKey: windowId)
+            if let observer = entry?.observer {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        }
+    }
 
     private func handleWindowClose(_ closedWindow: NSWindow) {
         guard let (windowId, entry) = entries.first(where: { $0.value.window === closedWindow }) else {
@@ -145,15 +202,16 @@ internal final class WindowLifecycleMonitor {
         if let observer = entry.observer {
             NotificationCenter.default.removeObserver(observer)
         }
+        unregisterSourceFiles(for: windowId)
         entries.removeValue(forKey: windowId)
 
-        let hasRemainingWindows = entries.values.contains { $0.connectionId == closedConnectionId }
+        let hasRemainingWindows = entries.values.contains {
+            $0.connectionId == closedConnectionId && $0.window != nil
+        }
         if !hasRemainingWindows {
-            NotificationCenter.default.post(
-                name: .lastWindowDidClose,
-                object: nil,
-                userInfo: ["connectionId": closedConnectionId]
-            )
+            Task {
+                await DatabaseManager.shared.disconnectSession(closedConnectionId)
+            }
         }
     }
 }

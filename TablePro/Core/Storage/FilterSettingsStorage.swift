@@ -71,7 +71,7 @@ struct FilterSettings: Codable, Equatable {
     var panelState: FilterPanelDefaultState
 
     init(
-        defaultColumn: FilterDefaultColumn = .anyColumn,
+        defaultColumn: FilterDefaultColumn = .rawSQL,
         defaultOperator: FilterDefaultOperator = .equal,
         panelState: FilterPanelDefaultState = .alwaysHide
     ) {
@@ -82,6 +82,7 @@ struct FilterSettings: Codable, Equatable {
 }
 
 /// Persistent storage for filter settings and per-table last-used filters
+@MainActor
 final class FilterSettingsStorage {
     static let shared = FilterSettingsStorage()
     private static let logger = Logger(subsystem: "com.TablePro", category: "FilterSettingsStorage")
@@ -94,6 +95,9 @@ final class FilterSettingsStorage {
 
     /// Cached settings to avoid repeated UserDefaults read + JSON decode
     private var cachedSettings: FilterSettings?
+
+    /// Per-table filter cache to avoid JSON decode on every table switch
+    private var lastFiltersCache: [String: [TableFilter]] = [:]
 
     /// In-memory cache for tracked filter keys. Lazy-loaded on first access
     /// so that `trackKey`/`removeTrackedKey` avoid redundant UserDefaults reads.
@@ -159,12 +163,18 @@ final class FilterSettingsStorage {
     func loadLastFilters(for tableName: String) -> [TableFilter] {
         let key = lastFiltersKeyPrefix + sanitizeTableName(tableName)
 
+        if let cached = lastFiltersCache[key] {
+            return cached
+        }
+
         guard let data = defaults.data(forKey: key) else {
             return []
         }
 
         do {
-            return try decoder.decode([TableFilter].self, from: data)
+            let filters = try decoder.decode([TableFilter].self, from: data)
+            lastFiltersCache[key] = filters
+            return filters
         } catch {
             Self.logger.error("Failed to decode last filters for \(tableName): \(error)")
             return []
@@ -179,6 +189,7 @@ final class FilterSettingsStorage {
         guard !filters.isEmpty else {
             defaults.removeObject(forKey: key)
             removeTrackedKey(key)
+            lastFiltersCache.removeValue(forKey: key)
             return
         }
 
@@ -186,6 +197,7 @@ final class FilterSettingsStorage {
             let data = try encoder.encode(filters)
             defaults.set(data, forKey: key)
             trackKey(key)
+            lastFiltersCache[key] = filters
         } catch {
             Self.logger.error("Failed to encode last filters for \(tableName): \(error)")
         }
@@ -196,6 +208,7 @@ final class FilterSettingsStorage {
         let key = lastFiltersKeyPrefix + sanitizeTableName(tableName)
         defaults.removeObject(forKey: key)
         removeTrackedKey(key)
+        lastFiltersCache.removeValue(forKey: key)
     }
 
     /// Clear all stored last filters using the tracked key set instead of
@@ -230,10 +243,6 @@ final class FilterSettingsStorage {
 
     /// Sanitize table name for use as UserDefaults key
     private func sanitizeTableName(_ tableName: String) -> String {
-        // Replace special characters that might cause issues in keys
-        tableName
-            .replacingOccurrences(of: ".", with: "_")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "\\", with: "_")
+        tableName.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? tableName
     }
 }

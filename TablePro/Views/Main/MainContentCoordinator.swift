@@ -11,10 +11,14 @@ import Foundation
 import Observation
 import os
 import SwiftUI
+import TableProPluginKit
 
 /// Discard action types for unified alert handling
 enum DiscardAction {
     case refresh
+    case sort
+    case pagination
+    case filter
 }
 
 /// Cache entry for async-sorted query tab rows (stores index permutation, not row copies)
@@ -32,6 +36,7 @@ enum ActiveSheet: Identifiable {
     case exportDialog
     case importDialog
     case quickSwitcher
+    case exportQueryResults
 
     var id: Self { self }
 }
@@ -39,15 +44,23 @@ enum ActiveSheet: Identifiable {
 /// Coordinator managing MainContentView business logic
 @MainActor @Observable
 final class MainContentCoordinator {
-    private static let logger = Logger(subsystem: "com.TablePro", category: "MainContentCoordinator")
+    static let logger = Logger(subsystem: "com.TablePro", category: "MainContentCoordinator")
+
+    /// Posted during teardown so DataGridView coordinators can release cell views.
+    /// Object is the connection UUID.
+    static let teardownNotification = Notification.Name("MainContentCoordinator.teardown")
 
     // MARK: - Dependencies
 
     let connection: DatabaseConnection
     var connectionId: UUID { connection.id }
+    /// Live safe mode level — reads from toolbar state (user-editable),
+    /// not from the immutable connection snapshot.
+    var safeModeLevel: SafeModeLevel { toolbarState.safeModeLevel }
     let tabManager: QueryTabManager
     let changeManager: DataChangeManager
     let filterStateManager: FilterStateManager
+    let columnVisibilityManager: ColumnVisibilityManager
     let toolbarState: ConnectionToolbarState
 
     // MARK: - Services
@@ -64,6 +77,19 @@ final class MainContentCoordinator {
     /// Direct reference to sidebar viewmodel — eliminates global notification broadcasts
     weak var sidebarViewModel: SidebarViewModel?
 
+    /// Direct reference to structure view actions — eliminates notification broadcasts
+    weak var structureActions: StructureViewActionHandler?
+
+    /// Direct reference to AI chat viewmodel — eliminates notification broadcasts
+    weak var aiViewModel: AIChatViewModel?
+
+    /// Direct reference to right panel state — enables showing AI panel programmatically
+    @ObservationIgnored weak var rightPanelState: RightPanelState?
+
+    /// Direct reference to this coordinator's content window, used for presenting alerts.
+    /// Avoids NSApp.keyWindow which may return a sheet window, causing stuck dialogs.
+    @ObservationIgnored weak var contentWindow: NSWindow?
+
     // MARK: - Published State
 
     var schemaProvider: SQLSchemaProvider
@@ -75,12 +101,18 @@ final class MainContentCoordinator {
     var needsLazyLoad = false
 
     /// Cache for async-sorted query tab rows (large datasets sorted on background thread)
-    private(set) var querySortCache: [UUID: QuerySortCacheEntry] = [:]
+    @ObservationIgnored private(set) var querySortCache: [UUID: QuerySortCacheEntry] = [:]
 
     // MARK: - Internal State
 
+    /// Cached column types per table for selective queries (avoids refetching schema).
+    /// Key: "connectionId:databaseName:tableName"
+    @ObservationIgnored var cachedTableColumnTypes: [String: [ColumnType]] = [:]
+    @ObservationIgnored var cachedTableColumnNames: [String: [String]] = [:]
+
     @ObservationIgnored internal var queryGeneration: Int = 0
     @ObservationIgnored internal var currentQueryTask: Task<Void, Never>?
+    @ObservationIgnored internal var redisDatabaseSwitchTask: Task<Void, Never>?
     @ObservationIgnored private var changeManagerUpdateTask: Task<Void, Never>?
     @ObservationIgnored private var activeSortTasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var terminationObserver: NSObjectProtocol?
@@ -89,6 +121,7 @@ final class MainContentCoordinator {
 
     /// Set during handleTabChange to suppress redundant onChange(of: resultColumns) reconfiguration
     @ObservationIgnored internal var isHandlingTabSwitch = false
+    @ObservationIgnored var isUpdatingColumnLayout = false
 
     /// Guards against re-entrant confirm dialogs (e.g. nested run loop during runModal)
     @ObservationIgnored internal var isShowingConfirmAlert = false
@@ -100,9 +133,12 @@ final class MainContentCoordinator {
     /// (e.g. save-then-close). Set before calling `saveChanges`, resumed by `executeCommitStatements`.
     @ObservationIgnored internal var saveCompletionContinuation: CheckedContinuation<Bool, Never>?
 
+    /// Called during teardown to let the view layer release cached row providers and sort data.
+    @ObservationIgnored var onTeardown: (() -> Void)?
+
     /// True while a database switch is in progress. Guards against
     /// side-effect window creation during the switch cascade.
-    var isSwitchingDatabase = false
+    @ObservationIgnored var isSwitchingDatabase = false
 
     /// True once the coordinator's view has appeared (onAppear fired).
     /// Coordinators that SwiftUI creates during body re-evaluation but never
@@ -179,13 +215,17 @@ final class MainContentCoordinator {
         }
     }()
 
-    /// Evict row data for all tabs in this coordinator to free memory.
+    /// Evict row data for background tabs in this coordinator to free memory.
     /// Called when the coordinator's native window-tab becomes inactive.
-    /// Data is re-fetched automatically when the tab becomes active again.
+    /// The currently selected tab is kept in memory so the user sees no
+    /// refresh flicker when switching back — matching native macOS behavior.
+    /// Background tabs are re-fetched automatically when selected.
     func evictInactiveRowData() {
+        let selectedId = tabManager.selectedTabId
         for tab in tabManager.tabs where !tab.rowBuffer.isEvicted
             && !tab.resultRows.isEmpty
             && !tab.pendingChanges.hasChanges
+            && tab.id != selectedId
         {
             tab.rowBuffer.evict()
         }
@@ -209,14 +249,21 @@ final class MainContentCoordinator {
         tabManager: QueryTabManager,
         changeManager: DataChangeManager,
         filterStateManager: FilterStateManager,
+        columnVisibilityManager: ColumnVisibilityManager,
         toolbarState: ConnectionToolbarState
     ) {
         self.connection = connection
         self.tabManager = tabManager
         self.changeManager = changeManager
         self.filterStateManager = filterStateManager
+        self.columnVisibilityManager = columnVisibilityManager
         self.toolbarState = toolbarState
-        self.queryBuilder = TableQueryBuilder(databaseType: connection.type)
+        let dialect = PluginManager.shared.sqlDialect(for: connection.type)
+        self.queryBuilder = TableQueryBuilder(
+            databaseType: connection.type,
+            dialect: dialect,
+            dialectQuote: quoteIdentifierFromDialect(dialect)
+        )
         self.persistence = TabPersistenceCoordinator(connectionId: connection.id)
 
         self.schemaProvider = SchemaProviderRegistry.shared.getOrCreate(for: connection.id)
@@ -246,12 +293,12 @@ final class MainContentCoordinator {
             }
         }
 
-        registerForPersistence()
         _ = Self.registerTerminationObserver
     }
 
     func markActivated() {
         _didActivate.withLock { $0 = true }
+        registerForPersistence()
         setupPluginDriver()
         // Retry when driver becomes available (connection may still be in progress)
         if changeManager.pluginDriver == nil {
@@ -265,14 +312,19 @@ final class MainContentCoordinator {
         }
     }
 
-    /// Set up the plugin driver for NoSQL query dispatch on the query builder and change manager.
+    func showAIChatPanel() {
+        rightPanelState?.isPresented = true
+        rightPanelState?.activeTab = .aiChat
+    }
+
+    /// Set up the plugin driver for query building dispatch on the query builder and change manager.
     private func setupPluginDriver() {
         guard let driver = DatabaseManager.shared.driver(for: connectionId) else { return }
-        let noSqlDriver = driver.noSqlPluginDriver
-        queryBuilder.setPluginDriver(noSqlDriver)
-        changeManager.pluginDriver = noSqlDriver
+        let pluginDriver = driver.queryBuildingPluginDriver
+        queryBuilder.setPluginDriver(pluginDriver)
+        changeManager.pluginDriver = pluginDriver
         // Remove observer once successfully set up
-        if noSqlDriver != nil, let observer = pluginDriverObserver {
+        if pluginDriver != nil, let observer = pluginDriverObserver {
             NotificationCenter.default.removeObserver(observer)
             pluginDriverObserver = nil
         }
@@ -287,13 +339,17 @@ final class MainContentCoordinator {
     }
 
     func reloadSidebar() {
-        sidebarViewModel?.forceLoadTables()
+        Task { @MainActor in
+            await schemaProvider.invalidateTables()
+            sidebarViewModel?.forceLoadTables()
+        }
     }
 
     /// Explicit cleanup called from `onDisappear`. Releases schema provider
     /// synchronously on MainActor so we don't depend on deinit + Task scheduling.
     func teardown() {
         _didTeardown.withLock { $0 = true }
+
         unregisterFromPersistence()
         for observer in urlFilterObservers {
             NotificationCenter.default.removeObserver(observer)
@@ -311,17 +367,43 @@ final class MainContentCoordinator {
         currentQueryTask = nil
         changeManagerUpdateTask?.cancel()
         changeManagerUpdateTask = nil
+        redisDatabaseSwitchTask?.cancel()
+        redisDatabaseSwitchTask = nil
         for task in activeSortTasks.values { task.cancel() }
         activeSortTasks.removeAll()
+
+        // Let the view layer release cached row providers before we drop RowBuffers.
+        // Called synchronously here because SwiftUI onChange handlers don't fire
+        // reliably on disappearing views.
+        onTeardown?()
+        onTeardown = nil
+
+        // Notify DataGridView coordinators to release NSTableView cell views
+        NotificationCenter.default.post(
+            name: Self.teardownNotification,
+            object: connection.id
+        )
 
         // Release heavy data so memory drops even if SwiftUI delays deallocation
         for tab in tabManager.tabs {
             tab.rowBuffer.evict()
         }
         querySortCache.removeAll()
+        cachedTableColumnTypes.removeAll()
+        cachedTableColumnNames.removeAll()
 
         tabManager.tabs.removeAll()
         tabManager.selectedTabId = nil
+
+        // Release change manager state — pluginDriver holds a strong reference
+        // to the entire database driver which prevents deallocation
+        changeManager.clearChanges()
+        changeManager.pluginDriver = nil
+
+        // Release metadata and filter state
+        tableMetadata = nil
+        filterStateManager.filters.removeAll()
+        filterStateManager.appliedFilters.removeAll()
 
         SchemaProviderRegistry.shared.release(for: connection.id)
         SchemaProviderRegistry.shared.purgeUnused()
@@ -334,6 +416,7 @@ final class MainContentCoordinator {
         // Never-activated coordinators are throwaway instances created by SwiftUI
         // during body re-evaluation — @State only keeps the first, rest are discarded
         guard _didActivate.withLock({ $0 }) else {
+            MainActor.assumeIsolated { unregisterFromPersistence() }
             if !alreadyHandled {
                 Task { @MainActor in
                     SchemaProviderRegistry.shared.release(for: connectionId)
@@ -479,7 +562,7 @@ final class MainContentCoordinator {
         guard !statements.isEmpty else { return }
 
         // Safe mode enforcement for query execution
-        let level = connection.safeModeLevel
+        let level = safeModeLevel
 
         if level == .readOnly {
             let writeStatements = statements.filter { isWriteQuery($0) }
@@ -555,7 +638,7 @@ final class MainContentCoordinator {
         let sql = tabManager.tabs[index].query
         guard !sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        let level = connection.safeModeLevel
+        let level = safeModeLevel
         if level.appliesToAllQueries && level.requiresConfirmation,
            tabManager.tabs[index].lastExecutedAt == nil
         {
@@ -583,6 +666,45 @@ final class MainContentCoordinator {
             }
         } else {
             executeQueryInternal(sql)
+        }
+    }
+
+    // MARK: - Editor Query Loading
+
+    func loadQueryIntoEditor(_ query: String) {
+        if let tabIndex = tabManager.selectedTabIndex,
+           tabIndex < tabManager.tabs.count,
+           tabManager.tabs[tabIndex].tabType == .query {
+            tabManager.tabs[tabIndex].query = query
+            tabManager.tabs[tabIndex].hasUserInteraction = true
+        } else {
+            let payload = EditorTabPayload(
+                connectionId: connection.id,
+                tabType: .query,
+                initialQuery: query
+            )
+            WindowOpener.shared.openNativeTab(payload)
+        }
+    }
+
+    func insertQueryFromAI(_ query: String) {
+        if let tabIndex = tabManager.selectedTabIndex,
+           tabIndex < tabManager.tabs.count,
+           tabManager.tabs[tabIndex].tabType == .query {
+            let existingQuery = tabManager.tabs[tabIndex].query
+            if existingQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                tabManager.tabs[tabIndex].query = query
+            } else {
+                tabManager.tabs[tabIndex].query = existingQuery + "\n\n" + query
+            }
+            tabManager.tabs[tabIndex].hasUserInteraction = true
+        } else {
+            let payload = EditorTabPayload(
+                connectionId: connection.id,
+                tabType: .query,
+                initialQuery: query
+            )
+            WindowOpener.shared.openNativeTab(payload)
         }
     }
 
@@ -620,26 +742,45 @@ final class MainContentCoordinator {
         let statements = SQLStatementScanner.allStatements(in: trimmed)
         guard let stmt = statements.first else { return }
 
-        // Build database-specific EXPLAIN prefix
-        let explainSQL: String
-        switch connection.type {
-        case .mssql, .oracle:
+        let level = safeModeLevel
+        let needsConfirmation = level.appliesToAllQueries && level.requiresConfirmation
+
+        // Multi-variant EXPLAIN: use plugin-declared variants if available
+        let explainVariants = PluginMetadataRegistry.shared.snapshot(
+            forTypeId: connection.type.pluginTypeId
+        )?.explainVariants ?? []
+
+        if !explainVariants.isEmpty {
+            if needsConfirmation {
+                Task { @MainActor in
+                    let window = NSApp.keyWindow
+                    let permission = await SafeModeGuard.checkPermission(
+                        level: level,
+                        isWriteOperation: false,
+                        sql: "EXPLAIN",
+                        operationDescription: String(localized: "Execute Query"),
+                        window: window,
+                        databaseType: connection.type
+                    )
+                    if case .allowed = permission {
+                        runVariantExplain(explainVariants[0])
+                    }
+                }
+            } else {
+                runVariantExplain(explainVariants[0])
+            }
             return
-        case .clickhouse:
-            runClickHouseExplain(variant: .plan)
-            return
-        case .sqlite:
-            explainSQL = "EXPLAIN QUERY PLAN \(stmt)"
-        case .mysql, .mariadb, .postgresql, .redshift, .duckdb:
-            explainSQL = "EXPLAIN \(stmt)"
-        case .mongodb:
-            explainSQL = Self.buildMongoExplain(for: stmt)
-        case .redis:
-            explainSQL = Self.buildRedisDebugCommand(for: stmt)
         }
 
-        let level = connection.safeModeLevel
-        if level.appliesToAllQueries && level.requiresConfirmation {
+        guard let adapter = DatabaseManager.shared.driver(for: connectionId) as? PluginDriverAdapter,
+              let explainSQL = adapter.buildExplainQuery(stmt) else {
+            if let index = tabManager.selectedTabIndex {
+                tabManager.tabs[index].errorMessage = String(localized: "EXPLAIN is not supported for this database type.")
+            }
+            return
+        }
+
+        if needsConfirmation {
             Task { @MainActor in
                 let window = NSApp.keyWindow
                 let permission = await SafeModeGuard.checkPermission(
@@ -681,7 +822,7 @@ final class MainContentCoordinator {
         tabManager.tabs[index] = tab
         toolbarState.setExecuting(true)
 
-        if connection.type == .clickhouse {
+        if PluginManager.shared.supportsQueryProgress(for: connection.type) {
             installClickHouseProgressHandler()
         }
 
@@ -698,9 +839,17 @@ final class MainContentCoordinator {
 
         let tableName: String?
         let isEditable: Bool
-        if connection.type == .redis {
+        let usesNoSQLBrowsing = PluginManager.shared.editorLanguage(for: connection.type) != .sql
+            || (DatabaseManager.shared.driver(for: connectionId) as? PluginDriverAdapter)?
+                .queryBuildingPluginDriver != nil
+        if usesNoSQLBrowsing {
             tableName = tabManager.selectedTab?.tableName
             isEditable = tableName != nil
+        } else if tab.tabType == .table, let existingName = tab.tableName {
+            // Table tabs already know their table name — don't re-extract from SQL
+            // which can fail for schema-qualified or quoted identifiers
+            tableName = existingName
+            isEditable = true
         } else {
             tableName = extractTableName(from: effectiveSQL)
             isEditable = tableName != nil
@@ -741,30 +890,23 @@ final class MainContentCoordinator {
                 }
                 let safeColumns: [String]
                 let safeColumnTypes: [ColumnType]
-                let safeRows: [QueryResultRow]
+                let safeRows: [[String?]]
                 let safeExecutionTime: TimeInterval
                 let safeRowsAffected: Int
+                let safeStatusMessage: String?
                 do {
                     let result = try await queryDriver.execute(query: effectiveSQL)
                     safeColumns = result.columns
                     safeColumnTypes = result.columnTypes
-                    safeRows = result.rows.enumerated().map { index, row in
-                        QueryResultRow(id: index, values: row)
-                    }
+                    safeRows = result.rows
                     safeExecutionTime = result.executionTime
                     safeRowsAffected = result.rowsAffected
+                    safeStatusMessage = result.statusMessage
                 }
 
                 guard !Task.isCancelled else {
                     parallelSchemaTask?.cancel()
-                    await MainActor.run { [weak self] in
-                        guard let self else { return }
-                        if let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) {
-                            tabManager.tabs[idx].isExecuting = false
-                        }
-                        toolbarState.setExecuting(false)
-                        toolbarState.lastQueryDuration = safeExecutionTime
-                    }
+                    await resetExecutionState(tabId: tabId, executionTime: safeExecutionTime)
                     return
                 }
 
@@ -784,14 +926,19 @@ final class MainContentCoordinator {
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     currentQueryTask = nil
-                    if self.connection.type == .clickhouse {
+                    if PluginManager.shared.supportsQueryProgress(for: self.connection.type) {
                         self.clearClickHouseProgress()
                     }
                     toolbarState.setExecuting(false)
                     toolbarState.lastQueryDuration = safeExecutionTime
 
-                    guard capturedGeneration == queryGeneration else { return }
-                    guard !Task.isCancelled else { return }
+                    // Always reset isExecuting even if generation is stale
+                    if capturedGeneration != queryGeneration || Task.isCancelled {
+                        if let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) {
+                            tabManager.tabs[idx].isExecuting = false
+                        }
+                        return
+                    }
 
                     applyPhase1Result(
                         tabId: tabId,
@@ -800,6 +947,7 @@ final class MainContentCoordinator {
                         rows: safeRows,
                         executionTime: safeExecutionTime,
                         rowsAffected: safeRowsAffected,
+                        statusMessage: safeStatusMessage,
                         tableName: tableName,
                         isEditable: isEditable,
                         metadata: metadata,
@@ -833,22 +981,40 @@ final class MainContentCoordinator {
                         guard let self else { return }
                         guard capturedGeneration == queryGeneration else { return }
                         guard !Task.isCancelled else { return }
-                        changeManager.clearChanges()
+                        changeManager.clearChangesAndUndoHistory()
                     }
                 }
             } catch {
-                guard capturedGeneration == queryGeneration else { return }
-
+                // Always reset isExecuting even if generation is stale —
+                // skipping this leaves the tab permanently stuck in "executing"
+                // state, requiring a reconnect to recover.
                 await MainActor.run { [weak self] in
                     guard let self else { return }
+                    if let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) {
+                        tabManager.tabs[idx].isExecuting = false
+                    }
+                    currentQueryTask = nil
+                    toolbarState.setExecuting(false)
+                    guard capturedGeneration == queryGeneration else { return }
                     handleQueryExecutionError(error, sql: sql, tabId: tabId, connection: conn)
                 }
             }
         }
     }
 
+    /// Reset execution state when a query is cancelled
+    @MainActor
+    private func resetExecutionState(tabId: UUID, executionTime: TimeInterval) {
+        if let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) {
+            tabManager.tabs[idx].isExecuting = false
+        }
+        currentQueryTask = nil
+        toolbarState.setExecuting(false)
+        toolbarState.lastQueryDuration = executionTime
+    }
+
     /// Fetch enum/set values for columns from database-specific sources
-    private func fetchEnumValues(
+    func fetchEnumValues(
         columnInfo: [ColumnInfo],
         tableName: String,
         driver: DatabaseDriver,
@@ -856,40 +1022,41 @@ final class MainContentCoordinator {
     ) async -> [String: [String]] {
         var result: [String: [String]] = [:]
 
-        // Build enum/set value lookup map from column types (MySQL/MariaDB)
+        // Build enum/set value lookup map from column types (MySQL/MariaDB + ClickHouse Enum8/Enum16)
         for col in columnInfo {
             if let values = ColumnType.parseEnumValues(from: col.dataType) {
+                result[col.name] = values
+            } else if let values = ColumnType.parseClickHouseEnumValues(from: col.dataType) {
                 result[col.name] = values
             }
         }
 
-        // For PostgreSQL: fetch actual enum values from pg_enum catalog via dependent types
-        if connectionType == .postgresql {
-            if let enumTypes = try? await driver.fetchDependentTypes(forTable: tableName) {
-                let typeMap = Dictionary(uniqueKeysWithValues: enumTypes.map { ($0.name, $0.labels) })
-                for col in columnInfo where col.dataType.uppercased().hasPrefix("ENUM(") {
-                    let raw = col.dataType
-                    if let openParen = raw.firstIndex(of: "("),
-                       let closeParen = raw.lastIndex(of: ")") {
-                        let typeName = String(raw[raw.index(after: openParen)..<closeParen])
-                        if let values = typeMap[typeName] {
-                            result[col.name] = values
-                        }
+        // Fetch actual enum values from catalog via dependent types (PostgreSQL returns values, others return [])
+        if let enumTypes = try? await driver.fetchDependentTypes(forTable: tableName),
+           !enumTypes.isEmpty {
+            let typeMap = Dictionary(uniqueKeysWithValues: enumTypes.map { ($0.name, $0.labels) })
+            for col in columnInfo where col.dataType.uppercased().hasPrefix("ENUM(") {
+                let raw = col.dataType
+                if let openParen = raw.firstIndex(of: "("),
+                   let closeParen = raw.lastIndex(of: ")") {
+                    let typeName = String(raw[raw.index(after: openParen)..<closeParen])
+                    if let values = typeMap[typeName] {
+                        result[col.name] = values
                     }
                 }
             }
         }
 
-        // For SQLite: fetch CHECK constraint pseudo-enum values from DDL
-        if connectionType == .sqlite {
-            if let createSQL = try? await driver.fetchTableDDL(table: tableName) {
-                let columns = try? await driver.fetchColumns(table: tableName)
-                for col in columns ?? [] {
-                    if let values = Self.parseSQLiteCheckConstraintValues(
-                        createSQL: createSQL, columnName: col.name
-                    ) {
-                        result[col.name] = values
-                    }
+        // Fetch CHECK constraint pseudo-enum values from DDL (SQLite-style CHECK ... IN constraints).
+        // Only attempt DDL parsing when no enum values were found via catalog (avoids unnecessary
+        // fetchTableDDL calls for databases that don't use CHECK constraints for enums).
+        if result.isEmpty, let createSQL = try? await driver.fetchTableDDL(table: tableName) {
+            let columns = try? await driver.fetchColumns(table: tableName)
+            for col in columns ?? [] {
+                if let values = Self.parseSQLiteCheckConstraintValues(
+                    createSQL: createSQL, columnName: col.name
+                ) {
+                    result[col.name] = values
                 }
             }
         }
@@ -925,8 +1092,10 @@ final class MainContentCoordinator {
         // Only apply to SELECT statements
         guard uppercased.hasPrefix("SELECT ") else { return sql }
 
-        // Skip for databases that don't support row limiting via SQL
-        guard dbType != .mongodb, dbType != .redis else { return sql }
+        let autoLimit = PluginManager.shared.autoLimitStyle(for: dbType)
+
+        // Skip for databases that don't support row limiting
+        guard autoLimit != .none else { return sql }
 
         // Check if query already has a LIMIT/FETCH/TOP clause
         let range = NSRange(trimmed.startIndex..., in: trimmed)
@@ -939,15 +1108,16 @@ final class MainContentCoordinator {
             ? String(trimmed.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
             : trimmed
 
-        switch dbType {
-        case .oracle:
+        switch autoLimit {
+        case .fetchFirst:
             return "\(withoutSemicolon) FETCH FIRST \(limit) ROWS ONLY"
-        case .mssql:
-            // MSSQL uses TOP in SELECT — inject after SELECT keyword
+        case .top:
             let afterSelect = withoutSemicolon.dropFirst(7) // drop "SELECT "
             return "SELECT TOP \(limit) \(afterSelect)"
-        default:
+        case .limit:
             return "\(withoutSemicolon) LIMIT \(limit)"
+        case .none:
+            return sql
         }
     }
 
@@ -1015,21 +1185,18 @@ final class MainContentCoordinator {
             currentSort = SortState()
             currentSort.columns = [SortColumn(columnIndex: columnIndex, direction: newDirection)]
         }
-
-        tabManager.tabs[tabIndex].sortState = currentSort
-        tabManager.tabs[tabIndex].hasUserInteraction = true
-
-        // Reset pagination to page 1 when sorting changes
-        tabManager.tabs[tabIndex].pagination.reset()
-
         if tab.tabType == .query {
+            tabManager.tabs[tabIndex].sortState = currentSort
+            tabManager.tabs[tabIndex].hasUserInteraction = true
+            tabManager.tabs[tabIndex].pagination.reset()
             let rows = tab.resultRows
             let tabId = tab.id
             let resultVersion = tab.resultVersion
             let sortColumns = currentSort.columns
+            let colTypes = tab.columnTypes
 
-            if rows.count > 10_000 {
-                // Large dataset: sort on background thread to avoid UI freeze
+            if rows.count > 1_000 {
+                // Sort on background thread to avoid UI freeze
                 activeSortTasks[tabId]?.cancel()
                 activeSortTasks.removeValue(forKey: tabId)
                 tabManager.tabs[tabIndex].isExecuting = true
@@ -1038,7 +1205,11 @@ final class MainContentCoordinator {
 
                 let sortStartTime = Date()
                 let task = Task.detached { [weak self] in
-                    let sortedIndices = Self.multiColumnSortIndices(rows: rows, sortColumns: sortColumns)
+                    let sortedIndices = Self.multiColumnSortIndices(
+                        rows: rows,
+                        sortColumns: sortColumns,
+                        columnTypes: colTypes
+                    )
                     let sortDuration = Date().timeIntervalSince(sortStartTime)
 
                     await MainActor.run { [weak self] in
@@ -1072,36 +1243,59 @@ final class MainContentCoordinator {
             return
         }
 
-        // Table tabs: rebuild query with ORDER BY and re-execute
-        let newQuery = queryBuilder.buildMultiSortQuery(
-            baseQuery: tab.query,
-            sortState: currentSort,
-            columns: tab.resultColumns
-        )
-        tabManager.tabs[tabIndex].query = newQuery
-        runQuery()
+        let tabId = tab.id
+        let capturedSort = currentSort
+        let capturedQuery = tab.query
+        let capturedColumns = tab.resultColumns
+        confirmDiscardChangesIfNeeded(action: .sort) { [weak self] confirmed in
+            guard let self, confirmed,
+                  let idx = self.tabManager.tabs.firstIndex(where: { $0.id == tabId }) else { return }
+            self.tabManager.tabs[idx].sortState = capturedSort
+            self.tabManager.tabs[idx].hasUserInteraction = true
+            self.tabManager.tabs[idx].pagination.reset()
+            let newQuery = self.queryBuilder.buildMultiSortQuery(
+                baseQuery: capturedQuery,
+                sortState: capturedSort,
+                columns: capturedColumns
+            )
+            self.tabManager.tabs[idx].query = newQuery
+            self.runQuery()
+        }
     }
 
     /// Multi-column sort returning index permutation (nonisolated for background thread).
     /// Returns an array of indices into the original `rows` array, sorted by the given columns.
     nonisolated private static func multiColumnSortIndices(
-        rows: [QueryResultRow],
-        sortColumns: [SortColumn]
+        rows: [[String?]],
+        sortColumns: [SortColumn],
+        columnTypes: [ColumnType] = []
     ) -> [Int] {
-        // Pre-extract sort keys for each row to avoid repeated access during comparison
-        let sortKeys: [[String]] = rows.map { row in
-            sortColumns.map { sortCol in
-                sortCol.columnIndex < row.values.count
-                    ? (row.values[sortCol.columnIndex] ?? "") : ""
+        // Fast path: single-column sort avoids intermediate key array allocation
+        if sortColumns.count == 1 {
+            let col = sortColumns[0]
+            let colIndex = col.columnIndex
+            let ascending = col.direction == .ascending
+            let colType = colIndex < columnTypes.count ? columnTypes[colIndex] : nil
+            var indices = Array(0..<rows.count)
+            indices.sort { i1, i2 in
+                let v1 = colIndex < rows[i1].count ? (rows[i1][colIndex] ?? "") : ""
+                let v2 = colIndex < rows[i2].count ? (rows[i2][colIndex] ?? "") : ""
+                let cmp = RowSortComparator.compare(v1, v2, columnType: colType)
+                return ascending ? cmp == .orderedAscending : cmp == .orderedDescending
             }
+            return indices
         }
 
         var indices = Array(0..<rows.count)
         indices.sort { i1, i2 in
-            let keys1 = sortKeys[i1]
-            let keys2 = sortKeys[i2]
-            for (colIdx, sortCol) in sortColumns.enumerated() {
-                let result = keys1[colIdx].localizedStandardCompare(keys2[colIdx])
+            let row1 = rows[i1]
+            let row2 = rows[i2]
+            for sortCol in sortColumns {
+                let v1 = sortCol.columnIndex < row1.count ? (row1[sortCol.columnIndex] ?? "") : ""
+                let v2 = sortCol.columnIndex < row2.count ? (row2[sortCol.columnIndex] ?? "") : ""
+                let colType = sortCol.columnIndex < columnTypes.count
+                    ? columnTypes[sortCol.columnIndex] : nil
+                let result = RowSortComparator.compare(v1, v2, columnType: colType)
                 if result == .orderedSame { continue }
                 return sortCol.direction == .ascending
                     ? result == .orderedAscending
@@ -1110,333 +1304,5 @@ final class MainContentCoordinator {
             return false
         }
         return indices
-    }
-}
-
-// MARK: - Query Execution Helpers
-
-private extension MainContentCoordinator {
-    /// Parsed schema metadata ready to apply to a tab
-    struct ParsedSchemaMetadata {
-        let columnDefaults: [String: String?]
-        let columnForeignKeys: [String: ForeignKeyInfo]
-        let columnNullable: [String: Bool]
-        let primaryKeyColumn: String?
-        let approximateRowCount: Int?
-    }
-
-    /// Schema result from parallel or sequential metadata fetch
-    typealias SchemaResult = (columnInfo: [ColumnInfo], fkInfo: [ForeignKeyInfo], approximateRowCount: Int?)
-
-    /// Parse a SchemaResult into dictionaries ready for tab assignment
-    func parseSchemaMetadata(_ schema: SchemaResult) -> ParsedSchemaMetadata {
-        var defaults: [String: String?] = [:]
-        var fks: [String: ForeignKeyInfo] = [:]
-        var nullable: [String: Bool] = [:]
-        for col in schema.columnInfo {
-            defaults[col.name] = col.defaultValue
-            nullable[col.name] = col.isNullable
-        }
-        for fk in schema.fkInfo {
-            fks[fk.column] = fk
-        }
-        return ParsedSchemaMetadata(
-            columnDefaults: defaults,
-            columnForeignKeys: fks,
-            columnNullable: nullable,
-            primaryKeyColumn: schema.columnInfo.first(where: { $0.isPrimaryKey })?.name,
-            approximateRowCount: schema.approximateRowCount
-        )
-    }
-
-    /// Check whether metadata is already cached for the given table in a tab
-    func isMetadataCached(tabId: UUID, tableName: String) -> Bool {
-        guard let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) else {
-            return false
-        }
-        let tab = tabManager.tabs[idx]
-        guard tab.tableName == tableName,
-              !tab.columnDefaults.isEmpty,
-              tab.primaryKeyColumn != nil else {
-            return false
-        }
-        // Ensure every ENUM/SET column has its allowed values loaded
-        let enumSetColumnNames: [String] = tab.resultColumns.enumerated().compactMap { i, name in
-            guard i < tab.columnTypes.count,
-                  tab.columnTypes[i].isEnumType || tab.columnTypes[i].isSetType else { return nil }
-            return name
-        }
-        if !enumSetColumnNames.isEmpty,
-           !enumSetColumnNames.allSatisfy({ tab.columnEnumValues[$0] != nil }) {
-            return false
-        }
-        return true
-    }
-
-    /// Await schema metadata from parallel task or fall back to sequential fetch
-    func awaitSchemaResult(
-        parallelTask: Task<SchemaResult, Error>?,
-        tableName: String
-    ) async -> SchemaResult? {
-        if let parallelTask {
-            return try? await parallelTask.value
-        }
-        guard let driver = DatabaseManager.shared.driver(for: connectionId) else { return nil }
-        do {
-            async let cols = driver.fetchColumns(table: tableName)
-            async let fks = driver.fetchForeignKeys(table: tableName)
-            let (c, f) = try await (cols, fks)
-            let approxCount = try? await driver.fetchApproximateRowCount(table: tableName)
-            return (columnInfo: c, fkInfo: f, approximateRowCount: approxCount)
-        } catch {
-            Self.logger.error("Phase 2 schema fetch failed: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    /// Apply Phase 1 query result data and optional metadata to the tab
-    func applyPhase1Result( // swiftlint:disable:this function_parameter_count
-        tabId: UUID,
-        columns: [String],
-        columnTypes: [ColumnType],
-        rows: [QueryResultRow],
-        executionTime: TimeInterval,
-        rowsAffected: Int,
-        tableName: String?,
-        isEditable: Bool,
-        metadata: ParsedSchemaMetadata?,
-        hasSchema: Bool,
-        sql: String,
-        connection conn: DatabaseConnection
-    ) {
-        guard let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) else { return }
-
-        var updatedTab = tabManager.tabs[idx]
-        updatedTab.resultColumns = columns
-        updatedTab.columnTypes = columnTypes
-        updatedTab.resultRows = rows
-        updatedTab.resultVersion += 1
-        updatedTab.executionTime = executionTime
-        updatedTab.rowsAffected = rowsAffected
-        updatedTab.isExecuting = false
-        updatedTab.lastExecutedAt = Date()
-        updatedTab.tableName = tableName
-        updatedTab.isEditable = isEditable && updatedTab.isEditable
-        if conn.type == .redis {
-            // Populate enum values from column types for the enum popover
-            for (index, colType) in updatedTab.columnTypes.enumerated() {
-                if case .enumType(_, let values) = colType, let vals = values, index < updatedTab.resultColumns.count {
-                    updatedTab.columnEnumValues[updatedTab.resultColumns[index]] = vals
-                }
-            }
-        }
-
-        // Merge FK metadata into the same update if available
-        if let metadata {
-            updatedTab.columnDefaults = metadata.columnDefaults
-            updatedTab.columnForeignKeys = metadata.columnForeignKeys
-            updatedTab.columnNullable = metadata.columnNullable
-            if let approxCount = metadata.approximateRowCount, approxCount > 0 {
-                updatedTab.pagination.totalRowCount = approxCount
-                updatedTab.pagination.isApproximateRowCount = true
-            }
-        }
-        if hasSchema {
-            updatedTab.metadataVersion += 1
-        }
-
-        tabManager.tabs[idx] = updatedTab
-        AppState.shared.isCurrentTabEditable = updatedTab.isEditable
-            && !updatedTab.isView && updatedTab.tableName != nil
-        toolbarState.isTableTab = updatedTab.tabType == .table
-
-        let resolvedPK: String?
-        if let pk = metadata?.primaryKeyColumn {
-            resolvedPK = pk
-        } else if conn.type == .redis {
-            resolvedPK = "Key"
-        } else {
-            // Preserve existing PK when metadata is cached and not re-fetched
-            resolvedPK = tabManager.tabs[idx].primaryKeyColumn
-        }
-
-        if let pk = resolvedPK {
-            tabManager.tabs[idx].primaryKeyColumn = pk
-        }
-
-        if tabManager.selectedTabId == tabId {
-            changeManager.configureForTable(
-                tableName: tableName ?? "",
-                columns: columns,
-                primaryKeyColumn: resolvedPK,
-                databaseType: conn.type
-            )
-        }
-
-        QueryHistoryManager.shared.recordQuery(
-            query: sql,
-            connectionId: conn.id,
-            databaseName: conn.database,
-            executionTime: executionTime,
-            rowCount: rows.count,
-            wasSuccessful: true,
-            errorMessage: nil
-        )
-
-        // Clear stale edit state immediately so the save banner
-        // doesn't linger while Phase 2 metadata loads in background.
-        if isEditable {
-            changeManager.clearChanges()
-        }
-    }
-
-    /// Launch Phase 2 background work: exact COUNT(*) and enum value fetching
-    func launchPhase2Work(
-        tableName: String,
-        tabId: UUID,
-        capturedGeneration: Int,
-        connectionType: DatabaseType,
-        schemaResult: SchemaResult?
-    ) {
-        let quotedTable = connectionType.quoteIdentifier(tableName)
-        Task { [weak self] in
-            guard let self else { return }
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            guard !self.isTearingDown else { return }
-            guard let mainDriver = DatabaseManager.shared.driver(for: connectionId) else { return }
-            let countResult = try? await mainDriver.execute(
-                query: "SELECT COUNT(*) FROM \(quotedTable)"
-            )
-            if let firstRow = countResult?.rows.first,
-               let countStr = firstRow.first ?? nil,
-               let count = Int(countStr) {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    guard capturedGeneration == queryGeneration else { return }
-                    if let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) {
-                        tabManager.tabs[idx].pagination.totalRowCount = count
-                        tabManager.tabs[idx].pagination.isApproximateRowCount = false
-                    }
-                }
-            }
-        }
-
-        // Phase 2b: Fetch enum/set values
-        let enumDriver = DatabaseManager.shared.driver(for: connectionId)
-        guard let enumDriver else { return }
-
-        Task { [weak self] in
-            guard let self else { return }
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            guard !self.isTearingDown else { return }
-
-            // Use schema if available, otherwise fetch column info for enum parsing
-            let columnInfo: [ColumnInfo]
-            if let schema = schemaResult {
-                columnInfo = schema.columnInfo
-            } else {
-                do {
-                    columnInfo = try await enumDriver.fetchColumns(table: tableName)
-                } catch {
-                    columnInfo = []
-                }
-            }
-
-            let columnEnumValues = await self.fetchEnumValues(
-                columnInfo: columnInfo,
-                tableName: tableName,
-                driver: enumDriver,
-                connectionType: connectionType
-            )
-
-            guard !columnEnumValues.isEmpty else {
-                return
-            }
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                guard capturedGeneration == queryGeneration else { return }
-                guard !Task.isCancelled else { return }
-                if let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) {
-                    tabManager.tabs[idx].columnEnumValues = columnEnumValues
-                    tabManager.tabs[idx].metadataVersion += 1
-                }
-            }
-        }
-    }
-
-    /// Launch only the exact COUNT(*) query (when metadata is already cached).
-    /// Does not guard on queryGeneration — the count is the same regardless of
-    /// which re-execution triggered it, and the repeated query issue means
-    /// generation is always stale by the time COUNT finishes.
-    private func launchPhase2Count(
-        tableName: String,
-        tabId: UUID,
-        capturedGeneration: Int,
-        connectionType: DatabaseType
-    ) {
-        let quotedTable = connectionType.quoteIdentifier(tableName)
-        Task { [weak self] in
-            guard let self else { return }
-            guard let mainDriver = DatabaseManager.shared.driver(for: connectionId) else { return }
-            let countResult = try? await mainDriver.execute(
-                query: "SELECT COUNT(*) FROM \(quotedTable)"
-            )
-            if let firstRow = countResult?.rows.first,
-               let countStr = firstRow.first ?? nil,
-               let count = Int(countStr) {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    if let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) {
-                        tabManager.tabs[idx].pagination.totalRowCount = count
-                        tabManager.tabs[idx].pagination.isApproximateRowCount = false
-                    }
-                }
-            }
-        }
-    }
-
-    /// Handle query execution error: update tab state, record history, show alert
-    func handleQueryExecutionError(
-        _ error: Error,
-        sql: String,
-        tabId: UUID,
-        connection conn: DatabaseConnection
-    ) {
-        currentQueryTask = nil
-        if let idx = tabManager.tabs.firstIndex(where: { $0.id == tabId }) {
-            var errTab = tabManager.tabs[idx]
-            errTab.errorMessage = error.localizedDescription
-            errTab.isExecuting = false
-            tabManager.tabs[idx] = errTab
-        }
-        toolbarState.setExecuting(false)
-
-        QueryHistoryManager.shared.recordQuery(
-            query: sql,
-            connectionId: conn.id,
-            databaseName: conn.database,
-            executionTime: 0,
-            rowCount: 0,
-            wasSuccessful: false,
-            errorMessage: error.localizedDescription
-        )
-
-        // Show error alert with AI fix option
-        let errorMessage = error.localizedDescription
-        let queryCopy = sql
-        Task { @MainActor in
-            let wantsAIFix = await AlertHelper.showQueryErrorWithAIOption(
-                title: String(localized: "Query Execution Failed"),
-                message: errorMessage,
-                window: NSApp.keyWindow
-            )
-            if wantsAIFix {
-                NotificationCenter.default.post(
-                    name: .aiFixError,
-                    object: nil,
-                    userInfo: ["query": queryCopy, "error": errorMessage]
-                )
-            }
-        }
     }
 }

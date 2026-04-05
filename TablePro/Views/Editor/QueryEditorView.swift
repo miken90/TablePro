@@ -8,6 +8,7 @@
 import CodeEditSourceEditor
 import os
 import SwiftUI
+import TableProPluginKit
 
 /// SQL query editor view with execute button
 struct QueryEditorView: View {
@@ -20,8 +21,14 @@ struct QueryEditorView: View {
     var onExecute: () -> Void
     var schemaProvider: SQLSchemaProvider?
     var databaseType: DatabaseType?
+    var connectionId: UUID?
     var onCloseTab: (() -> Void)?
     var onExecuteQuery: (() -> Void)?
+    var onExplain: ((ClickHouseExplainVariant?) -> Void)?
+    var onExplainVariant: ((ExplainVariant) -> Void)?
+    var onAIExplain: ((String) -> Void)?
+    var onAIOptimize: ((String) -> Void)?
+    var onSaveAsFavorite: ((String) -> Void)?
 
     @State private var vimMode: VimMode = .normal
 
@@ -41,9 +48,14 @@ struct QueryEditorView: View {
                 cursorPositions: $cursorPositions,
                 schemaProvider: schemaProvider,
                 databaseType: databaseType,
+                connectionId: connectionId,
                 vimMode: $vimMode,
                 onCloseTab: onCloseTab,
-                onExecuteQuery: onExecuteQuery
+                onExecuteQuery: onExecuteQuery,
+                onAIExplain: onAIExplain,
+                onAIOptimize: onAIOptimize,
+                onSaveAsFavorite: onSaveAsFavorite,
+                onFormatSQL: formatQuery
             )
             .frame(minHeight: 100)
             .clipped()
@@ -83,39 +95,7 @@ struct QueryEditorView: View {
             Divider()
                 .frame(height: 16)
 
-            if databaseType == .clickhouse {
-                Menu {
-                    ForEach(ClickHouseExplainVariant.allCases) { variant in
-                        Button(variant.rawValue) {
-                            NotificationCenter.default.post(
-                                name: .explainQuery,
-                                object: nil,
-                                userInfo: ["variant": variant.rawValue]
-                            )
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chart.bar.doc.horizontal")
-                        Text("Explain")
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .disabled(!hasQueryText)
-            } else {
-                Button {
-                    NotificationCenter.default.post(name: .explainQuery, object: nil)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chart.bar.doc.horizontal")
-                        Text("Explain")
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(!hasQueryText)
-            }
+            explainButton(hasQueryText: hasQueryText)
 
             // Execute button
             Button(action: onExecute) {
@@ -134,6 +114,47 @@ struct QueryEditorView: View {
     }
 
     // MARK: - Helpers
+
+    @ViewBuilder
+    private func explainButton(hasQueryText: Bool) -> some View {
+        let variants = databaseType.flatMap {
+            PluginMetadataRegistry.shared.snapshot(forTypeId: $0.pluginTypeId)?.explainVariants
+        } ?? []
+
+        if variants.isEmpty {
+            Button {
+                onExplain?(nil)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                    Text("Explain")
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!hasQueryText)
+        } else {
+            Menu {
+                ForEach(variants) { variant in
+                    Button(variant.label) {
+                        if let handler = onExplainVariant {
+                            handler(variant)
+                        } else if let legacy = ClickHouseExplainVariant(rawValue: variant.label) {
+                            onExplain?(legacy)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                    Text("Explain")
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .disabled(!hasQueryText)
+        }
+    }
 
     private func formatQuery() {
         // Get current database type

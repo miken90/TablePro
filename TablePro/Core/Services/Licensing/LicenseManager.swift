@@ -93,8 +93,9 @@ final class LicenseManager {
             }
 
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(self?.revalidationInterval ?? 604_800))
-                await self?.revalidate()
+                guard let self else { return }
+                try? await Task.sleep(for: .seconds(self.revalidationInterval))
+                await self.revalidate()
             }
         }
     }
@@ -191,8 +192,17 @@ final class LicenseManager {
 
     // MARK: - Re-validation
 
+    var isExpiringSoon: Bool {
+        guard let days = license?.daysUntilExpiry else { return false }
+        return days >= 0 && days <= 7
+    }
+
+    var daysUntilExpiry: Int? {
+        license?.daysUntilExpiry
+    }
+
     /// Periodic re-validation: refresh license from server, fall back to offline grace period
-    private func revalidate() async {
+    func revalidate() async {
         guard let license else { return }
 
         isValidating = true
@@ -236,6 +246,9 @@ final class LicenseManager {
 
     /// Evaluate current license status based on expiration, grace period, and signature validity
     private func evaluateStatus() {
+        let previousStatus = status
+        defer { notifyIfChanged(from: previousStatus) }
+
         guard let license else {
             status = .unlicensed
             return
@@ -269,5 +282,11 @@ final class LicenseManager {
         }
 
         status = .active
+    }
+
+    private func notifyIfChanged(from previousStatus: LicenseStatus) {
+        if status != previousStatus {
+            NotificationCenter.default.post(name: .licenseStatusDidChange, object: nil)
+        }
     }
 }

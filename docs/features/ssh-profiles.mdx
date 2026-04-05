@@ -1,0 +1,45 @@
+---
+title: SSH Profiles
+description: Save SSH tunnel configurations as reusable profiles shared across connections
+---
+
+# SSH Profiles
+
+Define an SSH tunnel config once, then reuse it across multiple connections. No more entering the same host, port, and credentials for every database on the same server.
+
+## Creating a Profile
+
+1. Open any connection's **SSH Tunnel** tab
+2. Click **Create New Profile...**
+3. Fill in host, port, username, and auth method
+4. Save
+
+Select the profile from the **Profile** picker in other connections. Changes to a profile apply to all connections using it.
+
+{/* Screenshot: SSH profile creation */}
+<Frame caption="Creating an SSH profile">
+  <img
+    className="block dark:hidden"
+    src="/images/ssh-profile-create.png"
+    alt="Creating an SSH profile"
+  />
+  <img
+    className="hidden dark:block"
+    src="/images/ssh-profile-create-dark.png"
+    alt="Creating an SSH profile"
+  />
+</Frame>
+
+You can also save an existing inline SSH config as a profile: click **Save Current as Profile...**.
+
+## Editing and Deleting
+
+Select a profile and click **Edit Profile...** to modify it. To delete, click **Edit Profile...** then **Delete Profile**.
+
+## Testing a Profile
+
+Click **Test Connection** in the profile editor to verify SSH settings without connecting to a database. TablePro performs the SSH handshake, verifies the host key, and authenticates. Green checkmark on success; error dialog on failure.
+
+## iCloud Sync
+
+SSH profiles sync across Macs when iCloud Sync is enabled with the **SSH Profiles** toggle on in **Settings > Sync**. Passwords and key passphrases stay local by default. Turn on **Password sync** to sync credentials via iCloud Keychain.

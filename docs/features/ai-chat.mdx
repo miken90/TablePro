@@ -5,17 +5,11 @@ description: Built-in AI chat panel with support for Claude, OpenAI, Gemini, Ope
 
 # AI Chat
 
-TablePro has a built-in AI chat panel for writing, explaining, and fixing SQL queries. It supports Claude (Anthropic), OpenAI, Gemini (Google), OpenRouter, Ollama, and custom OpenAI-compatible endpoints.
+Built-in AI chat panel for writing, explaining, and fixing SQL. Supports Claude, OpenAI, Gemini, OpenRouter, Ollama, and custom OpenAI-compatible endpoints.
 
-## Opening the AI Chat Panel
+## Opening the Panel
 
-| Method | Action |
-|--------|--------|
-| Keyboard shortcut | `Cmd+Shift+L` |
-| Toolbar | Click the AI button (sparkles icon) |
-| Menu | **View** > **Toggle AI Chat** |
-
-The panel appears on the right side of the editor, next to the data inspector.
+Press `Cmd+Shift+L`, click the AI toolbar button, or go **View** > **Toggle AI Chat**.
 
 <Frame caption="AI chat panel">
   <img
@@ -32,32 +26,7 @@ The panel appears on the right side of the editor, next to the data inspector.
 
 ## Chatting with AI
 
-1. Type your question in the input field at the bottom
-2. Press **Enter** or click send
-3. The AI responds with context-aware suggestions based on your current database connection
-
-The AI automatically receives:
-- Your database type (MySQL, PostgreSQL, SQLite)
-- Database schema (tables, columns, types, foreign keys)
-- The current query in the editor (when enabled)
-
-<Tip>
-The AI generates SQL matched to your specific database dialect, with correct identifier quoting and syntax.
-</Tip>
-
-### Markdown Responses
-
-AI responses render with full Markdown support:
-- **Formatted text** -- headers, bold, italic, lists
-- **SQL code blocks** -- with syntax highlighting and action buttons
-- **Inline code** -- for table names, column names, and SQL keywords
-
-## Code Blocks
-
-SQL code blocks in AI responses have two action buttons:
-
-- **Copy** -- copies the SQL to your clipboard
-- **Insert to Editor** -- inserts the SQL into your active editor tab
+Type a question and press Enter. The AI receives your database type, schema, and current query, then responds with syntax-highlighted SQL code blocks. Each code block has **Copy** and **Insert to Editor** buttons. Token counts appear below each response.
 
 <Frame caption="AI response with code block actions">
   <img
@@ -72,14 +41,6 @@ SQL code blocks in AI responses have two action buttons:
   />
 </Frame>
 
-## Token Usage
-
-After each response, the token count appears below the assistant message:
-
-- **Input tokens** -- tokens sent to the AI (your messages + context)
-- **Output tokens** -- tokens the AI generated
-
-Use this to track API usage and costs per message.
 
 <Frame caption="Token usage display">
   <img
@@ -94,21 +55,7 @@ Use this to track API usage and costs per message.
   />
 </Frame>
 
-## Conversation History
-
-Conversations save to disk automatically and restore on relaunch. Manage them from the chat panel header:
-
-| Button | Action |
-|--------|--------|
-| **History** (clock icon) | Browse and switch between past conversations |
-| **New Chat** (pencil icon) | Start a new conversation |
-| **Clear** (trash icon) | Delete the current conversation |
-
-Conversations are stored as JSON files in `~/Library/Application Support/TablePro/ai_chats/`.
-
-<Tip>
-Conversations are auto-titled from the first message you send, making them easy to find later.
-</Tip>
+Conversations auto-save and auto-title from your first message. Browse history, start new conversations, or delete old ones from the panel.
 
 <Frame caption="Conversation history">
   <img
@@ -123,18 +70,7 @@ Conversations are auto-titled from the first message you send, making them easy 
   />
 </Frame>
 
-## Retry and Regenerate
-
-- **Retry** -- if generation fails (network error, rate limit, etc.), a "Retry" button appears below the last user message. Click it to re-send the same request.
-- **Regenerate** -- after a successful response, a "Regenerate" button appears below the assistant message. Click it to discard the response and stream a new one.
-
-## Streaming
-
-Responses stream in real-time as they generate:
-- A three-dot typing indicator shows while waiting for the first token
-- Click **Stop** to cancel at any time
-- Scroll up to read previous messages without being forced back to the bottom. Auto-scroll only kicks in when you're already viewing the latest content.
-- Start a new message while viewing older responses
+Failed responses show **Retry**; successful ones show **Regenerate**. Responses stream in real-time -- click **Stop** to cancel.
 
 <Frame caption="Streaming response">
   <img
@@ -149,38 +85,13 @@ Responses stream in real-time as they generate:
   />
 </Frame>
 
-## Supported Providers
-
-Six provider types:
-
-| Provider | Endpoint | API Key Required |
-|----------|----------|------------------|
-| **Claude** (Anthropic) | `https://api.anthropic.com` | Yes |
-| **OpenAI** | `https://api.openai.com` | Yes |
-| **OpenRouter** | `https://openrouter.ai/api` | Yes |
-| **Gemini** (Google) | `https://generativelanguage.googleapis.com` | Yes |
-| **Ollama** | `http://localhost:11434` | No |
-| **Custom** | Any OpenAI-compatible endpoint | Optional |
-
-<Tip>
-**Ollama Auto-Detection**: If Ollama is running locally when TablePro launches, it's automatically registered as an AI provider with the first available model. No manual setup needed.
-</Tip>
-
-<Note>
-You can configure multiple providers at once and route different AI features to different providers.
-</Note>
-
 ## Configuring AI Providers
 
-Set up providers in **Settings** (`Cmd+,`) > **AI**:
+Configure providers in **Settings** (`Cmd+,`) > **AI**. Ollama auto-detects on launch.
 
 ### Adding a Provider
 
-1. Click **Add Provider** in the Providers section
-2. Pick a provider type (Claude, OpenAI, Gemini, OpenRouter, Ollama, or Custom)
-3. Enter your API key (the endpoint is pre-filled based on provider type)
-4. Specify a model name, or click **Fetch** to pull available models from the provider. Models auto-fetch when you change provider settings.
-5. Click **Test** to verify the connection
+Click **Add Provider**, choose a type, enter your API key, specify a model (or click **Fetch** to list available models), then **Test** to verify.
 
 <Frame caption="AI settings - provider configuration">
   <img
@@ -195,23 +106,11 @@ Set up providers in **Settings** (`Cmd+,`) > **AI**:
   />
 </Frame>
 
-### API Key Security
-
-API keys are stored in your macOS Keychain. They never touch plain text files or preferences.
+API keys are stored in macOS Keychain, never in plain text.
 
 ### Feature Routing
 
-Route specific AI features to different providers:
-
-| Feature | Description |
-|---------|-------------|
-| **Chat** | General AI chat conversations |
-| **Explain Query** | Query explanation requests |
-| **Optimize Query** | Query performance optimization suggestions |
-| **Fix Error** | Error diagnosis and fix suggestions |
-| **Inline Suggestions** | Inline code suggestions |
-
-Each feature can target a specific provider or fall back to the default (first enabled provider).
+Route each feature (Chat, Explain, Optimize, Fix Error, Inline Suggestions) to a specific provider, or use the default.
 
 <Frame caption="Feature routing configuration">
   <img
@@ -226,46 +125,7 @@ Each feature can target a specific provider or fall back to the default (first e
   />
 </Frame>
 
-## Context Settings
-
-Control what database context goes to the AI:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Include database schema** | On | Send table and column definitions |
-| **Include current query** | On | Send the query from the active editor tab |
-| **Include query results** | Off | Send recent query results |
-| **Max schema tables** | 20 | Maximum number of tables included in context |
-
-<Frame caption="Context settings">
-  <img
-    className="block dark:hidden"
-    src="/images/ai-chat-context-settings.png"
-    alt="Context settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/ai-chat-context-settings-dark.png"
-    alt="Context settings"
-  />
-</Frame>
-
-<Warning>
-More context means better AI answers, but also more data sent to the provider. Check your provider's privacy policy before enabling schema and query sharing.
-</Warning>
-
-## Per-Connection AI Policy
-
-Control AI access per connection from the connection form:
-
-| Policy | Description |
-|--------|-------------|
-| **Use Default** | Follow the global default policy from AI settings |
-| **Always Allow** | AI features always available for this connection |
-| **Ask Each Time** | Prompt before sending data to AI |
-| **Never** | Disable AI features entirely for this connection |
-
-Useful for locking down AI on production database connections.
+Configure context in **Settings** > **AI** > **Context**: schema (on), current query (on), query results (off), max tables (20). Set a per-connection AI policy (Use Default, Always Allow, Ask Each Time, or Never) for sensitive connections.
 
 <Frame caption="Per-connection AI policy">
   <img
@@ -282,12 +142,7 @@ Useful for locking down AI on production database connections.
 
 ## Editor Integration
 
-### Context Menu
-
-Right-click selected SQL in the editor to access AI features:
-
-- **Explain with AI** -- sends the selected SQL to AI for explanation
-- **Optimize with AI** -- asks AI to suggest performance improvements
+Right-click SQL in the editor for **Explain with AI** and **Optimize with AI**.
 
 <Frame caption="SQL editor context menu with AI items">
   <img
@@ -302,27 +157,11 @@ Right-click selected SQL in the editor to access AI features:
   />
 </Frame>
 
-### Keyboard Shortcuts
-
-| Action | Shortcut | Description |
-|--------|----------|-------------|
-| Toggle AI Chat | `Cmd+Shift+L` | Open or close the AI chat panel |
-| Explain with AI | `Cmd+L` | Explain selected SQL (or current query) |
-| Optimize with AI | `Cmd+Option+L` | Optimize selected SQL (or current query) |
-
-All AI shortcuts are customizable in **Settings** > **Keyboard** under the **AI** category.
-
-<Tip>
-When no text is selected, `Cmd+L` and `Cmd+Option+L` use the entire query from the active editor tab.
-</Tip>
+Shortcuts: Toggle AI Chat (`Cmd+Shift+L`), Explain (`Cmd+L`), Optimize (`Cmd+Option+L`). Customizable in **Settings** > **Keyboard** > **AI**.
 
 ### Ask AI to Fix Errors
 
-When a query fails, the error dialog includes an **Ask AI to Fix** button:
-
-1. Opens the AI chat panel (if not already open)
-2. Sends the failed query and error message to AI
-3. AI analyzes the error and suggests a corrected query
+Query error dialogs include an **Ask AI to Fix** button. It opens the chat panel with the failed query and error message.
 
 <Frame caption="Query error dialog with Ask AI to Fix button">
   <img
@@ -337,19 +176,3 @@ When a query fails, the error dialog includes an **Ask AI to Fix** button:
   />
 </Frame>
 
-## Related Pages
-
-<CardGroup cols={2}>
-  <Card title="SQL Editor" icon="code" href="/features/sql-editor">
-    Write and execute SQL queries
-  </Card>
-  <Card title="Settings" icon="gear" href="/customization/settings">
-    Configure all TablePro settings
-  </Card>
-  <Card title="Keyboard Shortcuts" icon="keyboard" href="/features/keyboard-shortcuts">
-    All keyboard shortcuts
-  </Card>
-  <Card title="Query History" icon="clock-rotate-left" href="/features/query-history">
-    Browse previous queries
-  </Card>
-</CardGroup>

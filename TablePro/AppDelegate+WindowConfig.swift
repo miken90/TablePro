@@ -38,7 +38,10 @@ extension AppDelegate {
                 )
                 item.target = self
                 item.representedObject = connection.id
-                if let original = NSImage(named: connection.type.iconName) {
+                let iconName = connection.type.iconName
+                let original = NSImage(systemSymbolName: iconName, accessibilityDescription: nil)
+                    ?? NSImage(named: iconName)
+                if let original {
                     let resized = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { rect in
                         original.draw(in: rect)
                         return true
@@ -64,6 +67,7 @@ extension AppDelegate {
         let connections = ConnectionStorage.shared.loadConnections()
         guard let connection = connections.first(where: { $0.id == connectionId }) else { return }
 
+        WindowOpener.shared.pendingConnectionId = connection.id
         NotificationCenter.default.post(name: .openMainWindow, object: connection.id)
 
         Task { @MainActor in
@@ -76,10 +80,12 @@ extension AppDelegate {
             } catch {
                 windowLogger.error("Dock connection failed for '\(connection.name)': \(error.localizedDescription)")
 
-                for window in NSApp.windows where self.isMainWindow(window) {
+                for window in WindowLifecycleMonitor.shared.windows(for: connection.id) {
                     window.close()
                 }
-                self.openWelcomeWindow()
+                if !NSApp.windows.contains(where: { self.isMainWindow($0) && $0.isVisible }) {
+                    self.openWelcomeWindow()
+                }
             }
         }
     }
@@ -97,18 +103,25 @@ extension AppDelegate {
 
     // MARK: - Window Identification
 
+    private enum WindowId {
+        static let main = "main"
+        static let welcome = "welcome"
+        static let connectionForm = "connection-form"
+    }
+
     func isMainWindow(_ window: NSWindow) -> Bool {
-        guard let identifier = window.identifier?.rawValue else { return false }
-        return identifier.contains("main")
+        guard let rawValue = window.identifier?.rawValue else { return false }
+        return rawValue == WindowId.main || rawValue.hasPrefix("\(WindowId.main)-")
     }
 
     func isWelcomeWindow(_ window: NSWindow) -> Bool {
-        window.identifier?.rawValue == "welcome" ||
-            window.title.lowercased().contains("welcome")
+        guard let rawValue = window.identifier?.rawValue else { return false }
+        return rawValue == WindowId.welcome || rawValue.hasPrefix("\(WindowId.welcome)-")
     }
 
     private func isConnectionFormWindow(_ window: NSWindow) -> Bool {
-        window.identifier?.rawValue.contains("connection-form") == true
+        guard let rawValue = window.identifier?.rawValue else { return false }
+        return rawValue == WindowId.connectionForm || rawValue.hasPrefix("\(WindowId.connectionForm)-")
     }
 
     // MARK: - Welcome Window
@@ -159,6 +172,12 @@ extension AppDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.titlebarAppearsTransparent = true
+
+        window.makeKeyAndOrderFront(nil)
+
+        if let textField = window.contentView?.firstEditableTextField() {
+            window.makeFirstResponder(textField)
+        }
     }
 
     private func configureConnectionFormWindowStyle(_ window: NSWindow) {
@@ -174,26 +193,24 @@ extension AppDelegate {
 
     // MARK: - Welcome Window Suppression
 
-    func scheduleWelcomeWindowSuppression() {
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(200))
-            self?.closeWelcomeWindowIfMainExists()
-            try? await Task.sleep(for: .milliseconds(500))
-            guard let self else { return }
-            self.closeWelcomeWindowIfMainExists()
-            self.fileOpenSuppressionCount = max(0, self.fileOpenSuppressionCount - 1)
-            if self.fileOpenSuppressionCount == 0 {
-                self.isHandlingFileOpen = false
-            }
+    /// Called by connection handlers when the file-open connection attempt finishes
+    /// (success or failure). Decrements the suppression counter and resets the flag
+    /// when all outstanding file opens have completed.
+    func endFileOpenSuppression() {
+        fileOpenSuppressionCount = max(0, fileOpenSuppressionCount - 1)
+        if fileOpenSuppressionCount == 0 {
+            isHandlingFileOpen = false
         }
     }
 
-    private func closeWelcomeWindowIfMainExists() {
+    @discardableResult
+    private func closeWelcomeWindowIfMainExists() -> Bool {
         let hasMainWindow = NSApp.windows.contains { isMainWindow($0) && $0.isVisible }
-        guard hasMainWindow else { return }
+        guard hasMainWindow else { return false }
         for window in NSApp.windows where isWelcomeWindow(window) {
             window.close()
         }
+        return true
     }
 
     // MARK: - Window Notifications
@@ -203,9 +220,13 @@ extension AppDelegate {
         let windowId = ObjectIdentifier(window)
 
         if isWelcomeWindow(window) && isHandlingFileOpen {
-            window.close()
-            for mainWin in NSApp.windows where isMainWindow(mainWin) {
+            // Only close welcome if a main window exists to take its place;
+            // otherwise just hide it so the user doesn't see a flash.
+            if let mainWin = NSApp.windows.first(where: { isMainWindow($0) }) {
+                window.close()
                 mainWin.makeKeyAndOrderFront(nil)
+            } else {
+                window.orderOut(nil)
             }
             return
         }
@@ -220,20 +241,71 @@ extension AppDelegate {
             configuredWindows.insert(windowId)
         }
 
+        if isMainWindow(window) && isHandlingFileOpen {
+            closeWelcomeWindowIfMainExists()
+        }
+
         if isMainWindow(window) && !configuredWindows.contains(windowId) {
             window.tabbingMode = .preferred
+            window.isRestorable = false
             let pendingId = MainActor.assumeIsolated { WindowOpener.shared.consumePendingConnectionId() }
+
+            // If no code opened this window (pendingId is nil), this is a
+            // SwiftUI WindowGroup state restoration — not a window we created.
+            // Hide it (orderOut, not close) to break the close→restore loop.
+            // Exception: if the window is already part of a tab group, it was
+            // attached by our addTabbedWindow call — not a restoration orphan.
+            // Ordering it out would crash NSWindowStackController.
+            if pendingId == nil && !isAutoReconnecting {
+                configuredWindows.insert(windowId)
+                if let tabbedWindows = window.tabbedWindows, tabbedWindows.count > 1 {
+                    // Already in a tab group — leave it alone
+                    return
+                }
+                window.orderOut(nil)
+                return
+            }
+
             let existingIdentifier = NSApp.windows
                 .first { $0 !== window && isMainWindow($0) && $0.isVisible }?
                 .tabbingIdentifier
-            window.tabbingIdentifier = TabbingIdentifierResolver.resolve(
+            let groupAll = MainActor.assumeIsolated { AppSettingsManager.shared.tabs.groupAllConnectionTabs }
+            let resolvedIdentifier = TabbingIdentifierResolver.resolve(
                 pendingConnectionId: pendingId,
-                existingIdentifier: existingIdentifier
+                existingIdentifier: existingIdentifier,
+                groupAllConnections: groupAll
             )
+            window.tabbingIdentifier = resolvedIdentifier
             configuredWindows.insert(windowId)
 
             if !NSWindow.allowsAutomaticWindowTabbing {
                 NSWindow.allowsAutomaticWindowTabbing = true
+            }
+
+            // Explicitly attach to existing tab group — automatic tabbing
+            // doesn't work when tabbingIdentifier is set after window creation.
+            let matchingWindow: NSWindow?
+            if groupAll {
+                // When grouping all connections, attach to any visible main window
+                // and normalize all existing windows' tabbingIdentifiers so future
+                // windows also match (not just the first one found).
+                let existingMainWindows = NSApp.windows.filter {
+                    $0 !== window && isMainWindow($0) && $0.isVisible
+                }
+                for existing in existingMainWindows {
+                    existing.tabbingIdentifier = resolvedIdentifier
+                }
+                matchingWindow = existingMainWindows.first
+            } else {
+                matchingWindow = NSApp.windows.first {
+                    $0 !== window && isMainWindow($0) && $0.isVisible
+                        && $0.tabbingIdentifier == resolvedIdentifier
+                }
+            }
+            if let existingWindow = matchingWindow {
+                let targetWindow = existingWindow.tabbedWindows?.last ?? existingWindow
+                targetWindow.addTabbedWindow(window, ordered: .above)
+                window.makeKeyAndOrderFront(nil)
             }
         }
     }
@@ -250,10 +322,7 @@ extension AppDelegate {
 
             if remainingMainWindows == 0 {
                 NotificationCenter.default.post(name: .mainWindowWillClose, object: nil)
-
-                DispatchQueue.main.async {
-                    self.openWelcomeWindow()
-                }
+                openWelcomeWindow()
             }
         }
     }
@@ -264,13 +333,9 @@ extension AppDelegate {
 
         if isWelcomeWindow(window),
            window.occlusionState.contains(.visible),
-           NSApp.windows.contains(where: { isMainWindow($0) && $0.isVisible }) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                if self.isWelcomeWindow(window), window.isVisible {
-                    window.close()
-                }
-            }
+           NSApp.windows.contains(where: { isMainWindow($0) && $0.isVisible }),
+           window.isVisible {
+            window.close()
         }
     }
 
@@ -285,25 +350,34 @@ extension AppDelegate {
             return
         }
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+        isAutoReconnecting = true
 
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            WindowOpener.shared.pendingConnectionId = connection.id
             NotificationCenter.default.post(name: .openMainWindow, object: connection.id)
 
-            Task { @MainActor in
-                do {
-                    try await DatabaseManager.shared.connectToSession(connection)
+            defer { self.isAutoReconnecting = false }
+            do {
+                try await DatabaseManager.shared.connectToSession(connection)
 
-                    for window in NSApp.windows where self.isWelcomeWindow(window) {
-                        window.close()
-                    }
-                } catch {
-                    windowLogger.error("Auto-reconnect failed for '\(connection.name)': \(error.localizedDescription)")
+                for window in NSApp.windows where self.isWelcomeWindow(window) {
+                    window.close()
+                }
+            } catch is CancellationError {
+                for window in WindowLifecycleMonitor.shared.windows(for: connection.id) {
+                    window.close()
+                }
+                if !NSApp.windows.contains(where: { self.isMainWindow($0) && $0.isVisible }) {
+                    self.openWelcomeWindow()
+                }
+            } catch {
+                windowLogger.error("Auto-reconnect failed for '\(connection.name)': \(error.localizedDescription)")
 
-                    for window in NSApp.windows where self.isMainWindow(window) {
-                        window.close()
-                    }
-
+                for window in WindowLifecycleMonitor.shared.windows(for: connection.id) {
+                    window.close()
+                }
+                if !NSApp.windows.contains(where: { self.isMainWindow($0) && $0.isVisible }) {
                     self.openWelcomeWindow()
                 }
             }
@@ -311,8 +385,8 @@ extension AppDelegate {
     }
 
     func closeRestoredMainWindows() {
-        DispatchQueue.main.async {
-            for window in NSApp.windows where window.identifier?.rawValue.contains("main") == true {
+        DispatchQueue.main.async { [weak self] in
+            for window in NSApp.windows where self?.isMainWindow(window) == true {
                 window.close()
             }
         }

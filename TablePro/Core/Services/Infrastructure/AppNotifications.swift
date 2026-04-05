@@ -10,25 +10,33 @@
 import Foundation
 
 extension Notification.Name {
-    // MARK: - Query Editor
-
-    static let aiFixError = Notification.Name("aiFixError")
-    static let aiExplainSelection = Notification.Name("aiExplainSelection")
-    static let aiOptimizeSelection = Notification.Name("aiOptimizeSelection")
-
     // MARK: - Query History
 
     static let queryHistoryDidUpdate = Notification.Name("queryHistoryDidUpdate")
-    static let loadQueryIntoEditor = Notification.Name("loadQueryIntoEditor")
-    static let insertQueryFromAI = Notification.Name("insertQueryFromAI")
 
     // MARK: - Connections
 
     static let connectionUpdated = Notification.Name("connectionUpdated")
+    static let connectionStatusDidChange = Notification.Name("connectionStatusDidChange")
     static let databaseDidConnect = Notification.Name("databaseDidConnect")
+    static let connectionShareFileOpened = Notification.Name("connectionShareFileOpened")
+    static let exportConnections = Notification.Name("exportConnections")
+    static let importConnections = Notification.Name("importConnections")
+    static let linkedFoldersDidUpdate = Notification.Name("linkedFoldersDidUpdate")
 
-    // MARK: - SSH
+    // MARK: - License
 
-    static let sshTunnelDied = Notification.Name("sshTunnelDied")
-    static let lastWindowDidClose = Notification.Name("lastWindowDidClose")
+    static let licenseStatusDidChange = Notification.Name("licenseStatusDidChange")
+
+    // MARK: - Export
+
+    static let exportQueryResults = Notification.Name("exportQueryResults")
+
+    // MARK: - SQL Favorites
+
+    static let sqlFavoritesDidUpdate = Notification.Name("sqlFavoritesDidUpdate")
+
+    // MARK: - Settings Window
+
+    static let openSettingsWindow = Notification.Name("com.TablePro.openSettingsWindow")
 }

@@ -13,7 +13,7 @@ import SwiftUI
 
 /// Abstraction over table fetching for testability
 protocol TableFetcher: Sendable {
-    func fetchTables() async throws -> [TableInfo]
+    func fetchTables(force: Bool) async throws -> [TableInfo]
 }
 
 /// Production implementation that uses DatabaseManager, with optional schema provider cache
@@ -26,17 +26,26 @@ struct LiveTableFetcher: TableFetcher {
         self.schemaProvider = schemaProvider
     }
 
-    func fetchTables() async throws -> [TableInfo] {
+    func fetchTables(force: Bool) async throws -> [TableInfo] {
         if let provider = schemaProvider {
-            let cached = await provider.getTables()
-            if !cached.isEmpty {
-                return cached
+            if force {
+                if let fresh = try await provider.fetchFreshTables() { return fresh }
+            } else {
+                let cached = await provider.getTables()
+                if !cached.isEmpty { return cached }
             }
         }
         guard let driver = await DatabaseManager.shared.driver(for: connectionId) else {
+            NSLog("[LiveTableFetcher] driver is nil for connectionId: %@", connectionId.uuidString)
             return []
         }
-        return try await driver.fetchTables()
+        let fetched = try await driver.fetchTables()
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        NSLog("[LiveTableFetcher] fetched %d tables", fetched.count)
+        if let provider = schemaProvider {
+            await provider.updateTables(fetched)
+        }
+        return fetched
     }
 }
 
@@ -58,6 +67,16 @@ final class SidebarViewModel {
     }() {
         didSet { UserDefaults.standard.set(isTablesExpanded, forKey: "sidebar.isTablesExpanded") }
     }
+    var isRedisKeysExpanded: Bool = {
+        let key = "sidebar.isRedisKeysExpanded"
+        if UserDefaults.standard.object(forKey: key) != nil {
+            return UserDefaults.standard.bool(forKey: key)
+        }
+        return true
+    }() {
+        didSet { UserDefaults.standard.set(isRedisKeysExpanded, forKey: "sidebar.isRedisKeysExpanded") }
+    }
+    var redisKeyTreeViewModel: RedisKeyTreeViewModel?
     var showOperationDialog = false
     var pendingOperationType: TableOperationType?
     var pendingOperationTables: [String] = []
@@ -135,22 +154,29 @@ final class SidebarViewModel {
     // MARK: - Lifecycle
 
     func onAppear() {
-        guard tables.isEmpty else { return }
+        guard tables.isEmpty else {
+            NSLog("[SidebarVM] onAppear: tables not empty (%d), skipping", tables.count)
+            return
+        }
         Task { @MainActor in
             if DatabaseManager.shared.driver(for: connectionId) != nil {
+                NSLog("[SidebarVM] onAppear: driver found, loading tables")
                 loadTables()
+            } else {
+                NSLog("[SidebarVM] onAppear: driver is nil for %@", connectionId.uuidString)
             }
         }
     }
 
     // MARK: - Table Loading
 
-    func loadTables() {
+    func loadTables(force: Bool = false) {
+        loadTask?.cancel()
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         loadTask = Task {
-            await loadTablesAsync()
+            await loadTablesAsync(force: force)
         }
     }
 
@@ -158,14 +184,14 @@ final class SidebarViewModel {
         loadTask?.cancel()
         loadTask = nil
         isLoading = false
-        loadTables()
+        loadTables(force: true)
     }
 
-    private func loadTablesAsync() async {
+    private func loadTablesAsync(force: Bool = false) async {
         let previousSelectedName: String? = tables.isEmpty ? nil : selectedTables.first?.name
 
         do {
-            let fetchedTables = try await tableFetcher.fetchTables()
+            let fetchedTables = try await tableFetcher.fetchTables(force: force)
             tables = fetchedTables
 
             // Clean up stale entries for tables that no longer exist
@@ -205,6 +231,8 @@ final class SidebarViewModel {
                     isRestoringSelection = false
                 }
             }
+            isLoading = false
+        } catch is CancellationError {
             isLoading = false
         } catch {
             errorMessage = error.localizedDescription

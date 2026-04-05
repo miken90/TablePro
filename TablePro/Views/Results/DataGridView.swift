@@ -29,9 +29,11 @@ struct DataGridIdentity: Equatable {
     let reloadVersion: Int
     let resultVersion: Int
     let metadataVersion: Int
+    let paginationVersion: Int
     let rowCount: Int
     let columnCount: Int
     let isEditable: Bool
+    let hiddenColumns: Set<String>
 }
 
 /// High-performance table view using AppKit NSTableView
@@ -40,6 +42,7 @@ struct DataGridView: NSViewRepresentable {
     var changeManager: AnyChangeManager
     var resultVersion: Int = 0
     var metadataVersion: Int = 0
+    var paginationVersion: Int = 0
     let isEditable: Bool
     var onRefresh: (() -> Void)?
     var onCellEdit: ((Int, Int, String?) -> Void)?
@@ -60,6 +63,14 @@ struct DataGridView: NSViewRepresentable {
     var databaseType: DatabaseType?
     var tableName: String?
     var primaryKeyColumn: String?
+    var tabType: TabType?
+    var showRowNumbers: Bool = true
+    var hiddenColumns: Set<String> = []
+    var onHideColumn: ((String) -> Void)?
+    var onShowAllColumns: (() -> Void)?
+    var onMoveRow: ((Int, Int) -> Void)?
+    var rowViewProvider: ((NSTableView, Int, TableViewCoordinator) -> NSTableRowView)?
+    var emptySpaceMenu: (() -> NSMenu?)?
 
     @Binding var selectedRowIndices: Set<Int>
     @Binding var sortState: SortState
@@ -108,16 +119,20 @@ struct DataGridView: NSViewRepresentable {
         rowNumberColumn.resizingMask = []
         rowNumberColumn.headerCell.setAccessibilityLabel(String(localized: "Row number"))
         tableView.addTableColumn(rowNumberColumn)
+        rowNumberColumn.isHidden = !showRowNumbers
 
         // Add data columns (suppress resize notifications during setup)
         context.coordinator.isRebuildingColumns = true
         for (index, columnName) in rowProvider.columns.enumerated() {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("col_\(index)"))
             column.title = columnName
+            if index < rowProvider.columnTypes.count {
+                let typeName = rowProvider.columnTypes[index].rawType ?? rowProvider.columnTypes[index].displayName
+                column.headerToolTip = "\(columnName) (\(typeName))"
+            }
             column.headerCell.setAccessibilityLabel(
                 String(localized: "Column: \(columnName)")
             )
-            // Use optimal width calculation based on both header and cell content
             column.width = context.coordinator.cellFactory.calculateOptimalColumnWidth(
                 for: columnName,
                 columnIndex: index,
@@ -149,14 +164,31 @@ struct DataGridView: NSViewRepresentable {
         }
         context.coordinator.isRebuildingColumns = false
 
+        // Apply column visibility
+        applyColumnVisibility(to: tableView)
+
         if let headerView = tableView.headerView {
             let headerMenu = NSMenu()
             headerMenu.delegate = context.coordinator
             headerView.menu = headerMenu
         }
 
+        // Register for row drag-and-drop if onMoveRow is provided
+        if onMoveRow != nil {
+            tableView.registerForDraggedTypes([NSPasteboard.PasteboardType("com.TablePro.rowDrag")])
+            tableView.draggingDestinationFeedbackStyle = .gap
+        }
+
         scrollView.documentView = tableView
         context.coordinator.tableView = tableView
+        context.coordinator.onMoveRow = onMoveRow
+        context.coordinator.rowViewProvider = rowViewProvider
+        context.coordinator.emptySpaceMenu = emptySpaceMenu
+        context.coordinator.onShowAllColumns = onShowAllColumns
+        context.coordinator.rebuildColumnMetadataCache()
+        if let connectionId {
+            context.coordinator.observeTeardown(connectionId: connectionId)
+        }
 
         return scrollView
     }
@@ -170,15 +202,39 @@ struct DataGridView: NSViewRepresentable {
         if tableView.editedRow >= 0 { return }
         if let editor = context.coordinator.overlayEditor, editor.isActive { return }
 
+        // Sync row number visibility before identity check (setting can change without data change)
+        if let rowNumCol = tableView.tableColumns.first(where: { $0.identifier.rawValue == "__rowNumber__" }) {
+            let shouldHide = !showRowNumbers
+            if rowNumCol.isHidden != shouldHide {
+                rowNumCol.isHidden = shouldHide
+            }
+        }
+
+        // Sync row drag registration when onMoveRow availability changes
+        let rowDragType = NSPasteboard.PasteboardType("com.TablePro.rowDrag")
+        let hasDragRegistered = tableView.registeredDraggedTypes.contains(rowDragType)
+        if onMoveRow != nil && !hasDragRegistered {
+            tableView.registerForDraggedTypes([rowDragType])
+            tableView.draggingDestinationFeedbackStyle = .gap
+        } else if onMoveRow == nil && hasDragRegistered {
+            let remaining = tableView.registeredDraggedTypes.filter { $0 != rowDragType }
+            tableView.unregisterDraggedTypes()
+            if !remaining.isEmpty {
+                tableView.registerForDraggedTypes(remaining)
+            }
+        }
+
         // Identity-based early-return BEFORE reading settings — avoids
         // AppSettingsManager access on every SwiftUI re-evaluation.
         let currentIdentity = DataGridIdentity(
             reloadVersion: changeManager.reloadVersion,
             resultVersion: resultVersion,
             metadataVersion: metadataVersion,
+            paginationVersion: paginationVersion,
             rowCount: rowProvider.totalRowCount,
             columnCount: rowProvider.columns.count,
-            isEditable: isEditable
+            isEditable: isEditable,
+            hiddenColumns: hiddenColumns
         )
         if currentIdentity == coordinator.lastIdentity {
             // Only refresh closure callbacks — they capture new state on each body eval
@@ -187,10 +243,15 @@ struct DataGridView: NSViewRepresentable {
             coordinator.onAddRow = onAddRow
             coordinator.onUndoInsert = onUndoInsert
             coordinator.onFilterColumn = onFilterColumn
+            coordinator.onHideColumn = onHideColumn
+            coordinator.onShowAllColumns = onShowAllColumns
+            coordinator.onMoveRow = onMoveRow
             coordinator.onRefresh = onRefresh
             coordinator.onDeleteRows = onDeleteRows
             coordinator.getVisualState = getVisualState
             coordinator.onNavigateFK = onNavigateFK
+            coordinator.rowViewProvider = rowViewProvider
+            coordinator.emptySpaceMenu = emptySpaceMenu
             return
         }
         let previousIdentity = coordinator.lastIdentity
@@ -235,6 +296,16 @@ struct DataGridView: NSViewRepresentable {
         }
 
         coordinator.updateCache()
+        coordinator.rebuildColumnMetadataCache()
+
+        if previousIdentity == nil || previousIdentity?.rowCount == 0 {
+            let rowH = tableView.rowHeight
+            if rowH > 0 {
+                let visibleRows = Int(tableView.visibleRect.height / rowH) + 5
+                coordinator.rowProvider.preWarmDisplayCache(upTo: visibleRows)
+            }
+        }
+
         coordinator.changeManager = changeManager
         coordinator.isEditable = isEditable
         coordinator.onRefresh = onRefresh
@@ -244,14 +315,20 @@ struct DataGridView: NSViewRepresentable {
         coordinator.onAddRow = onAddRow
         coordinator.onUndoInsert = onUndoInsert
         coordinator.onFilterColumn = onFilterColumn
+        coordinator.onHideColumn = onHideColumn
+        coordinator.onShowAllColumns = onShowAllColumns
+        coordinator.onMoveRow = onMoveRow
         coordinator.getVisualState = getVisualState
         coordinator.onNavigateFK = onNavigateFK
+        coordinator.rowViewProvider = rowViewProvider
+        coordinator.emptySpaceMenu = emptySpaceMenu
         coordinator.dropdownColumns = dropdownColumns
         coordinator.typePickerColumns = typePickerColumns
         coordinator.connectionId = connectionId
         coordinator.databaseType = databaseType
         coordinator.tableName = tableName
         coordinator.primaryKeyColumn = primaryKeyColumn
+        coordinator.tabType = tabType
 
         coordinator.rebuildVisualStateCache()
 
@@ -276,14 +353,20 @@ struct DataGridView: NSViewRepresentable {
             structureChanged: structureChanged
         )
 
+        // Sync column visibility
+        applyColumnVisibility(to: tableView)
+
         syncSortDescriptors(tableView: tableView, coordinator: coordinator)
+
+        let paginationChanged = previousIdentity.map { $0.paginationVersion != paginationVersion } ?? false
 
         reloadAndSyncSelection(
             tableView: tableView,
             coordinator: coordinator,
             needsFullReload: needsFullReload,
             versionChanged: versionChanged,
-            metadataChanged: metadataChanged
+            metadataChanged: metadataChanged,
+            paginationChanged: paginationChanged
         )
     }
 
@@ -308,14 +391,20 @@ struct DataGridView: NSViewRepresentable {
                     tableView.removeTableColumn(column)
                 }
 
+                let willRestoreWidths = !columnLayout.columnWidths.isEmpty
                 for (index, columnName) in rowProvider.columns.enumerated() {
                     let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("col_\(index)"))
                     column.title = columnName
+                    if index < rowProvider.columnTypes.count {
+                        let typeName = rowProvider.columnTypes[index].rawType
+                            ?? rowProvider.columnTypes[index].displayName
+                        column.headerToolTip = "\(columnName) (\(typeName))"
+                    }
                     column.headerCell.setAccessibilityLabel(
                         String(localized: "Column: \(columnName)")
                     )
-                    if let savedWidth = columnLayout.columnWidths[columnName] {
-                        column.width = savedWidth
+                    if willRestoreWidths {
+                        column.width = columnLayout.columnWidths[columnName] ?? 100
                     } else {
                         column.width = coordinator.cellFactory.calculateOptimalColumnWidth(
                             for: columnName,
@@ -331,14 +420,18 @@ struct DataGridView: NSViewRepresentable {
                 }
             } else {
                 // Same column count — lightweight in-place update (avoids remove/add overhead)
+                let hasSavedWidths = !columnLayout.columnWidths.isEmpty
                 for column in tableView.tableColumns where column.identifier.rawValue != "__rowNumber__" {
                     guard let colIndex = Self.columnIndex(from: column.identifier),
                           colIndex < rowProvider.columns.count else { continue }
                     let columnName = rowProvider.columns[colIndex]
                     column.title = columnName
-                    if let savedWidth = columnLayout.columnWidths[columnName] {
-                        column.width = savedWidth
-                    } else {
+                    if colIndex < rowProvider.columnTypes.count {
+                        let typeName = rowProvider.columnTypes[colIndex].rawType
+                            ?? rowProvider.columnTypes[colIndex].displayName
+                        column.headerToolTip = "\(columnName) (\(typeName))"
+                    }
+                    if !hasSavedWidths {
                         column.width = coordinator.cellFactory.calculateOptimalColumnWidth(
                             for: columnName,
                             columnIndex: colIndex,
@@ -348,8 +441,10 @@ struct DataGridView: NSViewRepresentable {
                     column.isEditable = isEditable
                 }
             }
-            // Restore user-resized column widths after rebuild (only if user explicitly resized)
-            if coordinator.hasUserResizedColumns, !columnLayout.columnWidths.isEmpty {
+            let hasSavedLayout = !columnLayout.columnWidths.isEmpty
+
+            // Restore saved column widths after rebuild (from user resize or persisted layout)
+            if hasSavedLayout {
                 for column in tableView.tableColumns where column.identifier.rawValue != "__rowNumber__" {
                     guard let colIndex = Self.columnIndex(from: column.identifier),
                           colIndex < rowProvider.columns.count else { continue }
@@ -358,16 +453,19 @@ struct DataGridView: NSViewRepresentable {
                         column.width = savedWidth
                     }
                 }
+                coordinator.hasUserResizedColumns = true
             }
 
-            // Restore saved column order after rebuild (only if user explicitly reordered)
-            if coordinator.hasUserResizedColumns, let savedOrder = columnLayout.columnOrder {
+            // Restore saved column order after rebuild
+            if let savedOrder = columnLayout.columnOrder {
                 DataGridView.applyColumnOrder(savedOrder, to: tableView, columns: rowProvider.columns)
+                coordinator.hasUserResizedColumns = true
             }
 
             // Persist calculated widths so subsequent tab switches reuse them
             // instead of calling the expensive calculateOptimalColumnWidth.
-            if !coordinator.hasUserResizedColumns {
+            // Skip when saved layout exists to avoid overwriting persisted values.
+            if !coordinator.hasUserResizedColumns, !hasSavedLayout {
                 var newWidths: [String: CGFloat] = [:]
                 for column in tableView.tableColumns where column.identifier.rawValue != "__rowNumber__" {
                     guard let colIndex = Self.columnIndex(from: column.identifier),
@@ -454,13 +552,32 @@ struct DataGridView: NSViewRepresentable {
         coordinator: TableViewCoordinator,
         needsFullReload: Bool,
         versionChanged: Bool,
-        metadataChanged: Bool = false
+        metadataChanged: Bool = false,
+        paginationChanged: Bool = false
     ) {
         if needsFullReload {
             tableView.reloadData()
         } else if metadataChanged {
-            // FK metadata arrived (Phase 2) — reload all cells to show FK arrow buttons
-            tableView.reloadData()
+            // FK metadata arrived (Phase 2) — reload only FK columns to show arrow buttons.
+            // Use display-order indices from tableView.tableColumns (respects user column reordering).
+            let fkColumnIndices = IndexSet(
+                tableView.tableColumns.enumerated().compactMap { displayIndex, tableColumn in
+                    guard tableColumn.identifier.rawValue != "__rowNumber__",
+                          let modelIndex = Self.columnIndex(from: tableColumn.identifier),
+                          modelIndex < rowProvider.columns.count else { return nil }
+                    let columnName = rowProvider.columns[modelIndex]
+                    return rowProvider.columnForeignKeys[columnName] != nil ? displayIndex : nil
+                }
+            )
+            if !fkColumnIndices.isEmpty {
+                let visibleRange = tableView.rows(in: tableView.visibleRect)
+                if visibleRange.length > 0 {
+                    let visibleRows = IndexSet(
+                        integersIn: visibleRange.location..<(visibleRange.location + visibleRange.length)
+                    )
+                    tableView.reloadData(forRowIndexes: visibleRows, columnIndexes: fkColumnIndices)
+                }
+            }
         } else if versionChanged {
             // Granular reload: only reload rows that changed
             let changedRows = changeManager.consumeChangedRowIndices()
@@ -480,6 +597,11 @@ struct DataGridView: NSViewRepresentable {
         }
 
         coordinator.lastReloadVersion = changeManager.reloadVersion
+
+        // Scroll to first row when page changes
+        if paginationChanged && tableView.numberOfRows > 0 {
+            tableView.scrollRowToVisible(0)
+        }
 
         // Sync selection
         let currentSelection = tableView.selectedRowIndexes
@@ -503,6 +625,21 @@ struct DataGridView: NSViewRepresentable {
             }
             DispatchQueue.main.async {
                 self.editingCell = nil
+            }
+        }
+    }
+
+    // MARK: - Column Visibility
+
+    /// Apply hidden column state to the table view
+    private func applyColumnVisibility(to tableView: NSTableView) {
+        for column in tableView.tableColumns where column.identifier.rawValue != "__rowNumber__" {
+            guard let colIndex = Self.columnIndex(from: column.identifier),
+                  colIndex < rowProvider.columns.count else { continue }
+            let columnName = rowProvider.columns[colIndex]
+            let shouldHide = hiddenColumns.contains(columnName)
+            if column.isHidden != shouldHide {
+                column.isHidden = shouldHide
             }
         }
     }
@@ -569,10 +706,16 @@ struct DataGridView: NSViewRepresentable {
 
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: TableViewCoordinator) {
         coordinator.overlayEditor?.dismiss(commit: false)
+        coordinator.persistColumnLayoutToStorage()
         if let observer = coordinator.settingsObserver {
             NotificationCenter.default.removeObserver(observer)
             coordinator.settingsObserver = nil
         }
+        if let observer = coordinator.themeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            coordinator.themeObserver = nil
+        }
+        coordinator.rowProvider = InMemoryRowProvider(rows: [], columns: [])
     }
 
     func makeCoordinator() -> TableViewCoordinator {
@@ -592,201 +735,6 @@ struct DataGridView: NSViewRepresentable {
     }
 }
 
-// MARK: - Coordinator
-
-/// Coordinator handling NSTableView delegate and data source
-@MainActor
-final class TableViewCoordinator: NSObject, NSTableViewDelegate, NSTableViewDataSource,
-                                  NSControlTextEditingDelegate, NSTextFieldDelegate, NSMenuDelegate
-{
-    var rowProvider: InMemoryRowProvider
-    var changeManager: AnyChangeManager
-    var isEditable: Bool
-    var onRefresh: (() -> Void)?
-    var onCellEdit: ((Int, Int, String?) -> Void)?
-    var onDeleteRows: ((Set<Int>) -> Void)?
-    var onCopyRows: ((Set<Int>) -> Void)?
-    var onPasteRows: (() -> Void)?
-    var onUndo: (() -> Void)?
-    var onRedo: (() -> Void)?
-    var onSort: ((Int, Bool, Bool) -> Void)?
-    var onAddRow: (() -> Void)?
-    var onUndoInsert: ((Int) -> Void)?
-    var onFilterColumn: ((String) -> Void)?
-    var onNavigateFK: ((String, ForeignKeyInfo) -> Void)?
-    var getVisualState: ((Int) -> RowVisualState)?
-    var dropdownColumns: Set<Int>?
-    var typePickerColumns: Set<Int>?
-    var connectionId: UUID?
-    var databaseType: DatabaseType?
-    var tableName: String?
-    var primaryKeyColumn: String?
-
-    /// Check if undo is available
-    func canUndo() -> Bool {
-        changeManager.hasChanges
-    }
-
-    /// Check if redo is available
-    func canRedo() -> Bool {
-        changeManager.canRedo
-    }
-
-    weak var tableView: NSTableView?
-    let cellFactory = DataGridCellFactory()
-    var overlayEditor: CellOverlayEditor?
-
-    // Settings observer for real-time updates
-    fileprivate var settingsObserver: NSObjectProtocol?
-
-    @Binding var selectedRowIndices: Set<Int>
-
-    fileprivate var lastIdentity: DataGridIdentity?
-    var lastReloadVersion: Int = 0
-    var lastReapplyVersion: Int = -1
-    private(set) var cachedRowCount: Int = 0
-    private(set) var cachedColumnCount: Int = 0
-    var isSyncingSortDescriptors: Bool = false
-    /// Suppresses selection delegate callbacks during programmatic selection sync
-    var isSyncingSelection = false
-    var isRebuildingColumns: Bool = false
-    var hasUserResizedColumns: Bool = false
-    /// Guards against two-frame bounce when async column layout write-back triggers updateNSView
-    var isWritingColumnLayout: Bool = false
-
-    private let cellIdentifier = NSUserInterfaceItemIdentifier("DataCell")
-    static let rowViewIdentifier = NSUserInterfaceItemIdentifier("TableRowView")
-    internal var pendingDropdownRow: Int = 0
-    internal var pendingDropdownColumn: Int = 0
-    private var rowVisualStateCache: [Int: RowVisualState] = [:]
-    private var lastVisualStateCacheVersion: Int = 0
-    private let largeDatasetThreshold = 5_000
-
-    var isLargeDataset: Bool { cachedRowCount > largeDatasetThreshold }
-
-    init(
-        rowProvider: InMemoryRowProvider,
-        changeManager: AnyChangeManager,
-        isEditable: Bool,
-        selectedRowIndices: Binding<Set<Int>>,
-        onRefresh: (() -> Void)?,
-        onCellEdit: ((Int, Int, String?) -> Void)?,
-        onDeleteRows: ((Set<Int>) -> Void)?,
-        onCopyRows: ((Set<Int>) -> Void)?,
-        onPasteRows: (() -> Void)?,
-        onUndo: (() -> Void)?,
-        onRedo: (() -> Void)?
-    ) {
-        self.rowProvider = rowProvider
-        self.changeManager = changeManager
-        self.isEditable = isEditable
-        self._selectedRowIndices = selectedRowIndices
-        self.onRefresh = onRefresh
-        self.onCellEdit = onCellEdit
-        self.onDeleteRows = onDeleteRows
-        self.onCopyRows = onCopyRows
-        self.onPasteRows = onPasteRows
-        self.onUndo = onUndo
-        self.onRedo = onRedo
-        super.init()
-        updateCache()
-
-        // Subscribe to settings changes for real-time updates
-        settingsObserver = NotificationCenter.default.addObserver(
-            forName: .dataGridSettingsDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self, let tableView = self.tableView else { return }
-                let newRowHeight = CGFloat(AppSettingsManager.shared.dataGrid.rowHeight.rawValue)
-
-                // Only reload if row height changed (requires full reload)
-                if tableView.rowHeight != newRowHeight {
-                    tableView.rowHeight = newRowHeight
-                    tableView.tile()
-                } else {
-                    // For other settings (date format, NULL display), just reload visible rows
-                    let visibleRect = tableView.visibleRect
-                    let visibleRange = tableView.rows(in: visibleRect)
-                    if visibleRange.length > 0 {
-                        tableView.reloadData(
-                            forRowIndexes: IndexSet(integersIn: visibleRange.location..<(visibleRange.location + visibleRange.length)),
-                            columnIndexes: IndexSet(integersIn: 0..<tableView.numberOfColumns)
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    deinit {
-        if let observer = settingsObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-    }
-
-    func updateCache() {
-        cachedRowCount = rowProvider.totalRowCount
-        cachedColumnCount = rowProvider.columns.count
-    }
-
-    // MARK: - Row Visual State Cache
-
-    @MainActor
-    func rebuildVisualStateCache() {
-        let currentVersion = changeManager.reloadVersion
-        guard currentVersion != lastVisualStateCacheVersion else { return }
-        lastVisualStateCacheVersion = currentVersion
-
-        rowVisualStateCache.removeAll(keepingCapacity: true)
-
-        // If custom getVisualState provided, don't build cache (use callback instead)
-        if getVisualState != nil {
-            return
-        }
-
-        // Always clear cache, then rebuild if there are changes
-        // This ensures deleted state is cleared when changeManager.clearChanges() is called
-        guard changeManager.hasChanges else {
-            // No changes → cache is now empty (cleared above)
-            return
-        }
-
-        for change in changeManager.changes {
-            guard let rowChange = change as? RowChange else { continue }
-            let rowIndex = rowChange.rowIndex
-            let isDeleted = rowChange.type == .delete
-            let isInserted = rowChange.type == .insert
-            let modifiedColumns: Set<Int> = rowChange.type == .update
-                ? Set(rowChange.cellChanges.map { $0.columnIndex })
-                : []
-
-            rowVisualStateCache[rowIndex] = RowVisualState(
-                isDeleted: isDeleted,
-                isInserted: isInserted,
-                modifiedColumns: modifiedColumns
-            )
-        }
-    }
-
-    func visualState(for row: Int) -> RowVisualState {
-        // If custom callback provided, use it
-        if let callback = getVisualState {
-            return callback(row)
-        }
-        // Otherwise use cache
-        return rowVisualStateCache[row] ?? .empty
-    }
-
-    // MARK: - NSTableViewDataSource
-
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        cachedRowCount
-    }
-}
 
 // MARK: - Preview
 
@@ -794,9 +742,9 @@ final class TableViewCoordinator: NSObject, NSTableViewDelegate, NSTableViewData
     DataGridView(
         rowProvider: InMemoryRowProvider(
             rows: [
-                QueryResultRow(id: 0, values: ["1", "John", "john@example.com"]),
-                QueryResultRow(id: 1, values: ["2", "Jane", nil]),
-                QueryResultRow(id: 2, values: ["3", "Bob", "bob@example.com"]),
+                ["1", "John", "john@example.com"],
+                ["2", "Jane", nil],
+                ["3", "Bob", "bob@example.com"],
             ],
             columns: ["id", "name", "email"]
         ),

@@ -19,9 +19,18 @@ final class PostgreSQLPlugin: NSObject, TableProPlugin, DriverPlugin {
 
     static let databaseTypeId = "PostgreSQL"
     static let databaseDisplayName = "PostgreSQL"
-    static let iconName = "cylinder.fill"
+    static let iconName = "postgresql-icon"
     static let defaultPort = 5432
-    static let additionalConnectionFields: [ConnectionField] = []
+    static let additionalConnectionFields: [ConnectionField] = [
+        ConnectionField(
+            id: "usePgpass",
+            label: String(localized: "Use ~/.pgpass"),
+            defaultValue: "false",
+            fieldType: .toggle,
+            section: .authentication,
+            hidesPassword: true
+        )
+    ]
     static let additionalDatabaseTypeIds: [String] = ["Redshift"]
 
     // MARK: - UI/Capability Metadata
@@ -29,6 +38,7 @@ final class PostgreSQLPlugin: NSObject, TableProPlugin, DriverPlugin {
     static let urlSchemes: [String] = ["postgresql", "postgres"]
     static let brandColorHex = "#336791"
     static let systemDatabaseNames: [String] = ["postgres", "template0", "template1"]
+    static let supportsSchemaSwitching = true
     static let databaseGroupingStrategy: GroupingStrategy = .bySchema
     static let columnTypesByCategory: [String: [String]] = [
         "Integer": ["SMALLINT", "INTEGER", "BIGINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL"],
@@ -46,6 +56,55 @@ final class PostgreSQLPlugin: NSObject, TableProPlugin, DriverPlugin {
         "Text Search": ["TSVECTOR", "TSQUERY"],
         "XML": ["XML"]
     ]
+
+    static let supportsCascadeDrop = true
+    static let supportsForeignKeyDisable = false
+    static let requiresReconnectForDatabaseSwitch = true
+    static let parameterStyle: ParameterStyle = .dollar
+
+    static let sqlDialect: SQLDialectDescriptor? = SQLDialectDescriptor(
+        identifierQuote: "\"",
+        keywords: [
+            "SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "OUTER", "CROSS", "FULL",
+            "ON", "USING", "AND", "OR", "NOT", "IN", "LIKE", "ILIKE", "BETWEEN", "AS",
+            "ORDER", "BY", "GROUP", "HAVING", "LIMIT", "OFFSET", "FETCH", "FIRST", "ROWS", "ONLY",
+            "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE",
+            "CREATE", "ALTER", "DROP", "TABLE", "INDEX", "VIEW", "DATABASE", "SCHEMA",
+            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "UNIQUE", "CONSTRAINT",
+            "ADD", "MODIFY", "COLUMN", "RENAME",
+            "NULL", "IS", "ASC", "DESC", "DISTINCT", "ALL", "ANY", "SOME",
+            "CASE", "WHEN", "THEN", "ELSE", "END", "COALESCE", "NULLIF",
+            "UNION", "INTERSECT", "EXCEPT",
+            "RETURNING", "WITH", "RECURSIVE", "MATERIALIZED",
+            "EXPLAIN", "ANALYZE", "VERBOSE",
+            "WINDOW", "OVER", "PARTITION",
+            "LATERAL", "ORDINALITY"
+        ],
+        functions: [
+            "COUNT", "SUM", "AVG", "MAX", "MIN", "STRING_AGG", "ARRAY_AGG",
+            "CONCAT", "SUBSTRING", "LEFT", "RIGHT", "LENGTH", "LOWER", "UPPER",
+            "TRIM", "LTRIM", "RTRIM", "REPLACE", "SPLIT_PART",
+            "NOW", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+            "DATE_TRUNC", "EXTRACT", "AGE", "TO_CHAR", "TO_DATE",
+            "ROUND", "CEIL", "CEILING", "FLOOR", "ABS", "MOD", "POW", "POWER", "SQRT",
+            "CAST", "TO_NUMBER", "TO_TIMESTAMP",
+            "JSON_BUILD_OBJECT", "JSON_AGG", "JSONB_BUILD_OBJECT"
+        ],
+        dataTypes: [
+            "INTEGER", "INT", "SMALLINT", "BIGINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL",
+            "DECIMAL", "NUMERIC", "REAL", "DOUBLE", "PRECISION",
+            "CHAR", "CHARACTER", "VARCHAR", "TEXT",
+            "DATE", "TIME", "TIMESTAMP", "TIMESTAMPTZ", "INTERVAL",
+            "BOOLEAN", "BOOL", "JSON", "JSONB", "UUID", "BYTEA", "ARRAY"
+        ],
+        tableOptions: [
+            "INHERITS", "PARTITION BY", "TABLESPACE", "WITH", "WITHOUT OIDS"
+        ],
+        regexSyntax: .tilde,
+        booleanLiteralStyle: .truefalse,
+        likeEscapeStyle: .explicit,
+        paginationStyle: .limit
+    )
 
     static func driverVariant(for databaseTypeId: String) -> String? {
         switch databaseTypeId {

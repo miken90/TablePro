@@ -264,7 +264,7 @@ bundle_dylibs() {
     # (e.g. strchrnul) that don't exist on earlier OS versions → launch crash.
     echo "   Verifying deployment target compatibility..."
     local deploy_target
-    deploy_target=$(echo "$build_settings" | grep -m 1 '^\s*MACOSX_DEPLOYMENT_TARGET = ' | awk '{print $3}')
+    deploy_target=$(grep -m 1 '^\s*MACOSX_DEPLOYMENT_TARGET = ' <<< "$build_settings" | awk '{print $3}')
     if [ -n "$deploy_target" ]; then
         local deploy_major
         deploy_major=$(echo "$deploy_target" | cut -d. -f1)
@@ -310,7 +310,12 @@ build_for_arch() {
     echo "🔨 Building for $arch..."
 
     # Fetch build settings once for this arch (used by build_for_arch and bundle_dylibs)
-    build_settings=$(xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIG" -arch "$arch" -showBuildSettings 2>&1)
+    echo "Fetching build settings..."
+    if ! build_settings=$(xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIG" -arch "$arch" -skipPackagePluginValidation -showBuildSettings 2>&1); then
+        echo "❌ FATAL: xcodebuild -showBuildSettings failed"
+        echo "$build_settings"
+        exit 1
+    fi
 
     # Prepare architecture-specific libraries
     prepare_mariadb "$arch"
@@ -318,18 +323,31 @@ build_for_arch() {
     prepare_libmongoc "$arch"
     prepare_hiredis "$arch"
 
-    # Remove AppIcon.icon if present — Xcode 26's automatic icon format
-    # uses SVG rendering with GPU effects (shadows, translucency) that
-    # crashes actool/ibtoold in headless CI environments.
-    # The traditional AppIcon.appiconset in Assets.xcassets is used instead.
-    if [ -d "TablePro/AppIcon.icon" ]; then
-        echo "🎨 Removing AppIcon.icon (not supported in headless CI)..."
+    # Xcode 26's Icon Composer (.icon) crashes actool in headless CI.
+    # Keep AppIcon.appiconset as fallback; remove .icon so actool uses it.
+    if [ -d "TablePro/AppIcon.icon" ] && [ -d "TablePro/Assets.xcassets/AppIcon.appiconset" ]; then
+        echo "🎨 Using AppIcon.appiconset fallback for headless CI..."
         rm -rf "TablePro/AppIcon.icon"
     fi
 
     # Persistent SPM package cache (speeds up CI on self-hosted runners)
     SPM_CACHE_DIR="${HOME}/.spm-cache"
     mkdir -p "$SPM_CACHE_DIR"
+
+    # Inject provisioning profile UUID into pbxproj for the main app target only.
+    # Command-line PROVISIONING_PROFILE_SPECIFIER applies to ALL targets (plugins,
+    # SPM packages) which breaks them. Instead, replace the empty specifier in
+    # the main app target's build settings directly.
+    PROFILE_PATH=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.provisionprofile" -print -quit 2>/dev/null)
+    if [ -n "${PROFILE_PATH:-}" ]; then
+        PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH" 2>/dev/null)" || true)
+        if [ -n "${PROFILE_UUID:-}" ]; then
+            echo "📋 Injecting provisioning profile into pbxproj: $PROFILE_UUID"
+            # The main app target has PROVISIONING_PROFILE_SPECIFIER = "";
+            # Other targets don't have this key at all, so this is safe.
+            sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = \"\";/PROVISIONING_PROFILE_SPECIFIER = \"$PROFILE_UUID\";/g" "$PROJECT/project.pbxproj"
+        fi
+    fi
 
     # Build with xcodebuild
     echo "Running xcodebuild..."
@@ -353,7 +371,7 @@ build_for_arch() {
     echo "✅ Build succeeded for $arch"
 
     # Get binary path with validation
-    DERIVED_DATA=$(echo "$build_settings" | grep -m 1 "BUILD_DIR" | awk '{print $3}')
+    DERIVED_DATA=$(grep -m 1 "BUILD_DIR" <<< "$build_settings" | awk '{print $3}')
 
     if [ -z "$DERIVED_DATA" ]; then
         echo "❌ FATAL: Failed to determine build directory from xcodebuild settings"
@@ -497,8 +515,15 @@ build_for_arch() {
         done
     fi
 
+    # Embed provisioning profile (required for iCloud entitlements)
+    PROFILE=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.provisionprofile" -print -quit 2>/dev/null)
+    if [ -n "$PROFILE" ]; then
+        echo "📋 Embedding provisioning profile: $(basename "$PROFILE")"
+        cp "$PROFILE" "$BUILD_DIR/$OUTPUT_NAME/Contents/embedded.provisionprofile"
+    fi
+
     # Sign the app bundle last
-    codesign -fs "$SIGN_IDENTITY" --force --options runtime --timestamp "$BUILD_DIR/$OUTPUT_NAME"
+    codesign -fs "$SIGN_IDENTITY" --force --options runtime --timestamp --entitlements "TablePro/TablePro.entitlements" "$BUILD_DIR/$OUTPUT_NAME"
     echo "✅ Code signing complete"
 
     # Verify signature

@@ -18,6 +18,14 @@ private struct SortedRowsCache {
     let resultVersion: Int
 }
 
+/// Per-tab row provider cache entry — groups all cache-invalidation keys together
+private struct RowProviderCacheEntry {
+    let provider: InMemoryRowProvider
+    let resultVersion: Int
+    let metadataVersion: Int
+    let sortState: SortState
+}
+
 /// Main editor content with tab bar and content switching
 struct MainEditorContentView: View {
     // MARK: - Dependencies
@@ -26,6 +34,7 @@ struct MainEditorContentView: View {
     var coordinator: MainContentCoordinator
     var changeManager: DataChangeManager
     var filterStateManager: FilterStateManager
+    var columnVisibilityManager: ColumnVisibilityManager
     let connection: DatabaseConnection
     let windowId: UUID
     let connectionId: UUID
@@ -44,7 +53,6 @@ struct MainEditorContentView: View {
     let onFilterColumn: (String) -> Void
     let onApplyFilters: ([TableFilter]) -> Void
     let onClearFilters: () -> Void
-    let onQuickSearch: (String) -> Void
     let onRefresh: () -> Void
 
     // Pagination callbacks
@@ -61,10 +69,9 @@ struct MainEditorContentView: View {
     @State private var sortCache: [UUID: SortedRowsCache] = [:]
 
     // Per-tab row provider cache — avoids recreation on every SwiftUI render.
-    @State private var tabRowProviders: [UUID: InMemoryRowProvider] = [:]
-    @State private var tabProviderVersions: [UUID: Int] = [:]
-    @State private var tabProviderMetaVersions: [UUID: Int] = [:]
+    @State private var tabProviderCache: [UUID: RowProviderCacheEntry] = [:]
     @State private var cachedChangeManager: AnyChangeManager?
+    @State private var favoriteDialogQuery: FavoriteDialogQuery?
 
     // Native macOS window tabs — no LRU tracking needed (single tab per window)
 
@@ -99,67 +106,64 @@ struct MainEditorContentView: View {
             // Global History Panel
             if isHistoryVisible {
                 Divider()
-                HistoryPanelView()
+                HistoryPanelView(connectionId: connectionId)
                     .frame(height: 300)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .background(.background)
         .animation(.easeInOut(duration: 0.2), value: isHistoryVisible)
-        .onChange(of: tabManager.tabs.count) {
-            // Clean up caches for closed tabs
-            let openTabIds = Set(tabManager.tabs.map(\.id))
-            sortCache = sortCache.filter { openTabIds.contains($0.key) }
-            coordinator.cleanupSortCache(openTabIds: openTabIds)
-            tabRowProviders = tabRowProviders.filter { openTabIds.contains($0.key) }
-            tabProviderVersions = tabProviderVersions.filter { openTabIds.contains($0.key) }
-            tabProviderMetaVersions = tabProviderMetaVersions.filter { openTabIds.contains($0.key) }
+        .sheet(item: $favoriteDialogQuery) { item in
+            FavoriteEditDialog(
+                connectionId: connectionId,
+                favorite: nil,
+                initialQuery: item.query
+            )
         }
-        .onChange(of: tabManager.tabs.map(\.id)) { _, newIds in
+        .onChange(of: tabManager.tabIds) { _, newIds in
+            guard !sortCache.isEmpty || !tabProviderCache.isEmpty else {
+                coordinator.cleanupSortCache(openTabIds: Set(newIds))
+                return
+            }
             let openTabIds = Set(newIds)
             sortCache = sortCache.filter { openTabIds.contains($0.key) }
             coordinator.cleanupSortCache(openTabIds: openTabIds)
-            tabRowProviders = tabRowProviders.filter { openTabIds.contains($0.key) }
-            tabProviderVersions = tabProviderVersions.filter { openTabIds.contains($0.key) }
-            tabProviderMetaVersions = tabProviderMetaVersions.filter { openTabIds.contains($0.key) }
+            tabProviderCache = tabProviderCache.filter { openTabIds.contains($0.key) }
         }
         .onChange(of: tabManager.selectedTabId) { _, newId in
             updateHasQueryText()
 
             guard let newId, let tab = tabManager.selectedTab else { return }
-            if tabProviderVersions[newId] != tab.resultVersion
-                || tabProviderMetaVersions[newId] != tab.metadataVersion {
-                let provider = makeRowProvider(for: tab)
-                tabRowProviders[newId] = provider
-                tabProviderVersions[newId] = tab.resultVersion
-                tabProviderMetaVersions[newId] = tab.metadataVersion
+            let cached = tabProviderCache[newId]
+            if cached?.resultVersion != tab.resultVersion
+                || cached?.metadataVersion != tab.metadataVersion
+            {
+                cacheRowProvider(for: tab)
             }
         }
         .onAppear {
             updateHasQueryText()
             cachedChangeManager = AnyChangeManager(dataManager: changeManager)
             if let tab = tabManager.selectedTab {
-                let provider = makeRowProvider(for: tab)
-                tabRowProviders[tab.id] = provider
-                tabProviderVersions[tab.id] = tab.resultVersion
-                tabProviderMetaVersions[tab.id] = tab.metadataVersion
+                cacheRowProvider(for: tab)
+            }
+            coordinator.onTeardown = { [self] in
+                tabProviderCache.removeAll()
+                sortCache.removeAll()
+                cachedChangeManager = nil
             }
         }
         .onChange(of: tabManager.selectedTab?.resultVersion) { _, newVersion in
-            guard let tab = tabManager.selectedTab, newVersion != nil else {
-                return
-            }
-            let provider = makeRowProvider(for: tab)
-            tabRowProviders[tab.id] = provider
-            tabProviderVersions[tab.id] = tab.resultVersion
-            tabProviderMetaVersions[tab.id] = tab.metadataVersion
+            guard let tab = tabManager.selectedTab, newVersion != nil else { return }
+            cacheRowProvider(for: tab)
         }
         .onChange(of: tabManager.selectedTab?.metadataVersion) { _, _ in
             guard let tab = tabManager.selectedTab else { return }
-            let provider = makeRowProvider(for: tab)
-            tabRowProviders[tab.id] = provider
-            tabProviderVersions[tab.id] = tab.resultVersion
-            tabProviderMetaVersions[tab.id] = tab.metadataVersion
+            cacheRowProvider(for: tab)
+        }
+        .onChange(of: tabManager.selectedTab?.activeResultSetId) { _, _ in
+            guard let tab = tabManager.selectedTab else { return }
+            cacheRowProvider(for: tab)
         }
     }
 
@@ -172,6 +176,11 @@ struct MainEditorContentView: View {
             queryTabContent(tab: tab)
         case .table:
             tableTabContent(tab: tab)
+        case .createTable:
+            CreateTableView(
+                connection: connection,
+                coordinator: coordinator
+            )
         }
     }
 
@@ -180,32 +189,56 @@ struct MainEditorContentView: View {
     @ViewBuilder
     private func queryTabContent(tab: QueryTab) -> some View {
         @Bindable var bindableCoordinator = coordinator
-        VSplitView {
-            // Query Editor (top)
-            VStack(spacing: 0) {
-                QueryEditorView(
-                    queryText: queryTextBinding(for: tab),
-                    cursorPositions: $bindableCoordinator.cursorPositions,
-                    onExecute: { coordinator.runQuery() },
-                    schemaProvider: coordinator.schemaProvider,
-                    databaseType: coordinator.connection.type,
-                    onCloseTab: {
-                        NSApp.keyWindow?.close()
-                    },
-                    onExecuteQuery: { coordinator.runQuery() }
-                )
+        QuerySplitView(
+            isBottomCollapsed: tab.isResultsCollapsed,
+            autosaveName: "QuerySplit-\(connectionId)-\(tab.id)",
+            topContent: {
+                VStack(spacing: 0) {
+                    QueryEditorView(
+                        queryText: queryTextBinding(for: tab),
+                        cursorPositions: $bindableCoordinator.cursorPositions,
+                        onExecute: { coordinator.runQuery() },
+                        schemaProvider: coordinator.schemaProvider,
+                        databaseType: coordinator.connection.type,
+                        connectionId: coordinator.connection.id,
+                        onCloseTab: {
+                            NSApp.keyWindow?.close()
+                        },
+                        onExecuteQuery: { coordinator.runQuery() },
+                        onExplain: { variant in
+                            if let variant {
+                                coordinator.runClickHouseExplain(variant: variant)
+                            } else {
+                                coordinator.runExplainQuery()
+                            }
+                        },
+                        onAIExplain: { text in
+                            coordinator.showAIChatPanel()
+                            coordinator.aiViewModel?.handleExplainSelection(text)
+                        },
+                        onAIOptimize: { text in
+                            coordinator.showAIChatPanel()
+                            coordinator.aiViewModel?.handleOptimizeSelection(text)
+                        },
+                        onSaveAsFavorite: { text in
+                            guard !text.isEmpty else { return }
+                            favoriteDialogQuery = FavoriteDialogQuery(query: text)
+                        }
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            },
+            bottomContent: {
+                resultsSection(tab: tab)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(minHeight: 100, idealHeight: 200)
-
-            // Results (bottom)
-            resultsSection(tab: tab)
-                .frame(minHeight: 150)
-        }
+        )
     }
 
     private func updateHasQueryText() {
         if let tab = tabManager.selectedTab, tab.tabType == .query {
-            appState.hasQueryText = !tab.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            appState.hasQueryText = !tab.query.trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
         } else {
             appState.hasQueryText = false
         }
@@ -221,10 +254,23 @@ struct MainEditorContentView: View {
                 // selectedTabIndex already points to the NEW tab — writing to
                 // selectedTabIndex would overwrite the new tab's query.
                 guard let index = tabManager.tabs.firstIndex(where: { $0.id == tabId }),
-                      index < tabManager.tabs.count else { return }
+                    index < tabManager.tabs.count
+                else { return }
 
                 tabManager.tabs[index].query = newValue
-                AppState.shared.hasQueryText = !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                AppState.shared.hasQueryText = !newValue.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty
+
+                // Update window dirty indicator and toolbar for file-backed tabs
+                if tabManager.tabs[index].sourceFileURL != nil {
+                    let isDirty = tabManager.tabs[index].isFileDirty
+                    Task { @MainActor in
+                        if let window = NSApp.keyWindow {
+                            window.isDocumentEdited = isDirty
+                        }
+                    }
+                }
 
                 // Skip persistence for very large queries (e.g., imported SQL dumps).
                 // JSON-encoding 40MB freezes the main thread.
@@ -249,40 +295,120 @@ struct MainEditorContentView: View {
     private func resultsSection(tab: QueryTab) -> some View {
         VStack(spacing: 0) {
             if tab.showStructure, let tableName = tab.tableName {
-                TableStructureView(tableName: tableName, connection: connection, toolbarState: coordinator.toolbarState)
-                    .id(tableName)
-                    .frame(maxHeight: .infinity)
+                TableStructureView(
+                    tableName: tableName, connection: connection,
+                    toolbarState: coordinator.toolbarState, coordinator: coordinator
+                )
+                .id(tableName)
+                .frame(maxHeight: .infinity)
             } else if let explainText = tab.explainText {
                 ExplainResultView(text: explainText, executionTime: tab.explainExecutionTime)
-            } else if tab.resultColumns.isEmpty && tab.errorMessage == nil && tab.lastExecutedAt != nil && !tab.isExecuting {
-                QuerySuccessView(
-                    rowsAffected: tab.rowsAffected,
-                    executionTime: tab.executionTime
-                )
             } else {
-                // Filter panel (collapsible, above data grid)
-                if filterStateManager.isVisible && tab.tabType == .table {
-                    FilterPanelView(
-                        filterState: filterStateManager,
-                        columns: tab.resultColumns,
-                        primaryKeyColumn: changeManager.primaryKeyColumn,
-                        databaseType: connection.type,
-                        onApply: onApplyFilters,
-                        onUnset: onClearFilters,
-                        onQuickSearch: onQuickSearch
-                    )
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                // Result tab bar (when multiple result sets)
+                if tab.resultSets.count > 1 {
+                    resultTabBar(tab: tab)
                     Divider()
                 }
 
-                dataGridView(tab: tab)
+                // Inline error banner (when active result set has error)
+                if let error = tab.activeResultSet?.errorMessage {
+                    InlineErrorBanner(
+                        message: error,
+                        onDismiss: { tab.activeResultSet?.errorMessage = nil }
+                    )
+                    Divider()
+                }
+
+                // Content: success view OR filter+grid
+                if let rs = tab.activeResultSet, rs.resultColumns.isEmpty,
+                   rs.errorMessage == nil, tab.lastExecutedAt != nil, !tab.isExecuting
+                {
+                    ResultSuccessView(
+                        rowsAffected: rs.rowsAffected,
+                        executionTime: rs.executionTime,
+                        statusMessage: rs.statusMessage
+                    )
+                } else if tab.resultColumns.isEmpty && tab.errorMessage == nil
+                    && tab.lastExecutedAt != nil && !tab.isExecuting
+                {
+                    if tab.resultSets.isEmpty {
+                        Spacer()
+                    } else {
+                        ResultSuccessView(
+                            rowsAffected: tab.rowsAffected,
+                            executionTime: tab.executionTime,
+                            statusMessage: tab.statusMessage
+                        )
+                    }
+                } else {
+                    // Filter panel (collapsible, above data grid)
+                    if filterStateManager.isVisible && tab.tabType == .table {
+                        FilterPanelView(
+                            filterState: filterStateManager,
+                            columns: tab.resultColumns,
+                            primaryKeyColumn: changeManager.primaryKeyColumn,
+                            databaseType: connection.type,
+                            onApply: onApplyFilters,
+                            onUnset: onClearFilters
+                        )
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        Divider()
+                    }
+
+                    if tab.tabType == .query && !tab.resultColumns.isEmpty
+                        && tab.resultRows.isEmpty && tab.lastExecutedAt != nil
+                        && !tab.isExecuting && !filterStateManager.hasAppliedFilters
+                    {
+                        emptyResultView(executionTime: tab.activeResultSet?.executionTime ?? tab.executionTime)
+                    } else {
+                        dataGridView(tab: tab)
+                    }
+                }
             }
 
             statusBar(tab: tab)
         }
-        .frame(minHeight: 150)
-        .animation(.easeInOut(duration: 0.2), value: filterStateManager.isVisible)
-        .animation(.easeInOut(duration: 0.2), value: tab.errorMessage)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func resultTabBar(tab: QueryTab) -> some View {
+        ResultTabBar(
+            resultSets: tab.resultSets,
+            activeResultSetId: Binding(
+                get: { tab.activeResultSetId },
+                set: { newId in
+                    if let tabIdx = coordinator.tabManager.selectedTabIndex {
+                        coordinator.tabManager.tabs[tabIdx].activeResultSetId = newId
+                    }
+                }
+            ),
+            onClose: { id in
+                coordinator.closeResultSet(id: id)
+            },
+            onPin: { id in
+                guard let tabIdx = coordinator.tabManager.selectedTabIndex else { return }
+                coordinator.tabManager.tabs[tabIdx].resultSets.first { $0.id == id }?.isPinned.toggle()
+                coordinator.tabManager.tabs[tabIdx].resultVersion += 1
+            }
+        )
+    }
+
+    private func emptyResultView(executionTime: TimeInterval?) -> some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "tray")
+                .font(.system(size: 36))
+                .foregroundStyle(.secondary)
+            Text("No rows returned")
+                .font(.system(size: ThemeEngine.shared.activeTheme.typography.body, weight: .medium))
+            if let time = executionTime {
+                Text(String(format: "%.3fs", time))
+                    .font(.system(size: ThemeEngine.shared.activeTheme.typography.small))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -292,7 +418,8 @@ struct MainEditorContentView: View {
             changeManager: currentChangeManager,
             resultVersion: tab.resultVersion,
             metadataVersion: tab.metadataVersion,
-            isEditable: tab.isEditable && !tab.isView && !connection.safeModeLevel.blocksAllWrites,
+            paginationVersion: tab.paginationVersion,
+            isEditable: tab.isEditable && !tab.isView && !coordinator.safeModeLevel.blocksAllWrites,
             onRefresh: onRefresh,
             onCellEdit: onCellEdit,
             onUndo: { [binding = _selectedRowIndices, coordinator] in
@@ -314,6 +441,29 @@ struct MainEditorContentView: View {
             databaseType: connection.type,
             tableName: tab.tableName,
             primaryKeyColumn: changeManager.primaryKeyColumn,
+            tabType: tab.tabType,
+            showRowNumbers: AppSettingsManager.shared.dataGrid.showRowNumbers,
+            hiddenColumns: columnVisibilityManager.hiddenColumns,
+            onHideColumn: { [coordinator] columnName in
+                coordinator.hideColumn(columnName)
+            },
+            onShowAllColumns: { [columnVisibilityManager, coordinator] in
+                columnVisibilityManager.showAll()
+                coordinator.saveColumnVisibilityToTab()
+            },
+            emptySpaceMenu: (tab.isEditable && !tab.isView && tab.tableName != nil) ? { [onAddRow] in
+                let menu = NSMenu()
+                let target = StructureMenuTarget { onAddRow() }
+                let item = NSMenuItem(
+                    title: String(localized: "Add Row"),
+                    action: #selector(StructureMenuTarget.addNewItem),
+                    keyEquivalent: ""
+                )
+                item.target = target
+                item.representedObject = target
+                menu.addItem(item)
+                return menu
+            } : nil,
             selectedRowIndices: $selectedRowIndices,
             sortState: sortStateBinding(for: tab),
             editingCell: $editingCell,
@@ -324,19 +474,53 @@ struct MainEditorContentView: View {
 
     private func rowProvider(for tab: QueryTab) -> InMemoryRowProvider {
         if tab.rowBuffer.isEvicted {
-            tabRowProviders.removeValue(forKey: tab.id)
+            Task { @MainActor in tabProviderCache.removeValue(forKey: tab.id) }
             return makeRowProvider(for: tab)
         }
-        if let cached = tabRowProviders[tab.id],
-           tabProviderVersions[tab.id] == tab.resultVersion,
-           tabProviderMetaVersions[tab.id] == tab.metadataVersion {
-            return cached
+        if let entry = tabProviderCache[tab.id],
+            entry.resultVersion == tab.resultVersion,
+            entry.metadataVersion == tab.metadataVersion,
+            entry.sortState == tab.sortState
+        {
+            return entry.provider
         }
-        return makeRowProvider(for: tab)
+        let provider = makeRowProvider(for: tab)
+        Task { @MainActor in
+            tabProviderCache[tab.id] = RowProviderCacheEntry(
+                provider: provider,
+                resultVersion: tab.resultVersion,
+                metadataVersion: tab.metadataVersion,
+                sortState: tab.sortState
+            )
+        }
+        return provider
+    }
+
+    private func cacheRowProvider(for tab: QueryTab) {
+        let provider = makeRowProvider(for: tab)
+        tabProviderCache[tab.id] = RowProviderCacheEntry(
+            provider: provider,
+            resultVersion: tab.resultVersion,
+            metadataVersion: tab.metadataVersion,
+            sortState: tab.sortState
+        )
     }
 
     private func makeRowProvider(for tab: QueryTab) -> InMemoryRowProvider {
-        InMemoryRowProvider(
+        // Use active ResultSet data when available (multi-statement results)
+        if let rs = tab.activeResultSet, !rs.resultColumns.isEmpty {
+            return InMemoryRowProvider(
+                rowBuffer: rs.rowBuffer,
+                sortIndices: sortIndicesForTab(tab),
+                columns: rs.resultColumns,
+                columnDefaults: rs.columnDefaults,
+                columnTypes: rs.columnTypes,
+                columnForeignKeys: rs.columnForeignKeys,
+                columnEnumValues: rs.columnEnumValues,
+                columnNullable: rs.columnNullable
+            )
+        }
+        return InMemoryRowProvider(
             rowBuffer: tab.rowBuffer,
             sortIndices: sortIndicesForTab(tab),
             columns: tab.resultColumns,
@@ -351,7 +535,21 @@ struct MainEditorContentView: View {
     /// Returns sort index permutation for a tab, or nil if no sorting is needed.
     /// For table tabs, sorting is handled server-side via SQL ORDER BY.
     private func sortIndicesForTab(_ tab: QueryTab) -> [Int]? {
-        guard !tab.rowBuffer.isEvicted else { return nil }
+        // Resolve data source: active ResultSet or tab-level fallback
+        let rowBuffer: RowBuffer
+        let rows: [[String?]]
+        let colTypes: [ColumnType]
+        if let rs = tab.activeResultSet, !rs.resultColumns.isEmpty {
+            rowBuffer = rs.rowBuffer
+            rows = rs.resultRows
+            colTypes = rs.columnTypes
+        } else {
+            rowBuffer = tab.rowBuffer
+            rows = tab.resultRows
+            colTypes = tab.columnTypes
+        }
+
+        guard !rowBuffer.isEvicted else { return nil }
 
         // Table tabs: no client-side sorting
         if tab.tabType == .table {
@@ -365,36 +563,43 @@ struct MainEditorContentView: View {
 
         // Check coordinator's async sort cache (for large datasets sorted on background thread)
         if let cached = coordinator.querySortCache[tab.id],
-           cached.columnIndex == (tab.sortState.columnIndex ?? -1),
-           cached.direction == tab.sortState.direction,
-           cached.resultVersion == tab.resultVersion {
+            cached.columnIndex == (tab.sortState.columnIndex ?? -1),
+            cached.direction == tab.sortState.direction,
+            cached.resultVersion == tab.resultVersion
+        {
             return cached.sortedIndices
         }
 
-        // For large datasets sorted async, return nil (unsorted) until cache is ready
-        if tab.resultRows.count > 10_000 {
+        // For datasets sorted async, return nil (unsorted) until cache is ready
+        if rows.count > 1_000 {
             return nil
         }
 
         // Small dataset: sort synchronously with view-level cache
         if let cached = sortCache[tab.id],
-           cached.columnIndex == (tab.sortState.columnIndex ?? -1),
-           cached.direction == tab.sortState.direction,
-           cached.resultVersion == tab.resultVersion {
+            cached.columnIndex == (tab.sortState.columnIndex ?? -1),
+            cached.direction == tab.sortState.direction,
+            cached.resultVersion == tab.resultVersion
+        {
             return cached.sortedIndices
         }
 
         let sortColumns = tab.sortState.columns
-        let indices = Array(tab.resultRows.indices)
+        let indices = Array(rows.indices)
         let sortedIndices = indices.sorted { idx1, idx2 in
-            let row1 = tab.resultRows[idx1]
-            let row2 = tab.resultRows[idx2]
+            let row1 = rows[idx1]
+            let row2 = rows[idx2]
             for sortCol in sortColumns {
-                let val1 = sortCol.columnIndex < row1.values.count
-                    ? (row1.values[sortCol.columnIndex] ?? "") : ""
-                let val2 = sortCol.columnIndex < row2.values.count
-                    ? (row2.values[sortCol.columnIndex] ?? "") : ""
-                let result = val1.localizedStandardCompare(val2)
+                let val1 =
+                    sortCol.columnIndex < row1.count
+                    ? (row1[sortCol.columnIndex] ?? "") : ""
+                let val2 =
+                    sortCol.columnIndex < row2.count
+                    ? (row2[sortCol.columnIndex] ?? "") : ""
+                let colType =
+                    sortCol.columnIndex < colTypes.count
+                    ? colTypes[sortCol.columnIndex] : nil
+                let result = RowSortComparator.compare(val1, val2, columnType: colType)
                 if result == .orderedSame { continue }
                 return sortCol.direction == .ascending
                     ? result == .orderedAscending
@@ -429,8 +634,13 @@ struct MainEditorContentView: View {
         Binding(
             get: { tab.columnLayout },
             set: { newValue in
+                coordinator.isUpdatingColumnLayout = true
                 if let index = tabManager.selectedTabIndex {
                     tabManager.tabs[index].columnLayout = newValue
+                }
+                Task { @MainActor in
+                    coordinator.isUpdatingColumnLayout = false
+                    coordinator.saveColumnLayoutForTable()
                 }
             }
         )
@@ -442,6 +652,8 @@ struct MainEditorContentView: View {
         MainStatusBarView(
             tab: tab,
             filterStateManager: filterStateManager,
+            columnVisibilityManager: columnVisibilityManager,
+            allColumns: tab.resultColumns,
             selectedRowIndices: selectedRowIndices,
             showStructure: showStructureBinding(for: tab),
             onFirstPage: onFirstPage,
@@ -494,9 +706,11 @@ struct MainEditorContentView: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color(nsColor: .quaternaryLabelColor))
                         )
-                    Text(connection.type == .mongodb ? "Open MQL Editor" : connection.type == .redis ? "Open Redis CLI" : "Open SQL Editor")
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
+                    Text(
+                        "Open \(PluginManager.shared.queryLanguageName(for: connection.type)) Editor"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
                 }
 
                 HStack(spacing: 6) {

@@ -1,5 +1,10 @@
 import Foundation
 
+public enum ParameterStyle: String, Sendable {
+    case questionMark  // ?
+    case dollar        // $1, $2
+}
+
 public struct PluginRowChange: Sendable {
     public enum ChangeType: Sendable {
         case insert
@@ -63,6 +68,7 @@ public protocol PluginDatabaseDriver: AnyObject, Sendable {
     func cancelQuery() throws
     func applyQueryTimeout(_ seconds: Int) async throws
     var serverVersion: String? { get }
+    var parameterStyle: ParameterStyle { get }
 
     // Batch operations
     func fetchApproximateRowCount(table: String, schema: String?) async throws -> Int?
@@ -77,14 +83,53 @@ public protocol PluginDatabaseDriver: AnyObject, Sendable {
     // Query building (optional, for NoSQL plugins)
     func buildBrowseQuery(table: String, sortColumns: [(columnIndex: Int, ascending: Bool)], columns: [String], limit: Int, offset: Int) -> String?
     func buildFilteredQuery(table: String, filters: [(column: String, op: String, value: String)], logicMode: String, sortColumns: [(columnIndex: Int, ascending: Bool)], columns: [String], limit: Int, offset: Int) -> String?
-    func buildQuickSearchQuery(table: String, searchText: String, columns: [String], sortColumns: [(columnIndex: Int, ascending: Bool)], limit: Int, offset: Int) -> String?
-    func buildCombinedQuery(table: String, filters: [(column: String, op: String, value: String)], logicMode: String, searchText: String, searchColumns: [String], sortColumns: [(columnIndex: Int, ascending: Bool)], columns: [String], limit: Int, offset: Int) -> String?
-
     // Statement generation (optional, for NoSQL plugins)
     func generateStatements(table: String, columns: [String], changes: [PluginRowChange], insertedRowData: [Int: [String?]], deletedRowIndices: Set<Int>, insertedRowIndices: Set<Int>) -> [(statement: String, parameters: [String?])]?
 
     // Database switching (SQL Server USE, ClickHouse database switch, etc.)
     func switchDatabase(to database: String) async throws
+
+    // DDL schema generation (optional, plugins return nil to use default fallback)
+    func generateAddColumnSQL(table: String, column: PluginColumnDefinition) -> String?
+    func generateModifyColumnSQL(table: String, oldColumn: PluginColumnDefinition, newColumn: PluginColumnDefinition) -> String?
+    func generateDropColumnSQL(table: String, columnName: String) -> String?
+    func generateAddIndexSQL(table: String, index: PluginIndexDefinition) -> String?
+    func generateDropIndexSQL(table: String, indexName: String) -> String?
+    func generateAddForeignKeySQL(table: String, fk: PluginForeignKeyDefinition) -> String?
+    func generateDropForeignKeySQL(table: String, constraintName: String) -> String?
+    func generateModifyPrimaryKeySQL(table: String, oldColumns: [String], newColumns: [String], constraintName: String?) -> [String]?
+    func generateMoveColumnSQL(table: String, column: PluginColumnDefinition, afterColumn: String?) -> String?
+    func generateCreateTableSQL(definition: PluginCreateTableDefinition) -> String?
+
+    // Definition SQL for clipboard copy (optional — return nil if not supported)
+    func generateColumnDefinitionSQL(column: PluginColumnDefinition) -> String?
+    func generateIndexDefinitionSQL(index: PluginIndexDefinition, tableName: String?) -> String?
+    func generateForeignKeyDefinitionSQL(fk: PluginForeignKeyDefinition) -> String?
+
+    // Table operations (optional — return nil to use app-level fallback)
+    func truncateTableStatements(table: String, schema: String?, cascade: Bool) -> [String]?
+    func dropObjectStatement(name: String, objectType: String, schema: String?, cascade: Bool) -> String?
+    func foreignKeyDisableStatements() -> [String]?
+    func foreignKeyEnableStatements() -> [String]?
+
+    // EXPLAIN query building (optional)
+    func buildExplainQuery(_ sql: String) -> String?
+
+    // Identifier quoting
+    func quoteIdentifier(_ name: String) -> String
+
+    // String escaping
+    func escapeStringLiteral(_ value: String) -> String
+
+    func createViewTemplate() -> String?
+    func editViewFallbackTemplate(viewName: String) -> String?
+    func castColumnToText(_ column: String) -> String
+
+    // All-tables metadata SQL (optional — returns nil for non-SQL databases)
+    func allTablesMetadataSQL(schema: String?) -> String?
+
+    // Default export query (optional — returns nil to use app-level fallback)
+    func defaultExportQuery(table: String) -> String?
 }
 
 public extension PluginDatabaseDriver {
@@ -120,8 +165,12 @@ public extension PluginDatabaseDriver {
 
     var serverVersion: String? { nil }
 
+    var parameterStyle: ParameterStyle { .questionMark }
+
     func fetchApproximateRowCount(table: String, schema: String?) async throws -> Int? { nil }
 
+    /// Default: fetches columns per-table sequentially (N+1 round-trips).
+    /// SQL drivers should override with a single bulk query (e.g. INFORMATION_SCHEMA.COLUMNS).
     func fetchAllColumns(schema: String?) async throws -> [String: [PluginColumnInfo]] {
         let tables = try await fetchTables(schema: schema)
         var result: [String: [PluginColumnInfo]] = [:]
@@ -131,6 +180,8 @@ public extension PluginDatabaseDriver {
         return result
     }
 
+    /// Default: fetches foreign keys per-table sequentially (N+1 round-trips).
+    /// SQL drivers should override with a single bulk query (e.g. INFORMATION_SCHEMA.KEY_COLUMN_USAGE).
     func fetchAllForeignKeys(schema: String?) async throws -> [String: [PluginForeignKeyInfo]] {
         let tables = try await fetchTables(schema: schema)
         var result: [String: [PluginForeignKeyInfo]] = [:]
@@ -171,52 +222,209 @@ public extension PluginDatabaseDriver {
 
     func buildBrowseQuery(table: String, sortColumns: [(columnIndex: Int, ascending: Bool)], columns: [String], limit: Int, offset: Int) -> String? { nil }
     func buildFilteredQuery(table: String, filters: [(column: String, op: String, value: String)], logicMode: String, sortColumns: [(columnIndex: Int, ascending: Bool)], columns: [String], limit: Int, offset: Int) -> String? { nil }
-    func buildQuickSearchQuery(table: String, searchText: String, columns: [String], sortColumns: [(columnIndex: Int, ascending: Bool)], limit: Int, offset: Int) -> String? { nil }
-    func buildCombinedQuery(table: String, filters: [(column: String, op: String, value: String)], logicMode: String, searchText: String, searchColumns: [String], sortColumns: [(columnIndex: Int, ascending: Bool)], columns: [String], limit: Int, offset: Int) -> String? { nil }
     func generateStatements(table: String, columns: [String], changes: [PluginRowChange], insertedRowData: [Int: [String?]], deletedRowIndices: Set<Int>, insertedRowIndices: Set<Int>) -> [(statement: String, parameters: [String?])]? { nil }
+
+    func generateAddColumnSQL(table: String, column: PluginColumnDefinition) -> String? { nil }
+    func generateModifyColumnSQL(table: String, oldColumn: PluginColumnDefinition, newColumn: PluginColumnDefinition) -> String? { nil }
+    func generateDropColumnSQL(table: String, columnName: String) -> String? { nil }
+    func generateAddIndexSQL(table: String, index: PluginIndexDefinition) -> String? { nil }
+    func generateDropIndexSQL(table: String, indexName: String) -> String? { nil }
+    func generateAddForeignKeySQL(table: String, fk: PluginForeignKeyDefinition) -> String? { nil }
+    func generateDropForeignKeySQL(table: String, constraintName: String) -> String? { nil }
+    func generateModifyPrimaryKeySQL(table: String, oldColumns: [String], newColumns: [String], constraintName: String?) -> [String]? { nil }
+    func generateMoveColumnSQL(table: String, column: PluginColumnDefinition, afterColumn: String?) -> String? { nil }
+    func generateCreateTableSQL(definition: PluginCreateTableDefinition) -> String? { nil }
+
+    func generateColumnDefinitionSQL(column: PluginColumnDefinition) -> String? { nil }
+    func generateIndexDefinitionSQL(index: PluginIndexDefinition, tableName: String?) -> String? { nil }
+    func generateForeignKeyDefinitionSQL(fk: PluginForeignKeyDefinition) -> String? { nil }
+
+    func truncateTableStatements(table: String, schema: String?, cascade: Bool) -> [String]? { nil }
+    func dropObjectStatement(name: String, objectType: String, schema: String?, cascade: Bool) -> String? { nil }
+    func foreignKeyDisableStatements() -> [String]? { nil }
+    func foreignKeyEnableStatements() -> [String]? { nil }
+
+    func buildExplainQuery(_ sql: String) -> String? { nil }
+
+    func createViewTemplate() -> String? { nil }
+    func editViewFallbackTemplate(viewName: String) -> String? { nil }
+    func castColumnToText(_ column: String) -> String { column }
+    func allTablesMetadataSQL(schema: String?) -> String? { nil }
+    func defaultExportQuery(table: String) -> String? { nil }
+
+    func quoteIdentifier(_ name: String) -> String {
+        let escaped = name.replacingOccurrences(of: "\"", with: "\"\"")
+        return "\"\(escaped)\""
+    }
+
+    func escapeStringLiteral(_ value: String) -> String {
+        var result = value
+        result = result.replacingOccurrences(of: "'", with: "''")
+        result = result.replacingOccurrences(of: "\0", with: "")
+        return result
+    }
 
     func executeParameterized(query: String, parameters: [String?]) async throws -> PluginQueryResult {
         guard !parameters.isEmpty else {
             return try await execute(query: query)
         }
+
+        let sql: String
+        switch parameterStyle {
+        case .questionMark:
+            sql = Self.substituteQuestionMarks(query: query, parameters: parameters)
+        case .dollar:
+            sql = Self.substituteDollarParams(query: query, parameters: parameters)
+        }
+
+        return try await execute(query: sql)
+    }
+
+    private static func substituteQuestionMarks(query: String, parameters: [String?]) -> String {
+        let nsQuery = query as NSString
+        let length = nsQuery.length
         var sql = ""
         var paramIndex = 0
         var inSingleQuote = false
         var inDoubleQuote = false
         var isEscaped = false
+        var i = 0
 
-        for char in query {
+        let backslash: UInt16 = 0x5C // \\
+        let singleQuote: UInt16 = 0x27 // '
+        let doubleQuote: UInt16 = 0x22 // "
+        let questionMark: UInt16 = 0x3F // ?
+
+        while i < length {
+            let char = nsQuery.character(at: i)
+
             if isEscaped {
                 isEscaped = false
-                sql.append(char)
+                if let scalar = UnicodeScalar(char) {
+                    sql.append(Character(scalar))
+                } else {
+                    sql.append("\u{FFFD}")
+                }
+                i += 1
                 continue
             }
 
-            if char == "\\" && (inSingleQuote || inDoubleQuote) {
+            if char == backslash && (inSingleQuote || inDoubleQuote) {
                 isEscaped = true
-                sql.append(char)
+                if let scalar = UnicodeScalar(char) {
+                    sql.append(Character(scalar))
+                } else {
+                    sql.append("\u{FFFD}")
+                }
+                i += 1
                 continue
             }
 
-            if char == "'" && !inDoubleQuote {
+            if char == singleQuote && !inDoubleQuote {
                 inSingleQuote.toggle()
-            } else if char == "\"" && !inSingleQuote {
+            } else if char == doubleQuote && !inSingleQuote {
                 inDoubleQuote.toggle()
             }
 
-            if char == "?" && !inSingleQuote && !inDoubleQuote && paramIndex < parameters.count {
+            if char == questionMark && !inSingleQuote && !inDoubleQuote && paramIndex < parameters.count {
                 if let value = parameters[paramIndex] {
-                    sql.append(Self.escapedParameterValue(value))
+                    sql.append(escapedParameterValue(value))
                 } else {
                     sql.append("NULL")
                 }
                 paramIndex += 1
             } else {
-                sql.append(char)
+                if let scalar = UnicodeScalar(char) {
+                    sql.append(Character(scalar))
+                } else {
+                    sql.append("\u{FFFD}")
+                }
             }
+
+            i += 1
         }
 
-        return try await execute(query: sql)
+        return sql
+    }
+
+    private static func substituteDollarParams(query: String, parameters: [String?]) -> String {
+        let nsQuery = query as NSString
+        let length = nsQuery.length
+        var sql = ""
+        var i = 0
+        var inSingleQuote = false
+        var inDoubleQuote = false
+        var isEscaped = false
+
+        while i < length {
+            let char = nsQuery.character(at: i)
+
+            if isEscaped {
+                isEscaped = false
+                if let scalar = UnicodeScalar(char) {
+                    sql.append(Character(scalar))
+                } else {
+                    sql.append("\u{FFFD}")
+                }
+                i += 1
+                continue
+            }
+
+            let backslash: UInt16 = 0x5C // \\
+            if char == backslash && (inSingleQuote || inDoubleQuote) {
+                isEscaped = true
+                if let scalar = UnicodeScalar(char) {
+                    sql.append(Character(scalar))
+                } else {
+                    sql.append("\u{FFFD}")
+                }
+                i += 1
+                continue
+            }
+
+            let singleQuote: UInt16 = 0x27 // '
+            let doubleQuote: UInt16 = 0x22 // "
+            if char == singleQuote && !inDoubleQuote {
+                inSingleQuote.toggle()
+            } else if char == doubleQuote && !inSingleQuote {
+                inDoubleQuote.toggle()
+            }
+
+            let dollar: UInt16 = 0x24 // $
+            if char == dollar && !inSingleQuote && !inDoubleQuote {
+                var numStr = ""
+                var j = i + 1
+                while j < length {
+                    let digitChar = nsQuery.character(at: j)
+                    if digitChar >= 0x30 && digitChar <= 0x39 { // 0-9
+                        if let scalar = UnicodeScalar(digitChar) {
+                            numStr.append(Character(scalar))
+                        }
+                        j += 1
+                    } else {
+                        break
+                    }
+                }
+                if !numStr.isEmpty, let paramNum = Int(numStr), paramNum >= 1, paramNum <= parameters.count {
+                    if let value = parameters[paramNum - 1] {
+                        sql.append(escapedParameterValue(value))
+                    } else {
+                        sql.append("NULL")
+                    }
+                    i = j
+                    continue
+                }
+            }
+
+            if let scalar = UnicodeScalar(char) {
+                sql.append(Character(scalar))
+            } else {
+                sql.append("\u{FFFD}")
+            }
+            i += 1
+        }
+
+        return sql
     }
 
     /// Escape a parameter value for safe interpolation into SQL.

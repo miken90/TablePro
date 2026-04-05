@@ -13,6 +13,7 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     private let config: DriverConnectionConfig
     private var mariadbConnection: MariaDBPluginConnection?
     private var _serverVersion: String?
+    private var _activeDatabase: String
 
     /// Detected server type from version string after connecting
     private var isMariaDB = false
@@ -24,12 +25,32 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     var supportsSchemas: Bool { false }
     var supportsTransactions: Bool { true }
 
+    func quoteIdentifier(_ name: String) -> String {
+        let escaped = name.replacingOccurrences(of: "`", with: "``")
+        return "`\(escaped)`"
+    }
+
+    func escapeStringLiteral(_ value: String) -> String {
+        var result = value
+        result = result.replacingOccurrences(of: "\\", with: "\\\\")
+        result = result.replacingOccurrences(of: "'", with: "''")
+        result = result.replacingOccurrences(of: "\n", with: "\\n")
+        result = result.replacingOccurrences(of: "\r", with: "\\r")
+        result = result.replacingOccurrences(of: "\t", with: "\\t")
+        result = result.replacingOccurrences(of: "\0", with: "\\0")
+        result = result.replacingOccurrences(of: "\u{08}", with: "\\b")
+        result = result.replacingOccurrences(of: "\u{0C}", with: "\\f")
+        result = result.replacingOccurrences(of: "\u{1A}", with: "\\Z")
+        return result
+    }
+
     private static let tableNameRegex = try? NSRegularExpression(pattern: "(?i)\\bFROM\\s+[`\"']?([\\w]+)[`\"']?")
     private static let limitRegex = try? NSRegularExpression(pattern: "(?i)\\s+LIMIT\\s+\\d+(\\s*,\\s*\\d+)?")
     private static let offsetRegex = try? NSRegularExpression(pattern: "(?i)\\s+OFFSET\\s+\\d+")
 
     init(config: DriverConnectionConfig) {
         self.config = config
+        self._activeDatabase = config.database
     }
 
     // MARK: - Connection
@@ -42,7 +63,7 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
             port: config.port,
             user: config.username,
             password: config.password,
-            database: config.database,
+            database: _activeDatabase,
             sslConfig: sslConfig
         )
 
@@ -156,12 +177,12 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     func fetchTables(schema: String?) async throws -> [PluginTableInfo] {
         let result = try await execute(query: "SHOW FULL TABLES")
 
-        return result.rows.compactMap { row in
+        return result.rows.compactMap { row -> PluginTableInfo? in
             guard let name = row[safe: 0] ?? nil else { return nil }
             let typeStr = (row[safe: 1] ?? nil) ?? "BASE TABLE"
             let type = typeStr.contains("VIEW") ? "VIEW" : "TABLE"
             return PluginTableInfo(name: name, type: type)
-        }
+        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func fetchColumns(table: String, schema: String?) async throws -> [PluginColumnInfo] {
@@ -204,7 +225,7 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     }
 
     func fetchAllColumns(schema: String?) async throws -> [String: [PluginColumnInfo]] {
-        let dbName = config.database
+        let dbName = _activeDatabase
         let escapedDb = dbName.replacingOccurrences(of: "'", with: "''")
         let query = """
             SELECT
@@ -291,7 +312,7 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     }
 
     func fetchForeignKeys(table: String, schema: String?) async throws -> [PluginForeignKeyInfo] {
-        let dbName = config.database
+        let dbName = _activeDatabase
         let escapedDb = dbName.replacingOccurrences(of: "'", with: "''")
         let escapedTable = table.replacingOccurrences(of: "'", with: "''")
 
@@ -332,7 +353,7 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     }
 
     func fetchAllForeignKeys(schema: String?) async throws -> [String: [PluginForeignKeyInfo]] {
-        let dbName = config.database
+        let dbName = _activeDatabase
         let escapedDb = dbName.replacingOccurrences(of: "'", with: "''")
 
         let query = """
@@ -375,7 +396,7 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     }
 
     func fetchApproximateRowCount(table: String, schema: String?) async throws -> Int? {
-        let dbName = config.database
+        let dbName = _activeDatabase
         let escapedDb = dbName.replacingOccurrences(of: "'", with: "''")
         let escapedTable = table.replacingOccurrences(of: "'", with: "''")
 
@@ -559,6 +580,7 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     func switchDatabase(to database: String) async throws {
         let escaped = database.replacingOccurrences(of: "`", with: "``")
         _ = try await execute(query: "USE `\(escaped)`")
+        _activeDatabase = database
     }
 
     // MARK: - Query Timeout
@@ -575,6 +597,258 @@ final class MySQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
         } catch {
             Self.logger.warning("Failed to set query timeout: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - EXPLAIN
+
+    func buildExplainQuery(_ sql: String) -> String? {
+        "EXPLAIN \(sql)"
+    }
+
+    // MARK: - Create Table DDL
+
+    func generateCreateTableSQL(definition: PluginCreateTableDefinition) -> String? {
+        let tableName = quoteIdentifier(definition.tableName)
+        let ifNotExists = definition.ifNotExists ? " IF NOT EXISTS" : ""
+
+        var parts: [String] = []
+
+        for column in definition.columns {
+            parts.append(buildColumnDefinitionSQL(column))
+        }
+
+        var pkCols = definition.primaryKeyColumns
+        if pkCols.isEmpty {
+            pkCols = definition.columns.filter { $0.autoIncrement }.map(\.name)
+        }
+        if !pkCols.isEmpty {
+            let quoted = pkCols.map { quoteIdentifier($0) }.joined(separator: ", ")
+            parts.append("PRIMARY KEY (\(quoted))")
+        }
+
+        for index in definition.indexes {
+            parts.append(buildIndexDefinitionSQL(index))
+        }
+
+        for fk in definition.foreignKeys {
+            parts.append(buildForeignKeyDefinitionSQL(fk))
+        }
+
+        var sql = "CREATE TABLE\(ifNotExists) \(tableName) (\n"
+        sql += parts.map { "    \($0)" }.joined(separator: ",\n")
+        sql += "\n)"
+
+        var tableOptions: [String] = []
+        if let engine = definition.engine, !engine.isEmpty {
+            tableOptions.append("ENGINE=\(engine)")
+        }
+        if let charset = definition.charset, !charset.isEmpty {
+            tableOptions.append("DEFAULT CHARSET=\(charset)")
+        }
+        if let collation = definition.collation, !collation.isEmpty {
+            tableOptions.append("COLLATE=\(collation)")
+        }
+
+        if !tableOptions.isEmpty {
+            sql += " " + tableOptions.joined(separator: " ")
+        }
+
+        sql += ";"
+        return sql
+    }
+
+    private func buildColumnDefinitionSQL(_ column: PluginColumnDefinition) -> String {
+        var def = "\(quoteIdentifier(column.name)) \(column.dataType)"
+
+        if column.unsigned {
+            def += " UNSIGNED"
+        }
+        if column.isNullable {
+            def += " NULL"
+        } else {
+            def += " NOT NULL"
+        }
+        if let defaultValue = column.defaultValue {
+            let upper = defaultValue.uppercased()
+            if upper == "NULL" || upper == "CURRENT_TIMESTAMP" || upper == "CURRENT_TIMESTAMP()"
+                || defaultValue.hasPrefix("'") {
+                def += " DEFAULT \(defaultValue)"
+            } else if Int64(defaultValue) != nil || Double(defaultValue) != nil {
+                def += " DEFAULT \(defaultValue)"
+            } else {
+                def += " DEFAULT '\(escapeStringLiteral(defaultValue))'"
+            }
+        }
+        if column.autoIncrement {
+            def += " AUTO_INCREMENT"
+        }
+        if let onUpdate = column.onUpdate, !onUpdate.isEmpty {
+            let upper = onUpdate.uppercased()
+            if upper == "CURRENT_TIMESTAMP" || upper == "CURRENT_TIMESTAMP()"
+                || upper.hasPrefix("CURRENT_TIMESTAMP(") {
+                def += " ON UPDATE \(onUpdate)"
+            }
+        }
+        if let comment = column.comment, !comment.isEmpty {
+            def += " COMMENT '\(escapeStringLiteral(comment))'"
+        }
+
+        return def
+    }
+
+    private func buildIndexDefinitionSQL(_ index: PluginIndexDefinition) -> String {
+        let cols = index.columns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        var def = ""
+
+        let upperType = index.indexType?.uppercased() ?? ""
+        if upperType == "FULLTEXT" {
+            def += "FULLTEXT INDEX"
+        } else if upperType == "SPATIAL" {
+            def += "SPATIAL INDEX"
+        } else if index.isUnique {
+            def += "UNIQUE INDEX"
+        } else {
+            def += "INDEX"
+        }
+
+        def += " \(quoteIdentifier(index.name)) (\(cols))"
+
+        if upperType == "BTREE" || upperType == "HASH" {
+            def += " USING \(upperType)"
+        }
+
+        return def
+    }
+
+    private func buildForeignKeyDefinitionSQL(_ fk: PluginForeignKeyDefinition) -> String {
+        let cols = fk.columns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        let refCols = fk.referencedColumns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        let refTable = quoteIdentifier(fk.referencedTable)
+
+        var def = "CONSTRAINT \(quoteIdentifier(fk.name)) FOREIGN KEY (\(cols)) REFERENCES \(refTable) (\(refCols))"
+
+        let onDelete = fk.onDelete.uppercased()
+        if onDelete != "NO ACTION" {
+            def += " ON DELETE \(onDelete)"
+        }
+
+        let onUpdate = fk.onUpdate.uppercased()
+        if onUpdate != "NO ACTION" {
+            def += " ON UPDATE \(onUpdate)"
+        }
+
+        return def
+    }
+
+    // MARK: - Definition SQL (clipboard copy)
+
+    func generateColumnDefinitionSQL(column: PluginColumnDefinition) -> String? {
+        buildColumnDefinitionSQL(column)
+    }
+
+    func generateIndexDefinitionSQL(index: PluginIndexDefinition, tableName: String?) -> String? {
+        buildIndexDefinitionSQL(index)
+    }
+
+    func generateForeignKeyDefinitionSQL(fk: PluginForeignKeyDefinition) -> String? {
+        buildForeignKeyDefinitionSQL(fk)
+    }
+
+    // MARK: - Column Reorder DDL
+
+    func generateMoveColumnSQL(table: String, column: PluginColumnDefinition, afterColumn: String?) -> String? {
+        let tableName = quoteIdentifier(table)
+        let colName = quoteIdentifier(column.name)
+
+        var def = "\(column.dataType)"
+        if column.unsigned {
+            def += " UNSIGNED"
+        }
+        if column.isNullable {
+            def += " NULL"
+        } else {
+            def += " NOT NULL"
+        }
+        if let defaultValue = column.defaultValue {
+            let upper = defaultValue.uppercased()
+            if upper == "NULL" || upper == "CURRENT_TIMESTAMP" || upper == "CURRENT_TIMESTAMP()"
+                || defaultValue.hasPrefix("'") {
+                def += " DEFAULT \(defaultValue)"
+            } else if Int64(defaultValue) != nil || Double(defaultValue) != nil {
+                def += " DEFAULT \(defaultValue)"
+            } else {
+                def += " DEFAULT '\(escapeStringLiteral(defaultValue))'"
+            }
+        }
+        if column.autoIncrement {
+            def += " AUTO_INCREMENT"
+        }
+        if let onUpdate = column.onUpdate, !onUpdate.isEmpty {
+            let upper = onUpdate.uppercased()
+            if upper == "CURRENT_TIMESTAMP" || upper == "CURRENT_TIMESTAMP()" || upper.hasPrefix("CURRENT_TIMESTAMP(") {
+                def += " ON UPDATE \(onUpdate)"
+            }
+        }
+        if let comment = column.comment, !comment.isEmpty {
+            def += " COMMENT '\(escapeStringLiteral(comment))'"
+        }
+
+        let position: String
+        if let afterCol = afterColumn {
+            position = "AFTER \(quoteIdentifier(afterCol))"
+        } else {
+            position = "FIRST"
+        }
+
+        return "ALTER TABLE \(tableName) MODIFY COLUMN \(colName) \(def) \(position)"
+    }
+
+    // MARK: - View Templates
+
+    func createViewTemplate() -> String? {
+        "CREATE VIEW view_name AS\nSELECT column1, column2\nFROM table_name\nWHERE condition;"
+    }
+
+    func editViewFallbackTemplate(viewName: String) -> String? {
+        let quoted = quoteIdentifier(viewName)
+        return "ALTER VIEW \(quoted) AS\nSELECT * FROM table_name;"
+    }
+
+    func castColumnToText(_ column: String) -> String {
+        "CAST(\(column) AS CHAR)"
+    }
+
+    // MARK: - Foreign Key Checks
+
+    func foreignKeyDisableStatements() -> [String]? {
+        ["SET FOREIGN_KEY_CHECKS=0"]
+    }
+
+    func foreignKeyEnableStatements() -> [String]? {
+        ["SET FOREIGN_KEY_CHECKS=1"]
+    }
+
+    // MARK: - All Tables Metadata
+
+    func allTablesMetadataSQL(schema: String?) -> String? {
+        """
+        SELECT
+            TABLE_SCHEMA as `schema`,
+            TABLE_NAME as name,
+            TABLE_TYPE as kind,
+            IFNULL(CCSA.CHARACTER_SET_NAME, '') as charset,
+            TABLE_COLLATION as collation,
+            TABLE_ROWS as estimated_rows,
+            CONCAT(ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2), ' MB') as total_size,
+            CONCAT(ROUND(DATA_LENGTH / 1024 / 1024, 2), ' MB') as data_size,
+            CONCAT(ROUND(INDEX_LENGTH / 1024 / 1024, 2), ' MB') as index_size,
+            TABLE_COMMENT as comment
+        FROM information_schema.TABLES
+        LEFT JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY CCSA
+            ON TABLE_COLLATION = CCSA.COLLATION_NAME
+        WHERE TABLE_SCHEMA = DATABASE()
+        ORDER BY TABLE_NAME
+        """
     }
 
     // MARK: - Private Helpers

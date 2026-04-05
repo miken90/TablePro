@@ -64,6 +64,16 @@ struct OnboardingContentView: View {
             goToPage(currentPage + 1)
             return .handled
         }
+        .onKeyPress(characters: .init(charactersIn: "h"), phases: .down) { keyPress in
+            guard keyPress.modifiers.contains(.control), currentPage > 0 else { return .ignored }
+            goToPage(currentPage - 1)
+            return .handled
+        }
+        .onKeyPress(characters: .init(charactersIn: "l"), phases: .down) { keyPress in
+            guard keyPress.modifiers.contains(.control), currentPage < 2 else { return .ignored }
+            goToPage(currentPage + 1)
+            return .handled
+        }
     }
 
     private func goToPage(_ page: Int) {
@@ -76,7 +86,7 @@ struct OnboardingContentView: View {
     // MARK: - Welcome Page
 
     private var welcomePage: some View {
-        VStack(spacing: DesignConstants.Spacing.md) {
+        VStack(spacing: ThemeEngine.shared.activeTheme.spacing.md) {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .frame(width: 80, height: 80)
@@ -85,7 +95,7 @@ struct OnboardingContentView: View {
                 .font(.system(size: 24, weight: .bold, design: .rounded))
 
             Text("A fast, lightweight native macOS database client")
-                .font(.system(size: DesignConstants.FontSize.body))
+                .font(.system(size: ThemeEngine.shared.activeTheme.typography.body))
                 .foregroundStyle(.secondary)
         }
     }
@@ -93,35 +103,35 @@ struct OnboardingContentView: View {
     // MARK: - Features Page
 
     private var featuresPage: some View {
-        VStack(spacing: DesignConstants.Spacing.xl) {
+        VStack(spacing: ThemeEngine.shared.activeTheme.spacing.xl) {
             Text("What you can do")
-                .font(.system(size: DesignConstants.FontSize.title2, weight: .semibold))
+                .font(.system(size: ThemeEngine.shared.activeTheme.typography.title2, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 16) {
                 featureRow(
                     icon: "cylinder.split.1x2",
-                    title: "MySQL, PostgreSQL & SQLite",
-                    description: "Connect to popular databases with full feature support"
+                    title: String(localized: "MySQL, PostgreSQL & SQLite"),
+                    description: String(localized: "Connect to popular databases with full feature support")
                 )
                 featureRow(
                     icon: "chevron.left.forwardslash.chevron.right",
-                    title: "Smart SQL Editor",
-                    description: "Syntax highlighting, autocomplete, and multi-tab editing"
+                    title: String(localized: "Smart SQL Editor"),
+                    description: String(localized: "Syntax highlighting, autocomplete, and multi-tab editing")
                 )
                 featureRow(
                     icon: "tablecells",
-                    title: "Interactive Data Grid",
-                    description: "Browse, edit, and manage your data with ease"
+                    title: String(localized: "Interactive Data Grid"),
+                    description: String(localized: "Browse, edit, and manage your data with ease")
                 )
                 featureRow(
                     icon: "lock.shield",
-                    title: "Secure Connections",
-                    description: "SSH tunneling and SSL/TLS encryption support"
+                    title: String(localized: "Secure Connections"),
+                    description: String(localized: "SSH tunneling and SSL/TLS encryption support")
                 )
                 featureRow(
                     icon: "brain",
-                    title: "AI-Powered Assistant",
-                    description: "Get intelligent SQL suggestions and query assistance"
+                    title: String(localized: "AI-Powered Assistant"),
+                    description: String(localized: "Get intelligent SQL suggestions and query assistance")
                 )
             }
             .padding(.horizontal, 20)
@@ -132,15 +142,15 @@ struct OnboardingContentView: View {
     private func featureRow(icon: String, title: String, description: String) -> some View {
         HStack(spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: DesignConstants.IconSize.extraLarge))
+                .font(.system(size: ThemeEngine.shared.activeTheme.iconSizes.extraLarge))
                 .foregroundStyle(.tint)
                 .frame(width: 40)
 
-            VStack(alignment: .leading, spacing: DesignConstants.Spacing.xxxs) {
+            VStack(alignment: .leading, spacing: ThemeEngine.shared.activeTheme.spacing.xxxs) {
                 Text(title)
-                    .font(.system(size: DesignConstants.FontSize.body, weight: .medium))
+                    .font(.system(size: ThemeEngine.shared.activeTheme.typography.body, weight: .medium))
                 Text(description)
-                    .font(.system(size: DesignConstants.FontSize.small))
+                    .font(.system(size: ThemeEngine.shared.activeTheme.typography.small))
                     .foregroundStyle(.secondary)
             }
         }
@@ -149,7 +159,7 @@ struct OnboardingContentView: View {
     // MARK: - Get Started Page
 
     private var getStartedPage: some View {
-        VStack(spacing: DesignConstants.Spacing.md) {
+        VStack(spacing: ThemeEngine.shared.activeTheme.spacing.md) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(.green)
@@ -158,7 +168,7 @@ struct OnboardingContentView: View {
                 .font(.system(size: 22, weight: .bold, design: .rounded))
 
             Text("Create a connection to get started with\nyour databases.")
-                .font(.system(size: DesignConstants.FontSize.body))
+                .font(.system(size: ThemeEngine.shared.activeTheme.typography.body))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -174,6 +184,7 @@ struct OnboardingContentView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .opacity(currentPage == 2 ? 0 : 1)
+            .frame(minWidth: 110, alignment: .leading)
 
             Spacer()
 
@@ -190,26 +201,28 @@ struct OnboardingContentView: View {
 
             Spacer()
 
-            Group {
+            ZStack {
                 if currentPage < 2 {
                     Button("Continue") {
                         goToPage(currentPage + 1)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
+                    .transition(.opacity)
                 } else {
                     Button("Get Started") {
                         completeOnboarding()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.opacity)
                 }
             }
-            .animation(.easeInOut(duration: 0.35), value: currentPage)
+            .animation(.easeInOut(duration: 0.25), value: currentPage)
+            .frame(minWidth: 110, alignment: .trailing)
         }
-        .padding(.horizontal, DesignConstants.Spacing.xl)
-        .padding(.bottom, DesignConstants.Spacing.lg)
+        .padding(.horizontal, ThemeEngine.shared.activeTheme.spacing.xl)
+        .padding(.bottom, ThemeEngine.shared.activeTheme.spacing.lg)
     }
 
     // MARK: - Actions

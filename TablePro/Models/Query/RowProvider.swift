@@ -58,18 +58,29 @@ final class TableRowData {
 
 // MARK: - In-Memory Row Provider
 
-/// Row provider that keeps all data in memory (for existing QueryResultRow data).
+/// Row provider that keeps all data in memory as `[[String?]]`.
 /// References `RowBuffer` directly to avoid duplicating row data.
 /// An optional `sortIndices` array maps display indices to source-row indices,
 /// so sorted views don't need a reordered copy of the rows.
 ///
 /// Direct-access methods `value(atRow:column:)` and `rowValues(at:)` avoid
-/// heap allocations by reading straight from the source `QueryResultRow`.
+/// heap allocations by reading straight from the source `[String?]` array.
 final class InMemoryRowProvider: RowProvider {
-    private let rowBuffer: RowBuffer
+    private weak var rowBuffer: RowBuffer?
+    /// Strong reference only when the provider created its own buffer (convenience init).
+    /// External buffers are owned by QueryTab, so we hold them weakly.
+    private var ownedBuffer: RowBuffer?
+    private static let emptyBuffer = RowBuffer()
+    private var safeBuffer: RowBuffer { rowBuffer ?? Self.emptyBuffer }
     private var sortIndices: [Int]?
-    private var appendedRows: [QueryResultRow] = []
+    private var appendedRows: [[String?]] = []
     private(set) var columns: [String]
+
+    /// Lazy per-cell cache for formatted display values.
+    /// Keyed by source row index (buffer index or offset appended index).
+    /// Evicted when exceeding maxDisplayCacheSize to bound memory.
+    private var displayCache: [Int: [String?]] = [:]
+    private static let maxDisplayCacheSize = 20_000
     private(set) var columnDefaults: [String: String?]
     private(set) var columnTypes: [ColumnType]
     private(set) var columnForeignKeys: [String: ForeignKeyInfo]
@@ -82,7 +93,7 @@ final class InMemoryRowProvider: RowProvider {
 
     /// Number of rows coming from the buffer (respecting sort indices count when present)
     private var bufferRowCount: Int {
-        sortIndices?.count ?? rowBuffer.rows.count
+        sortIndices?.count ?? safeBuffer.rows.count
     }
 
     init(
@@ -108,7 +119,7 @@ final class InMemoryRowProvider: RowProvider {
     /// Convenience initializer that wraps rows in an internal RowBuffer.
     /// Used by tests, previews, and callers that don't have a RowBuffer reference.
     convenience init(
-        rows: [QueryResultRow],
+        rows: [[String?]],
         columns: [String],
         columnDefaults: [String: String?] = [:],
         columnTypes: [ColumnType]? = nil,
@@ -126,6 +137,7 @@ final class InMemoryRowProvider: RowProvider {
             columnEnumValues: columnEnumValues,
             columnNullable: columnNullable
         )
+        ownedBuffer = buffer
     }
 
     func fetchRows(offset: Int, limit: Int) -> [TableRowData] {
@@ -135,7 +147,7 @@ final class InMemoryRowProvider: RowProvider {
         var result: [TableRowData] = []
         result.reserveCapacity(endIndex - offset)
         for i in offset..<endIndex {
-            result.append(TableRowData(index: i, values: sourceRow(at: i).values))
+            result.append(TableRowData(index: i, values: sourceRow(at: i)))
         }
         return result
     }
@@ -145,53 +157,119 @@ final class InMemoryRowProvider: RowProvider {
     }
 
     func invalidateCache() {
-        // No cache — protocol conformance only
+        displayCache.removeAll()
     }
 
     /// Update a cell value
     func updateValue(_ value: String?, at rowIndex: Int, columnIndex: Int) {
         guard rowIndex < totalRowCount else { return }
-        // Update the source row (buffer or appended)
         let sourceIndex = resolveSourceIndex(rowIndex)
         if let bufferIdx = sourceIndex.bufferIndex {
-            rowBuffer.rows[bufferIdx].values[columnIndex] = value
+            guard let buffer = rowBuffer else { return }
+            buffer.rows[bufferIdx][columnIndex] = value
+            displayCache.removeValue(forKey: bufferIdx)
         } else if let appendedIdx = sourceIndex.appendedIndex {
-            appendedRows[appendedIdx].values[columnIndex] = value
+            appendedRows[appendedIdx][columnIndex] = value
+            displayCache.removeValue(forKey: bufferRowCount + appendedIdx)
         }
     }
 
     /// Get row data at index
     func row(at index: Int) -> TableRowData? {
         guard index >= 0 && index < totalRowCount else { return nil }
-        return TableRowData(index: index, values: sourceRow(at: index).values)
+        return TableRowData(index: index, values: sourceRow(at: index))
     }
 
     /// O(1) cell value access — no heap allocation.
     func value(atRow rowIndex: Int, column columnIndex: Int) -> String? {
         guard rowIndex >= 0 && rowIndex < totalRowCount else { return nil }
         let src = sourceRow(at: rowIndex)
-        guard columnIndex >= 0 && columnIndex < src.values.count else { return nil }
-        return src.values[columnIndex]
+        guard columnIndex >= 0 && columnIndex < src.count else { return nil }
+        return src[columnIndex]
     }
 
     /// Returns the source values array for a display row. No copy until caller stores it.
     func rowValues(at rowIndex: Int) -> [String?]? {
         guard rowIndex >= 0 && rowIndex < totalRowCount else { return nil }
-        return sourceRow(at: rowIndex).values
+        return sourceRow(at: rowIndex)
+    }
+
+    // MARK: - Display Value Cache
+
+    /// Get the formatted display value for a cell.
+    /// Computes on first access for the entire row, returns cached on subsequent calls.
+    @MainActor
+    func displayValue(atRow rowIndex: Int, column columnIndex: Int) -> String? {
+        guard rowIndex >= 0 && rowIndex < totalRowCount else { return nil }
+
+        let cacheKey = resolveCacheKey(for: rowIndex)
+
+        if let cachedRow = displayCache[cacheKey], columnIndex < cachedRow.count {
+            return cachedRow[columnIndex]
+        }
+
+        let src = sourceRow(at: rowIndex)
+        let columnCount = columns.count
+        var rowCache = [String?](repeating: nil, count: columnCount)
+        for col in 0..<min(src.count, columnCount) {
+            let ct = col < columnTypes.count ? columnTypes[col] : nil
+            rowCache[col] = CellDisplayFormatter.format(src[col], columnType: ct)
+        }
+        displayCache[cacheKey] = rowCache
+        evictDisplayCacheIfNeeded(nearKey: cacheKey)
+        return columnIndex < rowCache.count ? rowCache[columnIndex] : nil
+    }
+
+    private func evictDisplayCacheIfNeeded(nearKey: Int) {
+        guard displayCache.count > Self.maxDisplayCacheSize else { return }
+        let halfSize = Self.maxDisplayCacheSize / 2
+        displayCache = displayCache.filter { abs($0.key - nearKey) <= halfSize }
+    }
+
+    @MainActor
+    func preWarmDisplayCache(upTo rowCount: Int) {
+        let count = min(rowCount, totalRowCount)
+        for row in 0..<count {
+            let cacheKey = resolveCacheKey(for: row)
+            guard displayCache[cacheKey] == nil else { continue }
+            let src = sourceRow(at: row)
+            let columnCount = columns.count
+            var rowCache = [String?](repeating: nil, count: columnCount)
+            for col in 0..<min(src.count, columnCount) {
+                let ct = col < columnTypes.count ? columnTypes[col] : nil
+                rowCache[col] = CellDisplayFormatter.format(src[col], columnType: ct)
+            }
+            displayCache[cacheKey] = rowCache
+        }
+    }
+
+    /// Invalidate entire display cache (after settings change, full reload).
+    func invalidateDisplayCache() {
+        displayCache.removeAll()
+    }
+
+    /// Release cached data to free memory when this provider is no longer active.
+    func releaseData() {
+        displayCache.removeAll()
+        appendedRows.removeAll()
+        sortIndices = nil
+        ownedBuffer = nil
     }
 
     /// Update rows by replacing the buffer contents and clearing appended rows
-    func updateRows(_ newRows: [QueryResultRow]) {
-        rowBuffer.rows = newRows
+    func updateRows(_ newRows: [[String?]]) {
+        guard let buffer = rowBuffer else { return }
+        buffer.rows = newRows
         appendedRows.removeAll()
         sortIndices = nil
+        displayCache.removeAll()
     }
 
     /// Append a new row with given values
     /// Returns the index of the new row
     func appendRow(values: [String?]) -> Int {
         let newIndex = totalRowCount
-        appendedRows.append(QueryResultRow(id: newIndex, values: values))
+        appendedRows.append(values)
         return newIndex
     }
 
@@ -200,24 +278,25 @@ final class InMemoryRowProvider: RowProvider {
         guard index >= 0 && index < totalRowCount else { return }
         let bCount = bufferRowCount
         if index >= bCount {
-            // Removing from appended rows
             let appendedIdx = index - bCount
             guard appendedIdx < appendedRows.count else { return }
             appendedRows.remove(at: appendedIdx)
         } else {
-            // Removing from buffer rows
+            guard let buffer = rowBuffer else { return }
             if let sorted = sortIndices {
                 let bufferIdx = sorted[index]
-                rowBuffer.rows.remove(at: bufferIdx)
-                // Rebuild sort indices: remove this entry and adjust indices above the removed one
+                buffer.rows.remove(at: bufferIdx)
                 var newIndices = sorted
                 newIndices.remove(at: index)
-                newIndices = newIndices.map { $0 > bufferIdx ? $0 - 1 : $0 }
+                for i in newIndices.indices where newIndices[i] > bufferIdx {
+                    newIndices[i] -= 1
+                }
                 sortIndices = newIndices
             } else {
-                rowBuffer.rows.remove(at: index)
+                buffer.rows.remove(at: index)
             }
         }
+        displayCache.removeAll()
     }
 
     /// Remove multiple rows at indices (used when discarding new rows)
@@ -231,6 +310,17 @@ final class InMemoryRowProvider: RowProvider {
 
     // MARK: - Private
 
+    /// Map a display index to a cache key based on the source row identity.
+    private func resolveCacheKey(for displayIndex: Int) -> Int {
+        let sourceIdx = resolveSourceIndex(displayIndex)
+        if let bufIdx = sourceIdx.bufferIndex {
+            return bufIdx
+        } else if let appIdx = sourceIdx.appendedIndex {
+            return bufferRowCount + appIdx
+        }
+        return displayIndex
+    }
+
     /// Resolve a display index to either a buffer index or an appended-row index.
     private func resolveSourceIndex(_ displayIndex: Int) -> (bufferIndex: Int?, appendedIndex: Int?) {
         let bCount = bufferRowCount
@@ -243,16 +333,16 @@ final class InMemoryRowProvider: RowProvider {
         return (displayIndex, nil)
     }
 
-    /// Get the source QueryResultRow for a display index.
-    private func sourceRow(at displayIndex: Int) -> QueryResultRow {
+    /// Get the source row values for a display index.
+    private func sourceRow(at displayIndex: Int) -> [String?] {
         let bCount = bufferRowCount
         if displayIndex >= bCount {
             return appendedRows[displayIndex - bCount]
         }
         if let sorted = sortIndices {
-            return rowBuffer.rows[sorted[displayIndex]]
+            return safeBuffer.rows[sorted[displayIndex]]
         }
-        return rowBuffer.rows[displayIndex]
+        return safeBuffer.rows[displayIndex]
     }
 }
 
@@ -269,6 +359,8 @@ final class DatabaseRowProvider: RowProvider {
     private let baseQuery: String
     private var cache: [Int: TableRowData] = [:]
     private let pageSize: Int
+    private var prefetchTask: Task<Void, Never>?
+    private var inFlightRange: Range<Int>?
 
     private(set) var totalRowCount: Int = 0
     private(set) var columns: [String]
@@ -317,22 +409,44 @@ final class DatabaseRowProvider: RowProvider {
 
         let offset = minIndex
         let limit = min(maxIndex - minIndex + pageSize, totalRowCount - offset)
+        let fetchRange = offset..<(offset + limit)
 
-        Task { @MainActor in
+        if let inFlight = inFlightRange,
+           inFlight.contains(offset) && inFlight.contains(offset + limit - 1) {
+            return
+        }
+
+        prefetchTask?.cancel()
+        let driver = self.driver
+        let baseQuery = self.baseQuery
+
+        inFlightRange = fetchRange
+        prefetchTask = Task { [weak self] in
             do {
                 let result = try await driver.fetchRows(query: baseQuery, offset: offset, limit: limit)
-                for (i, row) in result.rows.enumerated() {
-                    let rowData = TableRowData(index: offset + i, values: row)
-                    cache[offset + i] = rowData
+                guard !Task.isCancelled else { return }
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    for (i, row) in result.rows.enumerated() {
+                        self.cache[offset + i] = TableRowData(index: offset + i, values: row)
+                    }
+                    self.evictCacheIfNeeded(nearIndex: offset)
+                    self.inFlightRange = nil
                 }
-                evictCacheIfNeeded(nearIndex: offset)
             } catch {
+                guard !Task.isCancelled else { return }
                 Self.logger.error("Prefetch error: \(error)")
+                await MainActor.run { [weak self] in
+                    self?.inFlightRange = nil
+                }
             }
         }
     }
 
     func invalidateCache() {
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        inFlightRange = nil
         cache.removeAll()
         isInitialized = false
     }

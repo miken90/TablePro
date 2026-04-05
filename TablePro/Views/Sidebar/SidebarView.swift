@@ -9,12 +9,10 @@ import SwiftUI
 
 // MARK: - SidebarView
 
-/// Sidebar view displaying list of database tables
+/// Sidebar view with segmented tab picker for Tables and Favorites
 struct SidebarView: View {
     @State private var viewModel: SidebarViewModel
 
-    // Keep @Binding on the view for SwiftUI change tracking.
-    // The ViewModel stores the same bindings for write access.
     @Binding var tables: [TableInfo]
     var sidebarState: SharedSidebarState
     @Binding var pendingTruncates: Set<String>
@@ -25,8 +23,6 @@ struct SidebarView: View {
     var connectionId: UUID
     private weak var coordinator: MainContentCoordinator?
 
-    /// Computed on the view (not ViewModel) so SwiftUI tracks both
-    /// `@Binding var tables` and `@Published var searchText` as dependencies.
     private var filteredTables: [TableInfo] {
         guard !viewModel.debouncedSearchText.isEmpty else { return tables }
         return tables.filter { $0.name.localizedCaseInsensitiveContains(viewModel.debouncedSearchText) }
@@ -72,6 +68,9 @@ struct SidebarView: View {
             schemaProvider: schemaProvider
         )
         vm.debouncedSearchText = sidebarState.searchText
+        if databaseType == .redis, let existingVM = sidebarState.redisKeyTreeViewModel {
+            vm.redisKeyTreeViewModel = existingVM
+        }
         _viewModel = State(wrappedValue: vm)
         self.activeTableName = activeTableName
         self.connectionId = connectionId
@@ -81,8 +80,36 @@ struct SidebarView: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            content
+        ZStack(alignment: .top) {
+            tablesContent
+                .opacity(sidebarState.selectedSidebarTab == .tables ? 1 : 0)
+                .frame(maxHeight: sidebarState.selectedSidebarTab == .tables ? .infinity : 0)
+                .clipped()
+                .allowsHitTesting(sidebarState.selectedSidebarTab == .tables)
+
+            FavoritesTabView(
+                connectionId: connectionId,
+                searchText: viewModel.debouncedSearchText,
+                coordinator: coordinator
+            )
+            .opacity(sidebarState.selectedSidebarTab == .favorites ? 1 : 0)
+            .frame(maxHeight: sidebarState.selectedSidebarTab == .favorites ? .infinity : 0)
+            .clipped()
+            .allowsHitTesting(sidebarState.selectedSidebarTab == .favorites)
+        }
+        .animation(.easeInOut(duration: 0.18), value: sidebarState.selectedSidebarTab)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Picker("", selection: Binding(
+                get: { sidebarState.selectedSidebarTab },
+                set: { sidebarState.selectedSidebarTab = $0 }
+            )) {
+                Text("Tables").tag(SidebarTab.tables)
+                Text("Favorites").tag(SidebarTab.favorites)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
         }
         .frame(minWidth: 280)
         .onChange(of: sidebarState.searchText) { _, newValue in
@@ -116,10 +143,10 @@ struct SidebarView: View {
         }
     }
 
-    // MARK: - Content States
+    // MARK: - Tables Content
 
     @ViewBuilder
-    private var content: some View {
+    private var tablesContent: some View {
         if let error = viewModel.errorMessage {
             errorState(message: error)
         } else if tables.isEmpty && viewModel.isLoading {
@@ -151,20 +178,19 @@ struct SidebarView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 6) {
+        let entityName = PluginManager.shared.tableEntityName(for: viewModel.databaseType)
+        let noItemsLabel = String(localized: "No \(entityName)")
+        let noItemsDetail = String(localized: "This database has no \(entityName.lowercased()) yet.")
+        return VStack(spacing: 6) {
             Image(systemName: "tablecells")
                 .font(.system(size: 28, weight: .thin))
                 .foregroundStyle(Color(nsColor: .tertiaryLabelColor))
 
-            Text(sidebarLabel(mongodb: "No Collections", redis: "No Databases", default: "No Tables"))
+            Text(noItemsLabel)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color(nsColor: .secondaryLabelColor))
 
-            Text(sidebarLabel(
-                mongodb: "This database has no collections yet.",
-                redis: "All databases are empty.",
-                default: "This database has no tables yet."
-            ))
+            Text(noItemsDetail)
                 .font(.system(size: 11))
                 .foregroundStyle(Color(nsColor: .tertiaryLabelColor))
         }
@@ -174,10 +200,14 @@ struct SidebarView: View {
     // MARK: - Table List
 
     private var tableList: some View {
-        List(selection: selectedTablesBinding) {
+        let entityLabel = PluginManager.shared.tableEntityName(for: viewModel.databaseType)
+        let noMatchLabel = String(localized: "No matching \(entityLabel.lowercased())")
+        let helpLabel = String(localized: "Right-click to show all \(entityLabel.lowercased())")
+        let showAllLabel = String(localized: "Show All \(entityLabel)")
+        return List(selection: selectedTablesBinding) {
             if filteredTables.isEmpty {
                 ContentUnavailableView(
-                    sidebarLabel(mongodb: "No matching collections", redis: "No matching databases", default: "No matching tables"),
+                    noMatchLabel,
                     systemImage: "magnifyingglass"
                 )
                 .listRowSeparator(.hidden)
@@ -209,21 +239,35 @@ struct SidebarView: View {
                         }
                     }
                 } header: {
-                    Text(sidebarLabel(mongodb: "Collections", redis: "Databases", default: "Tables"))
-                        .help(sidebarLabel(
-                            mongodb: "Right-click to show all collections",
-                            redis: "Right-click to show all databases",
-                            default: "Right-click to show all tables"
-                        ))
+                    Text(entityLabel)
+                        .help(helpLabel)
                         .contextMenu {
-                            Button(sidebarLabel(
-                                mongodb: String(localized: "Show All Collections"),
-                                redis: String(localized: "Show All Databases"),
-                                default: String(localized: "Show All Tables")
-                            )) {
+                            Button(showAllLabel) {
                                 coordinator?.showAllTablesMetadata()
                             }
                         }
+                }
+
+                if viewModel.databaseType == .redis, let keyTreeVM = sidebarState.redisKeyTreeViewModel {
+                    Section(isExpanded: $viewModel.isRedisKeysExpanded) {
+                        RedisKeyTreeView(
+                            nodes: keyTreeVM.displayNodes(searchText: viewModel.debouncedSearchText),
+                            expandedPrefixes: Binding(
+                                get: { keyTreeVM.expandedPrefixes },
+                                set: { keyTreeVM.expandedPrefixes = $0 }
+                            ),
+                            isLoading: keyTreeVM.isLoading,
+                            isTruncated: keyTreeVM.isTruncated,
+                            onSelectNamespace: { prefix in
+                                coordinator?.browseRedisNamespace(prefix)
+                            },
+                            onSelectKey: { key, keyType in
+                                coordinator?.openRedisKey(key, keyType: keyType)
+                            }
+                        )
+                    } header: {
+                        Text("Keys")
+                    }
                 }
             }
         }
@@ -241,16 +285,6 @@ struct SidebarView: View {
         }
         .onExitCommand {
             sidebarState.selectedTables.removeAll()
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func sidebarLabel(mongodb: String, redis: String, default defaultLabel: String) -> String {
-        switch viewModel.databaseType {
-        case .mongodb: return mongodb
-        case .redis: return redis
-        default: return defaultLabel
         }
     }
 }

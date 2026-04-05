@@ -10,6 +10,7 @@ import AppKit
 import Combine
 import os
 import SwiftUI
+import TableProPluginKit
 import UniformTypeIdentifiers
 
 /// View displaying table structure with DataGridView
@@ -18,6 +19,7 @@ struct TableStructureView: View {
     let tableName: String
     let connection: DatabaseConnection
     let toolbarState: ConnectionToolbarState
+    let coordinator: MainContentCoordinator?
 
     @State private var selectedTab: StructureTab = .columns
     @State private var columns: [ColumnInfo] = []
@@ -41,11 +43,13 @@ struct TableStructureView: View {
     @State private var sortState = SortState()
     @State private var editingCell: CellPosition?
     @State private var structureColumnLayout = ColumnLayoutState()
+    @State private var actionHandler = StructureViewActionHandler()
 
-    init(tableName: String, connection: DatabaseConnection, toolbarState: ConnectionToolbarState) {
+    init(tableName: String, connection: DatabaseConnection, toolbarState: ConnectionToolbarState, coordinator: MainContentCoordinator?) {
         self.tableName = tableName
         self.connection = connection
         self.toolbarState = toolbarState
+        self.coordinator = coordinator
 
         // Initialize wrappedChangeManager using the StateObject's wrappedValue
         let manager = StructureChangeManager()
@@ -71,51 +75,30 @@ struct TableStructureView: View {
             AppState.shared.isCurrentTabEditable = (selectedTab != .ddl)
             AppState.shared.hasRowSelection = !selectedRows.isEmpty
             AppState.shared.hasStructureChanges = structureChangeManager.hasChanges
+
+            // Wire action handler for direct coordinator calls
+            actionHandler.saveChanges = {
+                if self.structureChangeManager.hasChanges && self.selectedTab != .ddl {
+                    Task { await self.executeSchemaChanges() }
+                }
+            }
+            actionHandler.previewSQL = { self.generateStructurePreviewSQL() }
+            actionHandler.copyRows = { self.handleCopyRows(self.selectedRows) }
+            actionHandler.pasteRows = { self.handlePaste() }
+            actionHandler.undo = { self.handleUndo() }
+            actionHandler.redo = { self.handleRedo() }
+            coordinator?.structureActions = actionHandler
         }
         .onDisappear {
             AppState.shared.isCurrentTabEditable = false
             AppState.shared.hasRowSelection = false
             AppState.shared.hasStructureChanges = false
+            coordinator?.structureActions = nil
         }
         .onChange(of: structureChangeManager.hasChanges) { _, newValue in
             AppState.shared.hasStructureChanges = newValue
         }
         .onReceive(NotificationCenter.default.publisher(for: .refreshData), perform: onRefreshData)
-        .onReceive(
-            Publishers.Merge(
-                NotificationCenter.default.publisher(for: .saveStructureChanges),
-                NotificationCenter.default.publisher(for: .previewStructureSQL)
-            )
-            .debounce(for: .milliseconds(50), scheduler: RunLoop.main)
-        ) { notification in
-            if notification.name == .saveStructureChanges {
-                if structureChangeManager.hasChanges && selectedTab != .ddl {
-                    Task {
-                        await executeSchemaChanges()
-                    }
-                }
-            } else {
-                generateStructurePreviewSQL()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .copySelectedRows)) { _ in
-            handleCopyRows(selectedRows)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .pasteRows)) { _ in
-            handlePaste()
-        }
-        .onReceive(
-            Publishers.Merge(
-                NotificationCenter.default.publisher(for: .undoChange),
-                NotificationCenter.default.publisher(for: .redoChange)
-            )
-        ) { notification in
-            if notification.name == .undoChange {
-                handleUndo()
-            } else {
-                handleRedo()
-            }
-        }
     }
 
     // MARK: - Toolbar
@@ -178,6 +161,49 @@ struct TableStructureView: View {
         let provider = StructureRowProvider(changeManager: structureChangeManager, tab: selectedTab, databaseType: connection.type)
         let canEdit = connection.type.supportsSchemaEditing
 
+        let moveRowHandler: ((Int, Int) -> Void)? = {
+            guard selectedTab == .columns,
+                  canEdit,
+                  !structureChangeManager.hasChanges,
+                  PluginManager.shared.supportsColumnReorder(for: connection.type) else {
+                return nil
+            }
+            return { fromIndex, toIndex in
+                let columnsSnapshot = structureChangeManager.workingColumns
+                Task { @MainActor in
+                    do {
+                        let executedSQL = try await StructureColumnReorderHandler.moveColumn(
+                            fromIndex: fromIndex,
+                            toIndex: toIndex,
+                            workingColumns: columnsSnapshot,
+                            tableName: tableName,
+                            connectionId: connection.id
+                        )
+                        QueryHistoryManager.shared.recordQuery(
+                            query: executedSQL.hasSuffix(";") ? executedSQL : executedSQL + ";",
+                            connectionId: connection.id,
+                            databaseName: connection.database,
+                            executionTime: 0,
+                            rowCount: 0,
+                            wasSuccessful: true
+                        )
+                        isReloadingAfterSave = true
+                        await loadColumns()
+                        loadSchemaForEditing()
+                        isReloadingAfterSave = false
+                        ColumnLayoutStorage.shared.clear(for: tableName, connectionId: connection.id)
+                        NotificationCenter.default.post(name: .refreshData, object: nil)
+                    } catch {
+                        AlertHelper.showErrorSheet(
+                            title: String(localized: "Column Reorder Failed"),
+                            message: error.localizedDescription,
+                            window: NSApp.keyWindow
+                        )
+                    }
+                }
+            }
+        }()
+
         return DataGridView(
             rowProvider: provider.asInMemoryProvider(),
             changeManager: wrappedChangeManager,
@@ -200,6 +226,9 @@ struct TableStructureView: View {
             typePickerColumns: provider.typePickerColumns,
             connectionId: connection.id,
             databaseType: getDatabaseType(),
+            onMoveRow: moveRowHandler,
+            rowViewProvider: makeStructureRowView,
+            emptySpaceMenu: makeEmptySpaceMenu,
             selectedRowIndices: $selectedRows,
             sortState: $sortState,
             editingCell: $editingCell,
@@ -440,7 +469,7 @@ struct TableStructureView: View {
         var lines: [String] = []
         for row in rowIndices.sorted() {
             guard let rowData = provider.row(at: row) else { continue }
-            let line = rowData.values.map { $0 ?? "NULL" }.joined(separator: "\t")
+            let line = rowData.map { $0 ?? "NULL" }.joined(separator: "\t")
             lines.append(line)
         }
         let tsvString = lines.joined(separator: "\n")
@@ -534,6 +563,142 @@ struct TableStructureView: View {
         }
     }
 
+    // MARK: - Structure Context Menu
+
+    private func makeEmptySpaceMenu() -> NSMenu? {
+        guard selectedTab != .ddl, selectedTab != .parts else { return nil }
+        guard connection.type.supportsSchemaEditing else { return nil }
+
+        let menu = NSMenu()
+        let label: String
+        switch selectedTab {
+        case .columns: label = String(localized: "Add Column")
+        case .indexes: label = String(localized: "Add Index")
+        case .foreignKeys: label = String(localized: "Add Foreign Key")
+        case .ddl, .parts: return nil
+        }
+
+        let target = StructureMenuTarget { [self] in addNewRow() }
+        let item = NSMenuItem(title: label, action: #selector(StructureMenuTarget.addNewItem), keyEquivalent: "")
+        item.target = target
+        item.representedObject = target
+        menu.addItem(item)
+        return menu
+    }
+
+    private static let structureRowViewId = NSUserInterfaceItemIdentifier("StructureRowView")
+
+    private func makeStructureRowView(
+        _ tableView: NSTableView, _ row: Int, _ coordinator: TableViewCoordinator
+    ) -> NSTableRowView {
+        let rowView = (tableView.makeView(withIdentifier: Self.structureRowViewId, owner: nil)
+            as? StructureRowViewWithMenu) ?? StructureRowViewWithMenu()
+        rowView.identifier = Self.structureRowViewId
+        rowView.coordinator = coordinator
+        rowView.rowIndex = row
+        rowView.structureTab = selectedTab
+        rowView.isStructureEditable = connection.type.supportsSchemaEditing
+        rowView.isRowDeleted = structureChangeManager.getVisualState(for: row, tab: selectedTab).isDeleted
+
+        if selectedTab == .foreignKeys, row < structureChangeManager.workingForeignKeys.count {
+            rowView.referencedTableName = structureChangeManager.workingForeignKeys[row].referencedTable
+        }
+
+        rowView.onCopyName = { [self] indices in handleCopyName(indices) }
+        rowView.onCopyDefinition = { [self] indices in handleCopyDefinition(indices) }
+        rowView.onNavigateFK = { [self] idx in handleNavigateToFK(idx) }
+        rowView.onDuplicate = { [self] indices in handleDuplicateItems(indices) }
+        rowView.onDelete = { [self] indices in handleDeleteRows(indices) }
+        rowView.onUndoDelete = { [self] _ in handleUndo() }
+        return rowView
+    }
+
+    private func handleCopyName(_ indices: Set<Int>) {
+        let provider = StructureRowProvider(
+            changeManager: structureChangeManager, tab: selectedTab, databaseType: connection.type
+        )
+        let names = indices.sorted().compactMap { provider.row(at: $0)?.first ?? nil }
+        guard !names.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(names.joined(separator: "\n"), forType: .string)
+    }
+
+    private func handleCopyDefinition(_ indices: Set<Int>) {
+        guard let driver = DatabaseManager.shared.driver(for: connection.id) else { return }
+        var definitions: [String] = []
+
+        for row in indices.sorted() {
+            switch selectedTab {
+            case .columns:
+                guard row < structureChangeManager.workingColumns.count else { continue }
+                let col = structureChangeManager.workingColumns[row]
+                if let sql = driver.generateColumnDefinitionSQL(column: col.toPlugin()) {
+                    definitions.append(sql)
+                }
+            case .indexes:
+                guard row < structureChangeManager.workingIndexes.count else { continue }
+                let idx = structureChangeManager.workingIndexes[row]
+                if let sql = driver.generateIndexDefinitionSQL(index: idx.toPlugin(), tableName: tableName) {
+                    definitions.append(sql)
+                }
+            case .foreignKeys:
+                guard row < structureChangeManager.workingForeignKeys.count else { continue }
+                let fk = structureChangeManager.workingForeignKeys[row]
+                if let sql = driver.generateForeignKeyDefinitionSQL(fk: fk.toPlugin()) {
+                    definitions.append(sql)
+                }
+            case .ddl, .parts:
+                break
+            }
+        }
+
+        guard !definitions.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(definitions.joined(separator: "\n"), forType: .string)
+    }
+
+    private func handleDuplicateItems(_ indices: Set<Int>) {
+        for row in indices.sorted() {
+            switch selectedTab {
+            case .columns:
+                guard row < structureChangeManager.workingColumns.count else { continue }
+                var copy = structureChangeManager.workingColumns[row]
+                copy = EditableColumnDefinition(
+                    id: UUID(), name: copy.name, dataType: copy.dataType, isNullable: copy.isNullable,
+                    defaultValue: copy.defaultValue, autoIncrement: copy.autoIncrement, unsigned: copy.unsigned,
+                    comment: copy.comment, collation: copy.collation, onUpdate: copy.onUpdate,
+                    charset: copy.charset, extra: copy.extra, isPrimaryKey: copy.isPrimaryKey
+                )
+                structureChangeManager.addColumn(copy)
+            case .indexes:
+                guard row < structureChangeManager.workingIndexes.count else { continue }
+                var copy = structureChangeManager.workingIndexes[row]
+                copy = EditableIndexDefinition(
+                    id: UUID(), name: copy.name, columns: copy.columns,
+                    type: copy.type, isUnique: copy.isUnique, isPrimary: false, comment: copy.comment
+                )
+                structureChangeManager.addIndex(copy)
+            case .foreignKeys:
+                guard row < structureChangeManager.workingForeignKeys.count else { continue }
+                var copy = structureChangeManager.workingForeignKeys[row]
+                copy = EditableForeignKeyDefinition(
+                    id: UUID(), name: copy.name, columns: copy.columns,
+                    referencedTable: copy.referencedTable, referencedColumns: copy.referencedColumns,
+                    onDelete: copy.onDelete, onUpdate: copy.onUpdate
+                )
+                structureChangeManager.addForeignKey(copy)
+            case .ddl, .parts:
+                break
+            }
+        }
+    }
+
+    private func handleNavigateToFK(_ row: Int) {
+        guard row < structureChangeManager.workingForeignKeys.count else { return }
+        let fk = structureChangeManager.workingForeignKeys[row]
+        coordinator?.openTableTab(fk.referencedTable, showStructure: false, isView: false)
+    }
+
     // MARK: - Schema Operations
 
     private func generateStructurePreviewSQL() {
@@ -550,9 +715,15 @@ struct TableStructureView: View {
             return
         }
 
+        guard let pluginDriver = (DatabaseManager.shared.driver(for: connection.id) as? PluginDriverAdapter)?.schemaPluginDriver else {
+            toolbarState.previewStatements = ["-- Error: no plugin driver available for DDL generation"]
+            toolbarState.showSQLReviewPopover = true
+            return
+        }
+
         let generator = SchemaStatementGenerator(
             tableName: tableName,
-            databaseType: getDatabaseType()
+            pluginDriver: pluginDriver
         )
 
         do {
@@ -757,7 +928,7 @@ struct TableStructureView: View {
                     }
                     for enumType in enumTypes {
                         let quotedName = "\"\(enumType.name.replacingOccurrences(of: "\"", with: "\"\""))\""
-                        let quotedLabels = enumType.labels.map { "'\(SQLEscaping.escapeStringLiteral($0, databaseType: .postgresql))'" }
+                        let quotedLabels = enumType.labels.map { "'\(SQLEscaping.escapeStringLiteral($0))'" }
                         preamble += "CREATE TYPE \(quotedName) AS ENUM (\(quotedLabels.joined(separator: ", ")));\n"
                     }
                     ddlStatement = preamble + "\n" + baseDDL
@@ -895,7 +1066,8 @@ struct TableStructureView: View {
             username: "root",
             type: .mysql
         ),
-        toolbarState: ConnectionToolbarState()
+        toolbarState: ConnectionToolbarState(),
+        coordinator: nil
     )
     .frame(width: 800, height: 600)
 }

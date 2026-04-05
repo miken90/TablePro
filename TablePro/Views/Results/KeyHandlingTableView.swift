@@ -127,8 +127,11 @@ final class KeyHandlingTableView: NSTableView {
 
     /// Copy selected rows to clipboard
     @objc func copy(_ sender: Any?) {
+        let indices = Set(selectedRowIndexes)
         if let callback = coordinator?.onCopyRows {
-            callback(Set(selectedRowIndexes))
+            callback(indices)
+        } else {
+            coordinator?.copyRows(at: indices)
         }
     }
 
@@ -196,7 +199,28 @@ final class KeyHandlingTableView: NSTableView {
 
         // Handle arrow keys (custom Shift+selection logic)
         let row = selectedRow
-        let isShiftHeld = event.modifierFlags.contains(.shift)
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let isShiftHeld = modifiers.contains(.shift)
+
+        // Ctrl+HJKL navigation (arrow key alternatives for keyboards without dedicated arrows)
+        if modifiers.contains(.control) {
+            switch key {
+            case .h:
+                handleLeftArrow(currentRow: row)
+                return
+            case .j:
+                handleDownArrow(currentRow: row, isShiftHeld: isShiftHeld)
+                return
+            case .k:
+                handleUpArrow(currentRow: row, isShiftHeld: isShiftHeld)
+                return
+            case .l:
+                handleRightArrow(currentRow: row)
+                return
+            default:
+                break
+            }
+        }
 
         switch key {
         case .upArrow:
@@ -217,6 +241,14 @@ final class KeyHandlingTableView: NSTableView {
 
         default:
             break
+        }
+
+        // Cmd+Return: preview referenced FK row
+        if key == .return && modifiers.contains(.command) && selectedRow >= 0 && focusedColumn >= 1 {
+            coordinator?.showForeignKeyPreview(
+                tableView: self, row: selectedRow, column: focusedColumn, columnIndex: focusedColumn - 1
+            )
+            return
         }
 
         // For all other keys, use interpretKeyEvents to map to standard selectors
@@ -388,11 +420,16 @@ final class KeyHandlingTableView: NSTableView {
         let clickedRow = row(at: point)
 
         if clickedRow >= 0,
-           let rowView = rowView(atRow: clickedRow, makeIfNecessary: false) as? TableRowViewWithMenu {
+           let rowView = rowView(atRow: clickedRow, makeIfNecessary: false) {
             if !selectedRowIndexes.contains(clickedRow) {
                 selectRowIndexes(IndexSet(integer: clickedRow), byExtendingSelection: false)
             }
             return rowView.menu(for: event)
+        }
+
+        // Empty space: ask coordinator for a fallback menu (e.g., Structure tab "Add" actions)
+        if let menu = coordinator?.emptySpaceMenu?() {
+            return menu
         }
 
         return super.menu(for: event)

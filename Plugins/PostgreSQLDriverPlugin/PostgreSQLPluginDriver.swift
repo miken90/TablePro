@@ -23,6 +23,7 @@ final class PostgreSQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     var supportsSchemas: Bool { true }
     var supportsTransactions: Bool { true }
     var serverVersion: String? { libpqConnection?.serverVersion() }
+    var parameterStyle: ParameterStyle { .dollar }
 
     init(config: DriverConnectionConfig) {
         self.config = config
@@ -157,6 +158,27 @@ final class PostgreSQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
     func applyQueryTimeout(_ seconds: Int) async throws {
         let ms = seconds * 1_000
         _ = try await execute(query: "SET statement_timeout = '\(ms)'")
+    }
+
+    // MARK: - EXPLAIN
+
+    func buildExplainQuery(_ sql: String) -> String? {
+        "EXPLAIN \(sql)"
+    }
+
+    // MARK: - View Templates
+
+    func createViewTemplate() -> String? {
+        "CREATE OR REPLACE VIEW view_name AS\nSELECT column1, column2\nFROM table_name\nWHERE condition;"
+    }
+
+    func editViewFallbackTemplate(viewName: String) -> String? {
+        let quoted = quoteIdentifier(viewName)
+        return "CREATE OR REPLACE VIEW \(quoted) AS\nSELECT * FROM table_name;"
+    }
+
+    func castColumnToText(_ column: String) -> String {
+        "CAST(\(column) AS TEXT)"
     }
 
     // MARK: - Schema
@@ -725,6 +747,140 @@ final class PostgreSQLPluginDriver: PluginDatabaseDriver, @unchecked Sendable {
             query += " LC_COLLATE '\(escapedCollation)'"
         }
         _ = try await execute(query: query)
+    }
+
+    // MARK: - All Tables Metadata
+
+    func allTablesMetadataSQL(schema: String?) -> String? {
+        let s = schema ?? currentSchema ?? "public"
+        return """
+        SELECT
+            schemaname as schema,
+            relname as name,
+            'TABLE' as kind,
+            n_live_tup as estimated_rows,
+            pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) as total_size,
+            pg_size_pretty(pg_relation_size(schemaname||'.'||relname)) as data_size,
+            pg_size_pretty(pg_indexes_size(schemaname||'.'||relname)) as index_size,
+            obj_description((schemaname||'.'||relname)::regclass) as comment
+        FROM pg_stat_user_tables
+        WHERE schemaname = '\(s)'
+        ORDER BY relname
+        """
+    }
+
+    // MARK: - Create Table DDL
+
+    func generateCreateTableSQL(definition: PluginCreateTableDefinition) -> String? {
+        guard !definition.columns.isEmpty else { return nil }
+
+        let schema = _currentSchema
+        let qualifiedTable = "\(quoteIdentifier(schema)).\(quoteIdentifier(definition.tableName))"
+        let pkColumns = definition.columns.filter { $0.isPrimaryKey }
+        let inlinePK = pkColumns.count == 1
+        var parts: [String] = definition.columns.map { pgColumnDefinition($0, inlinePK: inlinePK) }
+
+        if pkColumns.count > 1 {
+            let pkCols = pkColumns.map { quoteIdentifier($0.name) }.joined(separator: ", ")
+            parts.append("PRIMARY KEY (\(pkCols))")
+        }
+
+        for fk in definition.foreignKeys {
+            parts.append(pgForeignKeyDefinition(fk))
+        }
+
+        var sql = "CREATE TABLE \(qualifiedTable) (\n  " +
+            parts.joined(separator: ",\n  ") +
+            "\n);"
+
+        var indexStatements: [String] = []
+        for index in definition.indexes {
+            indexStatements.append(pgIndexDefinition(index, qualifiedTable: qualifiedTable))
+        }
+        if !indexStatements.isEmpty {
+            sql += "\n\n" + indexStatements.joined(separator: ";\n") + ";"
+        }
+
+        return sql
+    }
+
+    private func pgColumnDefinition(_ col: PluginColumnDefinition, inlinePK: Bool) -> String {
+        var dataType = col.dataType
+        if col.autoIncrement {
+            let upper = dataType.uppercased()
+            if upper == "BIGINT" || upper == "INT8" {
+                dataType = "BIGSERIAL"
+            } else {
+                dataType = "SERIAL"
+            }
+        }
+
+        var def = "\(quoteIdentifier(col.name)) \(dataType)"
+        if !col.autoIncrement {
+            if col.isNullable {
+                def += " NULL"
+            } else {
+                def += " NOT NULL"
+            }
+        }
+        if let defaultValue = col.defaultValue {
+            def += " DEFAULT \(pgDefaultValue(defaultValue))"
+        }
+        if inlinePK && col.isPrimaryKey {
+            def += " PRIMARY KEY"
+        }
+        return def
+    }
+
+    private func pgDefaultValue(_ value: String) -> String {
+        let upper = value.uppercased()
+        if upper == "NULL" || upper == "TRUE" || upper == "FALSE"
+            || upper == "CURRENT_TIMESTAMP" || upper == "NOW()"
+            || value.hasPrefix("'") || Int64(value) != nil || Double(value) != nil
+            || upper.hasSuffix("::REGCLASS") {
+            return value
+        }
+        return "'\(escapeLiteral(value))'"
+    }
+
+    private func pgIndexDefinition(_ index: PluginIndexDefinition, qualifiedTable: String) -> String {
+        let cols = index.columns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        let unique = index.isUnique ? "UNIQUE " : ""
+        var def = "CREATE \(unique)INDEX \(quoteIdentifier(index.name)) ON \(qualifiedTable)"
+        if let type = index.indexType?.uppercased(),
+           ["BTREE", "HASH", "GIN", "GIST", "BRIN"].contains(type) {
+            def += " USING \(type.lowercased())"
+        }
+        def += " (\(cols))"
+        return def
+    }
+
+    private func pgForeignKeyDefinition(_ fk: PluginForeignKeyDefinition) -> String {
+        let cols = fk.columns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        let refCols = fk.referencedColumns.map { quoteIdentifier($0) }.joined(separator: ", ")
+        var def = "CONSTRAINT \(quoteIdentifier(fk.name)) FOREIGN KEY (\(cols)) REFERENCES \(quoteIdentifier(fk.referencedTable)) (\(refCols))"
+        if fk.onDelete != "NO ACTION" {
+            def += " ON DELETE \(fk.onDelete)"
+        }
+        if fk.onUpdate != "NO ACTION" {
+            def += " ON UPDATE \(fk.onUpdate)"
+        }
+        return def
+    }
+
+    // MARK: - Definition SQL (clipboard copy)
+
+    func generateColumnDefinitionSQL(column: PluginColumnDefinition) -> String? {
+        pgColumnDefinition(column, inlinePK: false)
+    }
+
+    func generateIndexDefinitionSQL(index: PluginIndexDefinition, tableName: String?) -> String? {
+        let qualifiedTable = tableName.map { quoteIdentifier($0) } ?? "\"table\""
+        return pgIndexDefinition(index, qualifiedTable: qualifiedTable)
+    }
+
+    func generateForeignKeyDefinitionSQL(fk: PluginForeignKeyDefinition) -> String? {
+        pgForeignKeyDefinition(fk)
     }
 
     // MARK: - Helpers

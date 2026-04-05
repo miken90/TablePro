@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import TableProPluginKit
 
 struct SQLParameterInliner {
     // MARK: - Public API
@@ -18,10 +19,10 @@ struct SQLParameterInliner {
     ///   - databaseType: The database type, which determines placeholder style (`?` vs `$N`).
     /// - Returns: A SQL string with placeholders replaced by formatted literal values.
     static func inline(_ statement: ParameterizedStatement, databaseType: DatabaseType) -> String {
-        switch databaseType {
-        case .postgresql, .redshift, .duckdb:
+        let style = PluginMetadataRegistry.shared.snapshot(forTypeId: databaseType.pluginTypeId)?.parameterStyle ?? .questionMark
+        if style == .dollar {
             return inlineDollarPlaceholders(statement.sql, parameters: statement.parameters)
-        case .mysql, .mariadb, .sqlite, .mongodb, .redis, .mssql, .oracle, .clickhouse:
+        } else {
             return inlineQuestionMarkPlaceholders(statement.sql, parameters: statement.parameters)
         }
     }

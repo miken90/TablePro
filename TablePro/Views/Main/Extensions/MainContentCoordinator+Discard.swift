@@ -17,7 +17,7 @@ extension MainContentCoordinator {
         let sqlPreview = statements.map(\.sql).joined(separator: "\n")
         let window = await MainActor.run { NSApp.keyWindow }
         let permission = await SafeModeGuard.checkPermission(
-            level: connection.safeModeLevel,
+            level: safeModeLevel,
             isWriteOperation: true,
             sql: sqlPreview,
             operationDescription: String(localized: "Save Sidebar Changes"),
@@ -58,8 +58,9 @@ extension MainContentCoordinator {
         let originalValues = changeManager.getOriginalValues()
         if let index = tabManager.selectedTabIndex {
             for (rowIndex, columnIndex, originalValue) in originalValues {
-                if rowIndex < tabManager.tabs[index].resultRows.count {
-                    tabManager.tabs[index].resultRows[rowIndex].values[columnIndex] = originalValue
+                if rowIndex < tabManager.tabs[index].resultRows.count,
+                   columnIndex < tabManager.tabs[index].resultRows[rowIndex].count {
+                    tabManager.tabs[index].resultRows[rowIndex][columnIndex] = originalValue
                 }
             }
 
@@ -73,7 +74,7 @@ extension MainContentCoordinator {
 
         pendingTruncates.removeAll()
         pendingDeletes.removeAll()
-        changeManager.clearChanges()
+        changeManager.clearChangesAndUndoHistory()
 
         if let index = tabManager.selectedTabIndex {
             tabManager.tabs[index].pendingChanges = TabPendingChanges()

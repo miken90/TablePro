@@ -23,22 +23,6 @@ struct AIChatPanelView: View {
         settingsManager.ai.providers.contains(where: { $0.isEnabled })
     }
 
-    private var queryLanguage: String {
-        switch connection.type {
-        case .mongodb: return "javascript"
-        case .redis: return "bash"
-        default: return "sql"
-        }
-    }
-
-    private var queryTypeName: String {
-        switch connection.type {
-        case .mongodb: return "MongoDB query"
-        case .redis: return "Redis command"
-        default: return "SQL query"
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -61,38 +45,10 @@ struct AIChatPanelView: View {
         }
         .onAppear {
             viewModel.connection = connection
-            viewModel.tables = tables
-        }
-        .onChange(of: tables) { _, newTables in
-            viewModel.tables = newTables
         }
         .task(id: tables) {
+            viewModel.tables = tables
             await fetchSchemaContext()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .aiFixError)) { notification in
-            guard let userInfo = notification.userInfo,
-                  let query = userInfo["query"] as? String,
-                  let error = userInfo["error"] as? String else { return }
-            viewModel.startNewConversation()
-            updateContext()
-            let prompt = "Fix this \(queryTypeName) error:\n\nQuery:\n```\(queryLanguage)\n\(query)\n```\n\nError: \(error)"
-            viewModel.sendWithContext(prompt: prompt, feature: .fixError)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .aiExplainSelection)) { notification in
-            let selectedText = notification.userInfo?["selectedText"] as? String ?? currentQuery ?? ""
-            guard !selectedText.isEmpty else { return }
-            viewModel.startNewConversation()
-            updateContext()
-            let prompt = "Explain this \(queryTypeName):\n```\(queryLanguage)\n\(selectedText)\n```"
-            viewModel.sendWithContext(prompt: prompt, feature: .explainQuery)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .aiOptimizeSelection)) { notification in
-            let selectedText = notification.userInfo?["selectedText"] as? String ?? currentQuery ?? ""
-            guard !selectedText.isEmpty else { return }
-            viewModel.startNewConversation()
-            updateContext()
-            let prompt = "Optimize this \(queryTypeName):\n```\(queryLanguage)\n\(selectedText)\n```"
-            viewModel.sendWithContext(prompt: prompt, feature: .optimizeQuery)
         }
         .alert(
             String(localized: "Allow AI Access"),
@@ -211,12 +167,13 @@ struct AIChatPanelView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, message in
+                    ForEach(viewModel.messages) { message in
                         if message.role != .system {
                             // Extra spacing before user messages to separate conversation turns
-                            if message.role == .user
-                                && index > 0
-                                && viewModel.messages[0..<index].contains(where: { $0.role == .assistant })
+                            if message.role == .user,
+                               let msgIndex = viewModel.messages.firstIndex(where: { $0.id == message.id }),
+                               msgIndex > 0,
+                               viewModel.messages[msgIndex - 1].role == .assistant
                             {
                                 Spacer()
                                     .frame(height: 16)

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import TableProPluginKit
 
 /// Main provider for SQL autocomplete suggestions
 final class SQLCompletionProvider {
@@ -14,23 +15,52 @@ final class SQLCompletionProvider {
     private let contextAnalyzer = SQLContextAnalyzer()
     private let schemaProvider: SQLSchemaProvider
     private var databaseType: DatabaseType?
+    private var cachedDialect: SQLDialectDescriptor?
+    private var cachedStatementCompletions: [CompletionEntry] = []
+    private var favoriteKeywords: [String: (name: String, query: String)] = [:]
 
     /// Minimum prefix length to trigger suggestions
     private let minPrefixLength = 1
 
-    /// Maximum number of suggestions to return
-    private let maxSuggestions = 20
+    /// Default maximum number of suggestions to return
+    private let defaultMaxSuggestions = 20
+
+    /// Context-aware suggestion limit: schema-heavy clauses get more results
+    private func maxSuggestions(for clauseType: SQLClauseType) -> Int {
+        switch clauseType {
+        case .from, .join, .into, .dropObject, .createIndex,
+             .select, .where_, .and, .on, .having, .groupBy, .orderBy,
+             .set, .insertColumns, .returning, .using:
+            return 40
+        default:
+            return defaultMaxSuggestions
+        }
+    }
 
     // MARK: - Init
 
-    init(schemaProvider: SQLSchemaProvider, databaseType: DatabaseType? = nil) {
+    init(schemaProvider: SQLSchemaProvider, databaseType: DatabaseType? = nil,
+         dialect: SQLDialectDescriptor? = nil, statementCompletions: [CompletionEntry] = []) {
         self.schemaProvider = schemaProvider
         self.databaseType = databaseType
+        self.cachedDialect = dialect
+        self.cachedStatementCompletions = statementCompletions
     }
 
     /// Update the database type for context-aware completions
-    func setDatabaseType(_ type: DatabaseType) {
+    func setDatabaseType(_ type: DatabaseType, dialect: SQLDialectDescriptor? = nil, statementCompletions: [CompletionEntry] = []) {
         self.databaseType = type
+        self.cachedDialect = dialect
+        self.cachedStatementCompletions = statementCompletions
+    }
+
+    /// Update cached favorite keywords for autocomplete expansion
+    func updateFavoriteKeywords(_ keywords: [String: (name: String, query: String)]) {
+        self.favoriteKeywords = keywords
+    }
+
+    func retrySchemaIfNeeded() async {
+        await schemaProvider.retryLoadSchemaIfNeeded()
     }
 
     // MARK: - Public API
@@ -51,16 +81,17 @@ final class SQLCompletionProvider {
         // Get candidates based on context
         var candidates = await getCandidates(for: context)
 
-        // Filter by prefix
+        // Filter by prefix and compute match highlight ranges
         if !context.prefix.isEmpty {
             candidates = filterByPrefix(candidates, prefix: context.prefix)
+            populateMatchRanges(&candidates, prefix: context.prefix)
         }
 
         // Rank results
         candidates = rankResults(candidates, prefix: context.prefix, context: context)
 
         // Limit results
-        let limited = Array(candidates.prefix(maxSuggestions))
+        let limited = Array(candidates.prefix(maxSuggestions(for: context.clauseType)))
 
         return (limited, context)
     }
@@ -72,6 +103,14 @@ final class SQLCompletionProvider {
         for context: SQLContext
     ) async -> [SQLCompletionItem] {
         var items: [SQLCompletionItem] = []
+
+        // Check for favorite keyword matches first (highest priority)
+        if !favoriteKeywords.isEmpty && !context.prefix.isEmpty {
+            let lowerPrefix = context.prefix.lowercased()
+            for (keyword, value) in favoriteKeywords where keyword.lowercased().hasPrefix(lowerPrefix) {
+                items.append(.favorite(keyword: keyword, name: value.name, query: value.query))
+            }
+        }
 
         // If we have a dot prefix, we're looking for columns of a specific table
         if let dotPrefix = context.dotPrefix {
@@ -316,31 +355,12 @@ final class SQLCompletionProvider {
                 ])
                 items += dataTypeKeywords()
             } else {
-                // Pre-paren (CREATE TABLE ...) or post-paren (CREATE TABLE (...) ...)
-                items = filterKeywords([
-                    "IF NOT EXISTS",
-                ])
-                // Database-specific table options (for post-paren context)
-                switch databaseType {
-                case .mysql, .mariadb:
+                items = filterKeywords(["IF NOT EXISTS"])
+                if let options = cachedDialect?.tableOptions {
+                    items += filterKeywords(options)
+                } else {
                     items += filterKeywords([
-                        "ENGINE", "CHARSET", "COLLATE", "COMMENT",
-                        "AUTO_INCREMENT", "ROW_FORMAT", "DEFAULT CHARSET",
-                    ])
-                case .postgresql, .redshift:
-                    items += filterKeywords([
-                        "TABLESPACE", "INHERITS", "PARTITION BY",
-                        "WITH", "WITHOUT OIDS",
-                    ])
-                case .mssql:
-                    items += filterKeywords([
-                        "ON", "CLUSTERED", "NONCLUSTERED",
-                        "WITH", "TEXTIMAGE_ON",
-                    ])
-                default:
-                    items += filterKeywords([
-                        "ENGINE", "CHARSET", "COLLATE", "COMMENT",
-                        "TABLESPACE",
+                        "ENGINE", "CHARSET", "COLLATE", "COMMENT", "TABLESPACE"
                     ])
                 }
             }
@@ -400,45 +420,12 @@ final class SQLCompletionProvider {
             items += await schemaProvider.tableCompletionItems()
 
         case .unknown:
-            // Start of query - suggest statement keywords and tables
-            if databaseType == .redis {
-                // Redis: command completions
-                items = [
-                    "GET", "SET", "DEL", "EXISTS", "KEYS",
-                    "HGET", "HSET", "HGETALL", "HDEL",
-                    "LPUSH", "RPUSH", "LRANGE", "LLEN",
-                    "SADD", "SMEMBERS", "SREM", "SCARD",
-                    "ZADD", "ZRANGE", "ZREM", "ZSCORE",
-                    "EXPIRE", "TTL", "PERSIST", "TYPE",
-                    "SCAN", "HSCAN", "SSCAN", "ZSCAN",
-                    "INFO", "DBSIZE", "FLUSHDB", "SELECT",
-                    "INCR", "DECR", "APPEND", "MGET", "MSET",
-                ].map { cmd in
+            if !cachedStatementCompletions.isEmpty {
+                items = cachedStatementCompletions.map { entry in
                     SQLCompletionItem(
-                        label: cmd,
+                        label: entry.label,
                         kind: .keyword,
-                        insertText: cmd
-                    )
-                }
-            } else if databaseType == .mongodb {
-                // MongoDB: only MQL method completions, no SQL keywords
-                items = [
-                    "db.", "db.runCommand", "db.adminCommand",
-                    "db.createView", "db.createCollection",
-                    "show dbs", "show collections",
-                    ".find", ".findOne", ".aggregate",
-                    ".insertOne", ".insertMany",
-                    ".updateOne", ".updateMany",
-                    ".deleteOne", ".deleteMany",
-                    ".replaceOne",
-                    ".findOneAndUpdate", ".findOneAndReplace", ".findOneAndDelete",
-                    ".countDocuments", ".count",
-                    ".createIndex", ".dropIndex", ".drop",
-                ].map { mql in
-                    SQLCompletionItem(
-                        label: mql,
-                        kind: .keyword,
-                        insertText: mql
+                        insertText: entry.insertText
                     )
                 }
             } else {
@@ -466,141 +453,26 @@ final class SQLCompletionProvider {
     }
 
     /// SQL data type keywords (database-aware), with a slight priority boost
-    /// so they sort before generic constraint keywords in CREATE TABLE context
+    /// so they sort before generic constraint keywords in CREATE TABLE context.
+    /// Uses plugin-provided dialect data when available; falls back to common SQL types.
     private func dataTypeKeywords() -> [SQLCompletionItem] {
-        var types: [String] = [
-            // Common numeric types (all databases)
-            "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT",
-            "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL",
-            // Common string types
-            "VARCHAR", "CHAR", "TEXT",
-            // Common date/time types
-            "DATE", "TIME", "DATETIME", "TIMESTAMP",
-            // Boolean
-            "BOOLEAN", "BOOL",
-        ]
-
-        // Add database-specific types
-        switch databaseType {
-        case .mysql, .mariadb:
-            types += [
-                "MEDIUMINT", "DOUBLE PRECISION",
-                "TINYTEXT", "MEDIUMTEXT", "LONGTEXT",
-                "BLOB", "TINYBLOB", "MEDIUMBLOB", "LONGBLOB",
-                "YEAR", "ENUM", "SET", "JSON",
-                "BINARY", "VARBINARY",
-            ]
-
-        case .postgresql, .redshift:
-            types += [
-                "BIGSERIAL", "SERIAL", "SMALLSERIAL",
-                "DOUBLE PRECISION", "MONEY",
-                "CHARACTER", "CHARACTER VARYING", "CLOB",
-                "BYTEA", "UUID", "JSON", "JSONB", "XML", "ARRAY",
-                "TIMESTAMPTZ", "TIMETZ", "INTERVAL",
-                "POINT", "LINE", "LSEG", "BOX", "PATH", "POLYGON", "CIRCLE",
-                "INET", "CIDR", "MACADDR", "MACADDR8",
-            ]
-
-        case .mssql:
-            types += [
-                "NVARCHAR", "NCHAR", "NTEXT",
-                "MONEY", "SMALLMONEY",
-                "DATETIMEOFFSET", "DATETIME2", "SMALLDATETIME",
-                "BINARY", "VARBINARY", "IMAGE",
-                "UNIQUEIDENTIFIER", "XML", "SQL_VARIANT",
-                "ROWVERSION", "HIERARCHYID",
-            ]
-
-        case .oracle:
-            types += [
-                "NUMBER", "BINARY_FLOAT", "BINARY_DOUBLE",
-                "VARCHAR2", "NVARCHAR2", "NCHAR", "NCLOB",
-                "CLOB", "LONG", "RAW", "LONG RAW", "BFILE",
-                "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
-                "INTERVAL YEAR TO MONTH", "INTERVAL DAY TO SECOND",
-                "ROWID", "UROWID", "XMLTYPE", "SDO_GEOMETRY",
-            ]
-
-        case .clickhouse:
-            types += [
-                "UInt8", "UInt16", "UInt32", "UInt64", "UInt128", "UInt256",
-                "Int8", "Int16", "Int32", "Int64", "Int128", "Int256",
-                "Float32", "Float64",
-                "Decimal32", "Decimal64", "Decimal128", "Decimal256",
-                "String", "FixedString", "UUID",
-                "Date32", "DateTime64",
-                "Array", "Tuple", "Map", "Nested",
-                "Nullable", "LowCardinality",
-                "Enum8", "Enum16",
-                "IPv4", "IPv6",
-                "JSON", "Bool",
-            ]
-
-
-        case .sqlite:
-            types += [
-                "BLOB",
-            ]
-
-        case .duckdb:
-            types += [
-                "HUGEINT", "TINYINT", "SMALLINT", "REAL", "NUMERIC",
-                "CHAR", "BPCHAR",
-                "BLOB", "BYTEA",
-                "TIMESTAMP WITH TIME ZONE",
-                "LIST", "MAP", "STRUCT", "UNION", "ENUM", "UUID", "JSON", "BIT", "INTERVAL",
-            ]
-
-        case .mongodb:
-            // MongoDB types are case-sensitive — return directly without uppercasing
-            let mongoTypes = [
-                "ObjectId", "String", "Int32", "Int64", "Double", "Decimal128",
-                "Boolean", "Date", "Timestamp", "BinData", "Array", "Object",
-                "Null", "Regex", "UUID",
-            ]
-            return mongoTypes.map { typeName in
-                var item = SQLCompletionItem(
-                    label: typeName,
-                    kind: .keyword,
-                    insertText: typeName
-                )
+        if let descriptor = cachedDialect, !descriptor.dataTypes.isEmpty {
+            return descriptor.dataTypes.sorted().map { typeName in
+                var item = SQLCompletionItem(label: typeName, kind: .keyword, insertText: typeName)
                 item.sortPriority = 380
                 return item
             }
-
-        case .redis:
-            let redisTypes = [
-                "String", "List", "Set", "Sorted Set", "Hash", "Stream",
-            ]
-            return redisTypes.map { typeName in
-                var item = SQLCompletionItem(
-                    label: typeName,
-                    kind: .keyword,
-                    insertText: typeName
-                )
-                item.sortPriority = 380
-                return item
-            }
-
-        case .none:
-            // Include all types if database type is unknown
-            types += [
-                "MEDIUMINT", "DOUBLE PRECISION",
-                "TINYTEXT", "MEDIUMTEXT", "LONGTEXT",
-                "BLOB", "TINYBLOB", "MEDIUMBLOB", "LONGBLOB",
-                "CLOB", "NCHAR", "NVARCHAR",
-                "YEAR", "INTERVAL", "TIMESTAMPTZ", "TIMETZ",
-                "BIT", "JSON", "JSONB", "XML", "ARRAY",
-                "UUID", "BINARY", "VARBINARY", "BYTEA",
-                "ENUM", "SET",
-                "SERIAL", "BIGSERIAL", "SMALLSERIAL", "MONEY",
-                "POINT", "LINE", "LSEG", "BOX", "PATH", "POLYGON", "CIRCLE",
-                "INET", "CIDR", "MACADDR", "MACADDR8",
-            ]
         }
 
-        return types.map { typeName in
+        let commonTypes: [String] = [
+            "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT",
+            "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL",
+            "VARCHAR", "CHAR", "TEXT",
+            "DATE", "TIME", "DATETIME", "TIMESTAMP",
+            "BOOLEAN", "BOOL",
+            "BLOB", "JSON", "UUID"
+        ]
+        return commonTypes.map { typeName in
             var item = SQLCompletionItem.keyword(typeName)
             item.sortPriority = 380
             return item
@@ -623,8 +495,17 @@ final class SQLCompletionProvider {
 
     // MARK: - Filtering
 
+    /// Filter and rank items by prefix, returning sorted results with match ranges
+    func filterAndRank(_ items: [SQLCompletionItem], prefix: String, context: SQLContext) -> [SQLCompletionItem] {
+        var filtered = filterByPrefix(items, prefix: prefix)
+        // Clear stale match ranges before recomputing
+        for i in filtered.indices { filtered[i].matchedRanges = [] }
+        populateMatchRanges(&filtered, prefix: prefix)
+        return rankResults(filtered, prefix: prefix, context: context)
+    }
+
     /// Filter candidates by prefix (case-insensitive) with fuzzy matching support
-    private func filterByPrefix(_ items: [SQLCompletionItem], prefix: String) -> [SQLCompletionItem] {
+    func filterByPrefix(_ items: [SQLCompletionItem], prefix: String) -> [SQLCompletionItem] {
         guard !prefix.isEmpty else { return items }
 
         let lowerPrefix = prefix.lowercased()
@@ -648,7 +529,7 @@ final class SQLCompletionProvider {
     /// Fuzzy matching with scoring: returns penalty score (higher = worse),
     /// nil = no match. Uses NSString character-at-index for O(1) random
     /// access instead of Swift String indexing (LP-9).
-    private func fuzzyMatchScore(pattern: String, target: String) -> Int? {
+    func fuzzyMatchScore(pattern: String, target: String) -> Int? {
         let nsPattern = pattern as NSString
         let nsTarget = target as NSString
         let patternLen = nsPattern.length
@@ -697,10 +578,98 @@ final class SQLCompletionProvider {
         fuzzyMatchScore(pattern: pattern, target: target) != nil
     }
 
+    /// Fuzzy matching that returns both score and matched character indices
+    private func fuzzyMatchWithIndices(pattern: String, target: String) -> (score: Int, indices: [Int])? {
+        let nsPattern = pattern as NSString
+        let nsTarget = target as NSString
+        let patternLen = nsPattern.length
+        let targetLen = nsTarget.length
+
+        guard patternLen > 0, targetLen > 0 else { return nil }
+
+        var patternIdx = 0
+        var targetIdx = 0
+        var gaps = 0
+        var consecutiveMatches = 0
+        var maxConsecutive = 0
+        var lastMatchIdx = -1
+        var matchedIndices: [Int] = []
+
+        while patternIdx < patternLen && targetIdx < targetLen {
+            let pChar = nsPattern.character(at: patternIdx)
+            let tChar = nsTarget.character(at: targetIdx)
+
+            if pChar == tChar {
+                matchedIndices.append(targetIdx)
+                if lastMatchIdx == targetIdx - 1 {
+                    consecutiveMatches += 1
+                    maxConsecutive = max(maxConsecutive, consecutiveMatches)
+                } else {
+                    if lastMatchIdx >= 0 {
+                        gaps += targetIdx - lastMatchIdx - 1
+                    }
+                    consecutiveMatches = 1
+                }
+                lastMatchIdx = targetIdx
+                patternIdx += 1
+            }
+            targetIdx += 1
+        }
+
+        guard patternIdx == patternLen else { return nil }
+
+        let basePenalty = 50
+        let gapPenalty = gaps * 10
+        let consecutiveBonus = maxConsecutive * 15
+        let score = max(0, basePenalty + gapPenalty - consecutiveBonus)
+        return (score, matchedIndices)
+    }
+
+    /// Populate matchedRanges on each item based on how it matched the prefix
+    private func populateMatchRanges(_ items: inout [SQLCompletionItem], prefix: String) {
+        guard !prefix.isEmpty else { return }
+        let lowerPrefix = prefix.lowercased()
+        let nsPrefix = lowerPrefix as NSString
+
+        for i in items.indices {
+            let nsFilterText = items[i].filterText as NSString
+            let prefixRange = nsFilterText.range(of: lowerPrefix, options: .anchored)
+            if prefixRange.location != NSNotFound {
+                items[i].matchedRanges = [0..<nsPrefix.length]
+            } else {
+                let containsRange = nsFilterText.range(of: lowerPrefix)
+                if containsRange.location != NSNotFound {
+                    items[i].matchedRanges = [containsRange.location..<(containsRange.location + containsRange.length)]
+                } else if let result = fuzzyMatchWithIndices(pattern: lowerPrefix, target: items[i].filterText) {
+                    items[i].matchedRanges = indicesToRanges(result.indices)
+                }
+            }
+        }
+    }
+
+    /// Convert sorted individual character indices into contiguous ranges
+    private func indicesToRanges(_ indices: [Int]) -> [Range<Int>] {
+        guard !indices.isEmpty else { return [] }
+        var ranges: [Range<Int>] = []
+        var start = indices[0]
+        var end = indices[0]
+        for i in 1..<indices.count {
+            if indices[i] == end + 1 {
+                end = indices[i]
+            } else {
+                ranges.append(start..<(end + 1))
+                start = indices[i]
+                end = indices[i]
+            }
+        }
+        ranges.append(start..<(end + 1))
+        return ranges
+    }
+
     // MARK: - Ranking
 
     /// Rank results by relevance
-    private func rankResults(_ items: [SQLCompletionItem], prefix: String, context: SQLContext) -> [SQLCompletionItem] {
+    func rankResults(_ items: [SQLCompletionItem], prefix: String, context: SQLContext) -> [SQLCompletionItem] {
         let lowerPrefix = prefix.lowercased()
 
         return items.sorted { a, b in
@@ -711,7 +680,7 @@ final class SQLCompletionProvider {
     }
 
     /// Calculate ranking score for an item (lower = better)
-    private func calculateScore(for item: SQLCompletionItem, prefix: String, context: SQLContext) -> Int {
+    func calculateScore(for item: SQLCompletionItem, prefix: String, context: SQLContext) -> Int {
         var score = item.sortPriority
 
         // Exact prefix match bonus

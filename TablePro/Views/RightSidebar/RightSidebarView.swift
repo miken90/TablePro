@@ -17,6 +17,7 @@ struct RightSidebarView: View {
     let onSave: () -> Void
 
     var editState: MultiRowEditState
+    let databaseType: DatabaseType
 
     @State private var searchText: String = ""
 
@@ -148,17 +149,17 @@ struct RightSidebarView: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.tertiary)
-                    .font(.system(size: DesignConstants.FontSize.small))
+                    .font(.system(size: ThemeEngine.shared.activeTheme.typography.small))
                 TextField("Search for field...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: DesignConstants.FontSize.small))
+                    .font(.system(size: ThemeEngine.shared.activeTheme.typography.small))
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.tertiary)
-                            .font(.system(size: DesignConstants.FontSize.small))
+                            .font(.system(size: ThemeEngine.shared.activeTheme.typography.small))
                     }
                     .buttonStyle(.plain)
                 }
@@ -172,16 +173,12 @@ struct RightSidebarView: View {
                 Section {
                     if filtered.isEmpty && !searchText.isEmpty {
                         Text("No matching fields")
-                            .font(.system(size: DesignConstants.FontSize.small))
+                            .font(.system(size: ThemeEngine.shared.activeTheme.typography.small))
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity)
                     } else {
-                        ForEach(filtered, id: \.columnIndex) { field in
-                            if contentMode == .editRow {
-                                editableFieldRow(field, at: field.columnIndex)
-                            } else {
-                                readonlyFieldRow(field)
-                            }
+                        ForEach(filtered, id: \.id) { field in
+                            fieldDetailRow(field, at: field.columnIndex, isEditable: contentMode == .editRow)
                         }
                     }
                 } header: {
@@ -195,6 +192,7 @@ struct RightSidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
 
             if contentMode == .editRow && editState.hasEdits {
                 Divider()
@@ -211,34 +209,30 @@ struct RightSidebarView: View {
     }
 
     @ViewBuilder
-    private func editableFieldRow(_ field: FieldEditState, at index: Int) -> some View {
-        EditableFieldView(
-            columnName: field.columnName,
-            columnTypeEnum: field.columnTypeEnum,
-            isLongText: field.isLongText,
-            value: Binding(
-                get: { field.pendingValue ?? field.originalValue ?? "" },
-                set: { editState.updateField(at: index, value: $0) }
+    private func fieldDetailRow(_ field: FieldEditState, at index: Int, isEditable: Bool) -> some View {
+        FieldDetailView(
+            context: FieldEditorContext(
+                columnName: field.columnName,
+                columnType: field.columnTypeEnum,
+                isLongText: field.isLongText,
+                value: isEditable ? Binding(
+                    get: { field.pendingValue ?? field.originalValue ?? "" },
+                    set: { editState.updateField(at: index, value: $0) }
+                ) : .constant(field.originalValue ?? ""),
+                originalValue: field.originalValue,
+                hasMultipleValues: field.hasMultipleValues,
+                isReadOnly: !isEditable
             ),
-            originalValue: field.originalValue,
-            hasMultipleValues: field.hasMultipleValues,
             isPendingNull: field.isPendingNull,
             isPendingDefault: field.isPendingDefault,
             isModified: field.hasEdit,
+            isTruncated: field.isTruncated,
+            isLoadingFullValue: field.isLoadingFullValue,
+            databaseType: databaseType,
             onSetNull: { editState.setFieldToNull(at: index) },
             onSetDefault: { editState.setFieldToDefault(at: index) },
             onSetEmpty: { editState.setFieldToEmpty(at: index) },
             onSetFunction: { editState.setFieldToFunction(at: index, function: $0) }
-        )
-    }
-
-    @ViewBuilder
-    private func readonlyFieldRow(_ field: FieldEditState) -> some View {
-        ReadOnlyFieldView(
-            columnName: field.columnName,
-            columnTypeEnum: field.columnTypeEnum,
-            isLongText: field.isLongText,
-            value: field.originalValue
         )
     }
 }
@@ -266,7 +260,8 @@ struct RightSidebarView_Previews: PreviewProvider {
             isEditable: false,
             isRowDeleted: false,
             onSave: {},
-            editState: MultiRowEditState()
+            editState: MultiRowEditState(),
+            databaseType: .mysql
         )
         .frame(width: 280, height: 400)
     }

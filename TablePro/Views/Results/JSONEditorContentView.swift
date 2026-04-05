@@ -5,7 +5,6 @@
 //  SwiftUI popover content for editing JSON/JSONB column values with formatting and validation.
 //
 
-import AppKit
 import SwiftUI
 
 struct JSONEditorContentView: View {
@@ -24,12 +23,12 @@ struct JSONEditorContentView: View {
         self.initialValue = initialValue
         self.onCommit = onCommit
         self.onDismiss = onDismiss
-        self._text = State(initialValue: initialValue?.prettyPrintedAsJson() ?? initialValue ?? "")
+        self._text = State(initialValue: initialValue ?? "")
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            JSONSyntaxTextView(text: $text)
+            JSONSyntaxTextView(text: $text, wordWrap: true)
 
             Divider()
 
@@ -90,122 +89,5 @@ struct JSONEditorContentView: View {
             return nil
         }
         return compactString
-    }
-}
-
-// MARK: - JSON Syntax Highlighted Text View
-
-private struct JSONSyntaxTextView: NSViewRepresentable {
-    @Binding var text: String
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        guard let textView = scrollView.documentView as? NSTextView else {
-            return scrollView
-        }
-
-        textView.isEditable = true
-        textView.isSelectable = true
-        textView.font = NSFont.monospacedSystemFont(ofSize: DesignConstants.FontSize.medium, weight: .regular)
-        textView.textContainerInset = NSSize(width: 8, height: 8)
-        textView.backgroundColor = NSColor.textBackgroundColor
-        textView.textColor = NSColor.labelColor
-        textView.isAutomaticQuoteSubstitutionEnabled = false
-        textView.isAutomaticDashSubstitutionEnabled = false
-        textView.isAutomaticTextReplacementEnabled = false
-        textView.isAutomaticSpellingCorrectionEnabled = false
-        textView.isGrammarCheckingEnabled = false
-        textView.allowsUndo = true
-
-        textView.textContainer?.widthTracksTextView = true
-        textView.isHorizontallyResizable = false
-
-        textView.delegate = context.coordinator
-        textView.string = text
-        Self.applyHighlighting(to: textView)
-
-        return scrollView
-    }
-
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
-        if textView.string != text, !context.coordinator.isUpdating {
-            textView.string = text
-            Self.applyHighlighting(to: textView)
-        }
-    }
-
-    // MARK: - Syntax Highlighting
-
-    static func applyHighlighting(to textView: NSTextView) {
-        guard let textStorage = textView.textStorage else { return }
-        let length = textStorage.length
-        guard length > 0 else { return }
-
-        let fullRange = NSRange(location: 0, length: length)
-        let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: DesignConstants.FontSize.medium, weight: .regular)
-        let content = textStorage.string
-        let maxHighlightLength = 10_000
-        let highlightRange: NSRange
-        if length > maxHighlightLength {
-            highlightRange = NSRange(location: 0, length: maxHighlightLength)
-        } else {
-            highlightRange = fullRange
-        }
-
-        textStorage.beginEditing()
-
-        // Reset to base style
-        textStorage.addAttribute(.font, value: font, range: fullRange)
-        textStorage.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
-
-        applyPattern(JSONHighlightPatterns.string, color: .systemRed, in: textStorage, content: content, range: highlightRange)
-
-        for match in JSONHighlightPatterns.key.matches(in: content, range: highlightRange) {
-            let captureRange = match.range(at: 1)
-            if captureRange.location != NSNotFound {
-                textStorage.addAttribute(.foregroundColor, value: NSColor.systemBlue, range: captureRange)
-            }
-        }
-
-        applyPattern(JSONHighlightPatterns.number, color: .systemPurple, in: textStorage, content: content, range: highlightRange)
-        applyPattern(JSONHighlightPatterns.booleanNull, color: .systemOrange, in: textStorage, content: content, range: highlightRange)
-
-        textStorage.endEditing()
-    }
-
-    private static func applyPattern(
-        _ regex: NSRegularExpression,
-        color: NSColor,
-        in textStorage: NSTextStorage,
-        content: String,
-        range: NSRange
-    ) {
-        for match in regex.matches(in: content, range: range) {
-            textStorage.addAttribute(.foregroundColor, value: color, range: match.range)
-        }
-    }
-
-    // MARK: - Coordinator
-
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: JSONSyntaxTextView
-        var isUpdating = false
-
-        init(_ parent: JSONSyntaxTextView) {
-            self.parent = parent
-        }
-
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            isUpdating = true
-            parent.text = textView.string
-            JSONSyntaxTextView.applyHighlighting(to: textView)
-            isUpdating = false
-        }
     }
 }

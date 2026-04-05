@@ -1,7 +1,6 @@
 //
 //  InstalledPluginsView.swift
 //  TablePro
-//
 
 import AppKit
 import SwiftUI
@@ -12,59 +11,31 @@ struct InstalledPluginsView: View {
     private let pluginManager = PluginManager.shared
 
     @State private var selectedPluginId: String?
+    @State private var searchText = ""
     @State private var showErrorAlert = false
     @State private var errorAlertTitle = ""
     @State private var errorAlertMessage = ""
     @State private var dismissedRestartBanner = false
 
+    private var filteredPlugins: [PluginEntry] {
+        if searchText.isEmpty { return pluginManager.plugins }
+        return pluginManager.plugins.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
     var body: some View {
-        Form {
+        VStack(spacing: 0) {
             if pluginManager.needsRestart && !dismissedRestartBanner {
-                Section {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.clockwise.circle.fill")
-                            .foregroundStyle(.orange)
-                        Text("Restart TablePro to fully unload removed plugins.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button {
-                            dismissedRestartBanner = true
-                        } label: {
-                            Image(systemName: "xmark")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                restartBanner
             }
 
-            Section("Installed Plugins") {
-                ForEach(pluginManager.plugins) { plugin in
-                    pluginRow(plugin)
-                }
-            }
+            HSplitView {
+                pluginList
+                    .frame(minWidth: 200, idealWidth: 240, maxWidth: 280)
 
-            Section {
-                HStack {
-                    Button("Install from File...") {
-                        installFromFile()
-                    }
-                    .disabled(pluginManager.isInstalling)
-
-                    if pluginManager.isInstalling {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                }
-            }
-
-            if let selected = selectedPlugin {
-                pluginDetailSection(selected)
+                detailPane
+                    .frame(minWidth: 340)
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             guard let provider = providers.first,
                   provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) else {
@@ -88,66 +59,124 @@ struct InstalledPluginsView: View {
         }
     }
 
+    // MARK: - Restart Banner
+
+    private var restartBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(.yellow)
+            Text("Restart TablePro to fully unload removed plugins.")
+                .font(.callout)
+            Spacer()
+            Button("Dismiss") { dismissedRestartBanner = true }
+                .buttonStyle(.borderless)
+                .font(.callout)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Plugin List
+
+    private var pluginList: some View {
+        VStack(spacing: 0) {
+            TextField("Filter...", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+
+            List(selection: $selectedPluginId) {
+                ForEach(filteredPlugins) { plugin in
+                    pluginRow(plugin)
+                        .tag(plugin.id)
+                }
+            }
+            .listStyle(.inset)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                listBottomBar
+            }
+        }
+        .onChange(of: searchText) {
+            if let selectedPluginId, !filteredPlugins.contains(where: { $0.id == selectedPluginId }) {
+                self.selectedPluginId = nil
+            }
+        }
+    }
+
+    private var listBottomBar: some View {
+        HStack(spacing: 4) {
+            Button {
+                installFromFile()
+            } label: {
+                Image(systemName: "plus")
+                    .frame(width: 24, height: 20)
+            }
+            .buttonStyle(.borderless)
+            .disabled(pluginManager.isInstalling)
+            .accessibilityLabel(String(localized: "Install plugin from file"))
+
+            Button {
+                if let plugin = selectedPlugin {
+                    uninstallPlugin(plugin)
+                }
+            } label: {
+                Image(systemName: "minus")
+                    .frame(width: 24, height: 20)
+            }
+            .buttonStyle(.borderless)
+            .disabled(selectedPlugin == nil || selectedPlugin?.source == .builtIn)
+            .accessibilityLabel(
+                selectedPlugin.map { String(localized: "Uninstall \($0.name)") }
+                    ?? String(localized: "Uninstall plugin")
+            )
+
+            Spacer()
+
+            if pluginManager.isInstalling {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+    }
+
     // MARK: - Plugin Row
 
     @ViewBuilder
     private func pluginRow(_ plugin: PluginEntry) -> some View {
-        HStack {
-            pluginIcon(plugin.iconName)
-                .frame(width: 20)
-                .foregroundStyle(plugin.isEnabled ? .primary : .tertiary)
+        HStack(spacing: 8) {
+            PluginIconView(name: plugin.pluginIconName)
+                .font(.title3)
+                .frame(width: 24, height: 24)
+                .foregroundStyle(plugin.isEnabled ? .secondary : .tertiary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(plugin.name)
+                    .lineLimit(1)
                     .foregroundStyle(plugin.isEnabled ? .primary : .secondary)
 
                 HStack(spacing: 4) {
                     Text("v\(plugin.version)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text(plugin.source == .builtIn ? "Built-in" : "User")
-                        .font(.caption)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(
-                            plugin.source == .builtIn
-                                ? Color.blue.opacity(0.15)
-                                : Color.green.opacity(0.15),
-                            in: RoundedRectangle(cornerRadius: 3)
-                        )
-                        .foregroundStyle(plugin.source == .builtIn ? .blue : .green)
+                    if let capability = plugin.capabilities.first {
+                        Text("·")
+                        Text(capability.displayName)
+                    }
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            Toggle("", isOn: Binding(
-                get: { plugin.isEnabled },
-                set: { pluginManager.setEnabled($0, pluginId: plugin.id) }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
+            Text(plugin.source == .builtIn ? String(localized: "Built-in") : String(localized: "User"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedPluginId = selectedPluginId == plugin.id ? nil : plugin.id
-            }
-        }
+        .padding(.vertical, 2)
     }
 
-    @ViewBuilder
-    private func pluginIcon(_ name: String) -> some View {
-        if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
-            Image(systemName: name)
-        } else {
-            Image(name)
-                .renderingMode(.template)
-        }
-    }
-
-    // MARK: - Detail Section
+    // MARK: - Detail Pane
 
     private var selectedPlugin: PluginEntry? {
         guard let id = selectedPluginId else { return nil }
@@ -155,52 +184,106 @@ struct InstalledPluginsView: View {
     }
 
     @ViewBuilder
-    private func pluginDetailSection(_ plugin: PluginEntry) -> some View {
-        Section(plugin.name) {
-            LabeledContent("Version:", value: plugin.version)
-            LabeledContent("Bundle ID:", value: plugin.id)
-            LabeledContent("Source:", value: plugin.source == .builtIn
-                ? String(localized: "Built-in")
-                : String(localized: "User-installed"))
+    private var detailPane: some View {
+        if let selected = selectedPlugin {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text(selected.name)
+                            .font(.title3.weight(.semibold))
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { selected.isEnabled },
+                            set: { pluginManager.setEnabled($0, pluginId: selected.id) }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .accessibilityLabel(String(localized: "Enable \(selected.name)"))
+                    }
 
-            if !plugin.capabilities.isEmpty {
-                LabeledContent("Capabilities:") {
-                    Text(plugin.capabilities.map(\.displayName).joined(separator: ", "))
-                }
-            }
+                    Text("v\(selected.version) · \(selected.source == .builtIn ? String(localized: "Built-in") : String(localized: "User-installed"))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-            if let typeId = plugin.databaseTypeId {
-                LabeledContent("Database Type:", value: typeId)
+                    if !selected.pluginDescription.isEmpty {
+                        Text(selected.pluginDescription)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
 
-                if !plugin.additionalTypeIds.isEmpty {
-                    LabeledContent("Also handles:", value: plugin.additionalTypeIds.joined(separator: ", "))
-                }
+                    Divider()
 
-                if let port = plugin.defaultPort {
-                    LabeledContent("Default Port:", value: "\(port)")
-                }
-            }
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                        GridRow {
+                            Text("Bundle ID")
+                                .foregroundStyle(.secondary)
+                                .gridColumnAlignment(.leading)
+                            Text(selected.id)
+                                .textSelection(.enabled)
+                                .gridColumnAlignment(.leading)
+                        }
 
-            if !plugin.pluginDescription.isEmpty {
-                Text(plugin.pluginDescription)
+                        if !selected.capabilities.isEmpty {
+                            GridRow {
+                                Text("Capabilities")
+                                    .foregroundStyle(.secondary)
+                                Text(selected.capabilities.map(\.displayName).joined(separator: ", "))
+                            }
+                        }
+
+                        if let typeId = selected.databaseTypeId {
+                            GridRow {
+                                Text("Database Type")
+                                    .foregroundStyle(.secondary)
+                                Text(typeId)
+                            }
+
+                            if !selected.additionalTypeIds.isEmpty {
+                                GridRow {
+                                    Text("Also handles")
+                                        .foregroundStyle(.secondary)
+                                    Text(selected.additionalTypeIds.joined(separator: ", "))
+                                }
+                            }
+
+                            if let port = selected.defaultPort {
+                                GridRow {
+                                    Text("Default Port")
+                                        .foregroundStyle(.secondary)
+                                    Text("\(port)")
+                                }
+                            }
+                        }
+                    }
                     .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
 
-            if let settable = pluginManager.pluginInstances[plugin.id] as? any SettablePluginDiscoverable,
-               let pluginSettings = settable.settingsView() {
-                Divider()
-                pluginSettings
-            }
+                    if let settable = pluginManager.pluginInstances[selected.id] as? any SettablePluginDiscoverable,
+                       let pluginSettings = settable.settingsView() {
+                        Divider()
+                        pluginSettings
+                    }
 
-            if plugin.source == .userInstalled {
-                HStack {
-                    Spacer()
-                    Button("Uninstall", role: .destructive) {
-                        uninstallPlugin(plugin)
+                    if selected.source == .userInstalled {
+                        Divider()
+                        Button("Uninstall", role: .destructive) {
+                            uninstallPlugin(selected)
+                        }
                     }
                 }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "puzzlepiece.extension")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.tertiary)
+                Text("Select a Plugin")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -269,5 +352,5 @@ private extension PluginCapability {
 
 #Preview {
     InstalledPluginsView()
-        .frame(width: 550, height: 500)
+        .frame(width: 650, height: 500)
 }

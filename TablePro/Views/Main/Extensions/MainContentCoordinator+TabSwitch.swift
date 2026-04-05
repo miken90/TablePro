@@ -18,6 +18,21 @@ extension MainContentCoordinator {
         isHandlingTabSwitch = true
         defer { isHandlingTabSwitch = false }
 
+        // Persist the outgoing tab's unsaved changes and filter state so they survive the switch
+        if let oldId = oldTabId,
+           let oldIndex = tabManager.tabs.firstIndex(where: { $0.id == oldId })
+        {
+            if changeManager.hasChanges {
+                tabManager.tabs[oldIndex].pendingChanges = changeManager.saveState()
+            }
+            tabManager.tabs[oldIndex].filterState = filterStateManager.saveToTabState()
+            if let tableName = tabManager.tabs[oldIndex].tableName {
+                filterStateManager.saveLastFilters(for: tableName)
+            }
+            saveColumnVisibilityToTab()
+            saveColumnLayoutForTable()
+        }
+
         if tabManager.tabs.count > 2 {
             let activeIds: Set<UUID> = Set([oldTabId, newTabId].compactMap { $0 })
             evictInactiveTabs(excluding: activeIds)
@@ -30,15 +45,20 @@ extension MainContentCoordinator {
             // Restore filter state for new tab
             filterStateManager.restoreFromTabState(newTab.filterState)
 
+            // Restore column visibility for new tab
+            columnVisibilityManager.restoreFromColumnLayout(newTab.columnLayout.hiddenColumns)
+
             selectedRowIndices = newTab.selectedRowIndices
             AppState.shared.isCurrentTabEditable = newTab.isEditable && !newTab.isView && newTab.tableName != nil
             toolbarState.isTableTab = newTab.tabType == .table
+            toolbarState.isResultsCollapsed = newTab.isResultsCollapsed
+            AppState.shared.isTableTab = newTab.tabType == .table
 
             // Configure change manager without triggering reload yet — we'll fire a single
             // reloadVersion bump below after everything is set up.
             let pendingState = newTab.pendingChanges
             if pendingState.hasChanges {
-                changeManager.restoreState(from: pendingState, tableName: newTab.tableName ?? "")
+                changeManager.restoreState(from: pendingState, tableName: newTab.tableName ?? "", databaseType: connection.type)
             } else {
                 changeManager.configureForTable(
                     tableName: newTab.tableName ?? "",
@@ -103,6 +123,9 @@ extension MainContentCoordinator {
         } else {
             AppState.shared.isCurrentTabEditable = false
             toolbarState.isTableTab = false
+            toolbarState.isResultsCollapsed = false
+            AppState.shared.isTableTab = false
+            filterStateManager.clearAll()
         }
     }
 
@@ -115,11 +138,23 @@ extension MainContentCoordinator {
                 && !$0.pendingChanges.hasChanges
         }
 
+        // Sort by oldest first, breaking ties by largest estimated footprint first
         let sorted = candidates.sorted {
-            ($0.lastExecutedAt ?? .distantFuture) < ($1.lastExecutedAt ?? .distantFuture)
+            let t0 = $0.lastExecutedAt ?? .distantFuture
+            let t1 = $1.lastExecutedAt ?? .distantFuture
+            if t0 != t1 { return t0 < t1 }
+            let size0 = MemoryPressureAdvisor.estimatedFootprint(
+                rowCount: $0.rowBuffer.rows.count,
+                columnCount: $0.rowBuffer.columns.count
+            )
+            let size1 = MemoryPressureAdvisor.estimatedFootprint(
+                rowCount: $1.rowBuffer.rows.count,
+                columnCount: $1.rowBuffer.columns.count
+            )
+            return size0 > size1
         }
 
-        let maxInactiveLoaded = 2
+        let maxInactiveLoaded = MemoryPressureAdvisor.budgetForInactiveTabs()
         guard sorted.count > maxInactiveLoaded else { return }
         let toEvict = sorted.dropLast(maxInactiveLoaded)
 

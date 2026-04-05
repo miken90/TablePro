@@ -51,10 +51,10 @@ extension TableViewCoordinator {
         let columnIndex = column - 1
         guard !changeManager.isRowDeleted(row) else { return }
 
-        // MongoDB _id is immutable — block editing
-        if databaseType == .mongodb,
+        let immutable = databaseType.map { PluginManager.shared.immutableColumns(for: $0) } ?? []
+        if !immutable.isEmpty,
            columnIndex < rowProvider.columns.count,
-           rowProvider.columns[columnIndex] == "_id" {
+           immutable.contains(rowProvider.columns[columnIndex]) {
             return
         }
 
@@ -97,10 +97,23 @@ extension TableViewCoordinator {
             return
         }
 
-        // JSON columns use JSON editor popover
+        // JSON columns (or text columns containing JSON) use JSON editor popover
         if columnIndex < rowProvider.columnTypes.count,
            rowProvider.columnTypes[columnIndex].isJsonType {
             showJSONEditorPopover(tableView: sender, row: row, column: column, columnIndex: columnIndex)
+            return
+        }
+
+        if let cellValue = rowProvider.value(atRow: row, column: columnIndex),
+           cellValue.looksLikeJson {
+            showJSONEditorPopover(tableView: sender, row: row, column: column, columnIndex: columnIndex)
+            return
+        }
+
+        // BLOB columns use hex editor popover
+        if columnIndex < rowProvider.columnTypes.count,
+           rowProvider.columnTypes[columnIndex].isBlobType {
+            showBlobEditorPopover(tableView: sender, row: row, column: column, columnIndex: columnIndex)
             return
         }
 

@@ -10,9 +10,11 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @Binding var settings: GeneralSettings
+    @Binding var tabSettings: TabSettings
     var updaterBridge: UpdaterBridge
-    @Bindable private var settingsManager = AppSettingsManager.shared
+    var onResetAll: () -> Void
     @State private var initialLanguage: AppLanguage?
+    @State private var showResetConfirmation = false
 
     private static let standardTimeouts = [10, 20, 30, 40, 50, 60, 90, 120, 180, 300, 600]
 
@@ -76,15 +78,35 @@ struct GeneralSettingsView: View {
             }
 
             Section("Tabs") {
-                Toggle("Enable preview tabs", isOn: $settingsManager.tabs.enablePreviewTabs)
+                Toggle("Enable preview tabs", isOn: $tabSettings.enablePreviewTabs)
 
                 Text("Single-clicking a table opens a temporary tab that gets replaced on next click.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Toggle("Group all connections in one window", isOn: $tabSettings.groupAllConnectionTabs)
+
+                Text("When enabled, tabs from different connections share the same window instead of opening separate windows.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button(String(localized: "Reset All Settings to Defaults"), role: .destructive) {
+                    showResetConfirmation = true
+                }
             }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .alert(String(localized: "Reset All Settings"), isPresented: $showResetConfirmation) {
+            Button(String(localized: "Reset"), role: .destructive) {
+                onResetAll()
+            }
+            Button(String(localized: "Cancel"), role: .cancel) {}
+        } message: {
+            Text("This will reset all settings across every section to their default values.")
+        }
         .onAppear {
             if initialLanguage == nil {
                 initialLanguage = settings.language
@@ -97,7 +119,9 @@ struct GeneralSettingsView: View {
 #Preview {
     GeneralSettingsView(
         settings: .constant(.default),
-        updaterBridge: UpdaterBridge()
+        tabSettings: .constant(.default),
+        updaterBridge: UpdaterBridge(),
+        onResetAll: {}
     )
     .frame(width: 450, height: 300)
 }
