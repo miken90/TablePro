@@ -50,7 +50,9 @@ Before changing anything, verify all of these:
    - If there are uncommitted changes, ask whether they should be included.
 4. Dependency state is healthy.
    - `npm ci` if needed.
-5. Validation passes for current code.
+5. No TablePro process running (`tasklist | grep -i tablepro`).
+   - A running exe will lock the release binary and cause `Access denied` errors.
+6. Validation passes for current code.
 
 Run from `tablepro-windows/`:
 ```bash
@@ -72,32 +74,66 @@ If these fail, fix the source first. Do not ship around failing validation.
 Use the existing script from `tablepro-windows/`:
 
 ```bash
-powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version 0.2.0
+cd tablepro-windows && powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version X.Y.Z
 ```
 
-This updates:
+This updates (via regex, preserving formatting):
 - `tablepro-windows/package.json`
 - `tablepro-windows/src-tauri/tauri.conf.json`
 - `tablepro-windows/src-tauri/Cargo.toml`
 
 Do not hand-edit those three files unless the script is broken and you are fixing the script itself.
 
-## Step 2: Build release artifacts
+## Step 2: Update CHANGELOG.md
 
-Use the existing script from `tablepro-windows/`:
+Move `[Unreleased]` entries to `[X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`.
+Add new empty `[Unreleased]` section at top.
+
+## Step 3: Commit + push
+
+Commit version bump + changelog:
+```bash
+git add CHANGELOG.md tablepro-windows/package.json tablepro-windows/src-tauri/tauri.conf.json tablepro-windows/src-tauri/Cargo.toml
+git commit -m "feat: vX.Y.Z — <summary>"
+git push origin main
+```
+
+## Step 4: Build release artifacts
+
+**CRITICAL: Use PowerShell** — `npx tauri build` via bash loses cargo subprocess output on Windows. Always invoke build scripts through PowerShell.
+
+From `tablepro-windows/`:
 
 ```bash
+# Portable only
 powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Target portable
+
+# Installer only (MSI + NSIS)
 powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Target installer
+
+# Both
 powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Target all
 ```
 
 What the script does:
 - builds the frontend with Vite
-- builds release driver DLLs
+- builds all 6 release driver DLLs (postgres, mysql, mssql, sqlite, mongodb, redis)
+- cleans stale bundle artifacts before building
 - builds the Tauri app
 - packages portable ZIP when target includes `portable`
 - builds MSI + NSIS when target includes `installer`
+
+### If build-release.ps1 fails on installer
+
+The script handles unsigned builds by disabling `createUpdaterArtifacts`. If it still fails:
+
+1. Build exe directly: `cd src-tauri && cargo build --release`
+2. Then run bundler via PowerShell:
+   ```bash
+   echo '{"build":{"beforeBuildCommand":""},"bundle":{"createUpdaterArtifacts":false}}' > tauri-unsigned-build.json
+   powershell -ExecutionPolicy Bypass -Command "npx tauri build --config tauri-unsigned-build.json"
+   ```
+3. Check artifacts exist in `src-tauri/target/release/bundle/nsis/` and `msi/`
 
 ## Expected outputs
 
@@ -107,14 +143,16 @@ Expected artifact pattern:
 
 Portable staging should include:
 - `TablePro.exe`
-- `plugins/driver_*.dll`
+- `plugins/driver_*.dll` + `*.capabilities.json`
 - optional `WebView2Loader.dll`
 - optional `resources/`
 
 ### Installer
 Expected artifact locations:
-- `tablepro-windows/src-tauri/target/release/bundle/msi/*.msi`
-- `tablepro-windows/src-tauri/target/release/bundle/nsis/*.exe`
+- `tablepro-windows/src-tauri/target/release/bundle/msi/TablePro_<version>_x64_en-US.msi`
+- `tablepro-windows/src-tauri/target/release/bundle/nsis/TablePro_<version>_x64-setup.exe`
+
+**ALWAYS verify** artifact filenames contain the correct version. If they show an old version, the build reused stale artifacts.
 
 ## Signing and updater behavior
 
@@ -122,9 +160,23 @@ Expected artifact locations:
 
 Important behavior:
 - if `TAURI_SIGNING_PRIVATE_KEY` or `TAURI_SIGNING_PRIVATE_KEY_PATH` is available, the build keeps updater artifacts enabled
-- if no signing key is available, the script disables updater artifacts for that local build and still allows a local installer build path
+- if no signing key is available, the script disables updater artifacts and sets `beforeBuildCommand: ""` (since frontend/drivers were already built)
 
 That unsigned fallback is expected for local release testing. Do not treat it as a release-script failure by itself.
+
+## Step 5: Create GitHub release
+
+Write release notes to a temp file, then use `gh`:
+
+```bash
+gh release create vX.Y.Z "<installer-path>" --repo miken90/TablePro --title "TablePro vX.Y.Z" --notes-file <notes-file> --draft
+```
+
+If hooks block artifact access, provide the exact `!` command for the user to run in terminal.
+
+After user reviews draft: `gh release edit vX.Y.Z --draft=false --repo miken90/TablePro`
+
+**Target repo:** `miken90/TablePro` (origin). Never release to upstream.
 
 ## CI verification contract
 
@@ -141,39 +193,38 @@ It validates:
 
 Use this workflow as the release quality bar.
 
-## Optional git flow
-
-If the user wants a tagged release, use the normal git workflow after validation and artifact generation:
-1. review changed files
-2. commit the version bump and any intended release changes
-3. create a tag if requested
-4. push branch and tag only with explicit user approval
-
-Keep git steps generic unless the user asked for a full release publication flow.
-
 ## Final checklist
 
 A Windows release is ready only when all are true:
-- version was bumped by `scripts/bump-version.ps1`
-- validation commands passed
-- chosen artifact target built successfully
-- expected ZIP and/or MSI/NSIS outputs exist
-- signing-key behavior is understood for the current environment
-- CI workflow expectations still match the local process
+- [ ] version was bumped by `scripts/bump-version.ps1`
+- [ ] CHANGELOG.md updated
+- [ ] validation commands passed
+- [ ] no TablePro process running during build
+- [ ] chosen artifact target built successfully
+- [ ] artifact filenames contain correct version
+- [ ] expected ZIP and/or MSI/NSIS outputs exist
+- [ ] signing-key behavior is understood for the current environment
+- [ ] changes committed and pushed
+- [ ] GitHub release created (draft or published)
 
 ## Edge cases
 
 - Commands must run from `tablepro-windows/` unless the command explicitly targets `src-tauri/`.
 - Do not claim prerelease semver support. The current bump script allows only `X.Y.Z`.
 - Portable and installer builds are not the same artifact. Confirm which one the user wants.
-- Release builds depend on driver DLL builds. If a new driver was added but not added to scripts, release output will be incomplete.
+- Release builds depend on driver DLL builds. If a new driver was added but not added to `build:drivers` in package.json, release output will be incomplete.
 - Local builds without signing keys may skip updater artifacts. That is expected.
+- **Always kill TablePro.exe before building** — a running exe locks the release binary.
+- **npx tauri build via bash loses cargo output** — always use PowerShell wrapper.
 
 ## Quick workflow
 
-1. Confirm target version and artifact type.
-2. Run validation commands.
-3. Run `scripts/bump-version.ps1`.
-4. Run `scripts/build-release.ps1` with the requested target.
-5. Verify output files.
-6. If requested, commit/tag/push with explicit approval.
+1. Confirm target version, artifact type, and target repo.
+2. Kill any running TablePro process.
+3. Run validation commands.
+4. Run `scripts/bump-version.ps1`.
+5. Update CHANGELOG.md.
+6. Commit + push.
+7. Run `scripts/build-release.ps1` with the requested target (via PowerShell).
+8. Verify output files (version in filename!).
+9. Create GitHub release with `gh release create`.

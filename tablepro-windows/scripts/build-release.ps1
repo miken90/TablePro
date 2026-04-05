@@ -83,11 +83,17 @@ function Invoke-TauriReleaseBuild {
     $tempConfig = Join-Path ([System.IO.Path]::GetTempPath()) ("tablepro-tauri-release-{0}.json" -f [Guid]::NewGuid())
     $hasSigningKey = -not [string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)
 
+    # Clean stale bundle artifacts so we never mistake old builds for new ones
+    $msiDir = Join-Path $bundleDir "msi"
+    $nsisDir = Join-Path $bundleDir "nsis"
+    if (Test-Path $msiDir) { Remove-Item "$msiDir\*" -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $nsisDir) { Remove-Item "$nsisDir\*" -Force -ErrorAction SilentlyContinue }
+
     if ($hasSigningKey) {
         '{"build":{"beforeBuildCommand":""}}' | Set-Content -Path $tempConfig -Encoding utf8
     } else {
         Write-Host "[release] TAURI_SIGNING_PRIVATE_KEY not set; disabling updater artifacts for this local build." -ForegroundColor Yellow
-        '{"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Path $tempConfig -Encoding utf8
+        '{"build":{"beforeBuildCommand":""},"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Path $tempConfig -Encoding utf8
     }
 
     try {
