@@ -13,7 +13,7 @@ import logoIcon from "../../assets/logo-icon.svg";
 declare const __APP_VERSION__: string;
 
 export function WelcomeView() {
-  const { connections, groups, loadConnections, loadGroups, connect, getStatus, deleteGroup, deleteConnection, saveConnection, saveGroup } =
+  const { connections, groups, loadConnections, loadGroups, connect, getStatus, deleteGroup, deleteConnection, saveConnection, saveGroup, activeTagFilter, activeGroupFilter, setTagFilter, setGroupFilter } =
     useConnectionStore();
   const [showForm, setShowForm] = useState(false);
   const [editingConn, setEditingConn] = useState<SavedConnection | undefined>();
@@ -84,10 +84,17 @@ export function WelcomeView() {
     [groups],
   );
 
-  const filteredConns = useMemo(() => filterConnections(connList, search), [connList, search]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- activeTagFilter/activeGroupFilter trigger re-filter via store
+  const filteredConns = useMemo(() => filterConnections(connList, search), [connList, search, activeTagFilter, activeGroupFilter]);
 
   const filteredConnIds = useMemo(() => new Set(filteredConns.map((c) => c.id)), [filteredConns]);
   const ungrouped = useMemo(() => filteredConns.filter((c) => !c.groupId), [filteredConns]);
+
+  const clearAllFilters = useCallback(() => {
+    setSearch("");
+    setTagFilter([]);
+    setGroupFilter(null);
+  }, [setTagFilter, setGroupFilter]);
 
   if (showForm) {
     return (
@@ -101,7 +108,8 @@ export function WelcomeView() {
 
   const hasConnections = connList.length > 0 || groupList.length > 0;
   const isSearching = search.trim() !== "";
-  const hasSearchResults = isSearching ? filteredConns.length > 0 : hasConnections;
+  const isFiltering = activeTagFilter.length > 0 || activeGroupFilter !== null;
+  const hasSearchResults = (isSearching || isFiltering) ? filteredConns.length > 0 : hasConnections;
 
   return (
     <div className="flex h-full flex-col items-center overflow-y-auto p-8">
@@ -115,7 +123,7 @@ export function WelcomeView() {
 
         {hasConnections && (
           <div className="w-full">
-            <ConnectionSearch value={search} onChange={setSearch} />
+            <ConnectionSearch value={search} onChange={setSearch} connections={connList} />
           </div>
         )}
 
@@ -134,20 +142,24 @@ export function WelcomeView() {
               ungrouped={ungrouped}
               connectingId={connectingId}
               isSearching={isSearching}
+              isFiltering={isFiltering}
               getStatus={getStatus}
               onConnect={handleConnect}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onDuplicate={handleDuplicate}
               onDeleteGroup={deleteGroup}
+              onClearFilters={clearAllFilters}
             />
           ) : (
             <div className="w-full py-8 text-center">
               <p className="text-sm text-text-secondary">
-                No connections matching &quot;{search}&quot;
+                {isSearching
+                  ? <>No connections matching &quot;{search}&quot;</>
+                  : "No connections match the active filters"}
               </p>
-              <button onClick={() => setSearch("")} className="mt-1 text-xs text-accent-blue hover:underline">
-                Clear search
+              <button onClick={clearAllFilters} className="mt-1 text-xs text-accent-blue hover:underline">
+                Clear filters
               </button>
             </div>
           )

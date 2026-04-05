@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { ConnectionGroupSection } from "./ConnectionGroupSection";
 import { ConnectionCard } from "./connection-card";
 import type { ConnectionGroup, SavedConnection, ConnectionStatus } from "../../types/connection";
@@ -10,18 +11,21 @@ interface ConnectionListProps {
   ungrouped: SavedConnection[];
   connectingId: string | null;
   isSearching: boolean;
+  isFiltering?: boolean;
   getStatus: (id: string) => ConnectionStatus;
   onConnect: (conn: SavedConnection) => void;
   onEdit: (conn: SavedConnection) => void;
   onDelete: (conn: SavedConnection) => Promise<void>;
   onDuplicate: (conn: SavedConnection) => Promise<void>;
   onDeleteGroup: (id: string) => Promise<void>;
+  onClearFilters?: () => void;
 }
 
 export function ConnectionList({
   groupList, allConnections, filteredConnIds, ungrouped, connectingId,
-  isSearching, getStatus, onConnect, onEdit, onDelete, onDuplicate, onDeleteGroup,
+  isSearching, isFiltering, getStatus, onConnect, onEdit, onDelete, onDuplicate, onDeleteGroup, onClearFilters,
 }: ConnectionListProps) {
+  const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -42,13 +46,33 @@ export function ConnectionList({
     buttons[next]?.focus();
   }, []);
 
+  const hasVisibleConnections = filteredConnIds.size > 0;
+
+  if (!hasVisibleConnections && (isSearching || isFiltering)) {
+    return (
+      <div className="w-full py-8 text-center">
+        <p className="text-sm text-text-secondary">
+          {t("connection.filter.noMatches")}
+        </p>
+        {onClearFilters && (
+          <button
+            onClick={onClearFilters}
+            className="mt-1 text-xs text-accent-blue hover:underline"
+          >
+            {t("connection.filter.clearFilters")}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div ref={listRef} className="w-full space-y-2" onKeyDown={handleKeyDown}>
       {groupList.map((group) => {
         const groupConns = allConnections
           .filter((c) => c.groupId === group.id)
           .filter((c) => filteredConnIds.has(c.id));
-        if (isSearching && groupConns.length === 0) return null;
+        if ((isSearching || isFiltering) && groupConns.length === 0) return null;
         return (
           <ConnectionGroupSection
             key={group.id}

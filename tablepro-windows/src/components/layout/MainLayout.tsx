@@ -45,6 +45,8 @@ import { useMainLayoutCommands } from "../../hooks/useMainLayoutCommands";
 import { useFilterContext } from "../../hooks/useFilterContext";
 import { useTableCallbacks } from "../../hooks/useTableCallbacks";
 import { useState, useCallback, useRef, useEffect } from "react";
+import { OnboardingDialog } from "../onboarding/onboarding-dialog";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
@@ -89,9 +91,26 @@ export function MainLayout() {
   useMainLayoutShortcuts();
   useMainLayoutCommands();
 
-  // Load persisted tab state from backend on mount
+  // Load persisted tab state and settings from backend on mount
   useEffect(() => {
     void useEditorStore.getState().initFromBackend();
+    void useSettingsStore.getState().loadSettings();
+  }, []);
+
+  // Onboarding: check on mount, show dialog if not completed
+  const hasCompletedOnboarding = useSettingsStore((s) => s.settings.hasCompletedOnboarding);
+  const isSettingsLoaded = useSettingsStore((s) => s.isLoaded);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (isSettingsLoaded && !hasCompletedOnboarding) {
+      setShowOnboarding(true);
+    }
+  }, [isSettingsLoaded, hasCompletedOnboarding]);
+
+  const handleOnboardingComplete = useCallback(() => {
+    setShowOnboarding(false);
+    void useSettingsStore.getState().saveSettings({ hasCompletedOnboarding: true });
   }, []);
 
   const { filterTabId, activeWhereClause } = useFilterContext(viewMode, activeTableContext, activeTabId);
@@ -474,6 +493,10 @@ export function MainLayout() {
         onDiscard={handleUnsavedDiscard}
         onCancel={handleUnsavedCancel}
       />
+
+      {showOnboarding && (
+        <OnboardingDialog onComplete={handleOnboardingComplete} />
+      )}
       </EditorViewProvider>
     </div>
   );

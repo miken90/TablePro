@@ -36,5 +36,65 @@
   "toast": {
     "queryExecuted": "Query executed",
     "queryBlocked": "Query blocked"
+  },
+  "connection": {
+    "filter": {
+      "all": "All",
+      "noMatches": "No connections match the active filters",
+      "clearFilters": "Clear filters",
+      "tagChipAriaLabel": "Filter by tag: {{tag}}",
+      "clearAriaLabel": "Clear all tag filters"
+    },
+    "tag": {
+      "createNew": "Create tag",
+      "namePlaceholder": "Tag name",
+      "deleteConfirm": "Delete tag \"{{tag}}\"? Connections using it will be untagged.",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "colors": "Color"
+    }
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Welcome to TablePro",
+      "subtitle": "A fast, lightweight database client for Windows",
+      "getStarted": "Get Started",
+      "features": {
+        "multiDb": "PostgreSQL, MySQL, SQLite, MSSQL, MongoDB & Redis",
+        "multiDbDesc": "Connect to popular databases with full feature support",
+        "editor": "Smart SQL Editor",
+        "editorDesc": "Syntax highlighting, autocomplete, and multi-tab editing",
+        "grid": "Interactive Data Grid",
+        "gridDesc": "Browse, edit, and manage your data with ease",
+        "secure": "Secure Connections",
+        "secureDesc": "SSH tunneling and SSL/TLS encryption support",
+        "ai": "AI-Powered Assistant",
+        "aiDesc": "Get intelligent SQL suggestions and query assistance"
+      }
+    },
+    "addConnection": {
+      "title": "Add Your First Connection",
+      "subtitle": "Set up a database connection to get started",
+      "saveAndContinue": "Save & Continue",
+      "testConnection": "Test Connection",
+      "testSuccess": "Connection test succeeded!",
+      "connectionSaved": "Connection saved"
+    },
+    "quickStart": {
+      "title": "You're All Set!",
+      "subtitle": "Here are some shortcuts to help you get started",
+      "done": "Done",
+      "shortcuts": {
+        "execute": "Execute Query",
+        "commandPalette": "Command Palette",
+        "explain": "Explain Query"
+      }
+    },
+    "steps": {
+      "skip": "Skip",
+      "back": "Back",
+      "next": "Next",
+      "stepOf": "Step {{current}} of {{total}}"
+    }
   }
 }

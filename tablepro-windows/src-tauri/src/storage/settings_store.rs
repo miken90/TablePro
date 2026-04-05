@@ -85,6 +85,8 @@ pub struct AppSettings {
     pub date_format: String,
     #[serde(default)]
     pub ai: AiSettingsConfig,
+    #[serde(default)]
+    pub has_completed_onboarding: bool,
 }
 
 fn default_safe_mode_level() -> u32 {
@@ -112,6 +114,7 @@ impl Default for AppSettings {
             word_wrap: false,
             date_format: "iso".to_string(),
             ai: AiSettingsConfig::default(),
+            has_completed_onboarding: false,
         }
     }
 }

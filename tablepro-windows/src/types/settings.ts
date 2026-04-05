@@ -61,6 +61,7 @@ export interface AppSettings {
   wordWrap: boolean;
   dateFormat: string;
   ai: AiSettings;
+  hasCompletedOnboarding: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -76,4 +77,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wordWrap: false,
   dateFormat: "iso",
   ai: DEFAULT_AI_SETTINGS,
+  hasCompletedOnboarding: false,
 };
