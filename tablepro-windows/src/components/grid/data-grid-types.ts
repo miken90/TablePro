@@ -50,4 +50,6 @@ export interface DataGridProps {
   isDragging?: boolean;
   onSelectColumn?: (col: number) => void;
   onSelectAll?: () => void;
+  /** Ref forwarded to the scroll container so parents can call scrollTo */
+  scrollRef?: React.RefObject<HTMLDivElement>;
 }

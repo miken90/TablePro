@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { GridHeader } from './grid-header';
 import { GridRow } from './grid-row';
@@ -45,10 +45,18 @@ export function DataGrid({
   isDragging,
   onSelectColumn,
   onSelectAll,
+  scrollRef,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
   const parentRef = useRef<HTMLDivElement>(null);
   const rows = result.rows;
+
+  // Sync external scrollRef with internal parentRef
+  useEffect(() => {
+    if (scrollRef && parentRef.current) {
+      (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = parentRef.current;
+    }
+  });
 
   const {
     visibleColumns, resolvedWidths, totalContentWidth,

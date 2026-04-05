@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, type MutableRefObject } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { useQueryStore } from '../../stores/queryStore';
 import { useQueryLogStore } from '../../stores/queryLogStore';
 import { useConnectionStore } from '../../stores/connectionStore';
@@ -65,6 +65,7 @@ export function ResultPanel({
   const lastAutoSwitchedErrorRef = React.useRef<string | null>(null);
   const [confirmExecuteOpen, setConfirmExecuteOpen] = useState(false);
   const [confirmRefreshOpen, setConfirmRefreshOpen] = useState(false);
+  const gridScrollRef = useRef<HTMLDivElement>(null);
 
   // --- Hooks ---
   const tableData = useTableData({ tableName, schema, sessionId, activeWhereClause });
@@ -269,8 +270,8 @@ export function ResultPanel({
     resetSelection();
   }, [setSorting, resetSelection]);
 
-  const handlePageChange = useCallback((p: number) => { setPage(p); resetSelection(); }, [setPage, resetSelection]);
-  const handlePageSizeChange = useCallback((s: number) => { setPageSize(s); setPage(1); resetSelection(); }, [setPageSize, setPage, resetSelection]);
+  const handlePageChange = useCallback((p: number) => { setPage(p); resetSelection(); gridScrollRef.current?.scrollTo(0, 0); }, [setPage, resetSelection]);
+  const handlePageSizeChange = useCallback((s: number) => { setPageSize(s); setPage(1); resetSelection(); gridScrollRef.current?.scrollTo(0, 0); }, [setPageSize, setPage, resetSelection]);
 
   return (
     <div className="flex h-full flex-col">
@@ -367,6 +368,7 @@ export function ResultPanel({
                   onUpdateDrag={updateDrag}
                   onSelectColumn={selectColumn}
                   onSelectAll={selectAll}
+                  scrollRef={gridScrollRef}
                 />
               ) : (
                 <EmptyState icon={<Database size={24} />} message="Run a query to see results" description="Press Ctrl+Enter to execute the current statement" />
