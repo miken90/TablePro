@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod connection;
 pub mod data;
+pub mod explain;
 pub mod export;
 pub(crate) mod export_formats;
 pub(crate) mod export_writers;
@@ -22,6 +23,7 @@ pub use history::{
     history_clear_all, history_delete_entry, history_fetch_recent, history_record, history_search,
 };
 pub use import::{import_preview, import_sql_file};
+pub use explain::explain_query;
 pub use query::{cancel_query, execute_query, fetch_count, fetch_rows};
 pub use schema::{
     fetch_approximate_count, fetch_columns, fetch_databases, fetch_ddl, fetch_enum_values,

@@ -19,6 +19,7 @@ use commands::history::{
     history_clear_all, history_delete_entry, history_fetch_recent, history_record, history_search,
 };
 use commands::import::{import_preview, import_sql_file};
+use commands::explain::explain_query;
 use commands::query::{cancel_query, execute_query, fetch_count, fetch_rows};
 use commands::schema::{
     fetch_approximate_count, fetch_columns, fetch_databases, fetch_ddl, fetch_enum_values,
@@ -173,6 +174,7 @@ pub fn run() {
             get_driver_capabilities,
             // query
             execute_query,
+            explain_query,
             fetch_rows,
             fetch_count,
             cancel_query,
