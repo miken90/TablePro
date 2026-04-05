@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { QueryLogEntry } from '../../stores/queryLogStore';
 
 interface ResultStatusBarProps {
@@ -7,6 +8,7 @@ interface ResultStatusBarProps {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -16,7 +18,7 @@ function CopyButton({ text }: { text: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
-      title="Copy"
+      title={t("resultStatusBar.copy")}
     >
       {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
     </button>
@@ -24,10 +26,11 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function ResultStatusBar({ logEntries }: ResultStatusBarProps) {
+  const { t } = useTranslation();
   return (
     <div className="h-full overflow-y-auto font-mono text-xs">
       {logEntries.length === 0 ? (
-        <p className="p-3 text-[var(--color-text-muted)]">No queries executed yet.</p>
+        <p className="p-3 text-[var(--color-text-muted)]">{t("resultStatusBar.noQueries")}</p>
       ) : (
         logEntries.map((entry) => (
           <div

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { X, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useAiChatStore } from "../../stores/aiChatStore";
 import { AiChatInput } from "./ai-chat-input";
 import { AiChatMessage } from "./ai-chat-message";
@@ -10,6 +11,7 @@ interface AiChatPanelProps {
 }
 
 export function AiChatPanel({ onClose }: AiChatPanelProps) {
+  const { t } = useTranslation();
   const conversations = useAiChatStore((s) => s.conversations);
   const activeConversationId = useAiChatStore((s) => s.activeConversationId);
   const messages = useAiChatStore((s) => s.messages);
@@ -54,7 +56,7 @@ export function AiChatPanel({ onClose }: AiChatPanelProps) {
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Sparkles size={14} className="text-purple-500" />
-          <span className="text-xs font-medium text-text-primary">AI Chat</span>
+          <span className="text-xs font-medium text-text-primary">{t("aiChat.title")}</span>
         </div>
         <div className="flex items-center gap-1">
           <AiConversationList
@@ -67,7 +69,7 @@ export function AiChatPanel({ onClose }: AiChatPanelProps) {
           <button
             onClick={onClose}
             className="rounded p-1 text-text-muted transition hover:bg-surface-muted hover:text-text-primary"
-            aria-label="Close AI chat panel"
+            aria-label={t("aiChat.closePanel")}
           >
             <X size={14} aria-hidden="true" />
           </button>
@@ -80,7 +82,7 @@ export function AiChatPanel({ onClose }: AiChatPanelProps) {
           <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
             <Sparkles size={24} className="text-text-muted" />
             <p className="text-xs text-text-muted">
-              Ask questions about your database, generate SQL, or get help with queries.
+              {t("aiChat.emptyMessage")}
             </p>
           </div>
         ) : (

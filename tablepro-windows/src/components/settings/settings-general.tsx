@@ -1,22 +1,38 @@
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { SettingRow, SettingSection, Select, TextInput } from "./settings-form";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 500, 1000].map((v) => ({ label: String(v), value: v }));
-const DATE_FORMAT_OPTIONS = [
-  { label: "ISO 8601 (2026-03-13)", value: "iso" },
-  { label: "US (03/13/2026)", value: "us" },
-  { label: "EU (13/03/2026)", value: "eu" },
-  { label: "Unix timestamp", value: "unix" },
+
+const LANGUAGE_OPTIONS = [
+  { label: "English", value: "en" },
+  { label: "Tiếng Việt", value: "vi" },
 ];
 
 export function SettingsGeneral() {
+  const { t } = useTranslation();
   const { settings, saveSettings } = useSettingsStore();
+
+  const DATE_FORMAT_OPTIONS = [
+    { label: t("settings.general.dateFormats.iso"), value: "iso" },
+    { label: t("settings.general.dateFormats.us"), value: "us" },
+    { label: t("settings.general.dateFormats.eu"), value: "eu" },
+    { label: t("settings.general.dateFormats.unix"), value: "unix" },
+  ];
 
   return (
     <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
-      <SettingSection title="General" />
+      <SettingSection title={t("settings.general.title")} />
 
-      <SettingRow label="Page size" description="Number of rows loaded per page">
+      <SettingRow label={t("settings.general.language")} description={t("settings.general.languageDesc")}>
+        <Select
+          value={settings.language}
+          onChange={(v) => void saveSettings({ language: v })}
+          options={LANGUAGE_OPTIONS}
+        />
+      </SettingRow>
+
+      <SettingRow label={t("settings.general.pageSize")} description={t("settings.general.pageSizeDesc")}>
         <Select
           value={settings.pageSize}
           onChange={(v) => void saveSettings({ pageSize: Number(v) })}
@@ -24,7 +40,7 @@ export function SettingsGeneral() {
         />
       </SettingRow>
 
-      <SettingRow label="Null display" description="Text shown for NULL values">
+      <SettingRow label={t("settings.general.nullDisplay")} description={t("settings.general.nullDisplayDesc")}>
         <TextInput
           value={settings.nullDisplay}
           onChange={(v) => void saveSettings({ nullDisplay: v })}
@@ -32,7 +48,7 @@ export function SettingsGeneral() {
         />
       </SettingRow>
 
-      <SettingRow label="Date format" description="How dates are displayed in results">
+      <SettingRow label={t("settings.general.dateFormat")} description={t("settings.general.dateFormatDesc")}>
         <Select
           value={settings.dateFormat}
           onChange={(v) => void saveSettings({ dateFormat: v })}

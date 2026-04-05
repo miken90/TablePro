@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Filter, Plus, Undo2, Redo2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ColumnInfo } from '../../types/query';
 import { useChangeStore } from '../../stores/changeStore';
 import { useFilterStore } from '../../stores/filterStore';
@@ -18,6 +19,7 @@ interface ContextualBarProps {
 export function ContextualBar({
   tabId, tableName, columns, onSave, onAddRow,
 }: ContextualBarProps) {
+  const { t } = useTranslation();
   const hasChanges = useChangeStore((s) => Object.keys(s._changes).length > 0);
   const changeCount = useChangeStore((s) => Object.keys(s._changes).length);
   const undo = useChangeStore((s) => s.undo);
@@ -50,7 +52,6 @@ export function ContextualBar({
     clear();
   }, [clear]);
 
-  // Undo/redo keyboard shortcuts (owned by ContextualBar in table-browse mode)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
@@ -66,6 +67,8 @@ export function ContextualBar({
     return () => window.removeEventListener('keydown', handler);
   }, [undo, redo]);
 
+  const changeLabel = changeCount === 1 ? t("grid.changeToolbar.change") : t("grid.changeToolbar.changes");
+
   return (
     <div className="border-b border-border-subtle bg-surface">
       {/* Row 1: Action strip */}
@@ -77,10 +80,10 @@ export function ContextualBar({
               ? 'bg-accent-blue/10 text-accent-blue'
               : 'text-text-muted hover:bg-surface-muted hover:text-text-primary'
           }`}
-          title="Toggle filters (Ctrl+Shift+F)"
+          title={t("grid.contextualBar.toggleFilters")}
         >
           <Filter size={12} />
-          Filter
+          {t("common.filter")}
           {activeFilterCount > 0 && (
             <span className="ml-0.5 rounded-full bg-accent-blue px-1 text-[10px] text-white">
               {activeFilterCount}
@@ -95,7 +98,7 @@ export function ContextualBar({
             title="Add new row (Ctrl+I)"
           >
             <Plus size={12} />
-            Add Row
+            {t("grid.contextualBar.addRow")}
           </button>
         )}
       </div>
@@ -114,7 +117,7 @@ export function ContextualBar({
       {hasChanges && (
         <div className="state-strip-warning flex items-center gap-2 border-t px-3 py-1 text-xs">
           <span className="text-accent-yellow">
-            {changeCount} unsaved {changeCount === 1 ? 'change' : 'changes'}
+            {t("grid.changeToolbar.unsavedChanges", { count: changeCount, label: changeLabel })}
           </span>
           <div className="ml-auto flex items-center gap-1">
             <button
@@ -124,7 +127,7 @@ export function ContextualBar({
               title="Undo (Ctrl+Z)"
             >
               <Undo2 size={12} />
-              Undo
+              {t("common.undo")}
             </button>
             <button
               onClick={redo}
@@ -133,20 +136,20 @@ export function ContextualBar({
               title="Redo (Ctrl+Y)"
             >
               <Redo2 size={12} />
-              Redo
+              {t("common.redo")}
             </button>
             <button
               onClick={handleDiscard}
               className="menu-item-button-danger rounded border border-accent-red px-2 py-0.5 text-xs"
             >
-              Discard
+              {t("common.discard")}
             </button>
             <button
               onClick={onSave}
               className="button-success px-3 py-1 text-xs font-semibold shadow-sm"
-              title="Save changes (Ctrl+S)"
+              title={t("grid.changeToolbar.saveChanges")}
             >
-              Execute ({changeCount})
+              {t("grid.changeToolbar.executeCount", { count: changeCount })}
             </button>
           </div>
         </div>

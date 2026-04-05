@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import type { EditorView } from "@codemirror/view";
 import { Database } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorViewRef } from "../../contexts/editor-view-context";
@@ -35,6 +36,7 @@ const DIALECT_LABELS: Record<string, string> = {
 };
 
 export function EditorStatusBar() {
+  const { t } = useTranslation();
   const viewRef = useEditorViewRef();
   const [cursor, setCursor] = useState<CursorInfo>({ line: 1, col: 1, selected: 0 });
   const [stmtInfo, setStmtInfo] = useState({ current: 0, total: 0 });
@@ -49,10 +51,8 @@ export function EditorStatusBar() {
 
   const dialectLabel = dbType ? (DIALECT_LABELS[dbType.toLowerCase()] ?? dbType) : "SQL";
 
-  // H3 fix: cache parsed statements — only re-parse when doc text changes
   const cachedDocRef = useRef<string>("");
   const cachedStmtsRef = useRef<string[]>([]);
-  // H1 fix: cache statement offsets for offset-based matching (no string-equality)
   const cachedOffsetsRef = useRef<number[]>([]);
 
   useEffect(() => {
@@ -64,11 +64,9 @@ export function EditorStatusBar() {
       const doc = view.state.doc.toString();
       const cursorPos = view.state.selection.main.head;
 
-      // Only re-parse when doc text actually changed
       if (doc !== cachedDocRef.current) {
         cachedDocRef.current = doc;
         cachedStmtsRef.current = allStatements(doc);
-        // Build offset array by scanning each statement's located offset
         const offsets: number[] = [];
         let searchFrom = 0;
         for (const stmt of cachedStmtsRef.current) {
@@ -82,11 +80,9 @@ export function EditorStatusBar() {
       const stmts = cachedStmtsRef.current;
       const offsets = cachedOffsetsRef.current;
 
-      // H1 fix: use offset-based matching instead of string equality
       const located = locatedStatementAtCursor(doc, cursorPos);
       let currentIdx = 0;
       if (located.sql.trim().length > 0) {
-        // Find by closest offset match
         const idx = offsets.findIndex((o) => Math.abs(o - located.offset) <= 1);
         currentIdx = idx >= 0 ? idx + 1 : 1;
       }
@@ -98,38 +94,32 @@ export function EditorStatusBar() {
 
   return (
     <div className="flex items-center gap-3 border-t border-border-subtle bg-surface px-3 py-0.5 text-[10px] text-text-muted">
-      {/* Statement index */}
       {stmtInfo.total > 0 && (
-        <span>Stmt {stmtInfo.current}/{stmtInfo.total}</span>
+        <span>{t("editorStatusBar.stmt", { current: stmtInfo.current, total: stmtInfo.total })}</span>
       )}
 
-      {/* Position */}
       <span>
-        Ln {cursor.line}, Col {cursor.col}
+        {t("editorStatusBar.ln", { line: cursor.line, col: cursor.col })}
       </span>
 
-      {/* Selection info */}
       {cursor.selected > 0 && (
-        <span>{cursor.selected} selected</span>
+        <span>{t("editorStatusBar.selected", { count: cursor.selected })}</span>
       )}
 
-      {/* Spacer */}
       <span className="flex-1" />
 
-      {/* Vim mode indicator */}
       {vimMode && (
         <span className="rounded bg-surface-muted px-1 font-mono text-[9px] text-text-secondary">
           VIM
         </span>
       )}
 
-      {/* Dialect indicator */}
       <span className="flex items-center gap-1">
         <Database size={10} aria-hidden="true" />
         {dialectLabel}
       </span>
 
-      <span>Ctrl+Enter to run</span>
+      <span>{t("editorStatusBar.ctrlEnterToRun")}</span>
     </div>
   );
 }

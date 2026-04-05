@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { EditorTab } from "../../stores/editorStore";
 import { useEditorStore } from "../../stores/editorStore";
 
@@ -11,6 +12,7 @@ interface TabContextMenuProps {
 }
 
 export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContextMenuProps) {
+  const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
 
   const pinTab = useEditorStore((s) => s.pinTab);
@@ -20,7 +22,6 @@ export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContex
   const closeAllTabs = useEditorStore((s) => s.closeAllTabs);
   const closeTabsToRight = useEditorStore((s) => s.closeTabsToRight);
 
-  // Dismiss on click outside or Escape
   useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -38,7 +39,6 @@ export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContex
     };
   }, [onClose]);
 
-  // Clamp to viewport so menu never appears off-screen
   const menuStyle: React.CSSProperties = {
     position: "fixed",
     top: position.y,
@@ -59,7 +59,7 @@ export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContex
           onClose();
         }}
       >
-        {(tab.isPinned ?? false) ? "Unpin Tab" : "Pin Tab"}
+        {(tab.isPinned ?? false) ? t("tabContextMenu.unpinTab") : t("tabContextMenu.pinTab")}
       </MenuItem>
 
       <Separator />
@@ -74,7 +74,7 @@ export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContex
           onClose();
         }}
       >
-        Close
+        {t("tabContextMenu.close")}
       </MenuItem>
 
       <MenuItem
@@ -83,7 +83,7 @@ export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContex
           onClose();
         }}
       >
-        Close Others
+        {t("tabContextMenu.closeOthers")}
       </MenuItem>
 
       <MenuItem
@@ -92,7 +92,7 @@ export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContex
           onClose();
         }}
       >
-        Close All
+        {t("tabContextMenu.closeAll")}
       </MenuItem>
 
       <Separator />
@@ -103,7 +103,7 @@ export function TabContextMenu({ tab, position, onClose, onCloseTab }: TabContex
           onClose();
         }}
       >
-        Close to the Right
+        {t("tabContextMenu.closeToRight")}
       </MenuItem>
     </div>
   );

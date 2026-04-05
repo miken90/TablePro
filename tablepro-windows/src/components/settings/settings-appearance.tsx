@@ -1,20 +1,22 @@
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { SettingRow, SettingSection } from "./settings-form";
 
-const THEME_OPTIONS = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
-] as const;
-
 export function SettingsAppearance() {
+  const { t } = useTranslation();
   const { settings, saveSettings } = useSettingsStore();
+
+  const THEME_OPTIONS = [
+    { value: "light", label: t("settings.appearance.themes.light") },
+    { value: "dark", label: t("settings.appearance.themes.dark") },
+    { value: "system", label: t("settings.appearance.themes.system") },
+  ] as const;
 
   return (
     <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
-      <SettingSection title="Appearance" />
+      <SettingSection title={t("settings.appearance.title")} />
 
-      <SettingRow label="Theme" description="Color theme for the application">
+      <SettingRow label={t("settings.appearance.theme")} description={t("settings.appearance.themeDesc")}>
         <div className="flex gap-1">
           {THEME_OPTIONS.map((opt) => (
             <button

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { RotateCcw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   COMMAND_DEFINITIONS,
   type CommandCategory,
@@ -9,11 +10,11 @@ import {
   bindingToKey,
 } from "../../hooks/useCommandRegistry";
 
-const DISPLAY_SECTIONS: { category: CommandCategory; label: string }[] = [
-  { category: "Query", label: "Editor" },
-  { category: "Edit", label: "Tabs & Data" },
-  { category: "Navigation", label: "Navigation" },
-  { category: "Settings", label: "General" },
+const DISPLAY_SECTIONS: { category: CommandCategory; labelKey: string }[] = [
+  { category: "Query", labelKey: "settings.shortcuts.sections.editor" },
+  { category: "Edit", labelKey: "settings.shortcuts.sections.tabsData" },
+  { category: "Navigation", labelKey: "settings.shortcuts.sections.navigation" },
+  { category: "Settings", labelKey: "settings.shortcuts.sections.general" },
 ];
 
 /**
@@ -28,7 +29,6 @@ function eventToDisplayBinding(e: KeyboardEvent): string[] {
   const key = e.key;
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(key)) return parts;
 
-  // Normalize display name
   if (key === ' ') parts.push("Space");
   else if (key === 'Escape') parts.push("Escape");
   else if (key === 'Enter') parts.push("Enter");
@@ -40,7 +40,7 @@ function eventToDisplayBinding(e: KeyboardEvent): string[] {
   else if (key === 'ArrowLeft') parts.push("Left");
   else if (key === 'ArrowRight') parts.push("Right");
   else if (key.startsWith('F') && key.length >= 2 && key.length <= 3 && !isNaN(Number(key.slice(1))))
-    parts.push(key); // F1-F12
+    parts.push(key);
   else if (key === ',') parts.push(",");
   else if (key === '/') parts.push("/");
   else parts.push(key.length === 1 ? key.toUpperCase() : key);
@@ -56,6 +56,7 @@ interface KeyCaptureProps {
 }
 
 function KeyCaptureOverlay({ commandId, commandLabel, onSave, onCancel }: KeyCaptureProps) {
+  const { t } = useTranslation();
   const [captured, setCaptured] = useState<string[] | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const userBindings = useShortcutStore((s) => s.userBindings);
@@ -71,7 +72,6 @@ function KeyCaptureOverlay({ commandId, commandLabel, onSave, onCancel }: KeyCap
         return;
       }
 
-      // Wait for a non-modifier key
       if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
 
       const binding = eventToDisplayBinding(e);
@@ -79,7 +79,6 @@ function KeyCaptureOverlay({ commandId, commandLabel, onSave, onCancel }: KeyCap
 
       setCaptured(binding);
 
-      // Check for conflicts
       const conflictId = findBindingConflict(commandId, binding, userBindings);
       if (conflictId) {
         const conflictDef = COMMAND_DEFINITIONS.find((d) => d.id === conflictId);
@@ -108,13 +107,12 @@ function KeyCaptureOverlay({ commandId, commandLabel, onSave, onCancel }: KeyCap
         onClick={(e) => e.stopPropagation()}
       >
         <h4 className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-          Set shortcut for &ldquo;{commandLabel}&rdquo;
+          {t("settings.shortcuts.setShortcutFor")} &ldquo;{commandLabel}&rdquo;
         </h4>
         <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-          Press the desired key combination, then click Save.
+          {t("settings.shortcuts.pressKeyCombo")}
         </p>
 
-        {/* Captured binding display */}
         <div className="mt-4 flex min-h-[40px] items-center justify-center rounded border border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800">
           {captured ? (
             <span className="flex items-center gap-1">
@@ -128,31 +126,29 @@ function KeyCaptureOverlay({ commandId, commandLabel, onSave, onCancel }: KeyCap
               ))}
             </span>
           ) : (
-            <span className="text-xs text-zinc-400">Waiting for keypress...</span>
+            <span className="text-xs text-zinc-400">{t("settings.shortcuts.waitingForKeypress")}</span>
           )}
         </div>
 
-        {/* Conflict warning */}
         {conflict && (
           <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-            Conflicts with &ldquo;{conflict}&rdquo;. Saving will override that binding.
+            {t("settings.shortcuts.conflictsWith")} &ldquo;{conflict}&rdquo;. {t("settings.shortcuts.conflictOverride")}
           </p>
         )}
 
-        {/* Actions */}
         <div className="mt-4 flex items-center justify-end gap-2">
           <button
             onClick={onCancel}
             className="rounded px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={handleSave}
             disabled={!captured}
             className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {conflict ? "Save Anyway" : "Save"}
+            {conflict ? t("settings.shortcuts.saveAnyway") : t("common.save")}
           </button>
         </div>
       </div>
@@ -161,6 +157,7 @@ function KeyCaptureOverlay({ commandId, commandLabel, onSave, onCancel }: KeyCap
 }
 
 function ShortcutRow({ item }: { item: CommandDefinition }) {
+  const { t } = useTranslation();
   const [capturing, setCapturing] = useState(false);
   const userBindings = useShortcutStore((s) => s.userBindings);
   const setBinding = useShortcutStore((s) => s.setBinding);
@@ -171,14 +168,11 @@ function ShortcutRow({ item }: { item: CommandDefinition }) {
 
   const handleSave = useCallback(
     (binding: string[]) => {
-      // If the proposed binding matches the default, remove override
       if (bindingToKey(binding) === bindingToKey(item.defaultBinding)) {
         resetBinding(item.id);
       } else {
-        // If this binding conflicts, also remove the conflicting override
         const conflictId = findBindingConflict(item.id, binding, userBindings);
         if (conflictId && conflictId in userBindings) {
-          // Swap: the conflicting command gets our old binding
           useShortcutStore.getState().setBinding(conflictId, effectiveBinding);
         }
         setBinding(item.id, binding);
@@ -198,7 +192,7 @@ function ShortcutRow({ item }: { item: CommandDefinition }) {
           <button
             onClick={() => setCapturing(true)}
             className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            title="Click to change shortcut"
+            title={t("settings.shortcuts.changeShortcut")}
           >
             {effectiveBinding.map((key, i) => (
               <kbd
@@ -217,7 +211,7 @@ function ShortcutRow({ item }: { item: CommandDefinition }) {
             <button
               onClick={() => resetBinding(item.id)}
               className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
-              title="Reset to default"
+              title={t("settings.shortcuts.resetToDefault")}
             >
               <RotateCcw size={11} />
             </button>
@@ -237,13 +231,14 @@ function ShortcutRow({ item }: { item: CommandDefinition }) {
 }
 
 export function SettingsShortcuts() {
+  const { t } = useTranslation();
   const resetAllBindings = useShortcutStore((s) => s.resetAllBindings);
   const userBindings = useShortcutStore((s) => s.userBindings);
   const hasCustomBindings = Object.keys(userBindings).length > 0;
 
   const groups = useMemo(() => {
     return DISPLAY_SECTIONS.map((section) => ({
-      label: section.label,
+      labelKey: section.labelKey,
       items: COMMAND_DEFINITIONS.filter((d) => d.category === section.category),
     })).filter((g) => g.items.length > 0);
   }, []);
@@ -253,10 +248,10 @@ export function SettingsShortcuts() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-            Keyboard Shortcuts
+            {t("settings.shortcuts.title")}
           </h3>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Click on a shortcut to customize it. Custom bindings are highlighted in blue.
+            {t("settings.shortcuts.description")}
           </p>
         </div>
         {hasCustomBindings && (
@@ -265,15 +260,15 @@ export function SettingsShortcuts() {
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           >
             <RotateCcw size={11} />
-            Reset All
+            {t("settings.shortcuts.resetAll")}
           </button>
         )}
       </div>
 
       {groups.map((group) => (
-        <div key={group.label}>
+        <div key={group.labelKey}>
           <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            {group.label}
+            {t(group.labelKey)}
           </h4>
           <div className="rounded border border-zinc-200 dark:border-zinc-700">
             {group.items.map((item, idx) => (

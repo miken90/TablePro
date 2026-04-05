@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Rows3, List, Braces } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { FieldRow } from './field-row';
 import { JsonRecordView } from './json-record-view';
 import type { ColumnInfo } from '../../types/query';
@@ -13,6 +14,7 @@ interface InspectorPanelProps {
 }
 
 export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   const toggleBtnCls = (active: boolean) =>
@@ -26,7 +28,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
     <div className="flex h-full flex-col border-l border-border bg-surface">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-        <span className="text-xs font-semibold text-text-primary">Inspector</span>
+        <span className="text-xs font-semibold text-text-primary">{t("inspector.title")}</span>
         <div className="flex items-center gap-1">
           {row !== null && (
             <div className="flex items-center gap-0.5 mr-1">
@@ -34,27 +36,27 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
                 type="button"
                 className={toggleBtnCls(viewMode === 'list')}
                 onClick={() => setViewMode('list')}
-                title="List view"
+                title={t("inspector.listView")}
               >
                 <List size={11} />
-                List
+                {t("inspector.list")}
               </button>
               <button
                 type="button"
                 className={toggleBtnCls(viewMode === 'json')}
                 onClick={() => setViewMode('json')}
-                title="JSON view"
+                title={t("inspector.jsonView")}
               >
                 <Braces size={11} />
-                JSON
+                {t("inspector.json")}
               </button>
             </div>
           )}
           <button
             onClick={onClose}
             className="rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-text-secondary"
-            title="Close inspector (Ctrl+Shift+I)"
-            aria-label="Close inspector"
+            title={t("inspector.closeInspector")}
+            aria-label={t("inspector.closeInspector")}
           >
             <X size={14} aria-hidden="true" />
           </button>
@@ -65,7 +67,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
       {row === null ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-text-muted">
           <Rows3 size={24} />
-          <span className="text-xs">Select a row to inspect</span>
+          <span className="text-xs">{t("inspector.selectRow")}</span>
         </div>
       ) : viewMode === 'json' ? (
         <JsonRecordView columns={columns} row={row} />
@@ -86,7 +88,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
       {/* Footer with column count */}
       {row !== null && (
         <div className="border-t border-border px-3 py-1 text-[10px] text-text-muted">
-          {columns.length} columns
+          {t("inspector.columnCount", { count: columns.length })}
         </div>
       )}
     </div>

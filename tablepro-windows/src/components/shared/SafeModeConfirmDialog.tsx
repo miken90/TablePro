@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, ShieldOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export interface SafeModeConfirmDialogProps {
   open: boolean;
@@ -18,13 +19,6 @@ const LEVEL_NAMES: Record<number, string> = {
   5: "Read-Only",
 };
 
-const LEVEL_DESCRIPTIONS: Record<string, string> = {
-  destructive: "This query contains destructive operations (DELETE, DROP, TRUNCATE, ALTER).",
-  dml_ddl: "This query modifies data or database structure (INSERT, UPDATE, DELETE, DDL).",
-  safe_mode: "This query modifies data. Type the target table name to confirm.",
-  read_only: "Write queries are blocked in Read-Only mode.",
-};
-
 /** Extract first table name from SQL for level-4 hint */
 function extractTableHint(sql: string): string {
   const m =
@@ -39,6 +33,7 @@ export function SafeModeConfirmDialog({
   onConfirm,
   onCancel,
 }: SafeModeConfirmDialogProps) {
+  const { t } = useTranslation();
   const [tableInput, setTableInput] = useState("");
 
   if (!open) return null;
@@ -49,6 +44,14 @@ export function SafeModeConfirmDialog({
   const sqlPreview = sql.length > 200 ? sql.slice(0, 200) + "…" : sql;
   const tableHint = requiresTableInput ? extractTableHint(sql) : "";
   const canConfirm = !requiresTableInput || (tableHint ? tableInput.trim() === tableHint : tableInput.trim().length > 0);
+
+  const description = isReadOnly
+    ? t("safeMode.readOnly")
+    : level === 4
+    ? t("safeMode.safeModeConfirm")
+    : level === 3
+    ? t("safeMode.dmlDdl")
+    : t("safeMode.destructive");
 
   const handleConfirm = () => {
     setTableInput("");
@@ -78,23 +81,15 @@ export function SafeModeConfirmDialog({
           )}
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">
-              {isReadOnly ? "Read-Only Mode" : "Confirm Query"}
+              {isReadOnly ? t("safeMode.readOnlyMode") : t("safeMode.confirmQuery")}
             </h2>
-            <span className="text-xs text-zinc-400">Safe Mode: {levelName}</span>
+            <span className="text-xs text-zinc-400">{t("safeMode.safeModeLabel", { level: levelName })}</span>
           </div>
         </div>
 
         {/* Description */}
         <p className="mb-3 text-xs text-zinc-300">
-          {LEVEL_DESCRIPTIONS[
-            isReadOnly
-              ? "read_only"
-              : level === 4
-              ? "safe_mode"
-              : level === 3
-              ? "dml_ddl"
-              : "destructive"
-          ] ?? "Confirm before executing."}
+          {description}
         </p>
 
         {/* SQL preview */}
@@ -106,7 +101,7 @@ export function SafeModeConfirmDialog({
         {requiresTableInput && (
           <div className="mb-4">
             <label className="mb-1 block text-xs text-zinc-400">
-              Type table name{tableHint ? ` "${tableHint}"` : ""} to confirm:
+              {t("safeMode.typeTableName", { hint: tableHint ? ` "${tableHint}"` : "" })}
             </label>
             <input
               type="text"
@@ -130,7 +125,7 @@ export function SafeModeConfirmDialog({
               onClick={handleCancel}
               className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           )}
           <button
@@ -142,7 +137,7 @@ export function SafeModeConfirmDialog({
                 : "bg-orange-600 text-white hover:bg-orange-700"
             }`}
           >
-            {isReadOnly ? "OK" : "Run Anyway"}
+            {isReadOnly ? t("common.ok") : t("safeMode.runAnyway")}
           </button>
         </div>
       </div>

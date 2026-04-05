@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface ConfirmDiscardDialogProps {
   open: boolean;
@@ -9,6 +10,7 @@ interface ConfirmDiscardDialogProps {
 }
 
 export function ConfirmDiscardDialog({ open, changeCount, onConfirm, onCancel }: ConfirmDiscardDialogProps) {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleKeyDown = useCallback(
@@ -30,6 +32,8 @@ export function ConfirmDiscardDialog({ open, changeCount, onConfirm, onCancel }:
 
   if (!open) return null;
 
+  const changeLabel = changeCount === 1 ? t("grid.changeToolbar.change") : t("grid.changeToolbar.changes");
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
       <div
@@ -44,10 +48,10 @@ export function ConfirmDiscardDialog({ open, changeCount, onConfirm, onCancel }:
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-medium text-text-primary">
-              Discard {changeCount} {changeCount === 1 ? 'change' : 'changes'}?
+              {t("confirmDiscard.title", { count: changeCount, label: changeLabel })}
             </h3>
             <p className="mt-1 text-xs text-text-muted">
-              This action cannot be undone.
+              {t("confirmDiscard.message")}
             </p>
           </div>
         </div>
@@ -57,13 +61,13 @@ export function ConfirmDiscardDialog({ open, changeCount, onConfirm, onCancel }:
             onClick={onCancel}
             className="rounded px-3 py-1.5 text-xs text-text-muted hover:bg-surface-muted"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={onConfirm}
             className="rounded bg-red-500 px-3 py-1.5 text-xs text-white hover:bg-red-600"
           >
-            Discard
+            {t("common.discard")}
           </button>
         </div>
       </div>

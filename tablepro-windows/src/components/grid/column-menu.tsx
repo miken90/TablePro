@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ColumnInfo } from '../../types/query';
 
 interface ColumnMenuProps {
@@ -22,9 +23,9 @@ export function ColumnMenu({
   onSelectColumn,
   onClose,
 }: ColumnMenuProps) {
+  const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click or Escape
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -58,30 +59,30 @@ export function ColumnMenu({
       <div className="h-px bg-zinc-100 dark:bg-zinc-700 mx-1 my-1" />
 
       <button className={itemClass} onClick={() => { onSort('asc'); onClose(); }}>
-        Sort Ascending ↑
+        {t("grid.columnMenu.sortAsc")}
       </button>
       <button className={itemClass} onClick={() => { onSort('desc'); onClose(); }}>
-        Sort Descending ↓
+        {t("grid.columnMenu.sortDesc")}
       </button>
 
       <div className="h-px bg-zinc-100 dark:bg-zinc-700 mx-1 my-1" />
 
       <button className={itemClass} onClick={() => { onFilter(); onClose(); }}>
-        Filter by column
+        {t("grid.columnMenu.filterByColumn")}
       </button>
       <button className={itemClass} onClick={() => { onHide(); onClose(); }}>
-        Hide Column
+        {t("grid.columnMenu.hideColumn")}
       </button>
       {onSelectColumn && (
         <button className={itemClass} onClick={() => { onSelectColumn(); onClose(); }}>
-          Select Column
+          {t("grid.columnMenu.selectColumn")}
         </button>
       )}
 
       <div className="h-px bg-zinc-100 dark:bg-zinc-700 mx-1 my-1" />
 
       <button className={itemClass} onClick={() => { onCopyName(); onClose(); }}>
-        Copy Column Name
+        {t("grid.columnMenu.copyColumnName")}
       </button>
     </div>
   );

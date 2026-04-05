@@ -60,6 +60,7 @@ export interface AppSettings {
   tabSize: number;
   wordWrap: boolean;
   dateFormat: string;
+  language: string;
   ai: AiSettings;
   hasCompletedOnboarding: boolean;
 }
@@ -76,6 +77,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tabSize: 4,
   wordWrap: false,
   dateFormat: "iso",
+  language: "en",
   ai: DEFAULT_AI_SETTINGS,
   hasCompletedOnboarding: false,
 };

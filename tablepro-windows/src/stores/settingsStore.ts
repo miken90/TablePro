@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import i18n from "../i18n";
 import type { AppSettings } from "../types/settings";
 import { DEFAULT_SETTINGS } from "../types/settings";
 import * as commands from "../ipc/commands";
@@ -20,6 +21,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       const settings = await commands.getSettings();
       set({ settings, isLoaded: true });
+      if (settings.language && settings.language !== i18n.language) {
+        void i18n.changeLanguage(settings.language);
+      }
     } catch {
       // Use defaults if backend not ready
       set({ isLoaded: true });
@@ -29,6 +33,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveSettings: async (partial) => {
     const merged = { ...get().settings, ...partial };
     set({ settings: merged });
+    if (partial.language && partial.language !== i18n.language) {
+      void i18n.changeLanguage(partial.language);
+    }
     try {
       await commands.setSettings(merged);
     } catch (err) {

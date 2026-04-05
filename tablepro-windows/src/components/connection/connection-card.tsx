@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Pencil, Trash2, Copy, Plug, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { EngineIcon } from "./engine-icon";
 import { EnvironmentBadge } from "./environment-badge";
 import { ConnectionStatusIndicator } from "./connection-status-indicator";
@@ -19,6 +20,7 @@ interface ConnectionCardProps {
 export function ConnectionCard({
   conn, connectingId, status, onConnect, onEdit, onDelete, onDuplicate, onTestConnection,
 }: ConnectionCardProps) {
+  const { t } = useTranslation();
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const isConnecting = connectingId === conn.id;
@@ -54,7 +56,7 @@ export function ConnectionCard({
     <div
       role="button"
       tabIndex={0}
-      aria-label={`${conn.name} connection`}
+      aria-label={t("connection.card.connectionLabel", { name: conn.name })}
       className={`group flex items-center gap-2.5 rounded-md border p-2.5 transition-colors ${
         isConnecting
           ? "border-accent-blue bg-accent-blue/10"
@@ -91,7 +93,7 @@ export function ConnectionCard({
             Connecting…
           </>
         ) : (
-          "Connect"
+          t("common.connect")
         )}
       </button>
 
@@ -101,18 +103,18 @@ export function ConnectionCard({
           className="fixed z-50 min-w-[160px] rounded-md border border-border bg-surface-elevated py-1 shadow-lg"
           style={{ left: menuPos.x, top: menuPos.y }}
         >
-          <ContextMenuItem icon={<Plug size={12} />} label="Connect" onClick={() => { setMenuPos(null); onConnect(); }} />
-          <ContextMenuItem icon={<Pencil size={12} />} label="Edit Connection" onClick={() => { setMenuPos(null); onEdit(); }} />
+          <ContextMenuItem icon={<Plug size={12} />} label={t("common.connect")} onClick={() => { setMenuPos(null); onConnect(); }} />
+          <ContextMenuItem icon={<Pencil size={12} />} label={t("connection.card.editConnection")} onClick={() => { setMenuPos(null); onEdit(); }} />
           {onDuplicate && (
-            <ContextMenuItem icon={<Copy size={12} />} label="Duplicate" onClick={() => { setMenuPos(null); onDuplicate(); }} />
+            <ContextMenuItem icon={<Copy size={12} />} label={t("connection.card.duplicate")} onClick={() => { setMenuPos(null); onDuplicate(); }} />
           )}
           {onTestConnection && (
-            <ContextMenuItem icon={<Plug size={12} />} label="Test Connection" onClick={() => { setMenuPos(null); onTestConnection(); }} />
+            <ContextMenuItem icon={<Plug size={12} />} label={t("connection.card.testConnection")} onClick={() => { setMenuPos(null); onTestConnection(); }} />
           )}
           <div className="my-0.5 border-t border-border" />
           <ContextMenuItem
             icon={<Trash2 size={12} />}
-            label="Delete"
+            label={t("common.delete")}
             danger
             onClick={() => { setMenuPos(null); onDelete(); }}
           />

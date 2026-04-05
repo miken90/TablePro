@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type {
   AiProviderConfig,
@@ -8,7 +9,7 @@ import type {
   AiFeatureRoute,
   ProviderType,
 } from "../../types/settings";
-import { PROVIDER_PRESETS, AI_FEATURE_LABELS } from "../../types/settings";
+import { PROVIDER_PRESETS } from "../../types/settings";
 import {
   SettingRow,
   SettingSection,
@@ -30,11 +31,19 @@ const PROVIDER_TYPE_OPTIONS: { label: string; value: ProviderType }[] = [
 const ALL_FEATURES: AiFeature[] = ["chat", "explainQuery", "fixError", "inlineSuggestions"];
 
 export function SettingsAi() {
+  const { t } = useTranslation();
   const { settings, saveSettings } = useSettingsStore();
   const ai = settings.ai;
 
   const [testStatus, setTestStatus] = useState<Record<string, "ok" | "err" | "loading">>({});
   const [fetchedModels, setFetchedModels] = useState<Record<string, string[]>>({});
+
+  const featureLabels: Record<AiFeature, string> = {
+    chat: t("settings.ai.features.chat"),
+    explainQuery: t("settings.ai.features.explainQuery"),
+    fixError: t("settings.ai.features.fixError"),
+    inlineSuggestions: t("settings.ai.features.inlineSuggestions"),
+  };
 
   const updateAi = (patch: Partial<typeof ai>) => {
     void saveSettings({ ai: { ...ai, ...patch } });
@@ -115,29 +124,29 @@ export function SettingsAi() {
       {/* Providers */}
       <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
         <div className="flex items-center justify-between">
-          <SettingSection title="Providers" />
+          <SettingSection title={t("settings.ai.providers")} />
           <button
             onClick={addProvider}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-zinc-800"
           >
-            <Plus size={12} /> Add
+            <Plus size={12} /> {t("common.add")}
           </button>
         </div>
 
         {ai.providers.length === 0 && (
-          <p className="py-3 text-xs text-zinc-400">No providers configured. Click Add to get started.</p>
+          <p className="py-3 text-xs text-zinc-400">{t("settings.ai.noProviders")}</p>
         )}
 
         {ai.providers.map((provider) => (
           <div key={provider.id} className="flex flex-col gap-2 py-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                {provider.displayName || "Untitled"}
+                {provider.displayName || t("settings.ai.untitled")}
               </span>
               <button
                 onClick={() => removeProvider(provider.id)}
                 className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-zinc-800"
-                aria-label="Remove provider"
+                aria-label={t("settings.ai.removeProvider")}
               >
                 <Trash2 size={12} />
               </button>
@@ -145,7 +154,7 @@ export function SettingsAi() {
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-zinc-500">Type</span>
+                <span className="text-[10px] text-zinc-500">{t("settings.ai.type")}</span>
                 <Select
                   value={provider.providerType}
                   onChange={(v) => handleProviderTypeChange(provider.id, v as ProviderType)}
@@ -153,7 +162,7 @@ export function SettingsAi() {
                 />
               </label>
               <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-zinc-500">Display Name</span>
+                <span className="text-[10px] text-zinc-500">{t("settings.ai.displayName")}</span>
                 <TextInput
                   value={provider.displayName}
                   onChange={(v) => updateProvider(provider.id, { displayName: v })}
@@ -161,7 +170,7 @@ export function SettingsAi() {
                 />
               </label>
               <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-zinc-500">Base URL</span>
+                <span className="text-[10px] text-zinc-500">{t("settings.ai.baseUrl")}</span>
                 <TextInput
                   value={provider.baseUrl}
                   onChange={(v) => updateProvider(provider.id, { baseUrl: v })}
@@ -170,7 +179,7 @@ export function SettingsAi() {
                 />
               </label>
               <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-zinc-500">API Key</span>
+                <span className="text-[10px] text-zinc-500">{t("settings.ai.apiKey")}</span>
                 <PasswordInput
                   value={provider.apiKey}
                   onChange={(v) => updateProvider(provider.id, { apiKey: v })}
@@ -178,7 +187,7 @@ export function SettingsAi() {
                 />
               </label>
               <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-zinc-500">Model</span>
+                <span className="text-[10px] text-zinc-500">{t("settings.ai.model")}</span>
                 {(fetchedModels[provider.id]?.length ?? 0) > 0 ? (
                   <Select
                     value={provider.model}
@@ -194,7 +203,7 @@ export function SettingsAi() {
                 )}
               </label>
               <label className="flex items-end gap-2 pb-0.5">
-                <span className="text-[10px] text-zinc-500">Enabled</span>
+                <span className="text-[10px] text-zinc-500">{t("settings.ai.enabled")}</span>
                 <Toggle
                   checked={provider.isEnabled}
                   onChange={(v) => updateProvider(provider.id, { isEnabled: v })}
@@ -208,18 +217,18 @@ export function SettingsAi() {
                 className="rounded border border-zinc-300 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
                 {testStatus[provider.id] === "loading"
-                  ? "Testing…"
+                  ? t("settings.ai.testing")
                   : testStatus[provider.id] === "ok"
-                    ? "✓ Connected"
+                    ? t("settings.ai.testConnected")
                     : testStatus[provider.id] === "err"
-                      ? "✗ Failed"
-                      : "Test Connection"}
+                      ? t("settings.ai.testFailed")
+                      : t("connection.card.testConnection")}
               </button>
               <button
                 onClick={() => void fetchModels(provider)}
                 className="rounded border border-zinc-300 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
-                Fetch Models
+                {t("settings.ai.fetchModels")}
               </button>
               {testStatus[provider.id] === "ok" && (
                 <span className="text-[10px] text-green-600 dark:text-green-400">✓</span>
@@ -234,21 +243,21 @@ export function SettingsAi() {
 
       {/* Feature Routing */}
       <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
-        <SettingSection title="Feature Routing" />
+        <SettingSection title={t("settings.ai.featureRouting")} />
         {ai.providers.length === 0 ? (
-          <p className="py-3 text-xs text-zinc-400">Add a provider above to configure routing.</p>
+          <p className="py-3 text-xs text-zinc-400">{t("settings.ai.noProvidersRouting")}</p>
         ) : (
           ALL_FEATURES.map((feature) => {
             const route = ai.featureRouting.find((r) => r.feature === feature);
             const selectedProvider = ai.providers.find((p) => p.id === route?.providerId);
             const modelOptions = fetchedModels[route?.providerId ?? ""] ?? [];
             return (
-              <SettingRow key={feature} label={AI_FEATURE_LABELS[feature]}>
+              <SettingRow key={feature} label={featureLabels[feature]}>
                 <div className="flex items-center gap-2">
                   <Select
                     value={route?.providerId ?? ""}
                     onChange={(v) => updateRoute(feature, { providerId: v, model: selectedProvider?.model ?? "" })}
-                    options={[{ label: "— None —", value: "" }, ...providerOptions]}
+                    options={[{ label: t("settings.ai.none"), value: "" }, ...providerOptions]}
                   />
                   {route?.providerId && (
                     modelOptions.length > 0 ? (
@@ -274,9 +283,9 @@ export function SettingsAi() {
 
       {/* General AI settings */}
       <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
-        <SettingSection title="General" />
+        <SettingSection title={t("settings.ai.generalTitle")} />
 
-        <SettingRow label="Max schema tables" description="Maximum tables included in AI context (1–50)">
+        <SettingRow label={t("settings.ai.maxSchemaTables")} description={t("settings.ai.maxSchemaTablesDesc")}>
           <Slider
             value={ai.maxSchemaTables}
             onChange={(v) => updateAi({ maxSchemaTables: v })}
@@ -285,7 +294,7 @@ export function SettingsAi() {
           />
         </SettingRow>
 
-        <SettingRow label="Inline suggestions" description="Show AI-powered inline completions in the editor">
+        <SettingRow label={t("settings.ai.inlineSuggestions")} description={t("settings.ai.inlineSuggestionsDesc")}>
           <Toggle
             checked={ai.enableInlineSuggestions}
             onChange={(v) => updateAi({ enableInlineSuggestions: v })}

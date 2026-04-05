@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { DEFAULT_SETTINGS } from "../../types/settings";
 import { SettingsGeneral } from "./settings-general";
@@ -9,16 +10,17 @@ import { SettingsConnection } from "./settings-connection";
 import { SettingsAi } from "./settings-ai";
 import { SettingsShortcuts } from "./settings-shortcuts";
 
-const SECTIONS = ["General", "Editor", "Appearance", "Connection", "AI", "Shortcuts"] as const;
-type Section = (typeof SECTIONS)[number];
+const SECTION_KEYS = ["general", "editor", "appearance", "connection", "ai", "shortcuts"] as const;
+type SectionKey = (typeof SECTION_KEYS)[number];
 
 interface SettingsViewProps {
-  initialSection?: Section;
+  initialSection?: SectionKey;
   onClose: () => void;
 }
 
-export function SettingsView({ initialSection = "General", onClose }: SettingsViewProps) {
-  const [section, setSection] = useState<Section>(initialSection);
+export function SettingsView({ initialSection = "general", onClose }: SettingsViewProps) {
+  const { t } = useTranslation();
+  const [section, setSection] = useState<SectionKey>(initialSection);
   const { saveSettings } = useSettingsStore();
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -36,6 +38,15 @@ export function SettingsView({ initialSection = "General", onClose }: SettingsVi
     await saveSettings(DEFAULT_SETTINGS);
   };
 
+  const sectionLabels: Record<SectionKey, string> = {
+    general: t("settings.sections.general"),
+    editor: t("settings.sections.editor"),
+    appearance: t("settings.sections.appearance"),
+    connection: t("settings.sections.connection"),
+    ai: t("settings.sections.ai"),
+    shortcuts: t("settings.sections.shortcuts"),
+  };
+
   return (
     <div
       ref={overlayRef}
@@ -45,16 +56,16 @@ export function SettingsView({ initialSection = "General", onClose }: SettingsVi
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Settings"
+        aria-label={t("settings.title")}
         className="flex h-[600px] w-[760px] max-w-[95vw] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Settings</span>
+          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{t("settings.title")}</span>
           <button
             onClick={onClose}
             className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-            aria-label="Close settings"
+            aria-label={t("settings.closeSettings")}
           >
             <X size={15} aria-hidden="true" />
           </button>
@@ -64,7 +75,7 @@ export function SettingsView({ initialSection = "General", onClose }: SettingsVi
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar nav */}
           <nav className="flex w-40 flex-shrink-0 flex-col gap-0.5 border-r border-zinc-200 p-2 dark:border-zinc-700">
-            {SECTIONS.map((s) => (
+            {SECTION_KEYS.map((s) => (
               <button
                 key={s}
                 onClick={() => setSection(s)}
@@ -74,19 +85,19 @@ export function SettingsView({ initialSection = "General", onClose }: SettingsVi
                     : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                 }`}
               >
-                {s}
+                {sectionLabels[s]}
               </button>
             ))}
           </nav>
 
           {/* Content */}
           <div className="flex flex-1 flex-col overflow-y-auto p-6">
-            {section === "General" && <SettingsGeneral />}
-            {section === "Editor" && <SettingsEditor />}
-            {section === "Appearance" && <SettingsAppearance />}
-            {section === "Connection" && <SettingsConnection />}
-            {section === "AI" && <SettingsAi />}
-            {section === "Shortcuts" && <SettingsShortcuts />}
+            {section === "general" && <SettingsGeneral />}
+            {section === "editor" && <SettingsEditor />}
+            {section === "appearance" && <SettingsAppearance />}
+            {section === "connection" && <SettingsConnection />}
+            {section === "ai" && <SettingsAi />}
+            {section === "shortcuts" && <SettingsShortcuts />}
           </div>
         </div>
 
@@ -96,13 +107,13 @@ export function SettingsView({ initialSection = "General", onClose }: SettingsVi
             onClick={handleReset}
             className="rounded px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           >
-            Reset to Defaults
+            {t("settings.resetToDefaults")}
           </button>
           <button
             onClick={onClose}
             className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
           >
-            Done
+            {t("common.done")}
           </button>
         </div>
       </div>
