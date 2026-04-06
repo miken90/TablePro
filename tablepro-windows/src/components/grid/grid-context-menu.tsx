@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface GridContextMenuProps {
   x: number;
@@ -18,6 +19,8 @@ interface GridContextMenuProps {
   isPkColumn?: boolean;
   selectionMode?: 'cell' | 'range' | 'row' | 'column' | null;
   onCopySelection?: () => void;
+  onBulkInsert?: () => void;
+  onBulkUpdate?: () => void;
 }
 
 function Item({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
@@ -46,7 +49,9 @@ export function GridContextMenu({
   onCopyAsInsert, onCopyAsUpdate, onCopyRowTsv, onCopyCell, onCopyAsJson,
   isTableMode, onEditValue, onSetNull, onDuplicateRow, onDeleteRow,
   isDeletedRow, isPkColumn, selectionMode, onCopySelection,
+  onBulkInsert, onBulkUpdate,
 }: GridContextMenuProps) {
+  const { t } = useTranslation();
   return (
     <>
       <button
@@ -83,6 +88,17 @@ export function GridContextMenu({
             )}
             {onDeleteRow && (
               <Item label="Delete Row" onClick={onDeleteRow} />
+            )}
+            {(onBulkInsert || onBulkUpdate) && (
+              <>
+                <Separator />
+                {onBulkInsert && (
+                  <Item label={t('grid.bulk.insertRows')} onClick={onBulkInsert} />
+                )}
+                {onBulkUpdate && (
+                  <Item label={t('grid.bulk.updateColumn')} onClick={onBulkUpdate} />
+                )}
+              </>
             )}
           </>
         )}
