@@ -40,7 +40,8 @@ fn sql_literal(value: &Option<String>) -> String {
         None => "NULL".to_string(),
         Some(s) if s.is_empty() => "''".to_string(),
         Some(s) => {
-            if s.parse::<f64>().is_ok() {
+            // Only emit integers unquoted; everything else (floats, NaN, Infinity, text) gets quoted
+            if s.parse::<i64>().is_ok() {
                 s.clone()
             } else {
                 format!("'{}'", s.replace('\'', "''"))
@@ -336,8 +337,10 @@ mod tests {
     #[test]
     fn test_sql_literal_number() {
         assert_eq!(sql_literal(&Some("42".to_string())), "42");
-        assert_eq!(sql_literal(&Some("3.14".to_string())), "3.14");
+        assert_eq!(sql_literal(&Some("3.14".to_string())), "'3.14'"); // floats are quoted for safety
         assert_eq!(sql_literal(&Some("-1".to_string())), "-1");
+        assert_eq!(sql_literal(&Some("NaN".to_string())), "'NaN'"); // NaN must be quoted
+        assert_eq!(sql_literal(&Some("Infinity".to_string())), "'Infinity'"); // Infinity must be quoted
     }
 
     #[test]

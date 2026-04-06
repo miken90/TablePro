@@ -76,9 +76,11 @@ export function ProcedureSourcePanel({
     setDropping(true);
     try {
       const keyword = routine.kind === "procedure" ? "PROCEDURE" : "FUNCTION";
-      const qualified = routine.schema
-        ? `"${routine.schema}"."${routine.name}"`
-        : `"${routine.name}"`;
+      const escName = routine.name.replace(/"/g, '""');
+      const escSchema = routine.schema?.replace(/"/g, '""');
+      const qualified = escSchema
+        ? `"${escSchema}"."${escName}"`
+        : `"${escName}"`;
       const sql = `DROP ${keyword} ${qualified}`;
       await commands.executeQuery(sessionId, sql);
       onClose();
