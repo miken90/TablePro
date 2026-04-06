@@ -10,6 +10,10 @@ import { CreateTableWizard } from "../structure/create-table-wizard";
 import { EnvironmentBadge } from "../connection/environment-badge";
 import { ConnectionStatusIndicator } from "../connection/connection-status-indicator";
 import { ConnectionGroup } from "../connection/connection-group";
+import { SidebarRoutineNode } from "../procedures/sidebar-routine-node";
+import { ProcedureExecuteDialog } from "../procedures/procedure-execute-dialog";
+import { ProcedureSourcePanel } from "../procedures/procedure-source-panel";
+import type { RoutineInfo } from "../../types/schema";
 import * as commands from "../../ipc/commands";
 
 interface SidebarProps {
@@ -51,6 +55,8 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   const deferredFilter = useDeferredValue(filter);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [executeRoutine, setExecuteRoutine] = useState<RoutineInfo | null>(null);
+  const [viewSourceRoutine, setViewSourceRoutine] = useState<RoutineInfo | null>(null);
 
   const sessionId = selectedConnectionId ? sessionIds.get(selectedConnectionId) : undefined;
   const activeConnection = selectedConnectionId ? connections.get(selectedConnectionId) : undefined;
@@ -406,24 +412,22 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
               <>
                 <SidebarObjectGroup label="Functions" icon={Braces} count={routinesGrouped.functions.length}>
                   {routinesGrouped.functions.map((routine) => (
-                    <div
+                    <SidebarRoutineNode
                       key={`${routine.schema ?? ""}.${routine.name}.${routine.signature ?? ""}`}
-                      className="px-6 py-1 text-xs text-text-secondary"
-                      title={routine.signature ?? routine.name}
-                    >
-                      {routine.name}
-                    </div>
+                      routine={routine}
+                      onExecute={setExecuteRoutine}
+                      onViewSource={setViewSourceRoutine}
+                    />
                   ))}
                 </SidebarObjectGroup>
                 <SidebarObjectGroup label="Procedures" icon={ScrollText} count={routinesGrouped.procedures.length}>
                   {routinesGrouped.procedures.map((routine) => (
-                    <div
+                    <SidebarRoutineNode
                       key={`${routine.schema ?? ""}.${routine.name}.${routine.signature ?? ""}`}
-                      className="px-6 py-1 text-xs text-text-secondary"
-                      title={routine.signature ?? routine.name}
-                    >
-                      {routine.name}
-                    </div>
+                      routine={routine}
+                      onExecute={setExecuteRoutine}
+                      onViewSource={setViewSourceRoutine}
+                    />
                   ))}
                 </SidebarObjectGroup>
               </>
@@ -449,6 +453,24 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
             setWizardOpen(false);
             void fetchSchema(sessionId);
           }}
+        />
+      )}
+
+      {sessionId && executeRoutine && (
+        <ProcedureExecuteDialog
+          open={!!executeRoutine}
+          routine={executeRoutine}
+          sessionId={sessionId}
+          onClose={() => setExecuteRoutine(null)}
+        />
+      )}
+
+      {sessionId && viewSourceRoutine && (
+        <ProcedureSourcePanel
+          open={!!viewSourceRoutine}
+          routine={viewSourceRoutine}
+          sessionId={sessionId}
+          onClose={() => setViewSourceRoutine(null)}
         />
       )}
     </nav>

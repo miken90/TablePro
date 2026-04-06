@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface ConfirmRefreshDialogProps {
   open: boolean;
@@ -18,6 +19,8 @@ export function ConfirmRefreshDialog({
   onCancel,
   isSaving,
 }: ConfirmRefreshDialogProps) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -31,6 +34,8 @@ export function ConfirmRefreshDialog({
   }, [open, onCancel]);
 
   if (!open) return null;
+
+  const changeLabel = changeCount === 1 ? t("grid.changeToolbar.change") : t("grid.changeToolbar.changes");
 
   return (
     <div
@@ -51,10 +56,10 @@ export function ConfirmRefreshDialog({
           />
           <div>
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Unsaved Changes
+              {t("confirmRefresh.title")}
             </h2>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              You have {changeCount} unsaved {changeCount === 1 ? 'change' : 'changes'}. What would you like to do?
+              {t("confirmRefresh.message", { count: changeCount, label: changeLabel })}
             </p>
           </div>
         </div>
@@ -66,14 +71,14 @@ export function ConfirmRefreshDialog({
             onClick={onCancel}
             className="px-3 py-1.5 rounded text-xs font-medium border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
             onClick={onDiscardAndRefresh}
             className="px-3 py-1.5 rounded text-xs font-medium text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
           >
-            Discard & Refresh
+            {t("confirmRefresh.discardAndRefresh")}
           </button>
           <button
             type="button"
@@ -82,7 +87,7 @@ export function ConfirmRefreshDialog({
             autoFocus
             className="px-3 py-1.5 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving ? 'Saving…' : 'Save & Refresh'}
+            {isSaving ? t("confirmRefresh.saving") : t("confirmRefresh.saveAndRefresh")}
           </button>
         </div>
       </div>

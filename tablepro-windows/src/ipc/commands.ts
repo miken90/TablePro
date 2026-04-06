@@ -277,3 +277,100 @@ export const exportToFile = (
   options: ExportOptions,
 ): Promise<ExportResult> =>
   invoke('export_to_file', { sessionId, sql, format, filePath, options });
+
+// EXPLAIN query types
+export interface ExplainNode {
+  operation: string;
+  detail: string;
+  cost: number | null;
+  rows: number | null;
+  children: ExplainNode[];
+}
+
+export interface ExplainResult {
+  format: string;
+  raw: string;
+  nodes: ExplainNode[];
+}
+
+export const explainQuery = (sessionId: string, sql: string): Promise<ExplainResult> =>
+  invoke('explain_query', { sessionId, sql });
+
+// ── Routine operations (dev-2) ──────────────────────────────────────────
+export interface RoutineParam {
+  name: string;
+  value: string | null;
+  paramType: string | null;
+}
+
+export interface RoutineResult {
+  resultSet: QueryResult | null;
+  outputParams: [string, unknown][];
+}
+
+export const getRoutineSource = (
+  sessionId: string,
+  routineName: string,
+  routineSchema: string | null,
+  routineKind: string,
+): Promise<string> =>
+  invoke('get_routine_source', { sessionId, routineName, routineSchema, routineKind });
+
+export const executeRoutine = (
+  sessionId: string,
+  routineName: string,
+  routineSchema: string | null,
+  routineKind: string,
+  params: RoutineParam[],
+): Promise<RoutineResult> =>
+  invoke('execute_routine', { sessionId, routineName, routineSchema, routineKind, params });
+
+export const previewRoutineSql = (
+  sessionId: string,
+  routineName: string,
+  routineSchema: string | null,
+  routineKind: string,
+  params: RoutineParam[],
+): Promise<string> =>
+  invoke('preview_routine_sql', { sessionId, routineName, routineSchema, routineKind, params });
+
+// ── Bulk operations (dev-1) ──────────────────────────────────────────────
+
+export interface BulkResult {
+  rowsAffected: number;
+  batchesExecuted: number;
+  durationMs: number;
+}
+
+export interface FilterCondition {
+  column: string;
+  operator: string;
+  value: string | null;
+}
+
+export const bulkInsert = (
+  sessionId: string,
+  table: string,
+  schema: string | null,
+  columns: string[],
+  rows: (string | null)[][],
+): Promise<BulkResult> =>
+  invoke('bulk_insert', { sessionId, table, schema, columns, rows });
+
+export const bulkUpdatePreview = (
+  sessionId: string,
+  table: string,
+  schema: string | null,
+  filters: FilterCondition[],
+): Promise<number> =>
+  invoke('bulk_update_preview', { sessionId, table, schema, filters });
+
+export const bulkUpdate = (
+  sessionId: string,
+  table: string,
+  schema: string | null,
+  column: string,
+  value: string | null,
+  filters: FilterCondition[],
+): Promise<BulkResult> =>
+  invoke('bulk_update', { sessionId, table, schema, column, value, filters });

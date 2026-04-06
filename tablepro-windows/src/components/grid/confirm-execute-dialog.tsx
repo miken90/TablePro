@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Copy } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface ConfirmExecuteDialogProps {
   open: boolean;
@@ -18,6 +19,7 @@ export function ConfirmExecuteDialog({
   onExecute,
   onCancel,
 }: ConfirmExecuteDialogProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -40,6 +42,8 @@ export function ConfirmExecuteDialog({
 
   if (!open) return null;
 
+  const stmtLabel = statementCount === 1 ? t("confirmExecute.statement") : t("confirmExecute.statements");
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
@@ -54,10 +58,10 @@ export function ConfirmExecuteDialog({
         {/* Header */}
         <div className="px-5 pt-5 pb-3">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Confirm Changes
+            {t("confirmExecute.title")}
           </h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            The following SQL will be executed
+            {t("confirmExecute.subtitle")}
           </p>
         </div>
 
@@ -65,7 +69,7 @@ export function ConfirmExecuteDialog({
         <div className="mx-5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-200 dark:border-zinc-700">
             <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-              {statementCount} {statementCount === 1 ? 'statement' : 'statements'}
+              {t("confirmExecute.statementCount", { count: statementCount, label: stmtLabel })}
             </span>
             <button
               type="button"
@@ -73,7 +77,7 @@ export function ConfirmExecuteDialog({
               className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 px-1.5 py-0.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700"
             >
               <Copy size={11} />
-              {copied ? 'Copied!' : 'Copy SQL'}
+              {copied ? t("common.copied") : t("confirmExecute.copySql")}
             </button>
           </div>
           <pre className="p-3 text-[11px] font-mono text-zinc-700 dark:text-zinc-300 overflow-auto max-h-[40vh] whitespace-pre-wrap break-all">
@@ -88,7 +92,7 @@ export function ConfirmExecuteDialog({
             onClick={onCancel}
             className="px-3 py-1.5 rounded text-xs font-medium border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -97,7 +101,7 @@ export function ConfirmExecuteDialog({
             autoFocus
             className="px-3 py-1.5 rounded text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving ? 'Executing…' : 'Execute'}
+            {isSaving ? t("confirmExecute.executing") : t("common.execute")}
           </button>
         </div>
       </div>

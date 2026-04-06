@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
-import { extractErrorMessage } from "../ipc/error";
+import { classifyError } from "../ipc/error";
 
 interface ConnectionState {
   connections: Map<string, SavedConnection>;
@@ -14,6 +14,10 @@ interface ConnectionState {
   sessionIds: Map<string, string>; // SavedConnection id → Rust session UUID
   /** Per-connection reconnect guard — prevents double-tap reconnect. */
   reconnectingIds: Set<string>;
+
+  // Tag & group filter state
+  activeTagFilter: string[];
+  activeGroupFilter: string | null;
 
   // Actions
   loadConnections: () => Promise<void>;
@@ -30,6 +34,8 @@ interface ConnectionState {
   getSessionId: (id: string) => string | undefined;
   /** Check if a specific connection is currently reconnecting. */
   isConnectionReconnecting: (id: string) => boolean;
+  setTagFilter: (tags: string[]) => void;
+  setGroupFilter: (group: string | null) => void;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
@@ -39,11 +45,26 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   connectionStatuses: new Map(),
   sessionIds: new Map(),
   reconnectingIds: new Set(),
+  activeTagFilter: [],
+  activeGroupFilter: null,
 
   loadConnections: async () => {
     const list = await commands.listConnections();
     const map = new Map(list.map((c) => [c.id, c]));
-    set({ connections: map });
+
+    // Restore persisted filter state
+    let activeTagFilter: string[] = [];
+    let activeGroupFilter: string | null = null;
+    try {
+      const rawTags = localStorage.getItem("tp:activeTagFilter");
+      if (rawTags) activeTagFilter = JSON.parse(rawTags) as string[];
+    } catch { /* ignore */ }
+    try {
+      const rawGroup = localStorage.getItem("tp:activeGroupFilter");
+      if (rawGroup) activeGroupFilter = JSON.parse(rawGroup) as string | null;
+    } catch { /* ignore */ }
+
+    set({ connections: map, activeTagFilter, activeGroupFilter });
   },
 
   loadGroups: async () => {
@@ -79,8 +100,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         return { connectionStatuses: statuses };
       });
       toast.dismiss(loadingId);
-      const msg = extractErrorMessage(err);
-      toast.error("Connection failed", { description: msg, duration: Infinity });
+      const classified = classifyError(err);
+      const description = classified.hint
+        ? `${classified.message}\n${classified.hint}`
+        : classified.message;
+      toast.error("Connection failed", { description, duration: Infinity });
       throw err;
     }
   },
@@ -137,8 +161,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         statuses.set(connectionId, "error");
         return { connectionStatuses: statuses };
       });
-      const msg = extractErrorMessage(err);
-      toast.error("Reconnect failed", { description: msg });
+      const classified = classifyError(err);
+      const description = classified.hint
+        ? `${classified.message}\n${classified.hint}`
+        : classified.message;
+      toast.error("Reconnect failed", { description });
     } finally {
       set((s) => {
         const reconnectingIds = new Set(s.reconnectingIds);
@@ -194,6 +221,14 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   getStatus: (id) => get().connectionStatuses.get(id) ?? "disconnected",
   getSessionId: (id) => get().sessionIds.get(id),
   isConnectionReconnecting: (id) => get().reconnectingIds.has(id),
+  setTagFilter: (tags) => {
+    set({ activeTagFilter: tags });
+    try { localStorage.setItem("tp:activeTagFilter", JSON.stringify(tags)); } catch { /* ignore */ }
+  },
+  setGroupFilter: (group) => {
+    set({ activeGroupFilter: group });
+    try { localStorage.setItem("tp:activeGroupFilter", JSON.stringify(group)); } catch { /* ignore */ }
+  },
 }));
 
 // Auto-subscribe to connection events from Rust backend

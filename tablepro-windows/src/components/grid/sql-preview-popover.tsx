@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { Eye, Copy, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { RowChange } from "../../stores/changeStore";
 
 interface SqlPreviewPopoverProps {
@@ -100,6 +101,7 @@ export function SqlPreviewButton({
   primaryKeys,
   rows,
 }: Omit<SqlPreviewPopoverProps, "anchorEl" | "onClose">) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const btnRef = React.useRef<HTMLButtonElement>(null);
@@ -118,17 +120,17 @@ export function SqlPreviewButton({
         ref={btnRef}
         type="button"
         onClick={() => setOpen(v => !v)}
-        title="Preview generated SQL statements"
+        title={t("sqlPreview.previewTooltip")}
         className="flex items-center gap-1 border border-zinc-300 px-2 py-0.5 rounded text-xs dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
       >
         <Eye size={12} />
-        Preview SQL
+        {t("grid.changeToolbar.previewSql")}
       </button>
 
       {open && (
         <div className="absolute bottom-full mb-1 right-0 z-50 w-[520px] max-w-[90vw] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-200 dark:border-zinc-700">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">SQL Preview</span>
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{t("sqlPreview.title")}</span>
             <div className="flex items-center gap-1">
               <button
                 type="button"
@@ -136,7 +138,7 @@ export function SqlPreviewButton({
                 className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 px-1.5 py-0.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 <Copy size={11} />
-                {copied ? "Copied!" : "Copy"}
+                {copied ? t("common.copied") : t("common.copy")}
               </button>
               <button
                 type="button"

@@ -1,4 +1,5 @@
 import { Database, Table2, PanelRight, Filter, Check, X as XIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -25,6 +26,7 @@ function formatNumber(n: number): string {
 }
 
 export function StatusBar() {
+  const { t } = useTranslation();
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const connections = useConnectionStore((s) => s.connections);
   const getStatus = useConnectionStore((s) => s.getStatus);
@@ -65,7 +67,7 @@ export function StatusBar() {
         <div className="flex items-center gap-1.5">
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusColor}`} />
           <span className="max-w-[140px] truncate">
-            {isConnected ? "Connected" : connStatus === "connecting" ? "Connecting…" : activeConnection ? "Disconnected" : "No connection"}
+            {isConnected ? t("common.connected") : connStatus === "connecting" ? t("common.connecting") : activeConnection ? t("common.disconnected") : t("common.noConnection")}
           </span>
         </div>
         {dbType && isConnected && (
@@ -80,7 +82,7 @@ export function StatusBar() {
         {tableCount > 0 && isConnected && (
           <div className="flex items-center gap-1">
             <Table2 size={10} />
-            <span>{tableCount} table{tableCount !== 1 ? "s" : ""}</span>
+            <span>{tableCount} {t(tableCount !== 1 ? "common.tables" : "common.table")}</span>
           </div>
         )}
       </div>
@@ -91,19 +93,19 @@ export function StatusBar() {
       {/* Center-right: result summary */}
       <div className="flex items-center gap-3">
         {isExecuting ? (
-          <span className="text-accent-blue">Running…</span>
+          <span className="text-accent-blue">{t("common.running")}</span>
         ) : error ? (
           <span className="flex items-center gap-1 max-w-[300px] truncate text-accent-red">
             <XIcon size={10} className="flex-shrink-0" />
-            Error{durationMs !== null ? ` (${durationMs}ms)` : ""}
+            {t("common.error")}{durationMs !== null ? ` (${durationMs}ms)` : ""}
           </span>
         ) : result ? (
           <>
             <span className="flex items-center gap-1 text-accent-green">
               <Check size={10} className="flex-shrink-0" />
               {result.affectedRows > 0
-                ? `${formatNumber(result.affectedRows)} affected`
-                : `${formatNumber(result.rows.length)} row${result.rows.length !== 1 ? "s" : ""}`}
+                ? `${formatNumber(result.affectedRows)} ${t("common.affected")}`
+                : `${formatNumber(result.rows.length)} ${t(result.rows.length !== 1 ? "common.rows" : "common.row")}`}
             </span>
             {durationMs !== null && <span>{durationMs}ms</span>}
           </>
@@ -117,19 +119,19 @@ export function StatusBar() {
             aria-pressed={inspectorVisible}
             onClick={() => useLayoutStore.getState().toggleInspector()}
             className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${inspectorVisible ? "bg-surface-muted text-text-primary" : "hover:bg-surface-muted"}`}
-            title="Toggle Inspector (Ctrl+Shift+I)"
+            title={t("statusBar.toggleInspector")}
           >
             <PanelRight size={10} />
-            <span>Inspector</span>
+            <span>{t("statusBar.inspector")}</span>
           </button>
           <button
             aria-pressed={filterVisible}
             onClick={() => useLayoutStore.getState().toggleFilter()}
             className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${filterVisible ? "bg-surface-muted text-text-primary" : "hover:bg-surface-muted"}`}
-            title="Toggle Filter (Ctrl+Shift+L)"
+            title={t("statusBar.toggleFilter")}
           >
             <Filter size={10} />
-            <span>Filter</span>
+            <span>{t("common.filter")}</span>
           </button>
         </div>
       )}

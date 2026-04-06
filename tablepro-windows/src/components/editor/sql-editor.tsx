@@ -196,6 +196,15 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
             const sessionId = useConnectionStore.getState().getSessionId(connId);
             if (sessionId) void useSchemaStore.getState().fetchSchema(sessionId);
           },
+          runExplain: (view) => {
+            const sessionId = resolveActiveQuerySessionId();
+            if (!sessionId) return false;
+            const text = view.state.doc.toString();
+            const cursor = view.state.selection.main.head;
+            const stmt = runtime.statementAtCursor(text, cursor);
+            if (stmt.trim()) void useQueryStore.getState().runExplain(sessionId, stmt);
+            return true;
+          },
         }),
         // Keymaps (including fold keymaps)
         runtime.keymap.of([

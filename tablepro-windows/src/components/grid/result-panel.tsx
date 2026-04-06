@@ -18,6 +18,8 @@ import { ResultStatusBar } from './result-status-bar';
 import { GridContextMenu } from './grid-context-menu';
 import { ConfirmExecuteDialog } from './confirm-execute-dialog';
 import { ConfirmRefreshDialog } from './confirm-refresh-dialog';
+import { BulkInsertDialog } from './bulk-insert-dialog';
+import { BulkUpdateDialog } from './bulk-update-dialog';
 import { generatePreviewSql } from './sql-preview-popover';
 import { useTableData } from './hooks/use-table-data';
 import { useChangeTracking } from './hooks/use-change-tracking';
@@ -65,6 +67,8 @@ export function ResultPanel({
   const lastAutoSwitchedErrorRef = React.useRef<string | null>(null);
   const [confirmExecuteOpen, setConfirmExecuteOpen] = useState(false);
   const [confirmRefreshOpen, setConfirmRefreshOpen] = useState(false);
+  const [bulkInsertOpen, setBulkInsertOpen] = useState(false);
+  const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
   const gridScrollRef = useRef<HTMLDivElement>(null);
 
   // --- Hooks ---
@@ -228,6 +232,13 @@ export function ResultPanel({
   const handleDiscardAndRefresh = useCallback(() => {
     setConfirmRefreshOpen(false);
     useChangeStore.getState().clear();
+    if (sessionId && tableName) {
+      fetchTableData(sessionId, tableName, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
+    }
+  }, [sessionId, tableName, schema, fetchTableData, page, pageSize, activeWhereClause, sorting]);
+
+  // Refresh table data after a bulk operation completes successfully
+  const handleBulkSuccess = useCallback(() => {
     if (sessionId && tableName) {
       fetchTableData(sessionId, tableName, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
     }
@@ -408,6 +419,8 @@ export function ResultPanel({
           isPkColumn={result?.columns[contextMenu.colIndex]?.isPrimaryKey ?? false}
           selectionMode={selection.mode}
           onCopySelection={copySelection}
+          onBulkInsert={isTableMode ? () => { closeContextMenu(); setBulkInsertOpen(true); } : undefined}
+          onBulkUpdate={isTableMode ? () => { closeContextMenu(); setBulkUpdateOpen(true); } : undefined}
         />
       )}
       {showExport && displayResult && activeConnectionId && (
@@ -434,6 +447,28 @@ export function ResultPanel({
         onCancel={() => setConfirmRefreshOpen(false)}
         isSaving={isSaving}
       />
+      {isTableMode && sessionId && tableName && result && (
+        <>
+          <BulkInsertDialog
+            open={bulkInsertOpen}
+            sessionId={sessionId}
+            table={tableName}
+            schema={schema ?? null}
+            columns={result.columns}
+            onClose={() => setBulkInsertOpen(false)}
+            onSuccess={handleBulkSuccess}
+          />
+          <BulkUpdateDialog
+            open={bulkUpdateOpen}
+            sessionId={sessionId}
+            table={tableName}
+            schema={schema ?? null}
+            columns={result.columns}
+            onClose={() => setBulkUpdateOpen(false)}
+            onSuccess={handleBulkSuccess}
+          />
+        </>
+      )}
     </div>
   );
 }

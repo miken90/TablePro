@@ -130,7 +130,7 @@ describe("getEffectiveBinding", () => {
 
 describe("findBindingConflict", () => {
   it("returns null when no conflict", () => {
-    const result = findBindingConflict("editor.run", ["Ctrl", "Shift", "X"], {});
+    const result = findBindingConflict("editor.run", ["Ctrl", "Shift", "Y"], {});
     expect(result).toBeNull();
   });
 
@@ -141,8 +141,8 @@ describe("findBindingConflict", () => {
   });
 
   it("detects conflict with user override", () => {
-    const overrides: UserBindings = { "tabs.new": ["Ctrl", "Shift", "X"] };
-    const result = findBindingConflict("editor.run", ["Ctrl", "Shift", "X"], overrides);
+    const overrides: UserBindings = { "tabs.new": ["Ctrl", "Shift", "Y"] };
+    const result = findBindingConflict("editor.run", ["Ctrl", "Shift", "Y"], overrides);
     expect(result).toBe("tabs.new");
   });
 

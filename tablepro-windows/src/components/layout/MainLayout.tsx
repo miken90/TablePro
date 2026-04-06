@@ -25,6 +25,7 @@ import { EditorViewProvider } from "../../contexts/editor-view-context";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { resolveActiveQuerySessionId, useQueryStore } from "../../stores/queryStore";
+import { ExplainPanel } from "../editor/explain-panel";
 import { useInspectorStore } from "../../stores/inspectorStore";
 import { useChangeStore } from "../../stores/changeStore";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -44,6 +45,8 @@ import { useMainLayoutCommands } from "../../hooks/useMainLayoutCommands";
 import { useFilterContext } from "../../hooks/useFilterContext";
 import { useTableCallbacks } from "../../hooks/useTableCallbacks";
 import { useState, useCallback, useRef, useEffect } from "react";
+import { OnboardingDialog } from "../onboarding/onboarding-dialog";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 export function MainLayout() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
@@ -88,9 +91,26 @@ export function MainLayout() {
   useMainLayoutShortcuts();
   useMainLayoutCommands();
 
-  // Load persisted tab state from backend on mount
+  // Load persisted tab state and settings from backend on mount
   useEffect(() => {
     void useEditorStore.getState().initFromBackend();
+    void useSettingsStore.getState().loadSettings();
+  }, []);
+
+  // Onboarding: check on mount, show dialog if not completed
+  const hasCompletedOnboarding = useSettingsStore((s) => s.settings.hasCompletedOnboarding);
+  const isSettingsLoaded = useSettingsStore((s) => s.isLoaded);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (isSettingsLoaded && !hasCompletedOnboarding) {
+      setShowOnboarding(true);
+    }
+  }, [isSettingsLoaded, hasCompletedOnboarding]);
+
+  const handleOnboardingComplete = useCallback(() => {
+    setShowOnboarding(false);
+    void useSettingsStore.getState().saveSettings({ hasCompletedOnboarding: true });
   }, []);
 
   const { filterTabId, activeWhereClause } = useFilterContext(viewMode, activeTableContext, activeTabId);
@@ -210,6 +230,7 @@ export function MainLayout() {
   });
 
   const queryResult = useQueryStore((s) => s.result);
+  const explainResult = useQueryStore((s) => s.explainResult);
   const inspectorStoreColumns = useInspectorStore((s) => s.columns);
   const inspectorStoreRow = useInspectorStore((s) => s.row);
 
@@ -347,11 +368,21 @@ export function MainLayout() {
                           <span className="h-1 w-1 rounded-full bg-current" />
                         </div>
                       </div>
-                      <div className="flex-1 overflow-hidden">
-                        <ResultPanel
-                          sessionId={sessionId}
-                          onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
-                        />
+                      <div className="flex-1 overflow-hidden flex flex-col">
+                        {explainResult && (
+                          <div className="max-h-[40%] overflow-hidden">
+                            <ExplainPanel
+                              result={explainResult}
+                              onClose={() => useQueryStore.setState({ explainResult: null })}
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1 overflow-hidden">
+                          <ResultPanel
+                            sessionId={sessionId}
+                            onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
+                          />
+                        </div>
                       </div>
                     </>
                   )}
@@ -462,6 +493,10 @@ export function MainLayout() {
         onDiscard={handleUnsavedDiscard}
         onCancel={handleUnsavedCancel}
       />
+
+      {showOnboarding && (
+        <OnboardingDialog onComplete={handleOnboardingComplete} />
+      )}
       </EditorViewProvider>
     </div>
   );

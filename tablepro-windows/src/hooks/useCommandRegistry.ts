@@ -28,6 +28,7 @@ export const COMMAND_DEFINITIONS: CommandDefinition[] = [
   // -- Editor --
   { id: "editor.run",           label: "Run Query",            defaultBinding: ["Ctrl", "Enter"],       category: "Query" },
   { id: "editor.cancel",        label: "Cancel Query",         defaultBinding: ["Escape"],              category: "Query" },
+  { id: "editor.explain",       label: "Explain Query",        defaultBinding: ["Ctrl", "Shift", "X"], category: "Query" },
   { id: "editor.formatSql",     label: "Format SQL",           defaultBinding: ["Ctrl", "Shift", "F"],  category: "Query" },
   { id: "editor.toggleComment", label: "Toggle Comment",       defaultBinding: ["Ctrl", "/"],           category: "Query" },
 

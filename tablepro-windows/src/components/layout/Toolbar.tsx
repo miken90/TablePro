@@ -2,7 +2,6 @@ import { Clock, Loader2, RefreshCw, Settings, Shield, Sparkles, Unplug } from "l
 import { formatTagLabel, tagClassName } from "../connection/connection-tag-picker";
 import { useConnectionStore } from "../../stores/connectionStore";
 import {
-  resolveActiveQueryConnectionId,
   resolveActiveQuerySessionId,
   useQueryStore,
 } from "../../stores/queryStore";
@@ -108,25 +107,15 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
     void execute(sessionId, queryText.trim(), undefined, safeModeLevel);
   };
 
+  const runExplain = useQueryStore((s) => s.runExplain);
+
   const handleExplain = () => {
     if (!queryText.trim()) return;
     const sessionId = resolveActiveQuerySessionId();
     if (!sessionId) return;
-    const resolvedConnectionId = resolveActiveQueryConnectionId();
-    const conn = resolvedConnectionId ? connections.get(resolvedConnectionId) : null;
-    const dbType = conn?.config?.dbType?.toLowerCase();
-    // Use current statement only (not all editor text)
     const stmt = getCurrentStatement();
     if (!stmt.trim()) return;
-    // Prefix with engine-appropriate EXPLAIN
-    let explainSql: string;
-    if (dbType === "mysql") {
-      explainSql = `EXPLAIN ${stmt}`;
-    } else {
-      explainSql = `EXPLAIN ANALYZE ${stmt}`;
-    }
-    onRunQuery?.();
-    void execute(sessionId, explainSql, undefined, safeModeLevel);
+    void runExplain(sessionId, stmt);
   };
 
   const handleCycleSafeMode = () => {

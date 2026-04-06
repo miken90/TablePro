@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface UnsavedChangesDialogProps {
   open: boolean;
@@ -9,6 +10,7 @@ interface UnsavedChangesDialogProps {
 }
 
 export function UnsavedChangesDialog({ open, onSave, onDiscard, onCancel }: UnsavedChangesDialogProps) {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleKeyDown = useCallback(
@@ -43,9 +45,9 @@ export function UnsavedChangesDialog({ open, onSave, onDiscard, onCancel }: Unsa
             <AlertTriangle size={16} className="text-amber-500" />
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-medium text-text-primary">Unsaved Changes</h3>
+            <h3 className="text-sm font-medium text-text-primary">{t("unsavedChanges.title")}</h3>
             <p className="mt-1 text-xs text-text-muted">
-              This table has unsaved changes. What would you like to do?
+              {t("unsavedChanges.message")}
             </p>
           </div>
         </div>
@@ -55,19 +57,19 @@ export function UnsavedChangesDialog({ open, onSave, onDiscard, onCancel }: Unsa
             onClick={onCancel}
             className="rounded px-3 py-1.5 text-xs text-text-muted hover:bg-surface-muted"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={onDiscard}
             className="rounded px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
           >
-            Discard
+            {t("common.discard")}
           </button>
           <button
             onClick={onSave}
             className="rounded bg-accent-blue px-3 py-1.5 text-xs text-white hover:bg-accent-blue/90"
           >
-            Save
+            {t("common.save")}
           </button>
         </div>
       </div>

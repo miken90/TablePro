@@ -1,4 +1,5 @@
 import { Download, RefreshCw, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { AvailableUpdate } from "../../hooks/useAutoUpdater";
 
 interface UpdateNotificationProps {
@@ -31,6 +32,7 @@ export function UpdateNotification({
   onUpdateNow,
   onLater,
 }: UpdateNotificationProps) {
+  const { t } = useTranslation();
   const progress = progressPercent(downloadedBytes, totalBytes);
 
   return (
@@ -38,17 +40,17 @@ export function UpdateNotification({
       <div className="mb-2 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Update available: {update.version}
+            {t("update.available", { version: update.version })}
           </h3>
           {update.date && (
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Published: {update.date}</p>
+            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{t("update.published", { date: update.date })}</p>
           )}
         </div>
         <button
           onClick={onLater}
           disabled={isInstalling}
           className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-          aria-label="Dismiss update notification"
+          aria-label={t("common.close")}
         >
           <X size={16} />
         </button>
@@ -62,7 +64,7 @@ export function UpdateNotification({
         <div className="mb-3 rounded-md border border-zinc-200 p-2 dark:border-zinc-700">
           <div className="mb-1 flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
             <RefreshCw size={14} className="animate-spin" />
-            <span>Downloading update…</span>
+            <span>{t("update.downloading")}</span>
           </div>
           {progress !== null ? (
             <>
@@ -75,13 +77,13 @@ export function UpdateNotification({
             </>
           ) : (
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Downloaded {formatBytes(downloadedBytes)}
+              {t("update.downloaded", { bytes: formatBytes(downloadedBytes) })}
             </p>
           )}
         </div>
       )}
 
-      {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">Update failed: {error}</p>}
+      {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{t("error.updateFailed", { error })}</p>}
 
       <div className="flex items-center justify-end gap-2">
         <button
@@ -89,7 +91,7 @@ export function UpdateNotification({
           disabled={isInstalling}
           className="rounded border border-zinc-300 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
         >
-          Later
+          {t("update.later")}
         </button>
         <button
           onClick={onUpdateNow}
@@ -97,7 +99,7 @@ export function UpdateNotification({
           className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Download size={14} />
-          {isInstalling ? "Installing…" : "Update Now"}
+          {isInstalling ? t("update.installing") : t("update.updateNow")}
         </button>
       </div>
     </div>

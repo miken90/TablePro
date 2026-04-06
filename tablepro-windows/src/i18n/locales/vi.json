@@ -1,0 +1,588 @@
+{
+  "common": {
+    "connect": "Kết nối",
+    "connecting": "Đang kết nối…",
+    "connected": "Đã kết nối",
+    "disconnected": "Đã ngắt kết nối",
+    "noConnection": "Chưa kết nối",
+    "cancel": "Hủy",
+    "close": "Đóng",
+    "save": "Lưu",
+    "delete": "Xóa",
+    "discard": "Hủy bỏ",
+    "undo": "Hoàn tác",
+    "redo": "Làm lại",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép!",
+    "export": "Xuất",
+    "import": "Nhập",
+    "apply": "Áp dụng",
+    "clear": "Xóa bộ lọc",
+    "search": "Tìm kiếm",
+    "filter": "Lọc",
+    "loading": "Đang tải…",
+    "error": "Lỗi",
+    "results": "Kết quả",
+    "messages": "Thông báo",
+    "done": "Xong",
+    "ok": "OK",
+    "add": "Thêm",
+    "edit": "Chỉnh sửa",
+    "rows": "hàng",
+    "row": "hàng",
+    "columns": "cột",
+    "column": "cột",
+    "table": "bảng",
+    "tables": "bảng",
+    "preview": "Xem trước",
+    "options": "Tùy chọn",
+    "format": "Định dạng",
+    "browse": "Duyệt…",
+    "execute": "Thực thi",
+    "running": "Đang chạy…",
+    "affected": "bị ảnh hưởng",
+    "selected": "đã chọn",
+    "noData": "(không có dữ liệu)"
+  },
+  "error": {
+    "somethingWentWrong": "Đã xảy ra lỗi",
+    "tryAgain": "Thử lại",
+    "hint": "Gợi ý",
+    "queryFailed": "Truy vấn thất bại",
+    "connectionFailed": "Kết nối thất bại",
+    "reconnectFailed": "Kết nối lại thất bại",
+    "unknownError": "Đã xảy ra lỗi không xác định",
+    "updateFailed": "Cập nhật thất bại: {{error}}",
+    "hints": {
+      "databaseError": "Kiểm tra xem máy chủ cơ sở dữ liệu có đang chạy và có thể truy cập không",
+      "notConnected": "Thử kết nối lại với cơ sở dữ liệu",
+      "pluginError": "Kiểm tra xem trình điều khiển cơ sở dữ liệu đã được cài đặt đúng chưa",
+      "ioError": "Kiểm tra quyền truy cập tệp và dung lượng ổ đĩa",
+      "connectionRefused": "Kiểm tra xem máy chủ có đang chạy trên đúng máy chủ và cổng không",
+      "authFailure": "Kiểm tra tên người dùng và mật khẩu của bạn",
+      "timeout": "Thao tác đã hết thời gian chờ. Thử lại hoặc kiểm tra tải máy chủ"
+    }
+  },
+  "explain": {
+    "title": "Kế hoạch thực thi",
+    "treeView": "Cây",
+    "rawView": "Thô",
+    "operation": "Thao tác",
+    "detail": "Chi tiết",
+    "cost": "Chi phí",
+    "rows": "Hàng",
+    "noResult": "Không có kết quả kế hoạch thực thi",
+    "running": "Đang phân tích kế hoạch truy vấn...",
+    "expensiveNode": "Thao tác tốn kém",
+    "expandAll": "Mở rộng tất cả",
+    "collapseAll": "Thu gọn tất cả",
+    "button": "Giải thích",
+    "shortcut": "Ctrl+Shift+X"
+  },
+  "toast": {
+    "queryExecuted": "Đã thực thi truy vấn",
+    "queryBlocked": "Truy vấn bị chặn"
+  },
+  "connection": {
+    "filter": {
+      "all": "Tất cả",
+      "noMatches": "Không có kết nối nào khớp với bộ lọc đang hoạt động",
+      "clearFilters": "Xóa bộ lọc",
+      "tagChipAriaLabel": "Lọc theo nhãn: {{tag}}",
+      "clearAriaLabel": "Xóa tất cả bộ lọc nhãn"
+    },
+    "tag": {
+      "createNew": "Tạo nhãn",
+      "namePlaceholder": "Tên nhãn",
+      "deleteConfirm": "Xóa nhãn \"{{tag}}\"? Các kết nối sử dụng nhãn này sẽ bị gỡ nhãn.",
+      "delete": "Xóa",
+      "cancel": "Hủy",
+      "colors": "Màu"
+    },
+    "card": {
+      "editConnection": "Chỉnh sửa kết nối",
+      "duplicate": "Nhân bản",
+      "testConnection": "Kiểm tra kết nối",
+      "connectionLabel": "Kết nối {{name}}"
+    },
+    "form": {
+      "sshTunnel": "Đường hầm SSH",
+      "sshHost": "Máy chủ SSH",
+      "sshPort": "Cổng SSH",
+      "sshUser": "Người dùng SSH",
+      "authMethod": "Phương thức xác thực",
+      "password": "Mật khẩu",
+      "privateKey": "Khóa riêng tư",
+      "sshPassword": "Mật khẩu SSH",
+      "keyFile": "Tệp khóa",
+      "passphrase": "Cụm mật khẩu",
+      "optional": "(tùy chọn)",
+      "sshKeyLabel": "Khóa SSH",
+      "allFiles": "Tất cả tệp"
+    }
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Chào mừng đến với TablePro",
+      "subtitle": "Ứng dụng quản lý cơ sở dữ liệu nhanh, nhẹ cho Windows",
+      "getStarted": "Bắt đầu",
+      "features": {
+        "multiDb": "PostgreSQL, MySQL, SQLite, MSSQL, MongoDB & Redis",
+        "multiDbDesc": "Kết nối với các cơ sở dữ liệu phổ biến với đầy đủ tính năng",
+        "editor": "Trình soạn SQL thông minh",
+        "editorDesc": "Tô sáng cú pháp, tự động hoàn thành và chỉnh sửa đa thẻ",
+        "grid": "Lưới dữ liệu tương tác",
+        "gridDesc": "Duyệt, chỉnh sửa và quản lý dữ liệu dễ dàng",
+        "secure": "Kết nối bảo mật",
+        "secureDesc": "Hỗ trợ đường hầm SSH và mã hóa SSL/TLS",
+        "ai": "Trợ lý AI",
+        "aiDesc": "Nhận gợi ý SQL thông minh và hỗ trợ truy vấn"
+      }
+    },
+    "addConnection": {
+      "title": "Thêm kết nối đầu tiên",
+      "subtitle": "Thiết lập kết nối cơ sở dữ liệu để bắt đầu",
+      "saveAndContinue": "Lưu & Tiếp tục",
+      "testConnection": "Kiểm tra kết nối",
+      "testSuccess": "Kiểm tra kết nối thành công!",
+      "connectionSaved": "Đã lưu kết nối"
+    },
+    "quickStart": {
+      "title": "Bạn đã sẵn sàng!",
+      "subtitle": "Dưới đây là một số phím tắt giúp bạn bắt đầu",
+      "done": "Xong",
+      "shortcuts": {
+        "execute": "Thực thi truy vấn",
+        "commandPalette": "Bảng lệnh",
+        "explain": "Giải thích truy vấn"
+      }
+    },
+    "steps": {
+      "skip": "Bỏ qua",
+      "back": "Quay lại",
+      "next": "Tiếp",
+      "stepOf": "Bước {{current}} / {{total}}"
+    }
+  },
+  "procedures": {
+    "execute": "Thực thi",
+    "viewSource": "Xem mã nguồn",
+    "copyName": "Sao chép tên",
+    "executeRoutine": "Thực thi thủ tục",
+    "sourceOf": "Mã nguồn: {{name}}",
+    "parameters": "Tham số",
+    "noParameters": "Thủ tục này không có tham số.",
+    "paramName": "Tên",
+    "paramType": "Kiểu",
+    "paramValue": "Giá trị",
+    "null": "NULL",
+    "sqlPreview": "Xem trước SQL",
+    "generatePreview": "Tạo bản xem trước",
+    "confirm": "Xác nhận & Thực thi",
+    "cancel": "Hủy",
+    "executing": "Đang thực thi…",
+    "resultSet": "Tập kết quả",
+    "outputParams": "Tham số đầu ra",
+    "noResults": "Thủ tục đã thực thi thành công mà không có tập kết quả.",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép!",
+    "edit": "Chỉnh sửa trong thẻ truy vấn",
+    "drop": "Xóa",
+    "dropConfirm": "Bạn có chắc muốn xóa \"{{name}}\"? Hành động này không thể hoàn tác.",
+    "dropTitle": "Xóa thủ tục",
+    "notSupported": "Thủ tục lưu trữ không được hỗ trợ cho cơ sở dữ liệu này.",
+    "close": "Đóng"
+  },
+  "grid": {
+    "bulk": {
+      "insertRows": "Chèn hàng loạt…",
+      "updateColumn": "Cập nhật cột hàng loạt…",
+      "insertTitle": "Chèn hàng loạt",
+      "updateTitle": "Cập nhật hàng loạt",
+      "pasteOrDrop": "Dán dữ liệu phân tách bằng tab hoặc thả tệp CSV vào đây",
+      "dropCsv": "Thả tệp CSV (tối đa 50 MB)",
+      "columns": "Cột",
+      "previewRows": "Xem trước ({{count}} hàng đầu)",
+      "totalRows": "Tổng cộng {{count}} hàng",
+      "noData": "Không có dữ liệu để chèn",
+      "inserting": "Đang chèn…",
+      "insert": "Chèn",
+      "insertSuccess": "Đã chèn {{count}} hàng trong {{ms}} ms",
+      "insertFailed": "Chèn hàng loạt thất bại",
+      "fileTooLarge": "Tệp vượt quá giới hạn 50 MB",
+      "targetColumn": "Cột đích",
+      "newValue": "Giá trị mới",
+      "addFilter": "Thêm bộ lọc",
+      "removeFilter": "Xóa bộ lọc",
+      "column": "Cột",
+      "operator": "Toán tử",
+      "value": "Giá trị",
+      "dryRun": "Xem trước số lượng",
+      "willUpdate": "Sẽ cập nhật {{count}} hàng",
+      "noFilters": "Thêm ít nhất một điều kiện lọc",
+      "updating": "Đang cập nhật…",
+      "update": "Cập nhật",
+      "confirm": "Xác nhận",
+      "updateSuccess": "Đã cập nhật {{count}} hàng trong {{ms}} ms",
+      "updateFailed": "Cập nhật hàng loạt thất bại",
+      "cancel": "Hủy",
+      "close": "Đóng"
+    },
+    "columnMenu": {
+      "sortAsc": "Sắp xếp tăng dần ↑",
+      "sortDesc": "Sắp xếp giảm dần ↓",
+      "filterByColumn": "Lọc theo cột",
+      "hideColumn": "Ẩn cột",
+      "selectColumn": "Chọn cột",
+      "copyColumnName": "Sao chép tên cột",
+      "columnOptions": "Tùy chọn cột"
+    },
+    "changeToolbar": {
+      "unsavedChanges": "{{count}} thay đổi chưa lưu",
+      "change": "thay đổi",
+      "changes": "thay đổi",
+      "executeCount": "Thực thi ({{count}})",
+      "saveChanges": "Lưu thay đổi (Ctrl+S)",
+      "previewSql": "Xem trước SQL"
+    },
+    "contextualBar": {
+      "addRow": "Thêm hàng",
+      "toggleFilters": "Bật/tắt bộ lọc (Ctrl+Shift+F)"
+    },
+    "pagination": {
+      "showing": "{{start}}–{{end}} / {{total}} hàng",
+      "zeroRows": "0 hàng",
+      "rowsPerPage": "Hàng mỗi trang:",
+      "pageOf": "Trang {{page}} / {{total}}",
+      "firstPage": "Trang đầu",
+      "previousPage": "Trang trước",
+      "nextPage": "Trang sau",
+      "lastPage": "Trang cuối"
+    },
+    "noChangesPreview": "-- Không có thay đổi để xem trước"
+  },
+  "resultToolbar": {
+    "queryEditor": "Trình soạn truy vấn",
+    "exportResults": "Xuất kết quả",
+    "rowsOfTotal": "{{count}} / {{total}} hàng",
+    "truncatedRows": "{{count}} / {{total}} hàng (đã cắt bớt)",
+    "approximateRows": "~{{count}} hàng"
+  },
+  "resultStatusBar": {
+    "noQueries": "Chưa có truy vấn nào được thực thi.",
+    "copy": "Sao chép"
+  },
+  "confirmExecute": {
+    "title": "Xác nhận thay đổi",
+    "subtitle": "Câu lệnh SQL sau sẽ được thực thi",
+    "statementCount": "{{count}} {{label}}",
+    "statement": "câu lệnh",
+    "statements": "câu lệnh",
+    "copySql": "Sao chép SQL",
+    "executing": "Đang thực thi…"
+  },
+  "confirmRefresh": {
+    "title": "Thay đổi chưa lưu",
+    "message": "Bạn có {{count}} thay đổi chưa lưu. Bạn muốn làm gì?",
+    "discardAndRefresh": "Hủy bỏ & Làm mới",
+    "saveAndRefresh": "Lưu & Làm mới",
+    "saving": "Đang lưu…"
+  },
+  "confirmDiscard": {
+    "title": "Hủy bỏ {{count}} {{label}}?",
+    "message": "Hành động này không thể hoàn tác."
+  },
+  "unsavedChanges": {
+    "title": "Thay đổi chưa lưu",
+    "message": "Bảng này có thay đổi chưa lưu. Bạn muốn làm gì?"
+  },
+  "sqlPreview": {
+    "title": "Xem trước SQL",
+    "previewTooltip": "Xem trước các câu lệnh SQL được tạo"
+  },
+  "statusBar": {
+    "tableCount": "{{count}} bảng",
+    "tableCountPlural": "{{count}} bảng",
+    "inspector": "Thanh tra",
+    "toggleInspector": "Bật/tắt thanh tra (Ctrl+Shift+I)",
+    "toggleFilter": "Bật/tắt bộ lọc (Ctrl+Shift+L)",
+    "rowsAffected": "{{count}} bị ảnh hưởng",
+    "rowCount": "{{count}} hàng",
+    "rowCountPlural": "{{count}} hàng"
+  },
+  "settings": {
+    "title": "Cài đặt",
+    "closeSettings": "Đóng cài đặt",
+    "resetToDefaults": "Khôi phục mặc định",
+    "sections": {
+      "general": "Chung",
+      "editor": "Trình soạn",
+      "appearance": "Giao diện",
+      "connection": "Kết nối",
+      "ai": "AI",
+      "shortcuts": "Phím tắt"
+    },
+    "general": {
+      "title": "Chung",
+      "language": "Ngôn ngữ",
+      "languageDesc": "Ngôn ngữ hiển thị ứng dụng",
+      "pageSize": "Kích thước trang",
+      "pageSizeDesc": "Số hàng được tải mỗi trang",
+      "nullDisplay": "Hiển thị Null",
+      "nullDisplayDesc": "Văn bản hiển thị cho giá trị NULL",
+      "dateFormat": "Định dạng ngày",
+      "dateFormatDesc": "Cách hiển thị ngày trong kết quả",
+      "dateFormats": {
+        "iso": "ISO 8601 (2026-03-13)",
+        "us": "Mỹ (03/13/2026)",
+        "eu": "Châu Âu (13/03/2026)",
+        "unix": "Unix timestamp"
+      }
+    },
+    "editor": {
+      "title": "Trình soạn",
+      "font": "Phông chữ",
+      "fontDesc": "Họ phông chữ trình soạn",
+      "fontSize": "Cỡ chữ",
+      "fontSizeDesc": "Cỡ chữ trình soạn (10–24)",
+      "vimMode": "Chế độ Vim",
+      "vimModeDesc": "Bật phím tắt Vim trong trình soạn",
+      "tabSize": "Kích thước tab",
+      "tabSizeDesc": "Số khoảng trắng mỗi tab",
+      "wordWrap": "Tự động xuống dòng",
+      "wordWrapDesc": "Tự động xuống dòng cho dòng dài trong trình soạn"
+    },
+    "appearance": {
+      "title": "Giao diện",
+      "theme": "Chủ đề",
+      "themeDesc": "Chủ đề màu cho ứng dụng",
+      "themes": {
+        "light": "Sáng",
+        "dark": "Tối",
+        "system": "Hệ thống"
+      }
+    },
+    "connection": {
+      "title": "Kết nối",
+      "defaultTimeout": "Thời gian chờ mặc định",
+      "defaultTimeoutDesc": "Thời gian chờ truy vấn tính bằng giây (0 = không giới hạn)",
+      "safeMode": "Chế độ an toàn",
+      "safeModeDesc": "Điều khiển xác nhận truy vấn trước các thao tác ghi hoặc phá hủy",
+      "safeModeOptions": {
+        "off": "0 – Tắt: không kiểm tra",
+        "silent": "1 – Im lặng: chỉ ghi nhật ký",
+        "alert": "2 – Cảnh báo: xác nhận DELETE/DROP/TRUNCATE",
+        "alertPlus": "3 – Cảnh báo+: xác nhận tất cả DML + DDL",
+        "safe": "4 – An toàn: xác nhận + nhập tên bảng",
+        "readOnly": "5 – Chỉ đọc: chặn tất cả ghi"
+      }
+    },
+    "ai": {
+      "providers": "Nhà cung cấp",
+      "noProviders": "Chưa cấu hình nhà cung cấp nào. Nhấn Thêm để bắt đầu.",
+      "untitled": "Chưa đặt tên",
+      "removeProvider": "Xóa nhà cung cấp",
+      "type": "Loại",
+      "displayName": "Tên hiển thị",
+      "baseUrl": "URL cơ sở",
+      "apiKey": "Khóa API",
+      "model": "Mô hình",
+      "enabled": "Đã bật",
+      "testing": "Đang kiểm tra…",
+      "testConnected": "✓ Đã kết nối",
+      "testFailed": "✗ Thất bại",
+      "fetchModels": "Tải mô hình",
+      "featureRouting": "Định tuyến tính năng",
+      "noProvidersRouting": "Thêm nhà cung cấp ở trên để cấu hình định tuyến.",
+      "none": "— Không —",
+      "generalTitle": "Chung",
+      "maxSchemaTables": "Số bảng tối đa",
+      "maxSchemaTablesDesc": "Số bảng tối đa được bao gồm trong ngữ cảnh AI (1–50)",
+      "inlineSuggestions": "Gợi ý nội tuyến",
+      "inlineSuggestionsDesc": "Hiển thị gợi ý hoàn thành tự động AI trong trình soạn",
+      "features": {
+        "chat": "Trò chuyện",
+        "explainQuery": "Giải thích truy vấn",
+        "fixError": "Sửa lỗi",
+        "inlineSuggestions": "Gợi ý nội tuyến"
+      }
+    },
+    "shortcuts": {
+      "title": "Phím tắt",
+      "description": "Nhấn vào phím tắt để tùy chỉnh. Phím tắt tùy chỉnh được tô sáng bằng màu xanh.",
+      "resetAll": "Đặt lại tất cả",
+      "setShortcutFor": "Đặt phím tắt cho",
+      "pressKeyCombo": "Nhấn tổ hợp phím mong muốn, sau đó nhấn Lưu.",
+      "waitingForKeypress": "Đang chờ phím nhấn...",
+      "conflictsWith": "Xung đột với",
+      "conflictOverride": "Lưu sẽ ghi đè phím tắt đó.",
+      "saveAnyway": "Vẫn lưu",
+      "resetToDefault": "Đặt lại mặc định",
+      "changeShortcut": "Nhấn để thay đổi phím tắt",
+      "sections": {
+        "editor": "Trình soạn",
+        "tabsData": "Thẻ & Dữ liệu",
+        "navigation": "Điều hướng",
+        "general": "Chung"
+      }
+    }
+  },
+  "editorTab": {
+    "closeTab": "Đóng thẻ",
+    "newTab": "Thẻ mới",
+    "openNewTab": "Mở thẻ mới"
+  },
+  "tabContextMenu": {
+    "pinTab": "Ghim thẻ",
+    "unpinTab": "Bỏ ghim thẻ",
+    "close": "Đóng",
+    "closeOthers": "Đóng các thẻ khác",
+    "closeAll": "Đóng tất cả",
+    "closeToRight": "Đóng các thẻ bên phải"
+  },
+  "editorStatusBar": {
+    "stmt": "Lệnh {{current}}/{{total}}",
+    "ln": "Dòng {{line}}, Cột {{col}}",
+    "selected": "{{count}} đã chọn",
+    "ctrlEnterToRun": "Ctrl+Enter để chạy"
+  },
+  "editorPlaceholder": {
+    "placeholder": "-- Viết SQL ở đây\n-- Ctrl+Enter để thực thi",
+    "footer": "Trình soạn SQL (chỗ giữ) · Ctrl+Enter để chạy"
+  },
+  "sidebar": {
+    "openTable": "Mở bảng",
+    "copyTableName": "Sao chép tên bảng",
+    "copySelect": "Sao chép SELECT *",
+    "viewStructure": "Xem cấu trúc"
+  },
+  "history": {
+    "title": "Lịch sử truy vấn",
+    "clearAll": "Xóa toàn bộ lịch sử",
+    "closePanel": "Đóng bảng lịch sử",
+    "searchPlaceholder": "Tìm kiếm truy vấn…",
+    "searchLabel": "Tìm kiếm lịch sử truy vấn",
+    "noHistory": "Chưa có lịch sử truy vấn",
+    "copyQuery": "Sao chép truy vấn",
+    "deleteEntry": "Xóa mục",
+    "justNow": "vừa xong",
+    "minutesAgo": "{{count}} phút trước",
+    "hoursAgo": "{{count}} giờ trước",
+    "daysAgo": "{{count}} ngày trước"
+  },
+  "inspector": {
+    "title": "Thanh tra",
+    "listView": "Dạng danh sách",
+    "list": "Danh sách",
+    "jsonView": "Dạng JSON",
+    "json": "JSON",
+    "closeInspector": "Đóng thanh tra (Ctrl+Shift+I)",
+    "selectRow": "Chọn một hàng để xem chi tiết",
+    "columnCount": "{{count}} cột"
+  },
+  "exportDialog": {
+    "title": "Xuất kết quả",
+    "formatLabel": "Định dạng",
+    "csvDelimiter": "Ký tự phân tách",
+    "csvDelimiters": {
+      "comma": "Dấu phẩy (,)",
+      "tab": "Tab (\\t)",
+      "semicolon": "Dấu chấm phẩy (;)",
+      "pipe": "Dấu gạch đứng (|)"
+    },
+    "includeHeader": "Bao gồm hàng tiêu đề",
+    "prettyPrint": "Định dạng đẹp",
+    "arrayOfArrays": "Mảng của mảng (thay vì đối tượng)",
+    "tableName": "Tên bảng",
+    "rowsPerInsert": "Hàng mỗi INSERT",
+    "includeCreateTable": "Bao gồm câu lệnh CREATE TABLE",
+    "previewFirst5": "Xem trước (5 hàng đầu)",
+    "exportComplete": "Xuất hoàn tất",
+    "exporting": "Đang xuất…"
+  },
+  "importDialog": {
+    "title": "Nhập tệp SQL",
+    "fileLabel": "Tệp SQL (.sql hoặc .sql.gz)",
+    "noFileSelected": "Chưa chọn tệp",
+    "optionsLabel": "Tùy chọn",
+    "wrapInTransaction": "Gói trong giao dịch (hoàn tác khi lỗi)",
+    "disableFkChecks": "Tắt kiểm tra khóa ngoại",
+    "scanning": "Đang quét tệp…",
+    "importedResult": "Đã nhập <strong>{{count}}</strong> câu lệnh{{plural}} trong <strong>{{duration}}s</strong>.",
+    "importComplete": "Nhập hoàn tất",
+    "importing": "Đang nhập…",
+    "noStatements": "Không tìm thấy câu lệnh nào.",
+    "previewLabel": "Xem trước"
+  },
+  "about": {
+    "version": "Phiên bản {{version}} (Windows)",
+    "description": "Ứng dụng quản lý cơ sở dữ liệu cho PostgreSQL, MySQL và SQL Server.",
+    "website": "Trang web",
+    "documentation": "Tài liệu",
+    "github": "GitHub",
+    "platform": "Nền tảng",
+    "userAgent": "User Agent",
+    "copyright": "© 2026 TablePro. Bảo lưu mọi quyền."
+  },
+  "update": {
+    "available": "Có bản cập nhật: {{version}}",
+    "published": "Ngày phát hành: {{date}}",
+    "downloading": "Đang tải bản cập nhật…",
+    "downloaded": "Đã tải {{bytes}}",
+    "later": "Để sau",
+    "updateNow": "Cập nhật ngay",
+    "installing": "Đang cài đặt…"
+  },
+  "safeMode": {
+    "confirmQuery": "Xác nhận truy vấn",
+    "readOnlyMode": "Chế độ chỉ đọc",
+    "safeModeLabel": "Chế độ an toàn: {{level}}",
+    "destructive": "Truy vấn này chứa các thao tác phá hủy (DELETE, DROP, TRUNCATE, ALTER).",
+    "dmlDdl": "Truy vấn này thay đổi dữ liệu hoặc cấu trúc cơ sở dữ liệu (INSERT, UPDATE, DELETE, DDL).",
+    "safeModeConfirm": "Truy vấn này thay đổi dữ liệu. Nhập tên bảng đích để xác nhận.",
+    "readOnly": "Truy vấn ghi bị chặn trong chế độ Chỉ đọc.",
+    "confirmDefault": "Xác nhận trước khi thực thi.",
+    "typeTableName": "Nhập tên bảng{{hint}} để xác nhận:",
+    "runAnyway": "Vẫn chạy"
+  },
+  "structure": {
+    "structureLabel": "— Cấu trúc",
+    "tabs": {
+      "columns": "Cột",
+      "indexes": "Chỉ mục",
+      "foreignKeys": "Khóa ngoại",
+      "ddl": "DDL"
+    },
+    "pendingChanges": "{{count}} thay đổi lược đồ đang chờ",
+    "previewAndApply": "Xem trước & Áp dụng"
+  },
+  "commandPalette": {
+    "label": "Bảng lệnh",
+    "placeholder": "Nhập lệnh…",
+    "noResults": "Không tìm thấy lệnh nào.",
+    "recent": "Gần đây",
+    "navigate": "điều hướng",
+    "run": "chạy",
+    "closeLabel": "đóng"
+  },
+  "filterPanel": {
+    "presets": "Mẫu lọc",
+    "save": "Lưu",
+    "savePreset": "Lưu mẫu lọc",
+    "deletePreset": "Xóa mẫu lọc đã chọn",
+    "addCondition": "Thêm điều kiện lọc",
+    "toggleLogic": "Chuyển đổi AND/OR",
+    "placeholder": "Lọc… (ví dụ: status:active, age:>25)",
+    "clearAll": "Xóa tất cả bộ lọc",
+    "presetNamePrompt": "Tên mẫu lọc"
+  },
+  "aiChat": {
+    "title": "Trò chuyện AI",
+    "closePanel": "Đóng bảng trò chuyện AI",
+    "emptyMessage": "Đặt câu hỏi về cơ sở dữ liệu, tạo SQL hoặc nhận trợ giúp về truy vấn."
+  },
+  "languages": {
+    "en": "English",
+    "vi": "Tiếng Việt"
+  }
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ChevronRight, ChevronDown, Table2, Key } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { TableInfo } from "../../types/schema";
 import type { ColumnInfo } from "../../types/query";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -31,6 +32,7 @@ export function SidebarTableNode({
   onOpenTable,
   onOpenPreviewTable,
 }: SidebarTableNodeProps) {
+  const { t } = useTranslation();
   const { fetchColumns, columnsByTable } = useSchemaStore();
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const contextRef = useRef<HTMLDivElement>(null);
@@ -180,27 +182,27 @@ export function SidebarTableNode({
             onClick={handleOpenTable}
             className="menu-item-button w-full px-3 py-1.5 text-left text-xs font-medium"
           >
-            Open Table
+            {t("sidebar.openTable")}
           </button>
           <div className="my-0.5 border-t border-border" />
           <button
             onClick={handleCopyName}
             className="menu-item-button w-full px-3 py-1.5 text-left text-xs"
           >
-            Copy Table Name
+            {t("sidebar.copyTableName")}
           </button>
           <button
             onClick={handleCopySelect}
             className="menu-item-button w-full px-3 py-1.5 text-left text-xs"
           >
-            Copy SELECT *
+            {t("sidebar.copySelect")}
           </button>
           <div className="my-0.5 border-t border-border" />
           <button
             onClick={handleViewStructure}
             className="menu-item-button w-full px-3 py-1.5 text-left text-xs"
           >
-            View Structure
+            {t("sidebar.viewStructure")}
           </button>
         </div>
       )}

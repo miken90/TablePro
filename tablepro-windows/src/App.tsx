@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import "./styles/globals.css";
+import "./i18n";
 import { MainLayout } from "./components/layout/MainLayout";
 import { ErrorBoundary } from "./components/shared/error-boundary";
 import { ToastProvider } from "./components/shared/toast-provider";

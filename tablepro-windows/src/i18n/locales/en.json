@@ -1,0 +1,588 @@
+{
+  "common": {
+    "connect": "Connect",
+    "connecting": "Connecting…",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "noConnection": "No connection",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "delete": "Delete",
+    "discard": "Discard",
+    "undo": "Undo",
+    "redo": "Redo",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "export": "Export",
+    "import": "Import",
+    "apply": "Apply",
+    "clear": "Clear",
+    "search": "Search",
+    "filter": "Filter",
+    "loading": "Loading…",
+    "error": "Error",
+    "results": "Results",
+    "messages": "Messages",
+    "done": "Done",
+    "ok": "OK",
+    "add": "Add",
+    "edit": "Edit",
+    "rows": "rows",
+    "row": "row",
+    "columns": "columns",
+    "column": "column",
+    "table": "table",
+    "tables": "tables",
+    "preview": "Preview",
+    "options": "Options",
+    "format": "Format",
+    "browse": "Browse…",
+    "execute": "Execute",
+    "running": "Running…",
+    "affected": "affected",
+    "selected": "selected",
+    "noData": "(no data)"
+  },
+  "error": {
+    "somethingWentWrong": "Something went wrong",
+    "tryAgain": "Try Again",
+    "hint": "Hint",
+    "queryFailed": "Query failed",
+    "connectionFailed": "Connection failed",
+    "reconnectFailed": "Reconnect failed",
+    "unknownError": "An unknown error occurred",
+    "updateFailed": "Update failed: {{error}}",
+    "hints": {
+      "databaseError": "Check if the database server is running and accessible",
+      "notConnected": "Try reconnecting to the database",
+      "pluginError": "Check if the database driver is installed correctly",
+      "ioError": "Check file permissions and disk space",
+      "connectionRefused": "Check if the server is running on the correct host and port",
+      "authFailure": "Check your username and password",
+      "timeout": "The operation timed out. Try again or check server load"
+    }
+  },
+  "explain": {
+    "title": "Explain Plan",
+    "treeView": "Tree",
+    "rawView": "Raw",
+    "operation": "Operation",
+    "detail": "Detail",
+    "cost": "Cost",
+    "rows": "Rows",
+    "noResult": "No explain result available",
+    "running": "Analyzing query plan...",
+    "expensiveNode": "Expensive operation",
+    "expandAll": "Expand All",
+    "collapseAll": "Collapse All",
+    "button": "Explain",
+    "shortcut": "Ctrl+Shift+X"
+  },
+  "toast": {
+    "queryExecuted": "Query executed",
+    "queryBlocked": "Query blocked"
+  },
+  "connection": {
+    "filter": {
+      "all": "All",
+      "noMatches": "No connections match the active filters",
+      "clearFilters": "Clear filters",
+      "tagChipAriaLabel": "Filter by tag: {{tag}}",
+      "clearAriaLabel": "Clear all tag filters"
+    },
+    "tag": {
+      "createNew": "Create tag",
+      "namePlaceholder": "Tag name",
+      "deleteConfirm": "Delete tag \"{{tag}}\"? Connections using it will be untagged.",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "colors": "Color"
+    },
+    "card": {
+      "editConnection": "Edit Connection",
+      "duplicate": "Duplicate",
+      "testConnection": "Test Connection",
+      "connectionLabel": "{{name}} connection"
+    },
+    "form": {
+      "sshTunnel": "SSH Tunnel",
+      "sshHost": "SSH Host",
+      "sshPort": "SSH Port",
+      "sshUser": "SSH User",
+      "authMethod": "Auth Method",
+      "password": "Password",
+      "privateKey": "Private Key",
+      "sshPassword": "SSH Password",
+      "keyFile": "Key File",
+      "passphrase": "Passphrase",
+      "optional": "(optional)",
+      "sshKeyLabel": "SSH Key",
+      "allFiles": "All Files"
+    }
+  },
+  "onboarding": {
+    "welcome": {
+      "title": "Welcome to TablePro",
+      "subtitle": "A fast, lightweight database client for Windows",
+      "getStarted": "Get Started",
+      "features": {
+        "multiDb": "PostgreSQL, MySQL, SQLite, MSSQL, MongoDB & Redis",
+        "multiDbDesc": "Connect to popular databases with full feature support",
+        "editor": "Smart SQL Editor",
+        "editorDesc": "Syntax highlighting, autocomplete, and multi-tab editing",
+        "grid": "Interactive Data Grid",
+        "gridDesc": "Browse, edit, and manage your data with ease",
+        "secure": "Secure Connections",
+        "secureDesc": "SSH tunneling and SSL/TLS encryption support",
+        "ai": "AI-Powered Assistant",
+        "aiDesc": "Get intelligent SQL suggestions and query assistance"
+      }
+    },
+    "addConnection": {
+      "title": "Add Your First Connection",
+      "subtitle": "Set up a database connection to get started",
+      "saveAndContinue": "Save & Continue",
+      "testConnection": "Test Connection",
+      "testSuccess": "Connection test succeeded!",
+      "connectionSaved": "Connection saved"
+    },
+    "quickStart": {
+      "title": "You're All Set!",
+      "subtitle": "Here are some shortcuts to help you get started",
+      "done": "Done",
+      "shortcuts": {
+        "execute": "Execute Query",
+        "commandPalette": "Command Palette",
+        "explain": "Explain Query"
+      }
+    },
+    "steps": {
+      "skip": "Skip",
+      "back": "Back",
+      "next": "Next",
+      "stepOf": "Step {{current}} of {{total}}"
+    }
+  },
+  "procedures": {
+    "execute": "Execute",
+    "viewSource": "View Source",
+    "copyName": "Copy Name",
+    "executeRoutine": "Execute Routine",
+    "sourceOf": "Source: {{name}}",
+    "parameters": "Parameters",
+    "noParameters": "This routine has no parameters.",
+    "paramName": "Name",
+    "paramType": "Type",
+    "paramValue": "Value",
+    "null": "NULL",
+    "sqlPreview": "SQL Preview",
+    "generatePreview": "Generate Preview",
+    "confirm": "Confirm & Execute",
+    "cancel": "Cancel",
+    "executing": "Executing…",
+    "resultSet": "Result Set",
+    "outputParams": "Output Parameters",
+    "noResults": "Routine executed successfully with no result set.",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "edit": "Edit in Query Tab",
+    "drop": "Drop",
+    "dropConfirm": "Are you sure you want to drop \"{{name}}\"? This action cannot be undone.",
+    "dropTitle": "Drop Routine",
+    "notSupported": "Stored routines are not supported for this database.",
+    "close": "Close"
+  },
+  "grid": {
+    "bulk": {
+      "insertRows": "Bulk Insert Rows…",
+      "updateColumn": "Bulk Update Column…",
+      "insertTitle": "Bulk Insert",
+      "updateTitle": "Bulk Update",
+      "pasteOrDrop": "Paste tab-separated data or drop a CSV file here",
+      "dropCsv": "Drop CSV file (max 50 MB)",
+      "columns": "Columns",
+      "previewRows": "Preview (first {{count}} rows)",
+      "totalRows": "{{count}} rows total",
+      "noData": "No data to insert",
+      "inserting": "Inserting…",
+      "insert": "Insert",
+      "insertSuccess": "Inserted {{count}} rows in {{ms}} ms",
+      "insertFailed": "Bulk insert failed",
+      "fileTooLarge": "File exceeds 50 MB limit",
+      "targetColumn": "Target Column",
+      "newValue": "New Value",
+      "addFilter": "Add Filter",
+      "removeFilter": "Remove Filter",
+      "column": "Column",
+      "operator": "Operator",
+      "value": "Value",
+      "dryRun": "Preview Count",
+      "willUpdate": "Will update {{count}} rows",
+      "noFilters": "Add at least one filter condition",
+      "updating": "Updating…",
+      "update": "Update",
+      "confirm": "Confirm",
+      "updateSuccess": "Updated {{count}} rows in {{ms}} ms",
+      "updateFailed": "Bulk update failed",
+      "cancel": "Cancel",
+      "close": "Close"
+    },
+    "columnMenu": {
+      "sortAsc": "Sort Ascending ↑",
+      "sortDesc": "Sort Descending ↓",
+      "filterByColumn": "Filter by column",
+      "hideColumn": "Hide Column",
+      "selectColumn": "Select Column",
+      "copyColumnName": "Copy Column Name",
+      "columnOptions": "Column options"
+    },
+    "changeToolbar": {
+      "unsavedChanges": "{{count}} unsaved {{label}}",
+      "change": "change",
+      "changes": "changes",
+      "executeCount": "Execute ({{count}})",
+      "saveChanges": "Save changes (Ctrl+S)",
+      "previewSql": "Preview SQL"
+    },
+    "contextualBar": {
+      "addRow": "Add Row",
+      "toggleFilters": "Toggle filters (Ctrl+Shift+F)"
+    },
+    "pagination": {
+      "showing": "{{start}}–{{end}} of {{total}} rows",
+      "zeroRows": "0 rows",
+      "rowsPerPage": "Rows per page:",
+      "pageOf": "Page {{page}} of {{total}}",
+      "firstPage": "First page",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "lastPage": "Last page"
+    },
+    "noChangesPreview": "-- No changes to preview"
+  },
+  "resultToolbar": {
+    "queryEditor": "Query Editor",
+    "exportResults": "Export results",
+    "rowsOfTotal": "{{count}} of {{total}} rows",
+    "truncatedRows": "{{count}} of {{total}} rows (truncated)",
+    "approximateRows": "~{{count}} rows"
+  },
+  "resultStatusBar": {
+    "noQueries": "No queries executed yet.",
+    "copy": "Copy"
+  },
+  "confirmExecute": {
+    "title": "Confirm Changes",
+    "subtitle": "The following SQL will be executed",
+    "statementCount": "{{count}} {{label}}",
+    "statement": "statement",
+    "statements": "statements",
+    "copySql": "Copy SQL",
+    "executing": "Executing…"
+  },
+  "confirmRefresh": {
+    "title": "Unsaved Changes",
+    "message": "You have {{count}} unsaved {{label}}. What would you like to do?",
+    "discardAndRefresh": "Discard & Refresh",
+    "saveAndRefresh": "Save & Refresh",
+    "saving": "Saving…"
+  },
+  "confirmDiscard": {
+    "title": "Discard {{count}} {{label}}?",
+    "message": "This action cannot be undone."
+  },
+  "unsavedChanges": {
+    "title": "Unsaved Changes",
+    "message": "This table has unsaved changes. What would you like to do?"
+  },
+  "sqlPreview": {
+    "title": "SQL Preview",
+    "previewTooltip": "Preview generated SQL statements"
+  },
+  "statusBar": {
+    "tableCount": "{{count}} table",
+    "tableCountPlural": "{{count}} tables",
+    "inspector": "Inspector",
+    "toggleInspector": "Toggle Inspector (Ctrl+Shift+I)",
+    "toggleFilter": "Toggle Filter (Ctrl+Shift+L)",
+    "rowsAffected": "{{count}} affected",
+    "rowCount": "{{count}} row",
+    "rowCountPlural": "{{count}} rows"
+  },
+  "settings": {
+    "title": "Settings",
+    "closeSettings": "Close settings",
+    "resetToDefaults": "Reset to Defaults",
+    "sections": {
+      "general": "General",
+      "editor": "Editor",
+      "appearance": "Appearance",
+      "connection": "Connection",
+      "ai": "AI",
+      "shortcuts": "Shortcuts"
+    },
+    "general": {
+      "title": "General",
+      "language": "Language",
+      "languageDesc": "Application display language",
+      "pageSize": "Page size",
+      "pageSizeDesc": "Number of rows loaded per page",
+      "nullDisplay": "Null display",
+      "nullDisplayDesc": "Text shown for NULL values",
+      "dateFormat": "Date format",
+      "dateFormatDesc": "How dates are displayed in results",
+      "dateFormats": {
+        "iso": "ISO 8601 (2026-03-13)",
+        "us": "US (03/13/2026)",
+        "eu": "EU (13/03/2026)",
+        "unix": "Unix timestamp"
+      }
+    },
+    "editor": {
+      "title": "Editor",
+      "font": "Font",
+      "fontDesc": "Editor font family",
+      "fontSize": "Font size",
+      "fontSizeDesc": "Editor font size (10–24)",
+      "vimMode": "Vim mode",
+      "vimModeDesc": "Enable Vim keybindings in the editor",
+      "tabSize": "Tab size",
+      "tabSizeDesc": "Number of spaces per tab",
+      "wordWrap": "Word wrap",
+      "wordWrapDesc": "Wrap long lines in the editor"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "theme": "Theme",
+      "themeDesc": "Color theme for the application",
+      "themes": {
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      }
+    },
+    "connection": {
+      "title": "Connection",
+      "defaultTimeout": "Default timeout",
+      "defaultTimeoutDesc": "Query timeout in seconds (0 = unlimited)",
+      "safeMode": "Safe mode",
+      "safeModeDesc": "Controls query confirmation before destructive or write operations",
+      "safeModeOptions": {
+        "off": "0 – Off: no checks",
+        "silent": "1 – Silent: log to console only",
+        "alert": "2 – Alert: confirm DELETE/DROP/TRUNCATE",
+        "alertPlus": "3 – Alert+: confirm all DML + DDL",
+        "safe": "4 – Safe: confirm + type table name",
+        "readOnly": "5 – Read-Only: block all writes"
+      }
+    },
+    "ai": {
+      "providers": "Providers",
+      "noProviders": "No providers configured. Click Add to get started.",
+      "untitled": "Untitled",
+      "removeProvider": "Remove provider",
+      "type": "Type",
+      "displayName": "Display Name",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key",
+      "model": "Model",
+      "enabled": "Enabled",
+      "testing": "Testing…",
+      "testConnected": "✓ Connected",
+      "testFailed": "✗ Failed",
+      "fetchModels": "Fetch Models",
+      "featureRouting": "Feature Routing",
+      "noProvidersRouting": "Add a provider above to configure routing.",
+      "none": "— None —",
+      "generalTitle": "General",
+      "maxSchemaTables": "Max schema tables",
+      "maxSchemaTablesDesc": "Maximum tables included in AI context (1–50)",
+      "inlineSuggestions": "Inline suggestions",
+      "inlineSuggestionsDesc": "Show AI-powered inline completions in the editor",
+      "features": {
+        "chat": "Chat",
+        "explainQuery": "Explain Query",
+        "fixError": "Fix Error",
+        "inlineSuggestions": "Inline Suggestions"
+      }
+    },
+    "shortcuts": {
+      "title": "Keyboard Shortcuts",
+      "description": "Click on a shortcut to customize it. Custom bindings are highlighted in blue.",
+      "resetAll": "Reset All",
+      "setShortcutFor": "Set shortcut for",
+      "pressKeyCombo": "Press the desired key combination, then click Save.",
+      "waitingForKeypress": "Waiting for keypress...",
+      "conflictsWith": "Conflicts with",
+      "conflictOverride": "Saving will override that binding.",
+      "saveAnyway": "Save Anyway",
+      "resetToDefault": "Reset to default",
+      "changeShortcut": "Click to change shortcut",
+      "sections": {
+        "editor": "Editor",
+        "tabsData": "Tabs & Data",
+        "navigation": "Navigation",
+        "general": "General"
+      }
+    }
+  },
+  "editorTab": {
+    "closeTab": "Close tab",
+    "newTab": "New tab",
+    "openNewTab": "Open new tab"
+  },
+  "tabContextMenu": {
+    "pinTab": "Pin Tab",
+    "unpinTab": "Unpin Tab",
+    "close": "Close",
+    "closeOthers": "Close Others",
+    "closeAll": "Close All",
+    "closeToRight": "Close to the Right"
+  },
+  "editorStatusBar": {
+    "stmt": "Stmt {{current}}/{{total}}",
+    "ln": "Ln {{line}}, Col {{col}}",
+    "selected": "{{count}} selected",
+    "ctrlEnterToRun": "Ctrl+Enter to run"
+  },
+  "editorPlaceholder": {
+    "placeholder": "-- Write SQL here\n-- Ctrl+Enter to execute",
+    "footer": "SQL Editor (placeholder) · Ctrl+Enter to run"
+  },
+  "sidebar": {
+    "openTable": "Open Table",
+    "copyTableName": "Copy Table Name",
+    "copySelect": "Copy SELECT *",
+    "viewStructure": "View Structure"
+  },
+  "history": {
+    "title": "Query History",
+    "clearAll": "Clear all history",
+    "closePanel": "Close history panel",
+    "searchPlaceholder": "Search queries…",
+    "searchLabel": "Search query history",
+    "noHistory": "No query history",
+    "copyQuery": "Copy query",
+    "deleteEntry": "Delete entry",
+    "justNow": "just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
+  "inspector": {
+    "title": "Inspector",
+    "listView": "List view",
+    "list": "List",
+    "jsonView": "JSON view",
+    "json": "JSON",
+    "closeInspector": "Close inspector (Ctrl+Shift+I)",
+    "selectRow": "Select a row to inspect",
+    "columnCount": "{{count}} columns"
+  },
+  "exportDialog": {
+    "title": "Export Results",
+    "formatLabel": "Format",
+    "csvDelimiter": "Delimiter",
+    "csvDelimiters": {
+      "comma": "Comma (,)",
+      "tab": "Tab (\\t)",
+      "semicolon": "Semicolon (;)",
+      "pipe": "Pipe (|)"
+    },
+    "includeHeader": "Include header row",
+    "prettyPrint": "Pretty print",
+    "arrayOfArrays": "Array of arrays (instead of objects)",
+    "tableName": "Table name",
+    "rowsPerInsert": "Rows per INSERT",
+    "includeCreateTable": "Include CREATE TABLE statement",
+    "previewFirst5": "Preview (first 5 rows)",
+    "exportComplete": "Export complete",
+    "exporting": "Exporting…"
+  },
+  "importDialog": {
+    "title": "Import SQL File",
+    "fileLabel": "SQL file (.sql or .sql.gz)",
+    "noFileSelected": "No file selected",
+    "optionsLabel": "Options",
+    "wrapInTransaction": "Wrap in transaction (rollback on error)",
+    "disableFkChecks": "Disable foreign key checks",
+    "scanning": "Scanning file…",
+    "importedResult": "Imported <strong>{{count}}</strong> statement{{plural}} in <strong>{{duration}}s</strong>.",
+    "importComplete": "Import complete",
+    "importing": "Importing…",
+    "noStatements": "No statements found.",
+    "previewLabel": "Preview"
+  },
+  "about": {
+    "version": "Version {{version}} (Windows)",
+    "description": "Database client for PostgreSQL, MySQL, and SQL Server.",
+    "website": "Website",
+    "documentation": "Documentation",
+    "github": "GitHub",
+    "platform": "Platform",
+    "userAgent": "User Agent",
+    "copyright": "© 2026 TablePro. All rights reserved."
+  },
+  "update": {
+    "available": "Update available: {{version}}",
+    "published": "Published: {{date}}",
+    "downloading": "Downloading update…",
+    "downloaded": "Downloaded {{bytes}}",
+    "later": "Later",
+    "updateNow": "Update Now",
+    "installing": "Installing…"
+  },
+  "safeMode": {
+    "confirmQuery": "Confirm Query",
+    "readOnlyMode": "Read-Only Mode",
+    "safeModeLabel": "Safe Mode: {{level}}",
+    "destructive": "This query contains destructive operations (DELETE, DROP, TRUNCATE, ALTER).",
+    "dmlDdl": "This query modifies data or database structure (INSERT, UPDATE, DELETE, DDL).",
+    "safeModeConfirm": "This query modifies data. Type the target table name to confirm.",
+    "readOnly": "Write queries are blocked in Read-Only mode.",
+    "confirmDefault": "Confirm before executing.",
+    "typeTableName": "Type table name{{hint}} to confirm:",
+    "runAnyway": "Run Anyway"
+  },
+  "structure": {
+    "structureLabel": "— Structure",
+    "tabs": {
+      "columns": "Columns",
+      "indexes": "Indexes",
+      "foreignKeys": "Foreign Keys",
+      "ddl": "DDL"
+    },
+    "pendingChanges": "{{count}} pending schema {{label}}",
+    "previewAndApply": "Preview & Apply"
+  },
+  "commandPalette": {
+    "label": "Command Palette",
+    "placeholder": "Type a command…",
+    "noResults": "No commands found.",
+    "recent": "Recent",
+    "navigate": "navigate",
+    "run": "run",
+    "closeLabel": "close"
+  },
+  "filterPanel": {
+    "presets": "Presets",
+    "save": "Save",
+    "savePreset": "Save preset",
+    "deletePreset": "Delete selected preset",
+    "addCondition": "Add filter condition",
+    "toggleLogic": "Toggle AND/OR logic",
+    "placeholder": "Filter… (e.g. status:active, age:>25)",
+    "clearAll": "Clear all filters",
+    "presetNamePrompt": "Preset name"
+  },
+  "aiChat": {
+    "title": "AI Chat",
+    "closePanel": "Close AI chat panel",
+    "emptyMessage": "Ask questions about your database, generate SQL, or get help with queries."
+  },
+  "languages": {
+    "en": "English",
+    "vi": "Tiếng Việt"
+  }
+}

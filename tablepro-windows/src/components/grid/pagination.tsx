@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface PaginationProps {
   total: number;
@@ -22,6 +23,7 @@ export function Pagination({
   isLoading,
   approximateCount,
 }: PaginationProps) {
+  const { t } = useTranslation();
   const displayTotal = typeof approximateCount === 'number' && approximateCount > 0
     ? `~${approximateCount.toLocaleString()}`
     : total.toLocaleString();
@@ -34,12 +36,12 @@ export function Pagination({
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs select-none">
       <span className="text-zinc-500 dark:text-zinc-400">
-        {total > 0 ? `${start.toLocaleString()}–${end.toLocaleString()} of ${displayTotal} rows` : '0 rows'}
+        {total > 0 ? t("grid.pagination.showing", { start: start.toLocaleString(), end: end.toLocaleString(), total: displayTotal }) : t("grid.pagination.zeroRows")}
       </span>
 
       <div className="flex-1" />
 
-      <span className="text-zinc-500 dark:text-zinc-400">Rows per page:</span>
+      <span className="text-zinc-500 dark:text-zinc-400">{t("grid.pagination.rowsPerPage")}</span>
       <select
         value={pageSize}
         onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -52,7 +54,7 @@ export function Pagination({
       </select>
 
       <span className="text-zinc-500 dark:text-zinc-400">
-        Page {page} of {totalPages}
+        {t("grid.pagination.pageOf", { page, total: totalPages })}
       </span>
 
       <button
@@ -60,7 +62,7 @@ export function Pagination({
         disabled={!canPrev || isLoading}
         onClick={() => onPageChange(1)}
         className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40"
-        title="First page"
+        title={t("grid.pagination.firstPage")}
       >
         <ChevronsLeft size={14} />
       </button>
@@ -69,7 +71,7 @@ export function Pagination({
         disabled={!canPrev || isLoading}
         onClick={() => onPageChange(page - 1)}
         className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40"
-        title="Previous page"
+        title={t("grid.pagination.previousPage")}
       >
         <ChevronLeft size={14} />
       </button>
@@ -78,7 +80,7 @@ export function Pagination({
         disabled={!canNext || isLoading}
         onClick={() => onPageChange(page + 1)}
         className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40"
-        title="Next page"
+        title={t("grid.pagination.nextPage")}
       >
         <ChevronRight size={14} />
       </button>
@@ -87,7 +89,7 @@ export function Pagination({
         disabled={!canNext || isLoading}
         onClick={() => onPageChange(totalPages)}
         className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40"
-        title="Last page"
+        title={t("grid.pagination.lastPage")}
       >
         <ChevronsRight size={14} />
       </button>

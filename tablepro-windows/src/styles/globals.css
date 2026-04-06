@@ -236,3 +236,26 @@ body {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
+
+/* Onboarding dialog */
+.onboarding-slide-in {
+  animation: onboardingScaleIn 250ms ease-out;
+}
+@keyframes onboardingScaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.onboarding-enter-forward {
+  animation: onboardingSlideForward 250ms ease-out;
+}
+@keyframes onboardingSlideForward {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.onboarding-enter-backward {
+  animation: onboardingSlideBackward 250ms ease-out;
+}
+@keyframes onboardingSlideBackward {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}

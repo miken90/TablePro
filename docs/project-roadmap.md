@@ -1,7 +1,7 @@
 # TablePro Project Roadmap
 
-> **Last Updated**: 2026-04-04
-> **Roadmap Baseline**: Windows pre-release branch with manifest version `0.2.0`
+> **Last Updated**: 2026-04-05
+> **Roadmap Baseline**: Windows pre-release branch with manifest version `0.4.0`
 
 ## Platform Status
 
@@ -28,6 +28,10 @@
 | Command model + deep-links | 2026-04-03 | 21-command registry, shortcut drift fixes, deep-link protocol (tablepro://), settings shortcuts | Complete |
 | Quick switcher + custom shortcuts | 2026-04-04 | useShortcutStore, click-to-rebind, conflict detection, grouped/ranked quick switcher with fuzzy scoring | Complete |
 | Redis vertical slice | 2026-04-04 | driver-redis crate, CLI command parser (40+ ops), SCAN key browsing, all data types, TLS, db switching | Complete |
+| v0.3.1 - Error handling & EXPLAIN | 2026-04-05 | Error classifier with recovery hints, upgraded toasts, EXPLAIN viewer (PG/MySQL/MSSQL/SQLite), i18n framework setup | Complete |
+| v0.3.2 - Connections & onboarding | 2026-04-05 | Connection tag filtering with chip bar, tag management, first-launch onboarding (3-step) | Complete |
+| v0.3.3 - Bulk ops & procedures | 2026-04-05 | Bulk insert/update, stored procedure execute/view source, procedure denylist, sidebar context menu | Complete |
+| v0.4.0 - Localization & polish | 2026-04-05 | Full i18n migration, Vietnamese translation, language selector, immediate switching | Complete |
 
 ## Current Windows capability map (implemented)
 
@@ -35,11 +39,11 @@
 |---|---|
 | Drivers | PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis (6 total, DLL plugins) |
 | Driver capabilities | Sidecar `.capabilities.json` per driver (7 boolean flags), frontend gating |
-| Connection | Save/list/delete, test, connect/disconnect, groups, tags/colors, session-based runtime IDs, per-connection reconnect guard |
-| Query | Execute/cancel, paginated browse, progress events, approximate count, payload guardrails (50K row truncation) |
+| Connection | Save/list/delete, test, connect/disconnect, groups, tags/colors, tag filtering (chip bar + AND logic), session-based runtime IDs, per-connection reconnect guard |
+| Query | Execute/cancel, paginated browse, progress events, approximate count, payload guardrails (50K row truncation), EXPLAIN viewer (PG/MySQL/MSSQL/SQLite) |
 | MongoDB | find() with JSON filter/sort/limit, collection browser, BSON flattening, sample-based columns |
 | Redis | CLI command panel (40+ ops), SCAN key browsing, all data types (string/hash/list/set/zset/stream), TLS, db 0-15 |
-| Data grid | Inline edit, staged changes, undo/redo, save changes, copy-as-SQL, enum picker, FK navigation |
+| Data grid | Inline edit, staged changes, undo/redo, save changes, copy-as-SQL, enum picker, FK navigation, bulk insert (TSV/CSV), bulk update (filter builder) |
 | Editor | Syntax highlight, autocomplete, formatting, Vim mode, multi-tab with backend persistence |
 | Import/Export | SQL/SQL.gz import preview+execute; CSV/JSON/SQL/XLSX export |
 | Structure | Columns/indexes/FKs/DDL, create table flow, alter table generation/apply |
@@ -52,6 +56,11 @@
 | Deep-links | `tablepro://open/connection/{id}` protocol via `tauri-plugin-deep-link` |
 | AI | Chat streaming, inline suggestions, provider/model settings, schema-context support, conversation persistence |
 | Updater | Tauri updater plugin for release builds |
+| Error handling | Error classifier with kind-based recovery hints, severity-aware toasts with action buttons |
+| Bulk operations | Bulk insert (TSV paste + CSV drag-drop, 500-row batches), bulk update (structured filter builder, dry-run preview) |
+| Stored procedures | Execute with param inputs + SQL preview, source viewer with syntax highlight, system procedure denylist |
+| Onboarding | First-launch 3-step dialog (welcome, add connection, keyboard shortcuts), draft mode connection form |
+| i18n | i18next + react-i18next, English + Vietnamese locales, language selector in Settings, immediate switching |
 
 ## Remaining roadmap (planned)
 
@@ -97,11 +106,14 @@
 | 2026-03-18 | Encrypt saved credentials with DPAPI | Native Windows-at-rest secret protection |
 | 2026-03-18 | Keep session-based backend command model | Stable runtime identity independent of saved IDs |
 | 2026-04-01 | Ship AI + health monitor in current stream | Features are implemented and no longer roadmap-only |
-| 2026-04-02 | Keep roadmap baseline tied to manifest version `0.2.0` | Avoid mismatch between docs and app metadata |
+| 2026-04-02 | Keep roadmap baseline tied to manifest version `0.4.0` | Updated from 0.2.0 after v0.3.x and v0.4.0 release cycle |
 | 2026-04-03 | Capability sidecar over ABI extension | Avoids ABI version bump; sidecar is additive and backward-compatible |
 | 2026-04-03 | Per-connection reconnect guard (no auto-reconnect) | Prevents reconnect loops; user-initiated recovery is safer |
 | 2026-04-03 | Tab state to backend JSON (not localStorage) | Better crash resilience, larger payload, cross-session portability |
 | 2026-04-04 | Command registry as single source of truth for shortcuts | Eliminates shortcut drift between help panel, settings, and handlers |
+| 2026-04-05 | Structured filter builder for bulk update (no freeform WHERE) | Prevents SQL injection in bulk operations |
+| 2026-04-05 | System procedure denylist for routine execution | Block system-owned stored procedures for security |
+| 2026-04-05 | i18next for i18n (EN + VI initial scope) | Lightweight, React-native integration, immediate language switching |
 
 ## Tracking notes
 

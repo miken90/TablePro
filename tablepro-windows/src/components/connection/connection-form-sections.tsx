@@ -1,6 +1,7 @@
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { homeDir } from "@tauri-apps/api/path";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { ConnectionConfig } from "../../types/connection";
 import { inputCls, secondaryBtn } from "./connection-form-config";
 
@@ -19,6 +20,7 @@ interface SshSectionProps {
 }
 
 export function SshSection({ config, updateConfig }: SshSectionProps) {
+  const { t } = useTranslation();
   const handlePickKeyFile = async () => {
     let defaultPath: string | undefined;
     try {
@@ -30,8 +32,8 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
     const path = await openFilePicker({
       defaultPath,
       filters: [
-        { name: "SSH Key", extensions: ["pem", "key", "pub", "ppk", ""] },
-        { name: "All Files", extensions: ["*"] },
+        { name: t("connection.form.sshKeyLabel"), extensions: ["pem", "key", "pub", "ppk", ""] },
+        { name: t("connection.form.allFiles"), extensions: ["*"] },
       ],
     });
     if (path) {
@@ -51,14 +53,14 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
             config.sshEnabled ? "bg-blue-500" : "bg-zinc-300 dark:bg-zinc-600"
           }`}
         />
-        <span>SSH Tunnel</span>
+        <span>{t("connection.form.sshTunnel")}</span>
       </button>
 
       {config.sshEnabled && (
         <div className="flex flex-col gap-3 border-t border-zinc-200 px-3 pb-3 pt-2 dark:border-zinc-600">
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
-              <Field label="SSH Host">
+              <Field label={t("connection.form.sshHost")}>
                 <input
                   value={config.sshHost}
                   onChange={(e) => updateConfig({ sshHost: e.target.value })}
@@ -67,7 +69,7 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
                 />
               </Field>
             </div>
-            <Field label="SSH Port">
+            <Field label={t("connection.form.sshPort")}>
               <input
                 type="number"
                 value={config.sshPort}
@@ -77,7 +79,7 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
             </Field>
           </div>
 
-          <Field label="SSH User">
+          <Field label={t("connection.form.sshUser")}>
             <input
               value={config.sshUser}
               onChange={(e) => updateConfig({ sshUser: e.target.value })}
@@ -87,7 +89,7 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
           </Field>
 
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Auth Method</span>
+            <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">{t("connection.form.authMethod")}</span>
             <div className="flex gap-4">
               <label className="flex cursor-pointer items-center gap-1 text-xs text-zinc-700 dark:text-zinc-300">
                 <input
@@ -107,13 +109,13 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
                   checked={config.sshAuthMethod === "key"}
                   onChange={() => updateConfig({ sshAuthMethod: "key" })}
                 />
-                Private Key
+                {t("connection.form.privateKey")}
               </label>
             </div>
           </div>
 
           {config.sshAuthMethod === "password" && (
-            <Field label="SSH Password">
+            <Field label={t("connection.form.sshPassword")}>
               <input
                 type="password"
                 value={config.sshPassword}
@@ -125,7 +127,7 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
 
           {config.sshAuthMethod === "key" && (
             <>
-              <Field label="Key File">
+              <Field label={t("connection.form.keyFile")}>
                 <div className="flex gap-1">
                   <input
                     value={config.sshKeyPath}
@@ -143,12 +145,12 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
                   </button>
                 </div>
               </Field>
-              <Field label="Passphrase">
+              <Field label={t("connection.form.passphrase")}>
                 <input
                   type="password"
                   value={config.sshKeyPassphrase}
                   onChange={(e) => updateConfig({ sshKeyPassphrase: e.target.value })}
-                  placeholder="(optional)"
+                  placeholder={t("connection.form.optional")}
                   className={inputCls}
                 />
               </Field>

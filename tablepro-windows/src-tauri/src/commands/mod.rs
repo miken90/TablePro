@@ -1,6 +1,8 @@
 pub mod ai;
+pub mod bulk_ops;
 pub mod connection;
 pub mod data;
+pub mod explain;
 pub mod export;
 pub(crate) mod export_formats;
 pub(crate) mod export_writers;
@@ -8,6 +10,7 @@ pub mod filter;
 pub mod history;
 pub mod import;
 pub mod query;
+pub mod routine_ops;
 pub mod schema;
 pub mod settings;
 pub mod storage;
@@ -22,6 +25,7 @@ pub use history::{
     history_clear_all, history_delete_entry, history_fetch_recent, history_record, history_search,
 };
 pub use import::{import_preview, import_sql_file};
+pub use explain::explain_query;
 pub use query::{cancel_query, execute_query, fetch_count, fetch_rows};
 pub use schema::{
     fetch_approximate_count, fetch_columns, fetch_databases, fetch_ddl, fetch_enum_values,
@@ -35,3 +39,5 @@ pub use storage::{
 pub use structure::{apply_alter, create_table, generate_alter_sql_command};
 pub use tab_state::{get_tab_state, mark_localstorage_migrated, set_tab_state};
 pub use ai::{ai_cancel_chat, ai_chat_stream, ai_list_models, ai_test_provider};
+pub use bulk_ops::{bulk_insert, bulk_update, bulk_update_preview};
+pub use routine_ops::{execute_routine, get_routine_source, preview_routine_sql};

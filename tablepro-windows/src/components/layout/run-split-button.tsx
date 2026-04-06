@@ -130,6 +130,7 @@ export function RunSplitButton({
           <DropdownItem
             icon={<FileText size={12} />}
             label="Explain Plan"
+            shortcut="Ctrl+Shift+X"
             onClick={() => { onExplain(); closeDropdown(); }}
             disabled={!explainSupported}
             title={explainSupported ? undefined : "Not supported for this engine"}

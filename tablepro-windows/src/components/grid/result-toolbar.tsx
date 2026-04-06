@@ -1,5 +1,6 @@
 import React from 'react';
 import { Download, Code2, Loader2, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ColumnInfo, QueryResult } from '../../types/query';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
@@ -42,6 +43,7 @@ export function ResultToolbar({
   onOpenQueryEditor,
   onRefresh,
 }: ResultToolbarProps) {
+  const { t } = useTranslation();
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const sessionId = useConnectionStore((s) =>
     selectedConnectionId ? s.sessionIds.get(selectedConnectionId) : undefined,
@@ -72,7 +74,7 @@ export function ResultToolbar({
         className={tabCls('results')}
         onClick={() => onTabChange('results')}
       >
-        Results
+        {t("common.results")}
         {result && (
           <span className="ml-1.5 rounded bg-surface-muted px-1 py-0.5 text-[10px]">
             {result.rows.length}
@@ -86,8 +88,8 @@ export function ResultToolbar({
           className={tabCls('messages')}
           onClick={() => onTabChange('messages')}
         >
-          Messages
-          {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" aria-label="Error" />}
+          {t("common.messages")}
+          {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" aria-label={t("common.error")} />}
         </button>
       )}
 
@@ -111,10 +113,10 @@ export function ResultToolbar({
           <button
             onClick={onOpenQueryEditor}
             className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-muted hover:bg-surface-muted hover:text-text-primary"
-            title="Open SQL Query Editor"
+            title={t("resultToolbar.queryEditor")}
           >
             <Code2 size={10} />
-            Query Editor
+            {t("resultToolbar.queryEditor")}
           </button>
         )}
         {isTableMode && onRefresh && (
@@ -131,22 +133,22 @@ export function ResultToolbar({
             <button
               onClick={onExport}
               className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-muted hover:bg-surface-muted hover:text-text-primary"
-              title="Export results"
+              title={t("resultToolbar.exportResults")}
             >
               <Download size={10} />
-              Export
+              {t("common.export")}
             </button>
             <span className="text-[10px] text-text-muted">
               {result.truncated && result.totalRowCount != null
-                ? `${result.rows.length.toLocaleString()} of ${result.totalRowCount.toLocaleString()} rows (truncated)`
+                ? t("resultToolbar.truncatedRows", { count: result.rows.length.toLocaleString(), total: result.totalRowCount.toLocaleString() })
                 : filteredTotal != null && filteredTotal !== total
-                  ? `${filteredTotal} of ${total} rows`
+                  ? t("resultToolbar.rowsOfTotal", { count: filteredTotal, total })
                   : isTableMode
                     ? (typeof approximateCount === 'number' && approximateCount > 0
-                      ? `~${approximateCount.toLocaleString()} rows`
-                      : `${total.toLocaleString()} rows`)
-                    : `${total} rows`}
-              {result.affectedRows > 0 && ` · ${result.affectedRows} affected`}
+                      ? t("resultToolbar.approximateRows", { count: approximateCount.toLocaleString() })
+                      : `${total.toLocaleString()} ${t("common.rows")}`)
+                    : `${total} ${t("common.rows")}`}
+              {result.affectedRows > 0 && ` · ${result.affectedRows} ${t("common.affected")}`}
               {' · '}
               {result.executionTimeMs.toFixed(1)}ms
             </span>

@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useChangeStore } from "../../stores/changeStore";
 import { SqlPreviewButton } from "./sql-preview-popover";
 
@@ -12,6 +13,7 @@ interface ChangeToolbarProps {
 }
 
 export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys, rows }: ChangeToolbarProps) {
+  const { t } = useTranslation();
   const { _changes, _undoStack, _redoStack, hasChanges, undo, redo, clear } =
     useChangeStore();
 
@@ -37,11 +39,12 @@ export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys,
 
   const changeCount = Object.keys(_changes).length;
   const showPreview = !!(tableName && columns && primaryKeys);
+  const changeLabel = changeCount === 1 ? t("grid.changeToolbar.change") : t("grid.changeToolbar.changes");
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700 text-xs">
       <span className="flex-1 text-amber-800 dark:text-amber-300">
-        ⚠ {changeCount} unsaved {changeCount === 1 ? "change" : "changes"}
+        ⚠ {t("grid.changeToolbar.unsavedChanges", { count: changeCount, label: changeLabel })}
       </span>
       <div className="flex items-center gap-1">
         {showPreview && (
@@ -60,7 +63,7 @@ export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys,
           disabled={_undoStack.length === 0}
           className="border border-zinc-300 px-2 py-0.5 rounded text-xs dark:border-zinc-600 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-700"
         >
-          Undo
+          {t("common.undo")}
         </button>
         <button
           type="button"
@@ -68,22 +71,22 @@ export function ChangeToolbar({ onSave, tableName, schema, columns, primaryKeys,
           disabled={_redoStack.length === 0}
           className="border border-zinc-300 px-2 py-0.5 rounded text-xs dark:border-zinc-600 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-700"
         >
-          Redo
+          {t("common.redo")}
         </button>
         <button
           type="button"
           onClick={clear}
           className="border border-red-400 text-red-600 hover:bg-red-50 px-2 py-0.5 rounded text-xs"
         >
-          Discard
+          {t("common.discard")}
         </button>
         <button
           type="button"
           onClick={onSave}
           className="bg-green-600 text-white hover:bg-green-700 px-3 py-1 rounded font-semibold text-xs shadow-sm"
-          title="Save changes (Ctrl+S)"
+          title={t("grid.changeToolbar.saveChanges")}
         >
-          ▶ Execute ({changeCount})
+          ▶ {t("grid.changeToolbar.executeCount", { count: changeCount })}
         </button>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 ## Repository summary
 
-This summary reflects current repository structure as of 2026-04-04.
+This summary reflects current repository structure as of 2026-04-05.
 
 ## Top-level structure
 
@@ -29,7 +29,7 @@ src-tauri/
 ├── src/
 │   ├── lib.rs                   # Tauri setup, state injection, command registration
 │   ├── main.rs
-│   ├── commands/                # Connection/query/schema/import/export/history/filter/settings/data/structure/ai/tab_state
+│   ├── commands/                # Connection/query/schema/import/export/history/filter/settings/data/structure/ai/tab_state/explain/bulk_ops/routine_ops
 │   ├── services/                # Connection manager, health monitor, AI, import/export helpers, SQL generators, SSH
 │   ├── plugin/                  # Plugin manager + FFI adapter layers
 │   ├── storage/                 # Connection/settings/history/filter/AI chat/tab state persistence
@@ -78,10 +78,11 @@ Verified runtime facts:
 ```text
 src/
 ├── App.tsx
-├── components/              # Layout/editor/grid/filter/inspector/settings/AI/mongodb/redis/shared
+├── components/              # Layout/editor/grid/filter/inspector/settings/AI/mongodb/redis/shared/procedures/onboarding/connection
 ├── stores/                  # Zustand stores (connection/query/schema/change/editor/filter/history/settings/ai/shortcut/tab-state)
-├── ipc/                     # Typed invoke wrappers + command helpers
-├── hooks/                   # useAutoUpdater, useConnectionEvents, useQueryProgress, useCommandRegistry, useKeyboardShortcuts, etc.
+├── ipc/                     # Typed invoke wrappers + command helpers + error classifier
+├── hooks/                   # useAutoUpdater, useConnectionEvents, useQueryProgress, useCommandRegistry, useKeyboardShortcuts, useToast, etc.
+├── i18n/                    # i18next setup + locale files (en.json, vi.json)
 ├── editor/
 ├── types/                   # Including capability.ts
 └── utils/                   # Including deep-link-handler.ts
@@ -103,6 +104,13 @@ Verified frontend state facts:
 - MongoDB UI: `components/mongodb/mongodb-query-panel.tsx` (collection selector + JSON filter/sort/limit)
 - Redis UI: `components/redis/redis-command-panel.tsx` (CLI input) + `redis-database-selector.tsx` (db 0-15)
 - Driver capabilities: `types/capability.ts` types, schema store gates fetches behind capability checks
+- Error classifier: `ipc/error.ts` exports `classifyError` with kind-based recovery hints; consumed by stores and toast system
+- EXPLAIN viewer: `components/editor/explain-panel.tsx` and `explain-node.tsx` render engine plan trees
+- Bulk operations: `components/grid/bulk-insert-dialog.tsx` (TSV/CSV), `bulk-update-dialog.tsx` (structured filter builder)
+- Stored procedures: `components/procedures/procedure-execute-dialog.tsx`, `procedure-source-panel.tsx`, `sidebar-routine-node.tsx`
+- Onboarding: `components/onboarding/` (5 components: dialog, step, welcome, add-connection, quick-start)
+- Connection tags: `components/connection/connection-tag-filter.tsx` (chip bar), `connection-tag-picker.tsx` (color picker)
+- i18n: `i18n/index.ts` bootstraps i18next; locale files in `i18n/locales/` (en.json, vi.json); language selector in Settings
 
 ## Storage and persistence (current behavior)
 
@@ -143,6 +151,9 @@ Current command groups registered in `lib.rs`:
 - Tab state: `get_tab_state`, `set_tab_state`, `mark_localstorage_migrated`
 - Settings/diagnostics: `get_settings`, `set_settings`, `log_renderer_error`
 - AI: chat stream/cancel, inline suggestions, schema context, model/provider probes, conversation CRUD
+- Explain: `explain_query` (runs EXPLAIN for PG/MySQL/MSSQL/SQLite, returns parsed tree)
+- Bulk ops: `bulk_insert`, `bulk_update` (structured filter builder, transaction-wrapped batches)
+- Routines: `execute_routine`, `get_routine_source`, `list_routines` (with system denylist)
 
 ## Documentation stale-risk map
 
@@ -156,5 +167,5 @@ Areas most likely to drift:
 
 ---
 
-**Last Updated**: 2026-04-04  
+**Last Updated**: 2026-04-05  
 **Source of Truth for this summary**: direct reads of `tablepro-windows/` and docs

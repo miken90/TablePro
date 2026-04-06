@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import type { ColumnInfo } from '../../types/query';
 import type { SortingState } from '@tanstack/react-table';
 import { Key, ChevronDown } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ColumnMenu } from './column-menu';
 
 interface GridHeaderProps {
@@ -46,6 +47,7 @@ export function GridHeader({
   onAutoFit,
   onSelectColumn,
 }: GridHeaderProps) {
+  const { t } = useTranslation();
   const sortMap = new Map(sorting.map(s => [s.id, s.desc ? 'desc' : 'asc'] as const));
   const [menu, setMenu] = useState<MenuState | null>(null);
 
@@ -96,7 +98,7 @@ export function GridHeader({
                 <button
                   className="ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 text-text-muted hover:text-text-secondary transition-opacity p-0.5 rounded"
                   onClick={(e) => handleChevronClick(e, col)}
-                  title="Column options"
+                  title={t("grid.columnMenu.columnOptions")}
                 >
                   <ChevronDown size={10} />
                 </button>

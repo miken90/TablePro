@@ -13,6 +13,8 @@ export interface KeybindingCallbacks {
   formatSql: (view: EditorView) => boolean;
   /** Refresh the schema tree (no view arg needed). */
   refreshSchema: () => void;
+  /** Run EXPLAIN on the current statement. */
+  runExplain?: (view: EditorView) => boolean;
 }
 
 /**
@@ -22,12 +24,13 @@ export interface KeybindingCallbacks {
  *  - Ctrl-Enter       → runQuery
  *  - Ctrl-Shift-Enter → runAll
  *  - Ctrl-Shift-f     → formatSql
+ *  - Ctrl-Shift-x     → runExplain
  *  - F5               → refreshSchema
  *  - Ctrl-/           → toggleComment
  *  - Ctrl-d           → selectNextOccurrence
  */
 export function createKeybindings(callbacks: KeybindingCallbacks): Extension {
-  return keymap.of([
+  const bindings = [
     {
       key: 'Ctrl-Enter',
       run: callbacks.runQuery,
@@ -42,7 +45,7 @@ export function createKeybindings(callbacks: KeybindingCallbacks): Extension {
     },
     {
       key: 'F5',
-      run: (_view) => {
+      run: (_view: EditorView) => {
         callbacks.refreshSchema();
         return true;
       },
@@ -55,5 +58,14 @@ export function createKeybindings(callbacks: KeybindingCallbacks): Extension {
       key: 'Ctrl-d',
       run: selectNextOccurrence,
     },
-  ]);
+  ];
+
+  if (callbacks.runExplain) {
+    bindings.push({
+      key: 'Ctrl-Shift-x',
+      run: callbacks.runExplain,
+    });
+  }
+
+  return keymap.of(bindings);
 }

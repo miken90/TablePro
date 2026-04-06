@@ -19,6 +19,7 @@ use commands::history::{
     history_clear_all, history_delete_entry, history_fetch_recent, history_record, history_search,
 };
 use commands::import::{import_preview, import_sql_file};
+use commands::explain::explain_query;
 use commands::query::{cancel_query, execute_query, fetch_count, fetch_rows};
 use commands::schema::{
     fetch_approximate_count, fetch_columns, fetch_databases, fetch_ddl, fetch_enum_values,
@@ -36,6 +37,10 @@ use commands::ai::{
     ai_create_conversation, ai_delete_conversation, ai_get_conversation, ai_inline_suggest,
     ai_list_conversations, ai_list_models, ai_save_message, ai_test_provider,
 };
+// routine operations (dev-2)
+use commands::routine_ops::{execute_routine, get_routine_source, preview_routine_sql};
+// bulk operations (dev-1)
+use commands::bulk_ops::{bulk_insert, bulk_update, bulk_update_preview};
 use plugin::PluginManager;
 use services::health_monitor::HealthMonitor;
 use services::ConnectionManager;
@@ -173,6 +178,7 @@ pub fn run() {
             get_driver_capabilities,
             // query
             execute_query,
+            explain_query,
             fetch_rows,
             fetch_count,
             cancel_query,
@@ -238,6 +244,14 @@ pub fn run() {
             ai_get_conversation,
             ai_delete_conversation,
             ai_clear_all_conversations,
+            // routine operations (dev-2)
+            get_routine_source,
+            execute_routine,
+            preview_routine_sql,
+            // bulk operations (dev-1)
+            bulk_insert,
+            bulk_update,
+            bulk_update_preview,
         ])
         .on_window_event(|window, event| {
             match event {
