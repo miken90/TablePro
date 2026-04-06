@@ -50,7 +50,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [],
+    "resources": {
+      "target/release/driver_*.dll": "plugins/",
+      "driver-capabilities/*.capabilities.json": "driver-capabilities/"
+    },
     "copyright": "Copyright 2026 TablePro",
     "category": "DeveloperTool",
     "shortDescription": "Database client for PostgreSQL, MySQL, SQL Server",
