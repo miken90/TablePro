@@ -20,6 +20,7 @@ import { ConfirmExecuteDialog } from './confirm-execute-dialog';
 import { ConfirmRefreshDialog } from './confirm-refresh-dialog';
 import { BulkInsertDialog } from './bulk-insert-dialog';
 import { BulkUpdateDialog } from './bulk-update-dialog';
+import { BulkDeleteDialog } from './bulk-delete-dialog';
 import { generatePreviewSql } from './sql-preview-popover';
 import { useTableData } from './hooks/use-table-data';
 import { useChangeTracking } from './hooks/use-change-tracking';
@@ -69,6 +70,7 @@ export function ResultPanel({
   const [confirmRefreshOpen, setConfirmRefreshOpen] = useState(false);
   const [bulkInsertOpen, setBulkInsertOpen] = useState(false);
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const gridScrollRef = useRef<HTMLDivElement>(null);
 
   // --- Hooks ---
@@ -421,6 +423,7 @@ export function ResultPanel({
           onCopySelection={copySelection}
           onBulkInsert={isTableMode ? () => { closeContextMenu(); setBulkInsertOpen(true); } : undefined}
           onBulkUpdate={isTableMode ? () => { closeContextMenu(); setBulkUpdateOpen(true); } : undefined}
+          onBulkDelete={isTableMode ? () => { closeContextMenu(); setBulkDeleteOpen(true); } : undefined}
         />
       )}
       {showExport && displayResult && activeConnectionId && (
@@ -465,6 +468,15 @@ export function ResultPanel({
             schema={schema ?? null}
             columns={result.columns}
             onClose={() => setBulkUpdateOpen(false)}
+            onSuccess={handleBulkSuccess}
+          />
+          <BulkDeleteDialog
+            open={bulkDeleteOpen}
+            sessionId={sessionId}
+            table={tableName}
+            schema={schema ?? null}
+            columns={result.columns}
+            onClose={() => setBulkDeleteOpen(false)}
             onSuccess={handleBulkSuccess}
           />
         </>

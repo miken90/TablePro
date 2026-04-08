@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
-use tauri::State;
+use tauri::{Emitter, State};
 use tokio::sync::Mutex;
 
 use crate::models::AppError;
@@ -27,6 +27,13 @@ pub struct BulkResult {
 pub struct FilterCondition {
     pub column: String,
     pub operator: String,
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnUpdate {
+    pub column: String,
     pub value: Option<String>,
 }
 
@@ -81,13 +88,13 @@ fn build_filter_where(
         let op = f.operator.trim().to_uppercase();
 
         let clause = match op.as_str() {
-            "=" | "!=" | "<" | ">" | "<=" | ">=" | "LIKE" => {
+            "=" | "!=" | "<" | ">" | "<=" | ">=" | "LIKE" | "NOT LIKE" => {
                 let val = sql_literal(&f.value);
                 format!("{col} {op} {val}")
             }
             "IS NULL" => format!("{col} IS NULL"),
             "IS NOT NULL" => format!("{col} IS NOT NULL"),
-            "IN" => {
+            "IN" | "NOT IN" => {
                 let raw = f.value.as_deref().unwrap_or("");
                 let items: Vec<String> = raw
                     .split(',')
@@ -97,10 +104,22 @@ fn build_filter_where(
                     .collect();
                 if items.is_empty() {
                     return Err(AppError::ConfigError(
-                        "IN operator requires at least one value".to_string(),
+                        format!("{op} operator requires at least one value"),
                     ));
                 }
-                format!("{col} IN ({})", items.join(", "))
+                format!("{col} {op} ({})", items.join(", "))
+            }
+            "BETWEEN" => {
+                let raw = f.value.as_deref().unwrap_or("");
+                let parts: Vec<&str> = raw.splitn(2, ',').map(|s| s.trim()).collect();
+                if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+                    return Err(AppError::ConfigError(
+                        "BETWEEN requires exactly two comma-separated values (e.g. 10,20)".to_string(),
+                    ));
+                }
+                let low = sql_literal(&Some(parts[0].to_string()));
+                let high = sql_literal(&Some(parts[1].to_string()));
+                format!("{col} BETWEEN {low} AND {high}")
             }
             other => {
                 return Err(AppError::ConfigError(format!(
@@ -149,6 +168,7 @@ fn build_batch_insert(
 /// Insert rows in batches of 500, wrapped in a transaction when supported.
 #[tauri::command]
 pub async fn bulk_insert(
+    app: tauri::AppHandle,
     session_id: String,
     table: String,
     schema: Option<String>,
@@ -185,6 +205,7 @@ pub async fn bulk_insert(
 
     let mut total_affected: i64 = 0;
     let mut batches_executed: usize = 0;
+    let total_batches = rows.len().div_ceil(BATCH_SIZE);
 
     for chunk in rows.chunks(BATCH_SIZE) {
         let sql = build_batch_insert(&qualified, &columns, chunk, &driver_type);
@@ -194,6 +215,11 @@ pub async fn bulk_insert(
             Ok(result) => {
                 total_affected += result.affected_rows;
                 batches_executed += 1;
+                let _ = app.emit("bulk:progress", serde_json::json!({
+                    "batch": batches_executed,
+                    "totalBatches": total_batches,
+                    "rowsAffected": total_affected
+                }));
             }
             Err(err) => {
                 if use_txn {
@@ -261,14 +287,111 @@ pub async fn bulk_update_preview(
     Ok(count)
 }
 
-/// Update a single column for all rows matching structured filters.
+/// Update one or more columns for all rows matching structured filters.
 #[tauri::command]
 pub async fn bulk_update(
     session_id: String,
     table: String,
     schema: Option<String>,
-    column: String,
-    value: Option<String>,
+    updates: Vec<ColumnUpdate>,
+    filters: Vec<FilterCondition>,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<BulkResult, AppError> {
+    if updates.is_empty() {
+        return Err(AppError::ConfigError(
+            "At least one column update is required".to_string(),
+        ));
+    }
+
+    let (driver, driver_type, use_txn) = {
+        let mgr = manager.lock().await;
+        let driver = mgr.get_driver(&session_id)?;
+        let config = mgr.get_config(&session_id)?;
+        let dt = config.db_type.clone();
+        let txn = driver.supports_transactions();
+        (driver, dt, txn)
+    };
+
+    let qualified = qualified_table(&table, &schema, &driver_type);
+    let where_clause = build_filter_where(&filters, &driver_type)?;
+    let set_parts: Vec<String> = updates
+        .iter()
+        .map(|u| {
+            let col = quote_identifier(&u.column, &driver_type);
+            let val = sql_literal(&u.value);
+            format!("{col} = {val}")
+        })
+        .collect();
+    let set_clause = set_parts.join(", ");
+
+    let sql = format!("UPDATE {qualified} SET {set_clause} WHERE {where_clause}");
+    let start = Instant::now();
+
+    tracing::info!(session_id = %session_id, "bulk_update: {}", &sql);
+
+    if use_txn {
+        driver.execute("BEGIN").await?;
+    }
+
+    match driver.execute(&sql).await {
+        Ok(result) => {
+            if use_txn {
+                driver.execute("COMMIT").await?;
+            }
+            let duration_ms = start.elapsed().as_millis() as u64;
+            Ok(BulkResult {
+                rows_affected: result.affected_rows,
+                batches_executed: 1,
+                duration_ms,
+            })
+        }
+        Err(err) => {
+            if use_txn {
+                let _ = driver.execute("ROLLBACK").await;
+            }
+            Err(err)
+        }
+    }
+}
+
+/// Count rows matching filters (dry-run for bulk delete).
+#[tauri::command]
+pub async fn bulk_delete_preview(
+    session_id: String,
+    table: String,
+    schema: Option<String>,
+    filters: Vec<FilterCondition>,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<i64, AppError> {
+    let (driver, driver_type) = {
+        let mgr = manager.lock().await;
+        let driver = mgr.get_driver(&session_id)?;
+        let config = mgr.get_config(&session_id)?;
+        (driver, config.db_type.clone())
+    };
+
+    let qualified = qualified_table(&table, &schema, &driver_type);
+    let where_clause = build_filter_where(&filters, &driver_type)?;
+    let sql = format!("SELECT COUNT(*) FROM {qualified} WHERE {where_clause}");
+
+    let result = driver.execute(&sql).await?;
+    let count = result
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.as_deref())
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    Ok(count)
+}
+
+/// Delete all rows matching structured filters.
+#[tauri::command]
+pub async fn bulk_delete(
+    session_id: String,
+    table: String,
+    schema: Option<String>,
     filters: Vec<FilterCondition>,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<BulkResult, AppError> {
@@ -283,13 +406,11 @@ pub async fn bulk_update(
 
     let qualified = qualified_table(&table, &schema, &driver_type);
     let where_clause = build_filter_where(&filters, &driver_type)?;
-    let set_value = sql_literal(&value);
-    let quoted_col = quote_identifier(&column, &driver_type);
 
-    let sql = format!("UPDATE {qualified} SET {quoted_col} = {set_value} WHERE {where_clause}");
+    let sql = format!("DELETE FROM {qualified} WHERE {where_clause}");
     let start = Instant::now();
 
-    tracing::info!(session_id = %session_id, "bulk_update: {}", &sql);
+    tracing::info!(session_id = %session_id, "bulk_delete: {}", &sql);
 
     if use_txn {
         driver.execute("BEGIN").await?;
@@ -524,5 +645,49 @@ mod tests {
             result,
             "\"name\" = '''; DROP TABLE users; --'"
         );
+    }
+
+    #[test]
+    fn test_build_filter_where_between() {
+        let filters = vec![FilterCondition {
+            column: "age".to_string(),
+            operator: "BETWEEN".to_string(),
+            value: Some("10,20".to_string()),
+        }];
+        let result = build_filter_where(&filters, "postgres").unwrap();
+        assert_eq!(result, "\"age\" BETWEEN 10 AND 20");
+    }
+
+    #[test]
+    fn test_build_filter_where_not_like() {
+        let filters = vec![FilterCondition {
+            column: "name".to_string(),
+            operator: "NOT LIKE".to_string(),
+            value: Some("%test%".to_string()),
+        }];
+        let result = build_filter_where(&filters, "postgres").unwrap();
+        assert_eq!(result, "\"name\" NOT LIKE '%test%'");
+    }
+
+    #[test]
+    fn test_build_filter_where_not_in() {
+        let filters = vec![FilterCondition {
+            column: "status".to_string(),
+            operator: "NOT IN".to_string(),
+            value: Some("active, pending".to_string()),
+        }];
+        let result = build_filter_where(&filters, "postgres").unwrap();
+        assert_eq!(result, "\"status\" NOT IN ('active', 'pending')");
+    }
+
+    #[test]
+    fn test_build_filter_where_between_invalid() {
+        let filters = vec![FilterCondition {
+            column: "age".to_string(),
+            operator: "BETWEEN".to_string(),
+            value: Some("10".to_string()),
+        }];
+        let result = build_filter_where(&filters, "postgres");
+        assert!(result.is_err());
     }
 }

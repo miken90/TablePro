@@ -47,6 +47,7 @@ export function ProcedureExecuteDialog({
   const [error, setError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedTsv, setCopiedTsv] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -121,6 +122,23 @@ export function ProcedureExecuteDialog({
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, [sqlPreview]);
+
+  const handleReExecute = useCallback(async () => {
+    setResult(null);
+    setError(null);
+    setSqlPreview(null);
+    await handleExecute();
+  }, [handleExecute]);
+
+  const handleCopyTsv = useCallback(async () => {
+    const rs = result?.resultSet;
+    if (!rs || rs.columns.length === 0) return;
+    const header = rs.columns.map((c) => c.name).join("\t");
+    const rows = rs.rows.map((row) => row.map((cell) => cell ?? "NULL").join("\t"));
+    await navigator.clipboard.writeText([header, ...rows].join("\n"));
+    setCopiedTsv(true);
+    setTimeout(() => setCopiedTsv(false), 1500);
+  }, [result]);
 
   const updateParam = (index: number, field: "value" | "isNull", val: string | boolean) => {
     setParams((prev) =>
@@ -228,9 +246,19 @@ export function ProcedureExecuteDialog({
           {/* Result set */}
           {rs && rs.columns.length > 0 && (
             <div className="mb-3">
-              <p className="mb-1 text-xs font-medium text-text-secondary">
-                {t("procedures.resultSet")} ({rs.rows.length} rows)
-              </p>
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-xs font-medium text-text-secondary">
+                  {t("procedures.resultSet")} ({rs.rows.length} rows)
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyTsv()}
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-text-muted hover:bg-surface-muted hover:text-text-primary"
+                >
+                  <Copy size={11} />
+                  {copiedTsv ? t("procedures.copied") : "Copy as TSV"}
+                </button>
+              </div>
               <div className="max-h-[30vh] overflow-auto rounded border border-border">
                 <table className="w-full text-[11px]">
                   <thead>
@@ -276,24 +304,26 @@ export function ProcedureExecuteDialog({
             {result ? t("procedures.close") : t("procedures.cancel")}
           </button>
           {!result && (
-            <>
-              <button
-                type="button"
-                onClick={() => void handlePreview()}
-                className="rounded border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted"
-              >
-                {t("procedures.generatePreview")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleExecute()}
-                disabled={executing}
-                className="rounded bg-accent-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-blue/90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {executing ? t("procedures.executing") : t("procedures.confirm")}
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => void handlePreview()}
+              className="rounded border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted"
+            >
+              {t("procedures.generatePreview")}
+            </button>
           )}
+          <button
+            type="button"
+            onClick={() => void (result ? handleReExecute() : handleExecute())}
+            disabled={executing}
+            className="rounded bg-accent-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-blue/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {executing
+              ? t("procedures.executing")
+              : result
+                ? t("procedures.reExecute", "Re-execute")
+                : t("procedures.confirm")}
+          </button>
         </div>
       </div>
     </div>

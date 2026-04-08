@@ -1,8 +1,10 @@
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { homeDir } from "@tauri-apps/api/path";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionConfig } from "../../types/connection";
+import { listSshHosts, type SshHostEntry } from "../../ipc/commands";
 import { inputCls, secondaryBtn } from "./connection-form-config";
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -21,6 +23,31 @@ interface SshSectionProps {
 
 export function SshSection({ config, updateConfig }: SshSectionProps) {
   const { t } = useTranslation();
+  const [sshHosts, setSshHosts] = useState<SshHostEntry[]>([]);
+  const [selectedSshHost, setSelectedSshHost] = useState<string>('');
+
+  useEffect(() => {
+    if (config.sshEnabled) {
+      listSshHosts()
+        .then(hosts => setSshHosts(hosts.filter(h => h.hostPattern !== '*')))
+        .catch(() => setSshHosts([]));
+    }
+  }, [config.sshEnabled]);
+
+  const handleSshHostSelect = (hostPattern: string) => {
+    setSelectedSshHost(hostPattern);
+    if (!hostPattern) return;
+    const host = sshHosts.find(h => h.hostPattern === hostPattern);
+    if (host) {
+      updateConfig({
+        sshHost: host.hostname || host.hostPattern,
+        ...(host.port ? { sshPort: host.port } : {}),
+        ...(host.user ? { sshUser: host.user } : {}),
+        ...(host.identityFile ? { sshKeyPath: host.identityFile, sshAuthMethod: 'key' as const } : {}),
+      });
+    }
+  };
+
   const handlePickKeyFile = async () => {
     let defaultPath: string | undefined;
     try {
@@ -58,6 +85,35 @@ export function SshSection({ config, updateConfig }: SshSectionProps) {
 
       {config.sshEnabled && (
         <div className="flex flex-col gap-3 border-t border-zinc-200 px-3 pb-3 pt-2 dark:border-zinc-600">
+          {/* SSH Config Host Picker */}
+          {sshHosts.length > 0 && (
+            <Field label={t("connection.form.sshConfigHost")}>
+              <select
+                value={selectedSshHost}
+                onChange={(e) => handleSshHostSelect(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">{t("connection.form.sshManualEntry")}</option>
+                {sshHosts.map((h) => (
+                  <option key={h.hostPattern} value={h.hostPattern}>
+                    {h.hostPattern}{h.hostname ? ` (${h.hostname})` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          {/* ProxyJump info badge */}
+          {selectedSshHost && sshHosts.find(h => h.hostPattern === selectedSshHost)?.proxyJump && (
+            <div className="flex items-center gap-1.5 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+              <span className="font-medium">ProxyJump:</span>
+              <span>
+                {sshHosts.find(h => h.hostPattern === selectedSshHost)!.proxyJump!.split(',').join(' → ')}
+              </span>
+              <span className="text-[10px] text-amber-500 dark:text-amber-400 ml-1">(informational only)</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
               <Field label={t("connection.form.sshHost")}>

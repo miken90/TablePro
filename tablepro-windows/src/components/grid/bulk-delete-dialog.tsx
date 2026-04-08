@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, X } from 'lucide-react';
-import { bulkUpdate, bulkUpdatePreview } from '../../ipc/commands';
-import type { FilterCondition, ColumnUpdate } from '../../ipc/commands';
+import { bulkDelete, bulkDeletePreview } from '../../ipc/commands';
+import type { FilterCondition } from '../../ipc/commands';
 import { useToast } from '../../hooks/useToast';
 import type { ColumnInfo } from '../../types/query';
 
-interface BulkUpdateDialogProps {
+interface BulkDeleteDialogProps {
   open: boolean;
   sessionId: string;
   table: string;
@@ -26,15 +26,7 @@ interface FilterRow {
   value: string;
 }
 
-interface SetEntry {
-  id: number;
-  column: string;
-  value: string;
-  setNull: boolean;
-}
-
 let nextFilterId = 1;
-let nextSetId = 1;
 
 function makeFilter(columns: ColumnInfo[]): FilterRow {
   return {
@@ -45,40 +37,16 @@ function makeFilter(columns: ColumnInfo[]): FilterRow {
   };
 }
 
-function makeSetEntry(columns: ColumnInfo[]): SetEntry {
-  return {
-    id: nextSetId++,
-    column: columns[0]?.name ?? '',
-    value: '',
-    setNull: false,
-  };
-}
-
-export function BulkUpdateDialog({
+export function BulkDeleteDialog({
   open, sessionId, table, schema, columns, onClose, onSuccess,
-}: BulkUpdateDialogProps) {
+}: BulkDeleteDialogProps) {
   const { t } = useTranslation();
   const toast = useToast();
 
-  const [setEntries, setSetEntries] = useState<SetEntry[]>(() => [makeSetEntry(columns)]);
   const [filters, setFilters] = useState<FilterRow[]>(() => [makeFilter(columns)]);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
-
-  const addSetEntry = useCallback(() => {
-    setSetEntries((prev) => [...prev, makeSetEntry(columns)]);
-  }, [columns]);
-
-  const removeSetEntry = useCallback((id: number) => {
-    setSetEntries((prev) => prev.filter((e) => e.id !== id));
-  }, []);
-
-  const updateSetEntry = useCallback((id: number, field: keyof SetEntry, val: string | boolean) => {
-    setSetEntries((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, [field]: val } : e)),
-    );
-  }, []);
 
   const addFilter = useCallback(() => {
     setFilters((prev) => [...prev, makeFilter(columns)]);
@@ -116,44 +84,35 @@ export function BulkUpdateDialog({
     [filters],
   );
 
-  const setEntriesValid = useMemo(
-    () => setEntries.length > 0 && setEntries.every((e) => e.column),
-    [setEntries],
-  );
-
   const handlePreview = useCallback(async () => {
     if (!filtersValid) return;
     setIsPreviewing(true);
     try {
-      const count = await bulkUpdatePreview(sessionId, table, schema, filterConditions);
+      const count = await bulkDeletePreview(sessionId, table, schema, filterConditions);
       setPreviewCount(count);
     } catch (err) {
-      toast.showError(t('grid.bulk.updateFailed'), err);
+      toast.showError(t('grid.bulk.deleteFailed'), err);
     } finally {
       setIsPreviewing(false);
     }
   }, [filtersValid, sessionId, table, schema, filterConditions, t, toast]);
 
-  const handleUpdate = useCallback(async () => {
-    if (!filtersValid || !setEntriesValid) return;
-    setIsUpdating(true);
+  const handleDelete = useCallback(async () => {
+    if (!filtersValid) return;
+    setIsDeleting(true);
     try {
-      const updates: ColumnUpdate[] = setEntries.map((e) => ({
-        column: e.column,
-        value: e.setNull ? null : e.value,
-      }));
-      const result = await bulkUpdate(sessionId, table, schema, updates, filterConditions);
+      const result = await bulkDelete(sessionId, table, schema, filterConditions);
       toast.success(
-        t('grid.bulk.updateSuccess', { count: result.rowsAffected, ms: result.durationMs }),
+        t('grid.bulk.deleteSuccess', { count: result.rowsAffected, ms: result.durationMs }),
       );
       onSuccess();
       onClose();
     } catch (err) {
-      toast.showError(t('grid.bulk.updateFailed'), err);
+      toast.showError(t('grid.bulk.deleteFailed'), err);
     } finally {
-      setIsUpdating(false);
+      setIsDeleting(false);
     }
-  }, [filtersValid, setEntriesValid, setEntries, sessionId, table, schema, filterConditions, t, toast, onSuccess, onClose]);
+  }, [filtersValid, sessionId, table, schema, filterConditions, t, toast, onSuccess, onClose]);
 
   if (!open) return null;
 
@@ -170,7 +129,7 @@ export function BulkUpdateDialog({
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <div>
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {t('grid.bulk.updateTitle')}
+              {t('grid.bulk.deleteTitle')}
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{table}</p>
           </div>
@@ -181,64 +140,6 @@ export function BulkUpdateDialog({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 pb-3 space-y-4">
-          {/* SET entries */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                SET
-              </span>
-              <button
-                type="button"
-                onClick={addSetEntry}
-                className="flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
-              >
-                <Plus size={12} />
-                {t('grid.bulk.addColumn')}
-              </button>
-            </div>
-            <div className="space-y-2">
-              {setEntries.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-2">
-                  <select
-                    value={entry.column}
-                    onChange={(e) => updateSetEntry(entry.id, 'column', e.target.value)}
-                    className="flex-1 px-2 py-1.5 text-xs rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-                  >
-                    {columns.map((c) => (
-                      <option key={c.name} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={entry.setNull ? '' : entry.value}
-                    onChange={(e) => updateSetEntry(entry.id, 'value', e.target.value)}
-                    disabled={entry.setNull}
-                    placeholder={entry.setNull ? 'NULL' : ''}
-                    className="flex-1 px-2 py-1.5 text-xs rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 disabled:opacity-50"
-                  />
-                  <label className="flex items-center gap-1 text-xs text-zinc-500 whitespace-nowrap cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={entry.setNull}
-                      onChange={(e) => updateSetEntry(entry.id, 'setNull', e.target.checked)}
-                      className="w-3 h-3"
-                    />
-                    NULL
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => removeSetEntry(entry.id)}
-                    disabled={setEntries.length <= 1}
-                    className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
-                    title={t('grid.bulk.removeColumn')}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Filter conditions */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -311,7 +212,7 @@ export function BulkUpdateDialog({
             </button>
             {previewCount !== null && (
               <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                {t('grid.bulk.willUpdate', { count: previewCount })}
+                {t('grid.bulk.willDelete', { count: previewCount })}
               </span>
             )}
           </div>
@@ -328,11 +229,11 @@ export function BulkUpdateDialog({
           </button>
           <button
             type="button"
-            onClick={handleUpdate}
-            disabled={isUpdating || !filtersValid || !setEntriesValid}
-            className="px-3 py-1.5 rounded text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleDelete}
+            disabled={isDeleting || !filtersValid}
+            className="px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isUpdating ? t('grid.bulk.updating') : t('grid.bulk.update')}
+            {isDeleting ? t('grid.bulk.deleting') : t('grid.bulk.delete')}
           </button>
         </div>
       </div>

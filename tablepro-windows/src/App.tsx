@@ -6,7 +6,9 @@ import { ErrorBoundary } from "./components/shared/error-boundary";
 import { ToastProvider } from "./components/shared/toast-provider";
 import { SkipLink } from "./components/shared/skip-link";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { listen } from "@tauri-apps/api/event";
 import { handleDeepLinkUrl } from "./utils/deep-link-handler";
+import { handleFileOpen } from "./utils/file-open-handler";
 
 export default function App() {
   queueMicrotask(() => {
@@ -24,6 +26,19 @@ export default function App() {
       .then((fn) => { unlisten = fn; })
       .catch((err) => {
         console.error("[deep-link] Failed to register listener:", err);
+      });
+    return () => unlisten?.();
+  }, []);
+
+  // Listen for file-open events (double-click from Explorer)
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<string>("file-open", (event) => {
+      void handleFileOpen(event.payload);
+    })
+      .then((fn) => { unlisten = fn; })
+      .catch((err) => {
+        console.error("[file-open] Failed to register listener:", err);
       });
     return () => unlisten?.();
   }, []);

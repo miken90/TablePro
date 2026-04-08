@@ -19,6 +19,16 @@ fn is_valid_identifier(name: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// Validate a dot-separated qualified name (e.g. `schema.routine` or `schema.package.routine`).
+/// At most 3 parts; each part must be a valid identifier.
+fn is_valid_qualified_name(name: &str) -> bool {
+    let parts: Vec<&str> = name.split('.').collect();
+    if parts.is_empty() || parts.len() > 3 {
+        return false;
+    }
+    parts.iter().all(|p| is_valid_identifier(p))
+}
+
 /// System routines that must never be executed through the UI.
 const PG_DENYLIST: &[&str] = &[
     "pg_terminate_backend",
@@ -28,6 +38,8 @@ const PG_DENYLIST: &[&str] = &[
 
 const MSSQL_DENYLIST_PREFIXES: &[&str] = &["xp_", "sp_oa"];
 const MSSQL_DENYLIST_EXACT: &[&str] = &["sp_configure"];
+
+const MYSQL_DENYLIST_PREFIXES: &[&str] = &["mysql.", "performance_schema.", "information_schema."];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +57,7 @@ pub struct RoutineResult {
 }
 
 fn validate_routine_name(name: &str) -> Result<(), AppError> {
-    if !is_valid_identifier(name) {
+    if !is_valid_qualified_name(name) {
         return Err(AppError::DatabaseError(format!(
             "Invalid routine name: {name}"
         )));
@@ -87,6 +99,15 @@ fn check_denylist(name: &str, driver_type: &str) -> Result<(), AppError> {
                 }
             }
         }
+        "mysql" | "mariadb" => {
+            for prefix in MYSQL_DENYLIST_PREFIXES {
+                if lower.starts_with(prefix) {
+                    return Err(AppError::DatabaseError(format!(
+                        "Execution of system routine '{name}' is not allowed"
+                    )));
+                }
+            }
+        }
         _ => {}
     }
 
@@ -94,6 +115,14 @@ fn check_denylist(name: &str, driver_type: &str) -> Result<(), AppError> {
 }
 
 fn build_qualified_name(name: &str, schema: Option<&str>, driver_type: &str) -> String {
+    // If the name already contains dots (e.g. "dbo.my_proc"), it's already qualified — don't prepend schema
+    if name.contains('.') {
+        return name
+            .split('.')
+            .map(|part| quote_identifier(part, driver_type))
+            .collect::<Vec<_>>()
+            .join(".");
+    }
     match schema {
         Some(s) if !s.is_empty() => format!(
             "{}.{}",
@@ -222,19 +251,19 @@ fn build_execute_sql(
     driver_type: &str,
 ) -> String {
     let qualified = build_qualified_name(routine_name, routine_schema, driver_type);
-    let param_values: Vec<String> = params
-        .iter()
-        .map(|p| match &p.value {
-            None => "NULL".to_string(),
-            Some(v) => escape_param_value(v),
-        })
-        .collect();
-    let param_list = param_values.join(", ");
 
     let kind_lower = routine_kind.to_ascii_lowercase();
 
     match driver_type {
         "postgres" | "postgresql" => {
+            let param_values: Vec<String> = params
+                .iter()
+                .map(|p| match &p.value {
+                    None => "NULL".to_string(),
+                    Some(v) => escape_param_value(v),
+                })
+                .collect();
+            let param_list = param_values.join(", ");
             if kind_lower == "procedure" {
                 format!("CALL {qualified}({param_list})")
             } else {
@@ -242,16 +271,124 @@ fn build_execute_sql(
             }
         }
         "mysql" | "mariadb" => {
+            let param_values: Vec<String> = params
+                .iter()
+                .map(|p| match &p.value {
+                    None => "NULL".to_string(),
+                    Some(v) => escape_param_value(v),
+                })
+                .collect();
+            let param_list = param_values.join(", ");
             format!("CALL {qualified}({param_list})")
         }
         "mssql" | "sqlserver" | "sql_server" => {
-            if param_list.is_empty() {
-                format!("EXEC {qualified}")
-            } else {
+            if params.is_empty() {
+                return format!("EXEC {qualified}");
+            }
+            let param_values: Vec<String> = params
+                .iter()
+                .map(|p| {
+                    let name = if p.name.starts_with('@') {
+                        p.name.clone()
+                    } else {
+                        format!("@{}", p.name)
+                    };
+                    match &p.value {
+                        None => format!("{name} = NULL"),
+                        Some(v) => format!("{name} = {}", escape_param_value(v)),
+                    }
+                })
+                .collect();
+            let param_list = param_values.join(", ");
+
+            // Detect output params
+            let output_params: Vec<&RoutineParam> = params
+                .iter()
+                .filter(|p| {
+                    p.param_type
+                        .as_deref()
+                        .map(|t| {
+                            let lower = t.to_ascii_lowercase();
+                            lower.contains("output") || lower.contains("out")
+                        })
+                        .unwrap_or(false)
+                })
+                .collect();
+
+            if output_params.is_empty() {
                 format!("EXEC {qualified} {param_list}")
+            } else {
+                // Declare output variables, execute, then select them
+                let mut sql = String::new();
+                for op in &output_params {
+                    let var_name = if op.name.starts_with('@') {
+                        format!("{}__out", op.name)
+                    } else {
+                        format!("@{}__out", op.name)
+                    };
+                    let data_type = op
+                        .param_type
+                        .as_deref()
+                        .and_then(|t| t.split_whitespace().next())
+                        .unwrap_or("NVARCHAR(MAX)");
+                    sql.push_str(&format!("DECLARE {var_name} {data_type};\n"));
+                }
+                // Rebuild param list with OUTPUT markers
+                let exec_params: Vec<String> = params
+                    .iter()
+                    .map(|p| {
+                        let name = if p.name.starts_with('@') {
+                            p.name.clone()
+                        } else {
+                            format!("@{}", p.name)
+                        };
+                        let is_output = p
+                            .param_type
+                            .as_deref()
+                            .map(|t| {
+                                let lower = t.to_ascii_lowercase();
+                                lower.contains("output") || lower.contains("out")
+                            })
+                            .unwrap_or(false);
+                        if is_output {
+                            let var_name = format!("{name}__out");
+                            format!("{name} = {var_name} OUTPUT")
+                        } else {
+                            match &p.value {
+                                None => format!("{name} = NULL"),
+                                Some(v) => format!("{name} = {}", escape_param_value(v)),
+                            }
+                        }
+                    })
+                    .collect();
+                sql.push_str(&format!("EXEC {qualified} {};\n", exec_params.join(", ")));
+                // Select output variables
+                let select_cols: Vec<String> = output_params
+                    .iter()
+                    .map(|op| {
+                        let var_name = if op.name.starts_with('@') {
+                            format!("{}__out", op.name)
+                        } else {
+                            format!("@{}__out", op.name)
+                        };
+                        format!("{var_name} AS [{}]", op.name)
+                    })
+                    .collect();
+                sql.push_str(&format!("SELECT {};", select_cols.join(", ")));
+                sql
             }
         }
-        _ => format!("SELECT {qualified}({param_list})"),
+        _ => {
+            let param_values: Vec<String> = params
+                .iter()
+                .map(|p| match &p.value {
+                    None => "NULL".to_string(),
+                    Some(v) => escape_param_value(v),
+                })
+                .collect();
+            let param_list = param_values.join(", ");
+            format!("SELECT {qualified}({param_list})")
+        }
     }
 }
 
@@ -420,7 +557,7 @@ mod tests {
         }];
         let sql =
             build_execute_sql("my_proc", Some("dbo"), "procedure", &params, "mssql");
-        assert_eq!(sql, "EXEC [dbo].[my_proc] '1'");
+        assert_eq!(sql, "EXEC [dbo].[my_proc] @id = '1'");
     }
 
     #[test]
@@ -439,5 +576,56 @@ mod tests {
     fn build_qualified_name_without_schema() {
         let result = build_qualified_name("func", None, "mysql");
         assert_eq!(result, "`func`");
+    }
+
+    #[test]
+    fn mysql_denylist_blocks_system_routines() {
+        assert!(check_denylist("mysql.some_func", "mysql").is_err());
+        assert!(check_denylist("performance_schema.some_func", "mysql").is_err());
+        assert!(check_denylist("information_schema.routines", "mariadb").is_err());
+        assert!(check_denylist("my_func", "mysql").is_ok());
+        assert!(check_denylist("mydb.my_func", "mysql").is_ok());
+    }
+
+    #[test]
+    fn valid_qualified_names() {
+        assert!(is_valid_qualified_name("dbo.my_proc"));
+        assert!(is_valid_qualified_name("myschema.mypackage.myproc"));
+        assert!(is_valid_qualified_name("simple_name"));
+    }
+
+    #[test]
+    fn invalid_qualified_names() {
+        assert!(!is_valid_qualified_name("a.b.c.d")); // too many parts
+        assert!(!is_valid_qualified_name("a..b")); // empty part
+        assert!(!is_valid_qualified_name("")); // empty
+        assert!(!is_valid_qualified_name("123.abc")); // invalid first part
+    }
+
+    #[test]
+    fn build_execute_sql_mssql_output_params() {
+        let params = vec![
+            RoutineParam {
+                name: "input_val".to_string(),
+                value: Some("hello".to_string()),
+                param_type: Some("NVARCHAR(50)".to_string()),
+            },
+            RoutineParam {
+                name: "result".to_string(),
+                value: None,
+                param_type: Some("INT OUTPUT".to_string()),
+            },
+        ];
+        let sql = build_execute_sql("my_proc", Some("dbo"), "procedure", &params, "mssql");
+        assert!(sql.contains("DECLARE @result__out INT;"));
+        assert!(sql.contains("EXEC [dbo].[my_proc]"));
+        assert!(sql.contains("@result = @result__out OUTPUT"));
+        assert!(sql.contains("SELECT @result__out AS [result]"));
+    }
+
+    #[test]
+    fn build_qualified_name_dotted_routine() {
+        let result = build_qualified_name("dbo.my_proc", Some("ignored"), "mssql");
+        assert_eq!(result, "[dbo].[my_proc]");
     }
 }

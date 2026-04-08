@@ -21,6 +21,7 @@ interface GridContextMenuProps {
   onCopySelection?: () => void;
   onBulkInsert?: () => void;
   onBulkUpdate?: () => void;
+  onBulkDelete?: () => void;
 }
 
 function Item({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
@@ -49,7 +50,7 @@ export function GridContextMenu({
   onCopyAsInsert, onCopyAsUpdate, onCopyRowTsv, onCopyCell, onCopyAsJson,
   isTableMode, onEditValue, onSetNull, onDuplicateRow, onDeleteRow,
   isDeletedRow, isPkColumn, selectionMode, onCopySelection,
-  onBulkInsert, onBulkUpdate,
+  onBulkInsert, onBulkUpdate, onBulkDelete,
 }: GridContextMenuProps) {
   const { t } = useTranslation();
   return (
@@ -89,7 +90,7 @@ export function GridContextMenu({
             {onDeleteRow && (
               <Item label="Delete Row" onClick={onDeleteRow} />
             )}
-            {(onBulkInsert || onBulkUpdate) && (
+            {(onBulkInsert || onBulkUpdate || onBulkDelete) && (
               <>
                 <Separator />
                 {onBulkInsert && (
@@ -97,6 +98,9 @@ export function GridContextMenu({
                 )}
                 {onBulkUpdate && (
                   <Item label={t('grid.bulk.updateColumn')} onClick={onBulkUpdate} />
+                )}
+                {onBulkDelete && (
+                  <Item label={t('grid.bulk.deleteRows')} onClick={onBulkDelete} />
                 )}
               </>
             )}

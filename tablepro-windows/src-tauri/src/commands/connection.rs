@@ -254,3 +254,9 @@ pub async fn get_driver_capabilities(
     let mgr = manager.lock().await;
     Ok(mgr.plugin_manager().get_capabilities(&db_type))
 }
+
+/// List parsed SSH hosts from `~/.ssh/config`.
+#[tauri::command]
+pub async fn list_ssh_hosts() -> Vec<crate::services::ssh_config_parser::SshHostEntry> {
+    crate::services::ssh_config_parser::parse_ssh_config()
+}

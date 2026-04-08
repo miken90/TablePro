@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Upload, X } from 'lucide-react';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { bulkInsert } from '../../ipc/commands';
 import { useToast } from '../../hooks/useToast';
 import type { ColumnInfo } from '../../types/query';
@@ -64,6 +65,12 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
+interface ProgressPayload {
+  batch: number;
+  totalBatches: number;
+  rowsAffected: number;
+}
+
 export function BulkInsertDialog({
   open, sessionId, table, schema, columns, onClose, onSuccess,
 }: BulkInsertDialogProps) {
@@ -72,12 +79,35 @@ export function BulkInsertDialog({
 
   const [rawText, setRawText] = useState('');
   const [parsedRows, setParsedRows] = useState<string[][]>([]);
-  const [selectedColumns, setSelectedColumns] = useState<string[]>(() =>
-    columns.map((c) => c.name),
-  );
+  const [skipHeader, setSkipHeader] = useState(false);
+  const [columnMapping, setColumnMapping] = useState<string[]>([]);
   const [isInserting, setIsInserting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Derive effective rows (skip header if toggled)
+  const effectiveRows = useMemo(
+    () => (skipHeader && parsedRows.length > 0 ? parsedRows.slice(1) : parsedRows),
+    [parsedRows, skipHeader],
+  );
+
+  // Initialize column mapping when parsed rows change
+  useEffect(() => {
+    if (parsedRows.length > 0) {
+      const colCount = parsedRows[0].length;
+      setColumnMapping(
+        Array.from({ length: colCount }, (_, i) => columns[i]?.name ?? ''),
+      );
+    } else {
+      setColumnMapping([]);
+    }
+  }, [parsedRows, columns]);
+
+  const selectedColumns = useMemo(
+    () => columnMapping.filter((c) => c.length > 0),
+    [columnMapping],
+  );
 
   const handleTextChange = useCallback((text: string) => {
     setRawText(text);
@@ -116,28 +146,38 @@ export function BulkInsertDialog({
     [handleFileDrop],
   );
 
-  const toggleColumn = useCallback(
-    (colName: string) => {
-      setSelectedColumns((prev) =>
-        prev.includes(colName) ? prev.filter((c) => c !== colName) : [...prev, colName],
-      );
-    },
-    [],
-  );
+  const updateColumnMapping = useCallback((index: number, value: string) => {
+    setColumnMapping((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  }, []);
 
   const previewRows = useMemo(
-    () => parsedRows.slice(0, MAX_PREVIEW_ROWS),
-    [parsedRows],
+    () => effectiveRows.slice(0, MAX_PREVIEW_ROWS),
+    [effectiveRows],
   );
 
   const handleInsert = useCallback(async () => {
-    if (parsedRows.length === 0 || selectedColumns.length === 0) return;
+    if (effectiveRows.length === 0 || selectedColumns.length === 0) return;
 
     setIsInserting(true);
+    setProgress(null);
+
+    let unlisten: UnlistenFn | undefined;
     try {
-      // Map each parsed row to selected columns, converting empty strings to null
-      const mappedRows = parsedRows.map((row) =>
-        selectedColumns.map((_, idx) => {
+      unlisten = await listen<ProgressPayload>('bulk:progress', (event) => {
+        setProgress(event.payload);
+      });
+
+      // Map each parsed row to column mapping, converting empty strings to null
+      const activeIndices = columnMapping
+        .map((col, idx) => (col ? idx : -1))
+        .filter((idx) => idx >= 0);
+
+      const mappedRows = effectiveRows.map((row) =>
+        activeIndices.map((idx) => {
           const val = row[idx];
           return val === undefined || val === '' ? null : val;
         }),
@@ -152,9 +192,11 @@ export function BulkInsertDialog({
     } catch (err) {
       toast.showError(t('grid.bulk.insertFailed'), err);
     } finally {
+      unlisten?.();
       setIsInserting(false);
+      setProgress(null);
     }
-  }, [parsedRows, selectedColumns, sessionId, table, schema, t, toast, onSuccess, onClose]);
+  }, [effectiveRows, selectedColumns, columnMapping, sessionId, table, schema, t, toast, onSuccess, onClose]);
 
   if (!open) return null;
 
@@ -220,63 +262,98 @@ export function BulkInsertDialog({
             </div>
           </div>
 
-          {/* Column selection */}
-          <div>
-            <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
-              {t('grid.bulk.columns')}
+          {/* Skip header toggle */}
+          {parsedRows.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={skipHeader}
+                onChange={(e) => setSkipHeader(e.target.checked)}
+                className="w-3 h-3"
+              />
+              {t('grid.bulk.skipHeader')}
+            </label>
+          )}
+
+          {/* Column mapping */}
+          {columnMapping.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+                {t('grid.bulk.mapColumns')}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {columnMapping.map((mapped, idx) => (
+                  <div key={idx} className="flex items-center gap-1">
+                    <span className="text-xs text-zinc-400 w-5 text-right">{idx + 1}→</span>
+                    <select
+                      value={mapped}
+                      onChange={(e) => updateColumnMapping(idx, e.target.value)}
+                      className="px-2 py-1 text-xs rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                    >
+                      <option value="">—</option>
+                      {columns.map((col) => (
+                        <option key={col.name} value={col.name}>{col.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {columns.map((col) => (
-                <label
-                  key={col.name}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedColumns.includes(col.name)}
-                    onChange={() => toggleColumn(col.name)}
-                    className="w-3 h-3"
-                  />
-                  <span className="text-zinc-700 dark:text-zinc-300">{col.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Preview table */}
           {previewRows.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                  {t('grid.bulk.previewRows', { count: Math.min(parsedRows.length, MAX_PREVIEW_ROWS) })}
+                  {t('grid.bulk.previewRows', { count: Math.min(effectiveRows.length, MAX_PREVIEW_ROWS) })}
                 </span>
                 <span className="text-xs text-zinc-500">
-                  {t('grid.bulk.totalRows', { count: parsedRows.length })}
+                  {t('grid.bulk.totalRows', { count: effectiveRows.length })}
                 </span>
               </div>
               <div className="max-h-48 overflow-auto rounded border border-zinc-200 dark:border-zinc-700">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-zinc-50 dark:bg-zinc-800">
                     <tr>
-                      {selectedColumns.map((col) => (
-                        <th key={col} className="px-2 py-1 text-left font-medium text-zinc-600 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-700">
-                          {col}
-                        </th>
-                      ))}
+                      {columnMapping.map((col, idx) =>
+                        col ? (
+                          <th key={idx} className="px-2 py-1 text-left font-medium text-zinc-600 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-700">
+                            {col}
+                          </th>
+                        ) : null,
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {previewRows.map((row, ri) => (
                       <tr key={ri} className="border-b border-zinc-100 dark:border-zinc-800">
-                        {selectedColumns.map((_, ci) => (
-                          <td key={ci} className="px-2 py-1 text-zinc-700 dark:text-zinc-300 truncate max-w-[150px]">
-                            {row[ci] ?? ''}
-                          </td>
-                        ))}
+                        {columnMapping.map((col, ci) =>
+                          col ? (
+                            <td key={ci} className="px-2 py-1 text-zinc-700 dark:text-zinc-300 truncate max-w-[150px]">
+                              {row[ci] ?? ''}
+                            </td>
+                          ) : null,
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* Progress bar */}
+          {isInserting && progress && (
+            <div className="space-y-1">
+              <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                {t('grid.bulk.progress', { batch: progress.batch, total: progress.totalBatches, rows: progress.rowsAffected })}
+              </div>
+              <div className="h-2 rounded bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 transition-all"
+                  style={{ width: `${(progress.batch / progress.totalBatches) * 100}%` }}
+                />
               </div>
             </div>
           )}
@@ -285,7 +362,7 @@ export function BulkInsertDialog({
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-zinc-200 dark:border-zinc-700">
           <span className="text-xs text-zinc-500">
-            {parsedRows.length === 0 ? t('grid.bulk.noData') : t('grid.bulk.totalRows', { count: parsedRows.length })}
+            {effectiveRows.length === 0 ? t('grid.bulk.noData') : t('grid.bulk.totalRows', { count: effectiveRows.length })}
           </span>
           <div className="flex gap-2">
             <button
@@ -298,7 +375,7 @@ export function BulkInsertDialog({
             <button
               type="button"
               onClick={handleInsert}
-              disabled={isInserting || parsedRows.length === 0 || selectedColumns.length === 0}
+              disabled={isInserting || effectiveRows.length === 0 || selectedColumns.length === 0}
               className="px-3 py-1.5 rounded text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isInserting ? t('grid.bulk.inserting') : t('grid.bulk.insert')}

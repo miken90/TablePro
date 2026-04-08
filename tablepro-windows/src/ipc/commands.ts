@@ -29,6 +29,19 @@ export const listDrivers = (): Promise<DriverInfo[]> =>
 export const getDriverCapabilities = (dbType: string): Promise<DriverCapabilities> =>
   invoke("get_driver_capabilities", { dbType });
 
+// SSH config
+export interface SshHostEntry {
+  hostPattern: string;
+  hostname: string | null;
+  port: number | null;
+  user: string | null;
+  identityFile: string | null;
+  proxyJump: string | null;
+}
+
+export const listSshHosts = (): Promise<SshHostEntry[]> =>
+  invoke("list_ssh_hosts");
+
 // Query commands
 export const executeQuery = (sessionId: string, sql: string, params?: string[]): Promise<QueryResult> =>
   invoke("execute_query", { sessionId, sql, params });
@@ -348,6 +361,11 @@ export interface FilterCondition {
   value: string | null;
 }
 
+export interface ColumnUpdate {
+  column: string;
+  value: string | null;
+}
+
 export const bulkInsert = (
   sessionId: string,
   table: string,
@@ -369,8 +387,23 @@ export const bulkUpdate = (
   sessionId: string,
   table: string,
   schema: string | null,
-  column: string,
-  value: string | null,
+  updates: ColumnUpdate[],
   filters: FilterCondition[],
 ): Promise<BulkResult> =>
-  invoke('bulk_update', { sessionId, table, schema, column, value, filters });
+  invoke('bulk_update', { sessionId, table, schema, updates, filters });
+
+export const bulkDeletePreview = (
+  sessionId: string,
+  table: string,
+  schema: string | null,
+  filters: FilterCondition[],
+): Promise<number> =>
+  invoke('bulk_delete_preview', { sessionId, table, schema, filters });
+
+export const bulkDelete = (
+  sessionId: string,
+  table: string,
+  schema: string | null,
+  filters: FilterCondition[],
+): Promise<BulkResult> =>
+  invoke('bulk_delete', { sessionId, table, schema, filters });

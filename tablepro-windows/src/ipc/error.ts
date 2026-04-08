@@ -1,3 +1,6 @@
+import type { ErrorCategory, ErrorAction, ErrorContext } from './error-patterns';
+import { ERROR_PATTERNS, CATEGORY_DEFAULTS } from './error-patterns';
+
 /** Tauri IPC error shape from Rust AppError (serde tagged enum). */
 interface TauriIpcError {
   kind: string;
@@ -26,43 +29,52 @@ export function extractErrorMessage(err: unknown): string {
 
 export interface ClassifiedError {
   kind: string;
+  category: ErrorCategory;
   message: string;
   hint: string | null;
   recoverable: boolean;
+  action?: ErrorAction;
 }
 
-const KIND_HINTS: Record<string, { hint: string; recoverable: boolean }> = {
-  DatabaseError:  { hint: "Check if the database server is running and accessible", recoverable: false },
-  NotConnected:   { hint: "Try reconnecting to the database", recoverable: true },
-  PluginError:    { hint: "Check if the database driver is installed correctly", recoverable: false },
-  IoError:        { hint: "Check file permissions and disk space", recoverable: false },
-};
-
-const MESSAGE_PATTERNS: { pattern: RegExp; hint: string; recoverable: boolean }[] = [
-  { pattern: /connection refused/i,       hint: "Check if the server is running on the correct host and port", recoverable: true },
-  { pattern: /auth(entication|orization)\s*(failed|denied|error)/i, hint: "Check your username and password", recoverable: false },
-  { pattern: /password/i,                 hint: "Check your username and password", recoverable: false },
-  { pattern: /timed?\s*out/i,             hint: "The operation timed out. Try again or check server load", recoverable: true },
-  { pattern: /no\s*such\s*(host|address)/i, hint: "Check if the server is running on the correct host and port", recoverable: true },
-];
-
-/** Classify an error into kind, message, hint, and recoverability. */
-export function classifyError(err: unknown): ClassifiedError {
+/** Classify an error into kind, category, message, hint, recoverability, and action. */
+export function classifyError(err: unknown, context?: ErrorContext): ClassifiedError {
   const message = extractErrorMessage(err);
   const kind = isTauriError(err) ? err.kind : "Unknown";
 
-  // Check kind-based hints first
-  const kindHint = KIND_HINTS[kind];
-  if (kindHint) {
-    return { kind, message, hint: kindHint.hint, recoverable: kindHint.recoverable };
-  }
-
-  // Check message patterns
-  for (const { pattern, hint, recoverable } of MESSAGE_PATTERNS) {
+  // Check message patterns (SSH patterns checked first for disambiguation)
+  for (const { pattern, category, hint, recoverable, action } of ERROR_PATTERNS) {
     if (pattern.test(message)) {
-      return { kind, message, hint, recoverable };
+      // Context-aware: if SSH enabled and category is network during connect, reclassify as ssh
+      let finalCategory = category;
+      if (context?.sshEnabled && category === 'network' && context?.operation === 'connect') {
+        finalCategory = 'ssh';
+      }
+      const defaults = CATEGORY_DEFAULTS[finalCategory];
+      return {
+        kind,
+        category: finalCategory,
+        message,
+        hint: hint || defaults.hint,
+        recoverable,
+        action: action || defaults.action,
+      };
     }
   }
 
-  return { kind, message, hint: null, recoverable: false };
+  // Kind-based fallback classification
+  let category: ErrorCategory = 'system';
+  if (kind === 'DatabaseError') category = 'query';
+  else if (kind === 'NotConnected') category = 'network';
+  else if (kind === 'PluginError') category = 'config';
+  else if (kind === 'IoError') category = 'system';
+
+  const defaults = CATEGORY_DEFAULTS[category];
+  return {
+    kind,
+    category,
+    message,
+    hint: defaults.hint,
+    recoverable: kind === 'NotConnected' ? true : defaults.recoverable,
+    action: kind === 'NotConnected' ? 'reconnect' : defaults.action,
+  };
 }

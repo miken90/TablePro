@@ -6,11 +6,11 @@ pub mod storage;
 
 use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use commands::connection::{
     connect, disconnect, get_connection_status, get_driver_capabilities, list_drivers,
-    reconnect_session, test_connection,
+    list_ssh_hosts, reconnect_session, test_connection,
 };
 use commands::data::{generate_row_sql, save_changes};
 use commands::export::export_to_file;
@@ -40,7 +40,7 @@ use commands::ai::{
 // routine operations (dev-2)
 use commands::routine_ops::{execute_routine, get_routine_source, preview_routine_sql};
 // bulk operations (dev-1)
-use commands::bulk_ops::{bulk_insert, bulk_update, bulk_update_preview};
+use commands::bulk_ops::{bulk_delete, bulk_delete_preview, bulk_insert, bulk_update, bulk_update_preview};
 use plugin::PluginManager;
 use services::health_monitor::HealthMonitor;
 use services::ConnectionManager;
@@ -97,6 +97,18 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            tracing::info!("Single-instance callback: argv={argv:?}");
+            for arg in argv.iter().skip(1) {
+                if !arg.starts_with("tablepro://") && !arg.starts_with('-') {
+                    let path = arg.clone();
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.set_focus();
+                        let _ = app.emit("file-open", path);
+                    }
+                }
+            }
+        }))
         .plugin(tauri_plugin_deep_link::init());
 
     // Only register the updater plugin in release builds — the update server
@@ -165,6 +177,20 @@ pub fn run() {
                     Err(e) => tracing::warn!("Failed to decode window icon: {e}"),
                 }
             }
+            // Check for file path in command-line arguments (cold start from Explorer)
+            let args: Vec<String> = std::env::args().collect();
+            if args.len() > 1 {
+                let potential_file = &args[1];
+                if !potential_file.starts_with("tablepro://") && !potential_file.starts_with('-') {
+                    let path = potential_file.clone();
+                    let app_handle = app.handle().clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                        let _ = app_handle.emit("file-open", path);
+                    });
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -176,6 +202,7 @@ pub fn run() {
             reconnect_session,
             list_drivers,
             get_driver_capabilities,
+            list_ssh_hosts,
             // query
             execute_query,
             explain_query,
@@ -252,6 +279,8 @@ pub fn run() {
             bulk_insert,
             bulk_update,
             bulk_update_preview,
+            bulk_delete,
+            bulk_delete_preview,
         ])
         .on_window_event(|window, event| {
             match event {

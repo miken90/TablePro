@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-04-09
+
+### Added
+
+- SSH config parser: auto-fill connection form from `~/.ssh/config` entries (host, port, user, identity file)
+- SSH host picker dropdown in connection form with ProxyJump informational badge
+- File associations: double-click `.sqlite`, `.sqlite3`, `.db` files opens them in TablePro
+- Single-instance support: file opens route to existing window via `tauri-plugin-single-instance`
+- Bulk delete with structured filter builder (WHERE always required)
+- Bulk delete dry-run preview showing affected row count
+- Multi-column bulk update: unlimited SET columns per operation
+- Bulk insert progress events (`bulk:progress`) with batch tracking
+- BETWEEN, NOT LIKE, NOT IN filter operators for bulk operations
+- Bulk insert column mapping and skip-header toggle
+- Procedure execute: MSSQL named parameters (`@name = value` syntax)
+- Procedure execute: MSSQL OUTPUT parameter capture with declared variables
+- Procedure execute: MySQL system routine denylist (`mysql.*`, `performance_schema.*`, `information_schema.*`)
+- Procedure execute: re-execute button and Copy as TSV for results
+- Qualified routine name validation (dot-separated, max 3 parts)
+- Error classifier: 6 categories (network, auth, query, ssh, config, system) with 23 regex patterns
+- Error classifier: context-aware SSH reclassification during connect
+- Error classifier: `action` field on `ClassifiedError` driving toast action buttons (Reconnect, Edit Connection, Retry)
+
+### Changed
+
+- Error classifier upgraded from kind-based fallback to pattern-first matching with category defaults
+
 ## [0.4.0] - 2026-04-05
 
 ### Added
@@ -121,7 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shortcut drift between ShortcutsHelp and runtime bindings
 - Health monitor stale session entries blocking reconnect monitoring
 
-[Unreleased]: https://github.com/TableProApp/tablepro-windows/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/TableProApp/tablepro-windows/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/TableProApp/tablepro-windows/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/TableProApp/tablepro-windows/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/TableProApp/tablepro-windows/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/TableProApp/tablepro-windows/compare/v0.3.1...v0.3.2
