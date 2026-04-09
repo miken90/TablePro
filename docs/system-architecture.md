@@ -2,7 +2,7 @@
 
 ## 1. Scope and source of truth
 
-This document describes architecture reflected in current repository code as of 2026-04-04, focused on the active Windows implementation under `tablepro-windows/`.
+This document describes architecture reflected in current repository code as of 2026-04-08, focused on the active Windows implementation under `tablepro-windows/`.
 
 Primary verified sources:
 
@@ -19,6 +19,9 @@ Primary verified sources:
 - `tablepro-windows/src-tauri/driver-mongodb/`
 - `tablepro-windows/src-tauri/driver-redis/`
 - `tablepro-windows/src-tauri/driver-capabilities/`
+- `tablepro-windows/src-tauri/src/commands/explain.rs`
+- `tablepro-windows/src-tauri/src/commands/bulk_ops.rs`
+- `tablepro-windows/src-tauri/src/commands/routine_ops.rs`
 - Frontend stores/components under `tablepro-windows/src/`
 
 ## 2. High-level system view
@@ -125,6 +128,43 @@ File I/O and SQLite operations are moved off the async runtime via `spawn_blocki
 - Click-to-rebind key capture overlay with conflict detection and swap
 - `ShortcutsHelp` derives from registry; settings shortcuts section is read-only display + rebind
 - Quick switcher: grouped results (tables, views, collections, databases, schemas, recent queries) with scoring: exact(100) > prefix(80) > substring(60) > fuzzy(30)
+
+### 3.10 EXPLAIN query execution
+
+- `commands/explain.rs`: `explain_query(session_id, sql, db_type)` command
+- Universal tree parser: PG JSON, MySQL JSON, MSSQL XML, SQLite tabular → common `ExplainNode` tree
+- MSSQL isolation: new short-lived driver connection with SHOWPLAN_XML cleanup
+- Single-statement validation prevents injection
+- Frontend: `components/editor/explain-panel.tsx` + `explain-node.tsx`
+
+### 3.11 Bulk operations
+
+- `commands/bulk_ops.rs`: `bulk_insert`, `bulk_update`, `bulk_update_preview`
+- Bulk insert: 500-row batch INSERT, 50MB file cap, TSV/CSV input
+- Bulk update: structured filter builder (10 operators), no freeform WHERE
+- Transaction-wrapped with partial failure toast reporting
+- Frontend: `components/grid/bulk-insert-dialog.tsx`, `bulk-update-dialog.tsx`
+
+### 3.12 Stored procedure execution
+
+- `commands/routine_ops.rs`: `execute_routine`, `get_routine_source`, `preview_routine_sql`
+- System procedure denylist (xp_cmdshell, pg_terminate_backend, etc.)
+- String param inputs with backend type casting
+- Result shape: `RoutineResult` with `result_set` + `output_params`
+- Frontend: `components/procedures/procedure-execute-dialog.tsx`, `sidebar-routine-node.tsx`
+
+### 3.13 Error classification
+
+- `ipc/error.ts`: `classifyError` maps database errors to kind + recovery hint
+- Error kinds: auth, network, syntax, constraint, timeout, permission, unknown
+- Severity-aware toasts with action buttons (e.g., "Reconnect", "Check syntax")
+
+### 3.14 Internationalization
+
+- i18next + react-i18next framework
+- Locale files: `src/i18n/locales/en.json`, `vi.json`
+- Language selector in Settings with immediate switching (no restart)
+- All UI strings use `t()` translation keys
 
 ## 4. Plugin subsystem architecture
 
@@ -307,5 +347,5 @@ Re-verify these files when updating architecture docs:
 
 ---
 
-**Last Updated**: 2026-04-04  
+**Last Updated**: 2026-04-08  
 **Architecture focus**: Active Windows runtime + plugin/session/AI/health/capability/deep-link flows

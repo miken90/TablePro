@@ -2,7 +2,7 @@
 
 > Detailed record of development phases, features, and fixes for the Windows build.
 >
-> **Last Updated**: 2026-04-05
+> **Last Updated**: 2026-04-08
 
 ## Phase 4 — Localization & Release Polish (v0.4.0, 2026-04-05)
 

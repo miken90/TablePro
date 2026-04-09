@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines current product requirements for TablePro based on verified implementation state as of 2026-04-04.
+This document defines current product requirements for TablePro based on verified implementation state as of 2026-04-08.
 
 ## Product scope
 
@@ -22,6 +22,12 @@ Windows implementation status in source:
 - 6 database drivers: PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis
 - Tab state persistence via backend JSON file with localStorage migration is implemented
 - Command registry (21 commands), customizable shortcuts, and deep-link protocol are implemented
+- Error classifier with kind-based recovery hints and severity-aware toasts are implemented
+- EXPLAIN query viewer (PG/MySQL/MSSQL/SQLite) with universal tree parser is implemented
+- Bulk insert (TSV/CSV, 500-row batches) and bulk update (structured filter builder) are implemented
+- Stored procedure execute/view source with system procedure denylist is implemented
+- First-launch onboarding (3-step wizard) is implemented
+- i18n framework (i18next, English + Vietnamese) with immediate language switching is implemented
 
 ## Functional requirements
 
@@ -127,6 +133,56 @@ The system must:
 - Support quick switcher with grouped/ranked results and fuzzy scoring
 - Handle deep-link protocol `tablepro://open/connection/{id}` via `tauri-plugin-deep-link`
 
+### 11) Error handling and classification
+
+The system must:
+
+- Classify database errors by kind (auth, network, syntax, constraint, timeout, permission)
+- Map error kinds to recovery hints with action buttons
+- Display severity-aware toasts (info, warning, error) via `classifyError` in `ipc/error.ts`
+
+### 12) EXPLAIN query
+
+The system must:
+
+- Execute EXPLAIN (not ANALYZE) for PG, MySQL, MSSQL, SQLite via `explain_query`
+- Parse engine-specific output into universal `ExplainNode` tree
+- Validate single-statement input to prevent injection
+- Isolate MSSQL EXPLAIN in a dedicated short-lived connection
+
+### 13) Bulk data operations
+
+The system must:
+
+- Support bulk insert via `bulk_insert` (TSV paste + CSV file, 500-row batches, 50MB cap)
+- Support bulk update via `bulk_update` with structured filter builder (10 operators, no freeform WHERE)
+- Preview affected rows via `bulk_update_preview`
+- Wrap operations in transactions with partial failure reporting
+
+### 14) Stored procedure execution
+
+The system must:
+
+- Execute routines via `execute_routine` with string param inputs and backend type casting
+- Preview generated SQL via `preview_routine_sql`
+- Retrieve source code via `get_routine_source`
+- Block system procedures via denylist (xp_cmdshell, pg_terminate_backend, etc.)
+
+### 15) Onboarding
+
+The system must:
+
+- Show first-launch 3-step dialog (welcome, add connection, keyboard shortcuts)
+- Support draft mode connection form (no zombie connections on cancel)
+
+### 16) Internationalization
+
+The system must:
+
+- Use i18next + react-i18next for UI string translation
+- Ship English and Vietnamese locale files
+- Provide language selector in Settings with immediate switching (no restart)
+
 ## Non-functional requirements
 
 ### Performance
@@ -188,6 +244,12 @@ Host-side plugin loading must continue to use:
 | Command registry + shortcuts | Implemented | `hooks/useCommandRegistry.ts`, `stores/useShortcutStore`, `settings-shortcuts.tsx` |
 | Deep-link protocol | Implemented | `utils/deep-link-handler.ts`, `tauri-plugin-deep-link` in `lib.rs` |
 | Quick switcher | Implemented | `components/layout/quick-switcher.tsx` |
+| Error classifier + recovery hints | Implemented | `ipc/error.ts`, `hooks/useToast.ts` |
+| EXPLAIN query viewer | Implemented | `commands/explain.rs`, `components/editor/explain-panel.tsx` |
+| Bulk insert/update | Implemented | `commands/bulk_ops.rs`, `components/grid/bulk-*-dialog.tsx` |
+| Stored procedure execution | Implemented | `commands/routine_ops.rs`, `components/procedures/` |
+| First-launch onboarding | Implemented | `components/onboarding/` |
+| i18n (EN + VI) | Implemented | `i18n/index.ts`, `i18n/locales/en.json`, `i18n/locales/vi.json` |
 
 ## Constraints and decisions
 
@@ -197,12 +259,13 @@ Host-side plugin loading must continue to use:
 
 ## Requirement change log
 
+- **2026-04-08**: Added error classifier, EXPLAIN viewer, bulk operations, stored procedure execution, onboarding, i18n. Updated acceptance criteria.
 - **2026-04-04**: Added MongoDB, Redis, capability substrate, tab persistence backend, command registry, deep-links, payload guardrails, customizable shortcuts. Updated acceptance criteria.
 - **2026-04-02**: Refreshed requirements for current command surface including AI and health/reconnect flows.
 - **2026-03-18**: Session-based model, plugin ABI, DPAPI encryption, async I/O migration.
 
 ---
 
-**Last Updated**: 2026-04-04  
+**Last Updated**: 2026-04-08  
 **Document Status**: Active  
 **Source Scope**: `tablepro-windows/` runtime + docs alignment

@@ -2,7 +2,7 @@
 
 ## Repository summary
 
-This summary reflects current repository structure as of 2026-04-05.
+This summary reflects current repository structure as of 2026-04-08.
 
 ## Top-level structure
 
@@ -167,5 +167,5 @@ Areas most likely to drift:
 
 ---
 
-**Last Updated**: 2026-04-05  
+**Last Updated**: 2026-04-08  
 **Source of Truth for this summary**: direct reads of `tablepro-windows/` and docs

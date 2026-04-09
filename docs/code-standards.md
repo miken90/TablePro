@@ -29,7 +29,7 @@ src-tauri/
 ├── src/
 │   ├── lib.rs
 │   ├── main.rs
-│   ├── commands/          # connection/query/schema/import/export/history/filter/settings/data/structure/ai/tab_state
+│   ├── commands/          # connection/query/schema/import/export/history/filter/settings/data/structure/ai/tab_state/explain/bulk_ops/routine_ops
 │   ├── models/            # Including capability.rs (DriverCapabilities, DriverInfo)
 │   ├── plugin/            # manager.rs, adapter.rs, FFI helper modules
 │   ├── services/          # connection_manager, health_monitor, ai, ssh, import/export/sql helpers
@@ -228,5 +228,5 @@ When reviewing docs/code alignment, verify these first:
 
 ---
 
-**Last Updated**: 2026-04-04  
+**Last Updated**: 2026-04-08  
 **Applies to**: Current repository state

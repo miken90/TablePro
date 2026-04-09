@@ -1,7 +1,7 @@
 # TablePro Project Roadmap
 
-> **Last Updated**: 2026-04-05
-> **Roadmap Baseline**: Windows pre-release branch with manifest version `0.4.0`
+> **Last Updated**: 2026-04-08
+> **Roadmap Baseline**: Windows v0.4.0 released
 
 ## Platform Status
 
