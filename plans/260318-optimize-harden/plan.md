@@ -7,6 +7,7 @@ effort: 32h
 tags: [optimization, security, performance, modularization, quality]
 created: 2026-03-18
 validated: 2026-03-18
+blockedBy: [260403-0031-windows-next-non-licensing-roadmap]
 ---
 
 # TablePro Windows — Optimize & Harden

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-08
+
+### Added
+
+- EXPLAIN query viewer: universal tree parser rendering PG JSON, MySQL JSON, MSSQL XML, SQLite tabular into common ExplainNode tree with per-node cost/rows/width metrics
+- Error classification system: structured error-to-action mapping with recovery hints for common database errors (auth, network, syntax, constraint violations)
+- Connection tag filtering: sidebar filter dropdown to show/hide connections by environment tag (Production, Staging, Dev, etc.)
+- First-launch onboarding: 3-step wizard (welcome → add connection → keyboard shortcuts) with draft mode and skip cleanup
+- Bulk insert: TSV paste + CSV file drag-drop (50MB cap, 100-row preview) with 500-row batch INSERT and progress reporting
+- Bulk update: structured filter builder (10 operators: =, !=, <, >, <=, >=, IS NULL, IS NOT NULL, LIKE, IN) with preview count and partial failure toast
+- Stored procedure/function execute UI: parameter input dialog with string inputs + backend type casting, dangerous proc denylist, result set + output params display
+- Vietnamese localization: full i18n framework (i18next + react-i18next), English + Vietnamese locale files, all pre-existing components migrated to `t()` calls
+- Sidebar routine node: browse + right-click execute for stored procedures and functions
+
+### Fixed
+
+- SQL identifier injection in DROP statements: all identifiers now use `quote_identifier()` / `qualified_table()`
+- `sql_literal` restricted to integer-only values to prevent injection
+- Driver DLLs and capability sidecar files now included in NSIS installer bundle
+- Grid scrolls to top when pagination changes
+
 ## [0.3.0] - 2026-04-04
 
 ### Added
