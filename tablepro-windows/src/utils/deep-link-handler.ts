@@ -11,10 +11,9 @@ import { useConnectionStore } from "../stores/connectionStore";
 // If not found: show error toast. Never crash on malformed URLs.
 // ---------------------------------------------------------------------------
 
-export interface DeepLinkAction {
-  type: "open-connection";
-  connectionId: string;
-}
+export type DeepLinkAction =
+  | { type: "open-connection"; connectionId: string }
+  | { type: "import-connection"; params: Record<string, string> };
 
 /**
  * Parse a `tablepro://` URL into a structured action.
@@ -41,6 +40,17 @@ export function parseDeepLinkUrl(raw: string): DeepLinkAction | null {
     const connectionId = decodeURIComponent(segments[2]);
     if (connectionId) {
       return { type: "open-connection", connectionId };
+    }
+  }
+
+  // tablepro://import?name=...&host=...&port=...&type=...
+  if (segments.length >= 1 && segments[0] === "import") {
+    const params: Record<string, string> = {};
+    for (const [key, value] of url.searchParams.entries()) {
+      params[key] = value;
+    }
+    if (params.name || params.host) {
+      return { type: "import-connection", params };
     }
   }
 
@@ -87,6 +97,54 @@ export async function handleDeepLinkAction(action: DeepLinkAction): Promise<void
       await store.connect(connection.id, connection.config);
     } catch {
       // connect() already shows an error toast via the store
+    }
+  }
+
+  if (action.type === "import-connection") {
+    const { params } = action;
+    const store = useConnectionStore.getState();
+
+    // Check for duplicate
+    if (params.name) {
+      const existing = Array.from(store.connections.values()).find(
+        (c) => c.name.toLowerCase() === params.name.toLowerCase(),
+      );
+      if (existing) {
+        toast.warning("Connection already exists", {
+          description: `A connection named "${params.name}" already exists.`,
+        });
+        return;
+      }
+    }
+
+    // Create and save the connection
+    const conn = {
+      id: crypto.randomUUID(),
+      name: params.name || params.host || "Imported",
+      config: {
+        host: params.host || "",
+        port: params.port ? parseInt(params.port, 10) : 5432,
+        user: params.username || "",
+        password: "",
+        database: params.database || "",
+        dbType: params.type || "PostgreSQL",
+        sslMode: "",
+        sshEnabled: false,
+        sshHost: "",
+        sshPort: 22,
+        sshUser: "",
+        sshAuthMethod: "password",
+        sshPassword: "",
+        sshKeyPath: "",
+        sshKeyPassphrase: "",
+      },
+    };
+
+    try {
+      await store.saveConnection(conn);
+      toast.success("Connection imported", { description: conn.name });
+    } catch {
+      toast.error("Failed to import connection");
     }
   }
 }

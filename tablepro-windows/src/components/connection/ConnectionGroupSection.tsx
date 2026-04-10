@@ -19,10 +19,13 @@ interface Props {
   onDelete: () => void;
   onDeleteConnection: (conn: SavedConnection) => void;
   onDuplicateConnection?: (conn: SavedConnection) => void;
+  onExportConnection?: (conn: SavedConnection) => void;
+  onCopyImportLink?: (conn: SavedConnection) => void;
 }
 
 export function ConnectionGroupSection({
   group, connections, connectingId, getStatus, onConnect, onEdit, onDelete, onDeleteConnection, onDuplicateConnection,
+  onExportConnection, onCopyImportLink,
 }: Props) {
   const { saveGroup } = useConnectionStore();
   const [collapsed, setCollapsed] = useState(group.collapsed);
@@ -162,6 +165,8 @@ export function ConnectionGroupSection({
                 onEdit={() => onEdit(conn)}
                 onDelete={() => void onDeleteConnection(conn)}
                 onDuplicate={onDuplicateConnection ? () => void onDuplicateConnection(conn) : undefined}
+                onExport={onExportConnection ? () => onExportConnection(conn) : undefined}
+                onCopyImportLink={onCopyImportLink ? () => void onCopyImportLink(conn) : undefined}
               />
             ))
           )}

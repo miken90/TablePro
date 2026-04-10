@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "productName": "TablePro",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "identifier": "app.tablepro.windows",
   "build": {
     "frontendDist": "../dist",
@@ -46,6 +46,11 @@
         "ext": ["sqlite", "sqlite3", "db"],
         "description": "SQLite Database",
         "mimeType": "application/x-sqlite3"
+      },
+      {
+        "ext": ["tablepro"],
+        "description": "TablePro Connection Export",
+        "mimeType": "application/x-tablepro"
       }
     ],
     "createUpdaterArtifacts": true,

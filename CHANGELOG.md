@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-10
+
+### Added
+
+- Connection export/import: share database connections as `.tablepro` files with team members
+- Encrypted connection export: passphrase-protected (AES-256-GCM) credential sharing
+- Import preview with duplicate detection and resolution (import, skip, replace, copy)
+- Copy as Import Link: `tablepro://import?...` URL for sharing via chat/wiki
+- `.tablepro` file association: double-click to import
+
 ## [0.4.0] - 2026-04-08
 
 ### Added

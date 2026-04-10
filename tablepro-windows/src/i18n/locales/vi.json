@@ -121,6 +121,36 @@
       "optional": "(tùy chọn)",
       "sshKeyLabel": "Khóa SSH",
       "allFiles": "Tất cả tệp"
+    },
+    "export": {
+      "title": "Xuất kết nối",
+      "includeCredentials": "Bao gồm thông tin đăng nhập",
+      "credentialWarning": "Thông tin đăng nhập sẽ được mã hóa bằng mật khẩu của bạn",
+      "passphrase": "Mật khẩu",
+      "confirmPassphrase": "Xác nhận mật khẩu",
+      "passphraseMinLength": "Tối thiểu 8 ký tự",
+      "passphraseMismatch": "Mật khẩu không khớp",
+      "success": "Đã xuất {{count}} kết nối",
+      "copyLink": "Sao chép liên kết nhập",
+      "linkCopied": "Đã sao chép liên kết",
+      "exportConnection": "Xuất kết nối…",
+      "selectAll": "Chọn tất cả",
+      "deselectAll": "Bỏ chọn tất cả"
+    },
+    "import": {
+      "title": "Nhập kết nối",
+      "needsPassphrase": "Tệp này đã được mã hóa. Nhập mật khẩu:",
+      "wrongPassphrase": "Mật khẩu không đúng",
+      "preview": "Xem trước",
+      "actionImport": "Nhập",
+      "actionSkip": "Bỏ qua",
+      "actionReplace": "Thay thế",
+      "actionImportAsCopy": "Nhập bản sao",
+      "success": "Đã nhập {{count}} kết nối",
+      "statusReady": "Sẵn sàng",
+      "statusDuplicate": "Trùng lặp",
+      "statusWarnings": "Cảnh báo",
+      "importConnections": "Nhập kết nối…"
     }
   },
   "onboarding": {

@@ -1,7 +1,7 @@
 import { useConnectionStore } from '../stores/connectionStore';
 import type { ConnectionConfig } from '../types/connection';
 
-const ALLOWED_EXTENSIONS = ['.sqlite', '.sqlite3', '.db'];
+const ALLOWED_EXTENSIONS = ['.sqlite', '.sqlite3', '.db', '.tablepro'];
 
 function getFileName(path: string): string {
   const parts = path.replace(/\\/g, '/').split('/');
@@ -16,6 +16,13 @@ function hasAllowedExtension(path: string): boolean {
 export async function handleFileOpen(filePath: string): Promise<void> {
   if (!filePath || !hasAllowedExtension(filePath)) {
     console.warn('[file-open] Rejected file path:', filePath);
+    return;
+  }
+
+  // Handle .tablepro import files — emit custom event for the import dialog
+  if (filePath.toLowerCase().endsWith('.tablepro')) {
+    // Store the path so the WelcomeView can pick it up
+    window.dispatchEvent(new CustomEvent('tablepro-import-file', { detail: filePath }));
     return;
   }
 

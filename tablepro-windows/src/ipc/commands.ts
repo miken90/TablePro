@@ -407,3 +407,29 @@ export const bulkDelete = (
   filters: FilterCondition[],
 ): Promise<BulkResult> =>
   invoke('bulk_delete', { sessionId, table, schema, filters });
+
+// Connection export/import
+export interface ExportResult { path: string; count: number; }
+export interface ImportPreviewItem {
+  index: number; name: string; host: string; port: number; dbType: string;
+  status: 'ready' | 'duplicate' | 'warnings';
+  existingId?: string; existingName?: string; warnings: string[];
+}
+export interface ImportPreviewResponse {
+  formatVersion: number; appVersion: string; exportedAt: string;
+  items: ImportPreviewItem[];
+}
+export interface ImportResolutionEntry { index: number; action: 'import_new' | 'skip' | 'replace' | 'import_as_copy'; existingId?: string; }
+export interface ImportResult { importedCount: number; }
+
+export const exportConnections = (connectionIds: string[], filePath: string, includeCredentials: boolean, passphrase?: string): Promise<ExportResult> =>
+  invoke('export_connections', { connectionIds, filePath, includeCredentials, passphrase });
+
+export const importConnectionsPreview = (filePath: string, passphrase?: string): Promise<ImportPreviewResponse> =>
+  invoke('import_connections_preview', { filePath, passphrase });
+
+export const confirmImport = (filePath: string, passphrase: string | undefined, resolutions: ImportResolutionEntry[]): Promise<ImportResult> =>
+  invoke('confirm_import', { filePath, passphrase, resolutions });
+
+export const buildImportLink = (connectionId: string): Promise<string> =>
+  invoke('build_import_link', { connectionId });

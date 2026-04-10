@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Database as DatabaseIcon } from "lucide-react";
+import { Plus, Database as DatabaseIcon, Download } from "lucide-react";
+import { toast } from "sonner";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { ConnectionForm } from "./ConnectionForm";
 import { ConnectionList } from "./connection-list";
 import { ConnectionSearch } from "./connection-search";
+import { ConnectionExportDialog } from "./connection-export-dialog";
+import { ConnectionImportDialog } from "./connection-import-dialog";
 import { EmptyState } from "../shared/EmptyState";
 import { filterConnections } from "./connection-filter";
+import { buildImportLink } from "../../ipc/commands";
 import type { SavedConnection } from "../../types/connection";
 import { extractErrorMessage } from "../../ipc/error";
 import logoIcon from "../../assets/logo-icon.svg";
@@ -20,6 +24,8 @@ export function WelcomeView() {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [exportIds, setExportIds] = useState<string[] | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => {
     void loadConnections();
@@ -76,6 +82,20 @@ export function WelcomeView() {
     const id = crypto.randomUUID();
     await saveGroup({ id, name: "New Group", color: "#6366f1", order: groups.size, collapsed: false });
   }, [saveGroup, groups.size]);
+
+  const handleExport = useCallback((conn: SavedConnection) => {
+    setExportIds([conn.id]);
+  }, []);
+
+  const handleCopyImportLink = useCallback(async (conn: SavedConnection) => {
+    try {
+      const link = await buildImportLink(conn.id);
+      await navigator.clipboard.writeText(link);
+      toast.success("Import link copied");
+    } catch (err) {
+      toast.error(extractErrorMessage(err));
+    }
+  }, []);
 
   // Filter connections by search query
   const connList = useMemo(() => Array.from(connections.values()), [connections]);
@@ -150,6 +170,8 @@ export function WelcomeView() {
               onDuplicate={handleDuplicate}
               onDeleteGroup={deleteGroup}
               onClearFilters={clearAllFilters}
+              onExport={handleExport}
+              onCopyImportLink={handleCopyImportLink}
             />
           ) : (
             <div className="w-full py-8 text-center">
@@ -182,6 +204,13 @@ export function WelcomeView() {
             New Connection
           </button>
           <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs text-text-secondary transition-colors hover:bg-surface-muted hover:text-text-primary"
+          >
+            <Download size={12} />
+            Import
+          </button>
+          <button
             onClick={() => void handleNewGroup()}
             className="text-xs text-text-secondary transition-colors hover:text-text-primary"
           >
@@ -191,6 +220,21 @@ export function WelcomeView() {
 
         <div className="h-8" />
       </div>
+
+      {exportIds && (
+        <ConnectionExportDialog
+          connections={connList}
+          preSelectedIds={exportIds}
+          onClose={() => setExportIds(null)}
+        />
+      )}
+
+      {showImport && (
+        <ConnectionImportDialog
+          onClose={() => setShowImport(false)}
+          onImported={() => void loadConnections()}
+        />
+      )}
     </div>
   );
 }

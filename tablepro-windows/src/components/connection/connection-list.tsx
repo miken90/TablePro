@@ -19,11 +19,14 @@ interface ConnectionListProps {
   onDuplicate: (conn: SavedConnection) => Promise<void>;
   onDeleteGroup: (id: string) => Promise<void>;
   onClearFilters?: () => void;
+  onExport?: (conn: SavedConnection) => void;
+  onCopyImportLink?: (conn: SavedConnection) => void;
 }
 
 export function ConnectionList({
   groupList, allConnections, filteredConnIds, ungrouped, connectingId,
   isSearching, isFiltering, getStatus, onConnect, onEdit, onDelete, onDuplicate, onDeleteGroup, onClearFilters,
+  onExport, onCopyImportLink,
 }: ConnectionListProps) {
   const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
@@ -85,6 +88,8 @@ export function ConnectionList({
             onDelete={() => void onDeleteGroup(group.id)}
             onDeleteConnection={onDelete}
             onDuplicateConnection={onDuplicate}
+            onExportConnection={onExport}
+            onCopyImportLink={onCopyImportLink}
           />
         );
       })}
@@ -103,6 +108,8 @@ export function ConnectionList({
                 onEdit={() => onEdit(conn)}
                 onDelete={() => void onDelete(conn)}
                 onDuplicate={() => void onDuplicate(conn)}
+                onExport={onExport ? () => onExport(conn) : undefined}
+                onCopyImportLink={onCopyImportLink ? () => void onCopyImportLink(conn) : undefined}
               />
             ))}
           </div>

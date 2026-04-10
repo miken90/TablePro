@@ -121,6 +121,36 @@
       "optional": "(optional)",
       "sshKeyLabel": "SSH Key",
       "allFiles": "All Files"
+    },
+    "export": {
+      "title": "Export Connections",
+      "includeCredentials": "Include Credentials",
+      "credentialWarning": "Credentials will be encrypted with your passphrase",
+      "passphrase": "Passphrase",
+      "confirmPassphrase": "Confirm Passphrase",
+      "passphraseMinLength": "Minimum 8 characters",
+      "passphraseMismatch": "Passphrases don't match",
+      "success": "Exported {{count}} connection(s)",
+      "copyLink": "Copy as Import Link",
+      "linkCopied": "Import link copied",
+      "exportConnection": "Export Connection…",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All"
+    },
+    "import": {
+      "title": "Import Connections",
+      "needsPassphrase": "This file is encrypted. Enter passphrase:",
+      "wrongPassphrase": "Incorrect passphrase",
+      "preview": "Preview",
+      "actionImport": "Import",
+      "actionSkip": "Skip",
+      "actionReplace": "Replace",
+      "actionImportAsCopy": "Import as Copy",
+      "success": "Imported {{count}} connection(s)",
+      "statusReady": "Ready",
+      "statusDuplicate": "Duplicate",
+      "statusWarnings": "Warnings",
+      "importConnections": "Import Connections…"
     }
   },
   "onboarding": {

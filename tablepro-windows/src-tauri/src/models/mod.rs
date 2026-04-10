@@ -2,6 +2,7 @@ pub mod ai;
 pub mod capability;
 pub mod connection;
 pub mod error;
+pub mod export;
 pub mod query;
 pub mod schema;
 

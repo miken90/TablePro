@@ -12,6 +12,9 @@ use commands::connection::{
     connect, disconnect, get_connection_status, get_driver_capabilities, list_drivers,
     list_ssh_hosts, reconnect_session, test_connection,
 };
+use commands::connection_export::{
+    build_import_link, confirm_import, export_connections, import_connections_preview,
+};
 use commands::data::{generate_row_sql, save_changes};
 use commands::export::export_to_file;
 use commands::filter::{delete_filter_preset, load_filter_presets, save_filter_preset};
@@ -245,6 +248,11 @@ pub fn run() {
             generate_row_sql,
             // export
             export_to_file,
+            // connection export/import
+            export_connections,
+            import_connections_preview,
+            confirm_import,
+            build_import_link,
             // import
             import_preview,
             import_sql_file,

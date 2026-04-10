@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Pencil, Trash2, Copy, Plug, Loader2 } from "lucide-react";
+import { Pencil, Trash2, Copy, Plug, Loader2, Upload, Link } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { EngineIcon } from "./engine-icon";
 import { EnvironmentBadge } from "./environment-badge";
@@ -15,10 +15,12 @@ interface ConnectionCardProps {
   onDelete: () => void;
   onDuplicate?: () => void;
   onTestConnection?: () => void;
+  onExport?: () => void;
+  onCopyImportLink?: () => void;
 }
 
 export function ConnectionCard({
-  conn, connectingId, status, onConnect, onEdit, onDelete, onDuplicate, onTestConnection,
+  conn, connectingId, status, onConnect, onEdit, onDelete, onDuplicate, onTestConnection, onExport, onCopyImportLink,
 }: ConnectionCardProps) {
   const { t } = useTranslation();
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -110,6 +112,13 @@ export function ConnectionCard({
           )}
           {onTestConnection && (
             <ContextMenuItem icon={<Plug size={12} />} label={t("connection.card.testConnection")} onClick={() => { setMenuPos(null); onTestConnection(); }} />
+          )}
+          <div className="my-0.5 border-t border-border" />
+          {onExport && (
+            <ContextMenuItem icon={<Upload size={12} />} label={t("connection.export.exportConnection")} onClick={() => { setMenuPos(null); onExport(); }} />
+          )}
+          {onCopyImportLink && (
+            <ContextMenuItem icon={<Link size={12} />} label={t("connection.export.copyLink")} onClick={() => { setMenuPos(null); onCopyImportLink(); }} />
           )}
           <div className="my-0.5 border-t border-border" />
           <ContextMenuItem
