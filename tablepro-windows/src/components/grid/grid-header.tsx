@@ -36,7 +36,7 @@ function SortIndicator({ dir }: { dir: 'asc' | 'desc' | false }) {
  * custom DOM event `tablepro:filter-column` so the QuickFilterBar can focus
  * and prefill without needing a shared ref passed through many layers.
  */
-export function GridHeader({
+export const GridHeader = React.memo(function GridHeader({
   columns,
   columnWidths,
   sorting,
@@ -143,4 +143,4 @@ export function GridHeader({
       )}
     </>
   );
-}
+});

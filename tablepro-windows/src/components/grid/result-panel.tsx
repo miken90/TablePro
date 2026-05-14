@@ -5,10 +5,13 @@ import { useConnectionStore } from '../../stores/connectionStore';
 import { useChangeStore } from '../../stores/changeStore';
 import { useInspectorStore } from '../../stores/inspectorStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
-import type { ColumnInfo } from '../../types/query';
+import type { ColumnInfo, QueryResult } from '../../types/query';
 import { DataGrid } from './data-grid';
 import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
+import { TruncationBanner } from './truncation-banner';
+import { useQueryResultStore } from '../../stores/queryResultStore';
+import { RENDER_ROW_CAP, isExplainResult, readCell, truncateCell } from '../DataGrid/columnar-render';
 import { EmptyState } from '../shared/EmptyState';
 import { ExportDialog } from '../export/export-dialog';
 import { Database, Loader2 } from 'lucide-react';
@@ -57,6 +60,16 @@ export function ResultPanel({
   const queryText = useQueryStore((s) => s.queryText);
   const logEntries = useQueryLogStore((s) => s.entries);
 
+  // Streaming columnar store (T5/T6/T8) — primary source for the live
+  // query data grid. The legacy `useQueryStore.result` mirror is kept
+  // populated post-stream for non-grid readers (Export, StatusBar).
+  const columnar = useQueryResultStore((s) => s.columnar);
+  const streaming = useQueryResultStore((s) => s.streaming);
+  const streamError = useQueryResultStore((s) => s.streamError);
+  const streamDurationMs = useQueryResultStore((s) => s.durationMs);
+  const truncatedStream = useQueryResultStore((s) => s.truncated);
+  const storeRowCount = columnar?.row_count ?? 0;
+
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionIdForProgress = useConnectionStore((s) => s.getSessionId);
   const progressSessionId = selectedConnectionId ? getSessionIdForProgress(selectedConnectionId) : undefined;
@@ -81,10 +94,35 @@ export function ResultPanel({
     setPage, setPageSize, setSorting, fetchTableData,
   } = tableData;
 
-  const result = isTableMode ? tableResult : queryResult;
-  const error = isTableMode ? fetchError : queryError;
-  const total = isTableMode ? totalCount : (queryResult?.rows.length ?? 0);
-  const loading = isTableMode ? isFetching : isExecuting;
+  // Build query-mode display result from the streaming columnar store.
+  // Caps render at RENDER_ROW_CAP and truncates each cell to 80 chars
+  // (skipped when the result is an EXPLAIN payload). Recomputes whenever
+  // a new `generation` lands or row_count grows during streaming.
+  const queryResultFromStream = useMemo<QueryResult | null>(() => {
+    if (isTableMode || !columnar) return null;
+    const explain = isExplainResult(columnar.columns);
+    const limit = Math.min(columnar.row_count, RENDER_ROW_CAP);
+    const rows: (string | null)[][] = new Array(limit);
+    for (let r = 0; r < limit; r++) {
+      rows[r] = columnar.data.map((col) => {
+        const v = readCell(col, r);
+        if (v === null) return null;
+        return truncateCell(v, explain);
+      });
+    }
+    return {
+      columns: columnar.columns,
+      rows,
+      affectedRows: columnar.affected_rows ?? 0,
+      executionTimeMs: streamDurationMs ?? 0,
+      truncated: truncatedStream || undefined,
+    };
+  }, [isTableMode, columnar, streamDurationMs, truncatedStream]);
+
+  const result = isTableMode ? tableResult : (queryResultFromStream ?? queryResult);
+  const error = isTableMode ? fetchError : (streamError ?? queryError);
+  const total = isTableMode ? totalCount : (queryResultFromStream?.rows.length ?? queryResult?.rows.length ?? 0);
+  const loading = isTableMode ? isFetching : (isExecuting || streaming);
 
   const changeTracking = useChangeTracking({
     tableName, schema, sessionId, result,
@@ -170,14 +208,12 @@ export function ResultPanel({
   }, [onSaveRef, handleSave]);
 
   // Auto-switch to Messages tab on error
-  /* eslint-disable react-hooks/set-state-in-effect -- auto-switch tab on error */
   useEffect(() => {
     if (error && !isTableMode && error !== lastAutoSwitchedErrorRef.current) {
       lastAutoSwitchedErrorRef.current = error;
       setActiveTab('messages');
     }
   }, [error, isTableMode]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentFkColumns = tableName ? fkMap[tableName] : undefined;
 
@@ -340,6 +376,16 @@ export function ResultPanel({
         )}
         {!loading && activeTab === 'results' && (
           <>
+            <TruncationBanner />
+            {storeRowCount > RENDER_ROW_CAP && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="px-3 py-1 text-[11px] text-text-muted bg-surface-subtle border-b border-border-subtle"
+              >
+                Showing first {RENDER_ROW_CAP.toLocaleString()} of {storeRowCount.toLocaleString()} rows
+              </div>
+            )}
             <div className="flex-1 overflow-hidden">
               {displayResult ? (
                 <DataGrid

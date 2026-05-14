@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { GridHeader } from './grid-header';
 import { GridRow } from './grid-row';
@@ -78,6 +78,44 @@ export function DataGrid({
     onStartEditingActive, onClearSelection, onExtendActive, onSelectAll,
   });
 
+  // --- Stable callbacks (accept rowId from GridRow) ---
+  const handleRowClick = useCallback((rowId: number, e: React.MouseEvent) => {
+    if (!onRowSelect) return;
+    if (e.shiftKey) onRowSelect(rowId, 'range');
+    else if (e.ctrlKey || e.metaKey) onRowSelect(rowId, 'toggle');
+    else onRowSelect(rowId, 'single');
+  }, [onRowSelect]);
+
+  const handleCellMouseDown = useCallback((rowId: number, colIdx: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    if (e.shiftKey) { onExtendTo?.(rowId, colIdx); } else { onBeginDrag?.(rowId, colIdx); }
+    parentRef.current?.focus();
+  }, [onExtendTo, onBeginDrag]);
+
+  const handleCellMouseEnter = useCallback((rowId: number, colIdx: number) => {
+    if (isDragging) onUpdateDrag?.(rowId, colIdx);
+  }, [isDragging, onUpdateDrag]);
+
+  const handleRowHeaderClick = useCallback((rowId: number, e: React.MouseEvent) => {
+    if (e.shiftKey) { onRowSelect?.(rowId, 'range'); } else { onRowHeaderClick?.(rowId); }
+    parentRef.current?.focus();
+  }, [onRowSelect, onRowHeaderClick]);
+
+  const handleCellDblClick = useCallback((rowId: number, colIdx: number) => {
+    onCellDoubleClick?.(rowId, colIdx);
+  }, [onCellDoubleClick]);
+
+  const handleCommit = useCallback((rowId: number, colIdx: number, val: string | null) => {
+    onCellCommit?.(rowId, colIdx, val);
+  }, [onCellCommit]);
+
+  const handleContextMenu = useCallback((
+    event: React.MouseEvent<HTMLDivElement>, rowId: number, colIdx: number,
+    cellValue: string | null, row: (string | null)[],
+  ) => {
+    onCellContextMenu?.(event, rowId, colIdx, cellValue, row);
+  }, [onCellContextMenu]);
+
   return (
     <div
       className="relative h-full overflow-hidden"
@@ -113,6 +151,16 @@ export function DataGrid({
               const localIdx = virtualRow.index;
               const logicalRowId = rowIds?.[localIdx] ?? (pageOffset + localIdx);
               const displayRowNumber = pageOffset + localIdx + 1;
+
+              // Derive per-row selection primitives (stable across renders when unchanged)
+              const isActiveRow = selection?.active?.row === logicalRowId;
+              const activeColIdx = isActiveRow ? (selection?.active?.col ?? null) : null;
+              const selectionCols = selectionRect
+                && localIdx >= selectionRect.top
+                && localIdx <= selectionRect.bottom
+                ? [selectionRect.left, selectionRect.right] as [number, number]
+                : null;
+
               return (
                 <GridRow
                   key={virtualRow.index}
@@ -129,28 +177,17 @@ export function DataGrid({
                   nullDisplay={nullDisplay}
                   virtualTop={virtualRow.start}
                   fkColumns={fkColumns}
-                  selection={selection}
-                  selectionRect={selectionRect}
-                  onRowClick={(e) => {
-                    if (!onRowSelect) return;
-                    if (e.shiftKey) onRowSelect(logicalRowId, 'range');
-                    else if (e.ctrlKey || e.metaKey) onRowSelect(logicalRowId, 'toggle');
-                    else onRowSelect(logicalRowId, 'single');
-                  }}
-                  onCellMouseDown={(colIdx, e) => {
-                    if (e.button !== 0) return;
-                    if (e.shiftKey) { onExtendTo?.(logicalRowId, colIdx); } else { onBeginDrag?.(logicalRowId, colIdx); }
-                    parentRef.current?.focus();
-                  }}
-                  onCellMouseEnter={(colIdx) => { if (isDragging) onUpdateDrag?.(logicalRowId, colIdx); }}
-                  onRowHeaderClick={(e) => {
-                    if (e.shiftKey) { onRowSelect?.(logicalRowId, 'range'); } else { onRowHeaderClick?.(logicalRowId); }
-                    parentRef.current?.focus();
-                  }}
-                  onCellDoubleClick={(colIdx) => onCellDoubleClick?.(logicalRowId, colIdx)}
-                  onCellCommit={onCellCommit ? (colIdx, val) => onCellCommit(logicalRowId, colIdx, val) : undefined}
+                  isActiveRow={isActiveRow}
+                  activeColIdx={activeColIdx}
+                  selectionCols={selectionCols}
+                  onRowClick={handleRowClick}
+                  onCellMouseDown={handleCellMouseDown}
+                  onCellMouseEnter={handleCellMouseEnter}
+                  onRowHeaderClick={handleRowHeaderClick}
+                  onCellDoubleClick={handleCellDblClick}
+                  onCellCommit={onCellCommit ? handleCommit : undefined}
                   onCellCancel={onCellCancel}
-                  onCellContextMenu={onCellContextMenu ? (event, colIdx, cellValue, row) => onCellContextMenu(event, logicalRowId, colIdx, cellValue, row) : undefined}
+                  onCellContextMenu={onCellContextMenu ? handleContextMenu : undefined}
                   enumValuesByColumn={enumValuesByColumn}
                   onFkNavigate={onFkNavigate}
                 />
