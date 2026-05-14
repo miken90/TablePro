@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Performance settings section: configurable `streamingThreshold` (default 10K, range 1K–1M) and `storeMaxRows` (default 100K, range 10K–10M) with backend clamp on save
+
+### Changed
+
+- Split MainLayout god component (503 LOC) into MainLayout shell (138 LOC), ConnectedLayout, and OverlayRegion
+- Wrap GridRow and GridHeader in React.memo with stabilized props for fewer re-renders during scroll/selection
+- Lazy-load 7 non-critical panels (AiChat, Settings, MongoDB, Redis, Shortcuts, Onboarding, Explain) with per-panel Suspense boundaries
+- Add ErrorBoundary around sidebar, editor, inspector, overlays, and status bar regions
+- Drivers compiled into binary (was: dynamic DLL plugins via `libloading`)
+
+### Removed
+
+- `plugin-sdk` crate
+- DLL plugin loading via `PluginManager`
+- `libloading` dependency
+
+### Performance
+
+- ~2x RAM reduction on large query results (FFI clone eliminated)
+
+### Fixed
+
+- Grid column selection: clicking a cell no longer resets pointer to the first column
+- Onboarding dialog: settings now loaded from disk on startup, so skipped/completed onboarding persists across restarts
+
 ## [0.6.0] - 2026-04-10
 
 ### Added

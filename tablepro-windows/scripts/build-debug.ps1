@@ -13,40 +13,21 @@ Push-Location $root
 try {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
-    # 1. Build driver DLLs (debug)
-    Write-Host "[debug] Building driver DLLs..." -ForegroundColor Cyan
-    $drivers = @(
-        "src-tauri/driver-postgres/Cargo.toml",
-        "src-tauri/driver-mysql/Cargo.toml",
-        "src-tauri/driver-mssql/Cargo.toml",
-        "src-tauri/driver-sqlite/Cargo.toml",
-        "src-tauri/driver-mongodb/Cargo.toml",
-        "src-tauri/driver-redis/Cargo.toml"
-    )
-    foreach ($d in $drivers) {
-        cargo build --manifest-path $d
-        if ($LASTEXITCODE -ne 0) { throw "Driver build failed: $d" }
-    }
-
-    # 2. Tauri build --debug --no-bundle (frontend + exe only, skip MSI/NSIS/updater)
+    # 1. Tauri build --debug --no-bundle (frontend + exe only, skip MSI/NSIS/updater)
     Write-Host "[debug] Building Tauri app (debug)..." -ForegroundColor Cyan
     npx tauri build --debug --no-bundle
     if ($LASTEXITCODE -ne 0) { throw "Tauri debug build failed" }
 
-    # 3. Copy driver DLLs next to the exe
+    # 2. Stage driver capability sidecar files next to the exe
     $debugDir = "src-tauri\target\debug"
-    $pluginsDir = "$debugDir\plugins"
-    if (!(Test-Path $pluginsDir)) {
-        New-Item -ItemType Directory -Path $pluginsDir | Out-Null
-    }
-    Get-ChildItem "$debugDir\driver_*.dll" -ErrorAction SilentlyContinue |
-        ForEach-Object { Copy-Item $_.FullName "$pluginsDir\" -Force }
-
-    # 4. Copy driver capability sidecar files alongside DLLs
     $capsDir = "src-tauri\driver-capabilities"
     if (Test-Path $capsDir) {
+        $stageDir = "$debugDir\driver-capabilities"
+        if (!(Test-Path $stageDir)) {
+            New-Item -ItemType Directory -Path $stageDir | Out-Null
+        }
         Get-ChildItem "$capsDir\*.capabilities.json" -ErrorAction SilentlyContinue |
-            ForEach-Object { Copy-Item $_.FullName "$pluginsDir\" -Force }
+            ForEach-Object { Copy-Item $_.FullName "$stageDir\" -Force }
     }
 
     $sw.Stop()

@@ -52,25 +52,6 @@ function Import-DotEnvFile {
     }
 }
 
-function Invoke-ReleaseDriverBuild {
-    $drivers = @(
-        "src-tauri/driver-postgres/Cargo.toml",
-        "src-tauri/driver-mysql/Cargo.toml",
-        "src-tauri/driver-mssql/Cargo.toml",
-        "src-tauri/driver-sqlite/Cargo.toml",
-        "src-tauri/driver-mongodb/Cargo.toml",
-        "src-tauri/driver-redis/Cargo.toml"
-    )
-
-    Write-Host "[release] Building driver DLLs..." -ForegroundColor Cyan
-    foreach ($driver in $drivers) {
-        cargo build --release --manifest-path $driver
-        if ($LASTEXITCODE -ne 0) {
-            throw "Driver build failed: $driver"
-        }
-    }
-}
-
 function Invoke-FrontendBuild {
     Write-Host "[release] Building frontend..." -ForegroundColor Cyan
     npx vite build
@@ -151,7 +132,6 @@ function Assert-VersionConsistency {
     Write-Host ""
 
     Invoke-FrontendBuild
-    Invoke-ReleaseDriverBuild
 
     if ($Target -eq "portable" -or $Target -eq "all") {
         Write-Host "[release] Building main app (release)..." -ForegroundColor Cyan
@@ -162,15 +142,14 @@ function Assert-VersionConsistency {
 
         Write-Host "[release] Packaging portable ZIP..." -ForegroundColor Cyan
         $stagingDir = "target\portable-staging"
-        $pluginsDir = Join-Path $stagingDir "plugins"
         $resourcesDir = Join-Path $stagingDir "resources"
+        $capsStageDir = Join-Path $stagingDir "driver-capabilities"
 
         if (Test-Path $stagingDir) {
             Remove-Item $stagingDir -Recurse -Force
         }
 
         New-Item -ItemType Directory -Path $stagingDir | Out-Null
-        New-Item -ItemType Directory -Path $pluginsDir | Out-Null
 
         Copy-Item (Join-Path $releaseDir "tablepro-windows.exe") (Join-Path $stagingDir "TablePro.exe")
 
@@ -179,14 +158,12 @@ function Assert-VersionConsistency {
             Copy-Item $wv2 $stagingDir
         }
 
-        Get-ChildItem (Join-Path $releaseDir "driver_*.dll") -ErrorAction SilentlyContinue |
-            ForEach-Object { Copy-Item $_.FullName $pluginsDir -Force }
-
-        # Copy driver capability sidecar files alongside DLLs
+        # Stage driver capability sidecar files alongside the exe
         $capsDir = "src-tauri\driver-capabilities"
         if (Test-Path $capsDir) {
+            New-Item -ItemType Directory -Path $capsStageDir -Force | Out-Null
             Get-ChildItem "$capsDir\*.capabilities.json" -ErrorAction SilentlyContinue |
-                ForEach-Object { Copy-Item $_.FullName $pluginsDir -Force }
+                ForEach-Object { Copy-Item $_.FullName $capsStageDir -Force }
         }
 
         if (Test-Path "src-tauri\resources") {
