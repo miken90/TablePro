@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Performance settings section: configurable `streamingThreshold` (default 10K, range 1K–1M) and `storeMaxRows` (default 100K, range 10K–10M) with backend clamp on save
+- Dialect-aware ChangeTracker SQL generation: per-engine boolean literals (`1`/`0` for MySQL & MSSQL, `TRUE`/`FALSE` for Postgres/SQLite) and identifier quoting (backticks for MySQL, square brackets for MSSQL, ANSI double-quotes elsewhere)
+- EXPLAIN output detection: single-column `QUERY PLAN` results render without 80-char truncation and auto-size column width up to 4000px
+- Crash dump auto-collect: Rust panics are serialised to `%LOCALAPPDATA%\TablePro\crashes\panic-<ts>.json` with secret redaction; WER native dumps in `%LOCALAPPDATA%\CrashDumps\` are surfaced via `list_crash_dumps` / `delete_crash_dump` Tauri commands
 
 ### Changed
 
