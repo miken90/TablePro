@@ -57,6 +57,7 @@ rand = "0.8"
 
 [target.'cfg(windows)'.dependencies]
 windows-dpapi = "0.2"
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
 
 [features]
 devtools = ["tauri/devtools"]

@@ -47,6 +47,7 @@ use commands::routine_ops::{execute_routine, get_routine_source, preview_routine
 // bulk operations (dev-1)
 use commands::bulk_ops::{bulk_delete, bulk_delete_preview, bulk_insert, bulk_update, bulk_update_preview};
 use commands::crash::{delete_crash_dump, list_crash_dumps};
+use commands::credential::{cred_delete, cred_load, cred_save};
 use drivers::DriverRegistry;
 use services::health_monitor::HealthMonitor;
 use services::ConnectionManager;
@@ -305,6 +306,10 @@ pub fn run() {
             // phase-3 crash dump
             list_crash_dumps,
             delete_crash_dump,
+            // phase-3 dual credential (windows credential manager)
+            cred_save,
+            cred_load,
+            cred_delete,
         ])
         .on_window_event(|window, event| {
             match event {

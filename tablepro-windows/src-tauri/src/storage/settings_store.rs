@@ -91,6 +91,10 @@ pub struct AppSettings {
     pub streaming_threshold: usize,
     #[serde(default = "default_store_max_rows")]
     pub store_max_rows: usize,
+    /// Phase 3 Item 2: when true, connection passwords are mirrored into
+    /// Windows Credential Manager (in addition to the existing DPAPI flow).
+    #[serde(default)]
+    pub remember_credentials_in_os_keychain: bool,
 }
 
 fn default_streaming_threshold() -> usize {
@@ -128,6 +132,7 @@ impl Default for AppSettings {
             has_completed_onboarding: false,
             streaming_threshold: 10_000,
             store_max_rows: 100_000,
+            remember_credentials_in_os_keychain: false,
         }
     }
 }
