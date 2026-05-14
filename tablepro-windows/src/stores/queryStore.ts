@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import type { QueryResult } from "../types/query";
 import type { ExplainResult } from "../ipc/commands";
 import * as commands from "../ipc/commands";
@@ -7,6 +8,13 @@ import { classifyError } from "../ipc/error";
 import { useConnectionStore } from "./connectionStore";
 import { useEditorStore } from "./editorStore";
 import { useQueryLogStore } from "./queryLogStore";
+import {
+  useQueryResultStore,
+  type ColumnDataWire,
+  type ColumnarResultWire,
+  type QueryChunk,
+} from "./queryResultStore";
+import { useSettingsStore } from "./settingsStore";
 
 // --- Safe mode helpers ---
 
@@ -164,13 +172,74 @@ export function resolveActiveQuerySessionId(): string | undefined {
   return connectionState.getSessionId(selectedConnectionId);
 }
 
+// --- Streaming dispatch (Phase 2 — gridex/RAM optimization) ---
+//
+// Replaces the legacy single-shot `execute_query` IPC with the streaming
+// `execute_query_streaming` channel pipeline. Chunks land in the columnar
+// `useQueryResultStore`; on terminal `done` we synthesize a row-major
+// `QueryResult` mirror here so legacy readers (StatusBar, ExportDialog,
+// query-announcer, sql-editor error subscribe) continue to work without
+// modification. The data-grid render path consumes the columnar store
+// directly via `result-panel.tsx` so the mirror is only used by callers
+// that still want a `QueryResult` shape.
+//
+// Invariants:
+//   • Channel.onmessage is wired BEFORE invoke() (Tauri spike rule §1).
+//   • A new run cancels any in-flight stream; the per-run cancel handle
+//     is registered in `activeStreamCancel` so external `cancel()` works.
+//   • Every run mints a monotonic generation; stale chunks are dropped
+//     in the columnar store.
+
+let streamGeneration = 0;
+let activeStreamCancel: null | (() => void) = null;
+
+/** Materialize column-major data into row-major `(string | null)[][]`
+ *  for back-compat with the legacy `QueryResult.rows` shape. */
+function materializeStringRows(cr: ColumnarResultWire): (string | null)[][] {
+  const out: (string | null)[][] = new Array(cr.row_count);
+  for (let r = 0; r < cr.row_count; r++) {
+    out[r] = cr.data.map((col) => readCellAsString(col, r));
+  }
+  return out;
+}
+
+function readCellAsString(col: ColumnDataWire, idx: number): string | null {
+  if (col.kind === "Null") return null;
+  const v = (col.values as unknown[])[idx];
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean" || typeof v === "bigint") {
+    return String(v);
+  }
+  // Bytes (number[]), Json (object/array) → stringify.
+  return JSON.stringify(v);
+}
+
 async function runQuery(
   set: (state: Partial<QueryState>) => void,
   sessionId: string,
   sql: string,
+  // `params` is unused by the streaming command (parameter binding lives
+  // server-side via prepared statements, which the streaming pipeline
+  // does not yet expose). Kept in signature for source-compat with
+  // existing callers; if non-empty we log a warning.
   params?: string[],
 ): Promise<void> {
-  set({ isExecuting: true, error: null, result: null, durationMs: null, activeConnectionId: sessionId });
+  if (params && params.length > 0) {
+    console.warn("[queryStore] params ignored by streaming pipeline; use inline SQL");
+  }
+
+  // Cancel any prior in-flight stream before starting.
+  activeStreamCancel?.();
+
+  set({
+    isExecuting: true,
+    error: null,
+    result: null,
+    durationMs: null,
+    activeConnectionId: sessionId,
+  });
+
   const startMs = Date.now();
   const loadingId = toast.loading("Executing query...");
   const logId = useQueryLogStore.getState().add({
@@ -179,34 +248,80 @@ async function runQuery(
     status: "running",
     timestamp: startMs,
   });
-  try {
-    const result = await commands.executeQuery(sessionId, sql, params);
-    const elapsedMs = Date.now() - startMs;
-    const displayRowCount = getDisplayRowCount(result);
 
-    set({ result, isExecuting: false, durationMs: elapsedMs });
-    useQueryLogStore.getState().update(logId, {
-      status: "success",
-      durationMs: elapsedMs,
-      rowCount: displayRowCount,
+  // Mint generation + reset columnar store.
+  streamGeneration += 1;
+  const gen = streamGeneration;
+  useQueryResultStore.getState().beginStream(gen);
+
+  // Wire channel BEFORE invoke (spike rule §1).
+  const channel = new Channel<QueryChunk>();
+  let cancelled = false;
+  let doneMs = 0;
+  let streamErr: string | null = null;
+
+  const cancelHandle = () => {
+    if (cancelled) return;
+    cancelled = true;
+    void invoke("cancel_query", { sessionId }).catch(() => {
+      /* swallow: cancel best-effort */
     });
-    commands.historyRecord(sql, null, elapsedMs, displayRowCount, "success").catch(() => {});
-    toast.dismiss(loadingId);
-    toast.success("Query executed", {
-      description: getSuccessDescription(sql, result, elapsedMs),
+  };
+  activeStreamCancel = cancelHandle;
+
+  channel.onmessage = (chunk) => {
+    if (cancelled) return;
+    if (chunk.generation !== gen) return;
+    if (chunk.kind === "done") doneMs = chunk.ms;
+    if (chunk.kind === "err") streamErr = chunk.message;
+    useQueryResultStore.getState().appendChunk(chunk);
+  };
+
+  const threshold = useSettingsStore.getState().settings.streamingThreshold;
+
+  try {
+    await invoke("execute_query_streaming", {
+      sessionId,
+      sql,
+      threshold,
+      generation: gen,
+      channel,
     });
   } catch (err) {
-    const elapsedMs = Date.now() - startMs;
-    const classified = classifyError(err);
+    if (!cancelled && !streamErr) {
+      streamErr = String(err);
+      useQueryResultStore.getState().appendChunk({
+        kind: "err",
+        message: streamErr,
+        generation: gen,
+      });
+    }
+  }
+
+  // Clear our cancel slot if it's still ours.
+  if (activeStreamCancel === cancelHandle) activeStreamCancel = null;
+
+  if (cancelled) {
+    // User-initiated cancel: leave isExecuting false, no toast.
+    set({ isExecuting: false, durationMs: Date.now() - startMs });
+    toast.dismiss(loadingId);
+    useQueryLogStore.getState().update(logId, {
+      status: "error",
+      durationMs: Date.now() - startMs,
+      error: "cancelled",
+    });
+    return;
+  }
+
+  const elapsedMs = doneMs || Date.now() - startMs;
+
+  if (streamErr) {
+    const classified = classifyError(streamErr);
     const errorMsg = classified.message;
     const description = classified.hint
       ? `${errorMsg}\n${classified.hint}`
       : errorMsg;
-    set({
-      error: errorMsg,
-      isExecuting: false,
-      durationMs: elapsedMs,
-    });
+    set({ error: errorMsg, isExecuting: false, durationMs: elapsedMs });
     useQueryLogStore.getState().update(logId, {
       status: "error",
       durationMs: elapsedMs,
@@ -215,7 +330,44 @@ async function runQuery(
     commands.historyRecord(sql, null, elapsedMs, 0, "error").catch(() => {});
     toast.dismiss(loadingId);
     toast.error("Query failed", { description, duration: Infinity });
+    return;
   }
+
+  // Build legacy QueryResult mirror from the columnar store.
+  // Rows are duplicated here for back-compat with non-grid readers
+  // (StatusBar, ExportDialog, query-announcer). T7 follow-up should
+  // migrate those readers to read columnar directly to drop the mirror.
+  const resultStore = useQueryResultStore.getState();
+  const columnar = resultStore.columnar;
+  const result: QueryResult = columnar
+    ? {
+        columns: columnar.columns,
+        rows: materializeStringRows(columnar),
+        affectedRows: columnar.affected_rows ?? 0,
+        executionTimeMs: elapsedMs,
+        truncated: resultStore.truncated || undefined,
+        totalRowCount:
+          resultStore.totalRowsServer && resultStore.truncated
+            ? resultStore.totalRowsServer
+            : undefined,
+      }
+    : { columns: [], rows: [], affectedRows: 0, executionTimeMs: elapsedMs };
+
+  set({ result, isExecuting: false, durationMs: elapsedMs });
+
+  const displayRowCount = getDisplayRowCount(result);
+  useQueryLogStore.getState().update(logId, {
+    status: "success",
+    durationMs: elapsedMs,
+    rowCount: displayRowCount,
+  });
+  commands
+    .historyRecord(sql, null, elapsedMs, displayRowCount, "success")
+    .catch(() => {});
+  toast.dismiss(loadingId);
+  toast.success("Query executed", {
+    description: getSuccessDescription(sql, result, elapsedMs),
+  });
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
@@ -271,6 +423,11 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   },
 
   cancel: async (sessionId) => {
+    // Kill the local stream listener immediately (drops further chunks
+    // and prevents the post-invoke `result` synthesis from running).
+    activeStreamCancel?.();
+    // Best-effort backend cancel (may be redundant with the cancel
+    // already issued by `activeStreamCancel`, but harmless).
     await commands.cancelQuery(sessionId);
     set({ isExecuting: false });
   },

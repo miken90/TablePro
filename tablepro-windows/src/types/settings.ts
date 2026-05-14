@@ -63,6 +63,8 @@ export interface AppSettings {
   language: string;
   ai: AiSettings;
   hasCompletedOnboarding: boolean;
+  streamingThreshold: number;
+  storeMaxRows: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -80,4 +82,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: "en",
   ai: DEFAULT_AI_SETTINGS,
   hasCompletedOnboarding: false,
+  streamingThreshold: 10_000,
+  storeMaxRows: 100_000,
 };
