@@ -3,6 +3,7 @@ pub mod ai_schema_context;
 pub mod connection_export;
 pub mod connection_export_crypto;
 pub mod connection_manager;
+pub mod crash_handler;
 pub mod credential_store;
 pub mod health_monitor;
 pub mod import_service;

@@ -46,6 +46,7 @@ use commands::ai::{
 use commands::routine_ops::{execute_routine, get_routine_source, preview_routine_sql};
 // bulk operations (dev-1)
 use commands::bulk_ops::{bulk_delete, bulk_delete_preview, bulk_insert, bulk_update, bulk_update_preview};
+use commands::crash::{delete_crash_dump, list_crash_dumps};
 use drivers::DriverRegistry;
 use services::health_monitor::HealthMonitor;
 use services::ConnectionManager;
@@ -65,16 +66,9 @@ fn build_history_store() -> HistoryStore {
 }
 
 pub fn run() {
-    // Install a panic hook that logs to stderr + a file before aborting.
-    std::panic::set_hook(Box::new(|info| {
-        let bt = std::backtrace::Backtrace::force_capture();
-        let msg = format!("PANIC: {info}\nBacktrace:\n{bt}");
-        eprintln!("{msg}");
-        if let Ok(exe) = std::env::current_exe() {
-            let crash_log = exe.with_file_name("crash.log");
-            let _ = std::fs::write(&crash_log, &msg);
-        }
-    }));
+    // Install crash dump auto-collect (Phase 3 Item 4): writes panic info to
+    // %LOCALAPPDATA%\TablePro\crashes\panic-<ts>.json before the process dies.
+    crate::services::crash_handler::install_panic_hook();
 
     // Initialise structured logging — respects RUST_LOG env var.
     tracing_subscriber::fmt()
@@ -308,6 +302,9 @@ pub fn run() {
             spike_stream,
             // phase-2 streaming query
             execute_query_streaming,
+            // phase-3 crash dump
+            list_crash_dumps,
+            delete_crash_dump,
         ])
         .on_window_event(|window, event| {
             match event {
