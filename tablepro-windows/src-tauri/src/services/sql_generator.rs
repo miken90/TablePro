@@ -6,6 +6,63 @@ use super::sql_generator_ops::{
 };
 use crate::services::sql_quoting::quote_identifier;
 
+/// Target SQL dialect for ChangeTracker statement generation.
+///
+/// Maps to the host `db_type` string via [`Dialect::from_db_type`]. Used to
+/// pick correct boolean literals and identifier quoting per engine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dialect {
+    Postgres,
+    MySql,
+    Mssql,
+    Sqlite,
+    Mongo,
+    Redis,
+}
+
+impl Dialect {
+    /// Map a host `db_type` string (case-insensitive, accepts common aliases)
+    /// to a [`Dialect`]. Unknown engines fall back to `Postgres` (ANSI).
+    pub fn from_db_type(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "postgres" | "postgresql" => Self::Postgres,
+            "mysql" | "mariadb" => Self::MySql,
+            "mssql" | "sqlserver" | "sql_server" => Self::Mssql,
+            "sqlite" => Self::Sqlite,
+            "mongodb" | "mongo" => Self::Mongo,
+            "redis" => Self::Redis,
+            _ => Self::Postgres,
+        }
+    }
+
+    /// Canonical lowercase id used when delegating to `sql_quoting`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Postgres => "postgres",
+            Self::MySql => "mysql",
+            Self::Mssql => "mssql",
+            Self::Sqlite => "sqlite",
+            Self::Mongo => "mongodb",
+            Self::Redis => "redis",
+        }
+    }
+
+    /// Per-dialect boolean literal.
+    ///
+    /// - PG / SQLite: `TRUE` / `FALSE`
+    /// - MSSQL (`bit`), MySQL (`tinyint(1)`): `1` / `0`
+    /// - Mongo / Redis: not SQL — use `TRUE`/`FALSE` so any SQL pasted in a
+    ///   raw editor still parses.
+    pub fn bool_literal(self, b: bool) -> &'static str {
+        match (self, b) {
+            (Self::Mssql | Self::MySql, true) => "1",
+            (Self::Mssql | Self::MySql, false) => "0",
+            (_, true) => "TRUE",
+            (_, false) => "FALSE",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum ChangeType {
@@ -40,30 +97,24 @@ pub struct SavePayload {
     pub changes: Vec<RowChange>,
 }
 
-pub fn generate_statements(payload: &SavePayload) -> Vec<String> {
-    let table = qualified_table(&payload.table, &payload.schema);
+pub fn generate_statements(payload: &SavePayload, dialect: Dialect) -> Vec<String> {
+    let table = qualified_table(&payload.table, &payload.schema, dialect);
 
     payload
         .changes
         .iter()
         .filter_map(|row_change| match row_change.change_type {
-            ChangeType::Insert => build_insert_statement(&table, row_change),
-            ChangeType::Update => build_update_statement(&table, payload, row_change),
-            ChangeType::Delete => build_delete_statement(&table, payload, row_change),
+            ChangeType::Insert => build_insert_statement(&table, row_change, dialect),
+            ChangeType::Update => build_update_statement(&table, payload, row_change, dialect),
+            ChangeType::Delete => build_delete_statement(&table, payload, row_change, dialect),
         })
         .collect()
 }
 
-fn sql_literal(value: &Value) -> String {
+fn sql_literal(value: &Value, dialect: Dialect) -> String {
     match value {
         Value::Null => "NULL".to_string(),
-        Value::Bool(b) => {
-            if *b {
-                "TRUE".to_string()
-            } else {
-                "FALSE".to_string()
-            }
-        }
+        Value::Bool(b) => dialect.bool_literal(*b).to_string(),
         Value::Number(n) => n.to_string(),
         Value::String(s) => format!("'{}'", s.replace('\'', "''")),
         Value::Array(_) | Value::Object(_) => {
@@ -102,9 +153,14 @@ pub fn generate_insert_sql(
         .collect::<Vec<_>>()
         .join(", ");
 
+    let dialect = Dialect::from_db_type(driver_type);
     rows.iter()
         .map(|row| {
-            let values = row.iter().map(sql_literal).collect::<Vec<_>>().join(", ");
+            let values = row
+                .iter()
+                .map(|v| sql_literal(v, dialect))
+                .collect::<Vec<_>>()
+                .join(", ");
             format!("INSERT INTO {quoted_table} ({quoted_columns}) VALUES ({values});")
         })
         .collect::<Vec<_>>()
@@ -131,6 +187,7 @@ pub fn generate_update_sql(
         .map(|(idx, col)| (col.as_str(), idx))
         .collect::<std::collections::HashMap<_, _>>();
 
+    let dialect = Dialect::from_db_type(driver_type);
     rows.iter()
         .map(|row| {
             let set_clause = columns
@@ -141,7 +198,7 @@ pub fn generate_update_sql(
                     format!(
                         "{}={}",
                         quote_identifier(col, driver_type),
-                        sql_literal(value)
+                        sql_literal(value, dialect)
                     )
                 })
                 .collect::<Vec<_>>()
@@ -155,7 +212,7 @@ pub fn generate_update_sql(
                         format!(
                             "{}={}",
                             quote_identifier(pk, driver_type),
-                            sql_literal(value)
+                            sql_literal(value, dialect)
                         )
                     })
                 })
@@ -206,7 +263,7 @@ mod tests {
                 },
             ],
         }];
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
@@ -230,7 +287,7 @@ mod tests {
                 new_value: Some("Charlie".to_string()),
             }],
         }];
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert_eq!(stmts.len(), 1);
         assert_eq!(
             stmts[0],
@@ -250,24 +307,24 @@ mod tests {
             ],
             cell_changes: vec![],
         }];
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert_eq!(stmts.len(), 1);
         assert_eq!(stmts[0], r#"DELETE FROM "public"."users" WHERE "id"=42"#);
     }
 
     #[test]
     fn test_escape_null() {
-        assert_eq!(escape_value(&None), "NULL");
+        assert_eq!(escape_value(&None, Dialect::Postgres), "NULL");
     }
 
     #[test]
     fn test_escape_numeric() {
-        assert_eq!(escape_value(&Some("3.14".to_string())), "3.14");
+        assert_eq!(escape_value(&Some("3.14".to_string()), Dialect::Postgres), "3.14");
     }
 
     #[test]
     fn test_escape_string_with_quote() {
-        assert_eq!(escape_value(&Some("it's".to_string())), "'it''s'");
+        assert_eq!(escape_value(&Some("it's".to_string()), Dialect::Postgres), "'it''s'");
     }
 
     #[test]
@@ -283,14 +340,14 @@ mod tests {
             ],
             cell_changes: vec![],
         }];
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert_eq!(stmts[0], r#"DELETE FROM "users" WHERE "id"=1"#);
     }
 
     #[test]
     fn test_empty_payload_returns_empty() {
         let p = make_payload();
-        assert!(generate_statements(&p).is_empty());
+        assert!(generate_statements(&p, Dialect::Postgres).is_empty());
     }
 
     #[test]
@@ -301,7 +358,7 @@ mod tests {
             original_row: vec![],
             cell_changes: vec![],
         }];
-        assert!(generate_statements(&p).is_empty());
+        assert!(generate_statements(&p, Dialect::Postgres).is_empty());
     }
 
     #[test]
@@ -316,7 +373,7 @@ mod tests {
             ],
             cell_changes: vec![],
         }];
-        assert!(generate_statements(&p).is_empty());
+        assert!(generate_statements(&p, Dialect::Postgres).is_empty());
     }
 
     #[test]
@@ -336,7 +393,7 @@ mod tests {
                 new_value: Some("y".to_string()),
             }],
         }];
-        assert!(generate_statements(&p).is_empty());
+        assert!(generate_statements(&p, Dialect::Postgres).is_empty());
     }
 
     #[test]
@@ -348,7 +405,7 @@ mod tests {
             original_row: vec![Some("1".to_string())],
             cell_changes: vec![],
         }];
-        assert!(generate_statements(&p).is_empty());
+        assert!(generate_statements(&p, Dialect::Postgres).is_empty());
     }
 
     #[test]
@@ -372,7 +429,7 @@ mod tests {
                 cell_changes: vec![],
             }],
         };
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert_eq!(
             stmts[0],
             r#"DELETE FROM "order_items" WHERE "order_id"=10 AND "item_id"=20"#
@@ -415,7 +472,7 @@ mod tests {
                 cell_changes: vec![],
             },
         ];
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert_eq!(stmts.len(), 3);
         assert!(stmts[0].starts_with("INSERT"));
         assert!(stmts[1].starts_with("UPDATE"));
@@ -434,7 +491,7 @@ mod tests {
                 new_value: Some("Robert'; DROP TABLE users;--".to_string()),
             }],
         }];
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert!(stmts[0].contains("Robert''; DROP TABLE users;--"));
     }
 
@@ -446,28 +503,28 @@ mod tests {
             original_row: vec![None, Some("x".to_string()), Some("5".to_string())],
             cell_changes: vec![],
         }];
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert_eq!(stmts[0], r#"DELETE FROM "public"."users" WHERE "id" IS NULL"#);
     }
 
     #[test]
     fn test_escape_negative_number() {
-        assert_eq!(escape_value(&Some("-1".to_string())), "-1");
+        assert_eq!(escape_value(&Some("-1".to_string()), Dialect::Postgres), "-1");
     }
 
     #[test]
     fn test_escape_scientific_notation() {
-        assert_eq!(escape_value(&Some("1e10".to_string())), "1e10");
+        assert_eq!(escape_value(&Some("1e10".to_string()), Dialect::Postgres), "1e10");
     }
 
     #[test]
     fn test_escape_non_numeric_string() {
-        assert_eq!(escape_value(&Some("123abc".to_string())), "'123abc'");
+        assert_eq!(escape_value(&Some("123abc".to_string()), Dialect::Postgres), "'123abc'");
     }
 
     #[test]
     fn test_escape_empty_string() {
-        assert_eq!(escape_value(&Some(String::new())), "''");
+        assert_eq!(escape_value(&Some(String::new()), Dialect::Postgres), "''");
     }
 
     #[test]
@@ -482,7 +539,7 @@ mod tests {
                 new_value: None,
             }],
         }];
-        let stmts = generate_statements(&p);
+        let stmts = generate_statements(&p, Dialect::Postgres);
         assert!(stmts[0].contains("NULL"));
     }
 
@@ -532,25 +589,170 @@ mod tests {
         );
         assert_eq!(
             sql,
-            "INSERT INTO `flags` (`ok`, `payload`, `meta`) VALUES (TRUE, NULL, '{\"a\":1,\"b\":\"x\"}');"
+            "INSERT INTO `flags` (`ok`, `payload`, `meta`) VALUES (1, NULL, '{\"a\":1,\"b\":\"x\"}');"
         );
     }
 
     #[test]
     fn test_quote_ident() {
-        assert_eq!(quote_ident("my_table"), r#""my_table""#);
+        assert_eq!(quote_ident("my_table", Dialect::Postgres), r#""my_table""#);
     }
 
     #[test]
     fn test_qualified_table_with_schema() {
         assert_eq!(
-            qt("users", &Some("public".to_string())),
+            qt("users", &Some("public".to_string()), Dialect::Postgres),
             r#""public"."users""#
         );
     }
 
     #[test]
     fn test_qualified_table_without_schema() {
-        assert_eq!(qt("users", &None), r#""users""#);
+        assert_eq!(qt("users", &None, Dialect::Postgres), r#""users""#);
+    }
+
+    // ── Dialect coverage (Phase 3 Item 1) ──────────────────────────────────
+
+    #[test]
+    fn test_dialect_from_db_type_aliases() {
+        assert_eq!(Dialect::from_db_type("postgres"), Dialect::Postgres);
+        assert_eq!(Dialect::from_db_type("PostgreSQL"), Dialect::Postgres);
+        assert_eq!(Dialect::from_db_type("mysql"), Dialect::MySql);
+        assert_eq!(Dialect::from_db_type("mariadb"), Dialect::MySql);
+        assert_eq!(Dialect::from_db_type("mssql"), Dialect::Mssql);
+        assert_eq!(Dialect::from_db_type("sqlserver"), Dialect::Mssql);
+        assert_eq!(Dialect::from_db_type("sqlite"), Dialect::Sqlite);
+        assert_eq!(Dialect::from_db_type("mongo"), Dialect::Mongo);
+        assert_eq!(Dialect::from_db_type("redis"), Dialect::Redis);
+        // Unknown → ANSI / Postgres fallback
+        assert_eq!(Dialect::from_db_type("oracle"), Dialect::Postgres);
+    }
+
+    #[test]
+    fn test_bool_literal_per_dialect() {
+        assert_eq!(Dialect::Postgres.bool_literal(true), "TRUE");
+        assert_eq!(Dialect::Postgres.bool_literal(false), "FALSE");
+        assert_eq!(Dialect::Sqlite.bool_literal(true), "TRUE");
+        assert_eq!(Dialect::MySql.bool_literal(true), "1");
+        assert_eq!(Dialect::MySql.bool_literal(false), "0");
+        assert_eq!(Dialect::Mssql.bool_literal(true), "1");
+        assert_eq!(Dialect::Mssql.bool_literal(false), "0");
+        assert_eq!(Dialect::Mongo.bool_literal(true), "TRUE");
+        assert_eq!(Dialect::Redis.bool_literal(false), "FALSE");
+    }
+
+    #[test]
+    fn test_escape_value_bool_string_dialect_aware() {
+        // "true"/"false" string in cell → dialect-specific literal
+        assert_eq!(
+            escape_value(&Some("true".to_string()), Dialect::Postgres),
+            "TRUE"
+        );
+        assert_eq!(
+            escape_value(&Some("FALSE".to_string()), Dialect::Postgres),
+            "FALSE"
+        );
+        assert_eq!(
+            escape_value(&Some("true".to_string()), Dialect::MySql),
+            "1"
+        );
+        assert_eq!(
+            escape_value(&Some("false".to_string()), Dialect::Mssql),
+            "0"
+        );
+        assert_eq!(
+            escape_value(&Some("True".to_string()), Dialect::Sqlite),
+            "TRUE"
+        );
+    }
+
+    #[test]
+    fn test_generate_statements_mysql_identifier_quoting() {
+        let mut p = make_payload();
+        p.changes = vec![RowChange {
+            change_type: ChangeType::Update,
+            original_row: vec![
+                Some("1".to_string()),
+                Some("Bob".to_string()),
+                Some("25".to_string()),
+            ],
+            cell_changes: vec![CellChange {
+                column_name: "name".to_string(),
+                old_value: Some("Bob".to_string()),
+                new_value: Some("Charlie".to_string()),
+            }],
+        }];
+        let stmts = generate_statements(&p, Dialect::MySql);
+        assert_eq!(
+            stmts[0],
+            "UPDATE `public`.`users` SET `name`='Charlie' WHERE `id`=1"
+        );
+    }
+
+    #[test]
+    fn test_generate_statements_mssql_identifier_quoting_and_bool() {
+        let mut p = make_payload();
+        p.changes = vec![RowChange {
+            change_type: ChangeType::Insert,
+            original_row: vec![],
+            cell_changes: vec![
+                CellChange {
+                    column_name: "name".to_string(),
+                    old_value: None,
+                    new_value: Some("Alice".to_string()),
+                },
+                CellChange {
+                    column_name: "active".to_string(),
+                    old_value: None,
+                    new_value: Some("true".to_string()),
+                },
+            ],
+        }];
+        let stmts = generate_statements(&p, Dialect::Mssql);
+        assert_eq!(
+            stmts[0],
+            "INSERT INTO [public].[users] ([name],[active]) VALUES ('Alice',1)"
+        );
+    }
+
+    #[test]
+    fn test_generate_statements_sqlite_uses_ansi_quotes() {
+        let mut p = make_payload();
+        p.changes = vec![RowChange {
+            change_type: ChangeType::Delete,
+            original_row: vec![
+                Some("7".to_string()),
+                Some("X".to_string()),
+                Some("1".to_string()),
+            ],
+            cell_changes: vec![],
+        }];
+        let stmts = generate_statements(&p, Dialect::Sqlite);
+        assert_eq!(stmts[0], r#"DELETE FROM "public"."users" WHERE "id"=7"#);
+    }
+
+    #[test]
+    fn test_generate_insert_sql_mysql_bool_uses_1_0() {
+        let sql = generate_insert_sql(
+            "flags",
+            None,
+            &["ok".to_string()],
+            &[vec![Value::Bool(true)], vec![Value::Bool(false)]],
+            "mysql",
+        );
+        assert!(sql.contains("VALUES (1)"));
+        assert!(sql.contains("VALUES (0)"));
+    }
+
+    #[test]
+    fn test_generate_insert_sql_postgres_bool_uses_true_false() {
+        let sql = generate_insert_sql(
+            "flags",
+            None,
+            &["ok".to_string()],
+            &[vec![Value::Bool(true)]],
+            "postgres",
+        );
+        assert!(sql.contains("VALUES (TRUE)"));
     }
 }

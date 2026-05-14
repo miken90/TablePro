@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::models::AppError;
 use crate::services::{
-    sql_generator::{generate_insert_sql, generate_statements, generate_update_sql, SavePayload},
+    sql_generator::{generate_insert_sql, generate_statements, generate_update_sql, Dialect, SavePayload},
     ConnectionManager,
 };
 use crate::storage::history_store::HistoryStore;
@@ -37,18 +37,22 @@ pub async fn save_changes(
     manager: State<'_, Mutex<ConnectionManager>>,
     history_store: State<'_, Mutex<HistoryStore>>,
 ) -> Result<SaveResult, AppError> {
-    let (driver, database_name) = {
+    let (driver, database_name, dialect) = {
         let mgr = manager.lock().await;
         let driver = mgr.get_driver(&session_id)?;
-        let database_name = mgr
-            .get_config(&session_id)
-            .ok()
+        let config = mgr.get_config(&session_id).ok();
+        let database_name = config
+            .as_ref()
             .map(|cfg| cfg.database.clone())
             .filter(|name| !name.trim().is_empty());
-        (driver, database_name)
+        let dialect = config
+            .as_ref()
+            .map(|cfg| Dialect::from_db_type(&cfg.db_type))
+            .unwrap_or(Dialect::Postgres);
+        (driver, database_name, dialect)
     };
 
-    let statements = generate_statements(&payload);
+    let statements = generate_statements(&payload, dialect);
     let mut total_affected = 0i64;
     let started_at = Instant::now();
     let mut executed_statements: Vec<&str> = Vec::with_capacity(statements.len());
