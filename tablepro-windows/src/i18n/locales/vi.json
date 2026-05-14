@@ -364,6 +364,7 @@
       "appearance": "Giao diện",
       "connection": "Kết nối",
       "ai": "AI",
+      "performance": "Hiệu năng",
       "shortcuts": "Phím tắt"
     },
     "general": {
@@ -450,6 +451,13 @@
         "fixError": "Sửa lỗi",
         "inlineSuggestions": "Gợi ý nội tuyến"
       }
+    },
+    "performance": {
+      "title": "Hiệu năng",
+      "streamingThreshold": "Ngưỡng truyền dòng (số hàng)",
+      "streamingThresholdDesc": "Truy vấn trả về nhiều hàng hơn ngưỡng này sẽ truyền theo khối thay vì tải hết một lần. Cao hơn = dùng nhiều RAM hơn, thấp hơn = nhiều khối hơn.",
+      "storeMaxRows": "Số hàng tối đa lưu",
+      "storeMaxRowsDesc": "Số hàng tối đa giữ trong bộ nhớ. Vượt ngưỡng, các hàng sẽ bị bỏ (dùng Xuất để lấy đầy đủ). Cao hơn = dùng nhiều RAM hơn."
     },
     "shortcuts": {
       "title": "Phím tắt",
