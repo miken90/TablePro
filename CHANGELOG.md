@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dialect-aware ChangeTracker SQL generation: per-engine boolean literals (`1`/`0` for MySQL & MSSQL, `TRUE`/`FALSE` for Postgres/SQLite) and identifier quoting (backticks for MySQL, square brackets for MSSQL, ANSI double-quotes elsewhere)
 - EXPLAIN output detection: single-column `QUERY PLAN` results render without 80-char truncation and auto-size column width up to 4000px
 - Crash dump auto-collect: Rust panics are serialised to `%LOCALAPPDATA%\TablePro\crashes\panic-<ts>.json` with secret redaction; WER native dumps in `%LOCALAPPDATA%\CrashDumps\` are surfaced via `list_crash_dumps` / `delete_crash_dump` Tauri commands
-- Dual credential storage: opt-in `rememberCredentialsInOsKeychain` setting (default off) and Tauri commands (`cred_save`, `cred_load`, `cred_delete`) that mirror connection passwords into Windows Credential Manager under the `TablePro/<connection-uuid>` namespace
+- Dual credential storage: opt-in `rememberCredentialsInOsKeychain` setting (default off) and Tauri commands (`cred_save`, `cred_load`, `cred_delete`) that mirror connection passwords into Windows Credential Manager under the `TablePro/<connection-uuid>` namespace. Wired into `connectionStore.saveConnection` (mirrors when toggle ON) and `connectionStore.deleteConnection` (always cleans up CredMan entry).
+- Diagnostics settings tab: crash dump viewer that lists Rust panic JSON dumps + WER native dumps with size and per-entry delete; refuses paths outside known directories.
 
 ### Changed
 
