@@ -183,6 +183,30 @@ export const saveConnection = (connection: SavedConnection): Promise<void> =>
 export const deleteConnection = (id: string): Promise<void> =>
   invoke("delete_connection", { id });
 
+// Phase 3 Item 2: Windows Credential Manager
+export const credSave = (connectionId: string, password: string): Promise<void> =>
+  invoke("cred_save", { connectionId, password });
+
+export const credLoad = (connectionId: string): Promise<string | null> =>
+  invoke("cred_load", { connectionId });
+
+export const credDelete = (connectionId: string): Promise<void> =>
+  invoke("cred_delete", { connectionId });
+
+// Phase 3 Item 4: Crash dump viewer
+export interface CrashDumpEntry {
+  path: string;
+  name: string;
+  size: number;
+  kind: "rust" | "wer";
+}
+
+export const listCrashDumps = (): Promise<CrashDumpEntry[]> =>
+  invoke("list_crash_dumps");
+
+export const deleteCrashDump = (path: string): Promise<void> =>
+  invoke("delete_crash_dump", { path });
+
 // Connection group commands
 export const listGroups = (): Promise<ConnectionGroup[]> =>
   invoke("list_groups");

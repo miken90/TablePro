@@ -5,6 +5,7 @@ import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../type
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
 import { classifyError } from "../ipc/error";
+import { useSettingsStore } from "./settingsStore";
 
 interface ConnectionState {
   connections: Map<string, SavedConnection>;
@@ -177,6 +178,16 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   saveConnection: async (connection) => {
     await commands.saveConnection(connection);
+    // Phase 3 Item 2: optionally mirror password into Windows Credential Manager.
+    try {
+      const useKeychain = useSettingsStore.getState().settings.rememberCredentialsInOsKeychain;
+      const pwd = connection.config.password;
+      if (useKeychain && pwd && pwd.length > 0) {
+        await commands.credSave(connection.id, pwd);
+      }
+    } catch (e) {
+      console.warn("cred_save failed (non-fatal):", e);
+    }
     set((s) => {
       const connections = new Map(s.connections);
       connections.set(connection.id, connection);
@@ -186,6 +197,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   deleteConnection: async (id) => {
     await commands.deleteConnection(id);
+    // Always clean up CredMan entry (idempotent on missing entries).
+    try {
+      await commands.credDelete(id);
+    } catch (e) {
+      console.warn("cred_delete failed (non-fatal):", e);
+    }
     set((s) => {
       const connections = new Map(s.connections);
       connections.delete(id);

@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { SettingRow, SettingSection, NumberInput, Select } from "./settings-form";
+import { SettingRow, SettingSection, NumberInput, Select, Toggle } from "./settings-form";
 
 export function SettingsConnection() {
   const { t } = useTranslation();
@@ -36,6 +36,16 @@ export function SettingsConnection() {
           value={settings.safeModeLevel}
           onChange={(v) => void saveSettings({ safeModeLevel: Number(v) })}
           options={SAFE_MODE_OPTIONS}
+        />
+      </SettingRow>
+
+      <SettingRow
+        label="Remember passwords in Windows Credential Manager"
+        description="Mirror saved connection passwords into the OS keychain (DPAPI encryption is always applied; this is an additive opt-in)."
+      >
+        <Toggle
+          checked={settings.rememberCredentialsInOsKeychain}
+          onChange={(v) => void saveSettings({ rememberCredentialsInOsKeychain: v })}
         />
       </SettingRow>
     </div>
