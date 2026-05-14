@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tablepro-plugin-sdk = { path = "../plugin-sdk" }
-redis = { version = "0.27", features = ["tls-rustls"] }
+driver-common = { path = "../driver-common" }
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp"] }
 serde_json = "1"
 
 [lib]
 name = "driver_redis"
-crate-type = ["cdylib"]
+crate-type = ["rlib"]

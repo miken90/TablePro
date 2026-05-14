@@ -20,6 +20,8 @@ pub async fn set_settings(
     settings: AppSettings,
     store: State<'_, Mutex<SettingsStore>>,
 ) -> Result<(), AppError> {
+    let mut settings = settings;
+    settings.clamp_perf();
     let mut store = store.lock().await;
     store.set(settings);
     store.save()

@@ -1,206 +1,185 @@
-mod driver;
-mod ffi_helpers;
-mod free_fns;
-mod ops_basic;
-mod schema;
-mod schema_ext;
+//! SQLite driver — statically linked into TablePro Windows.
+//!
+//! Implements `driver_common::DatabaseDriver` directly using `rusqlite`.
+//! `rusqlite` is synchronous, so each trait method dispatches the work to a
+//! blocking thread via `tokio::runtime::Handle::spawn_blocking`. The
+//! `Connection` lives behind a `std::sync::Mutex` (sync-only access; never
+//! held across `.await`).
 
-use driver::SqliteDriver;
-use ffi_helpers::{err_result, string_to_ffi};
-use tablepro_plugin_sdk::{
-    API_VERSION, DriverConfig, DriverHandle, PluginMetadata, PluginVTable,
+mod ops;
+
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+use rusqlite::{Connection, InterruptHandle};
+
+use driver_common::{
+    ColumnInfo, ConnectionConfig, DatabaseDriver, DriverError, ForeignKeyInfo, IndexInfo,
+    QueryResult, TableInfo,
 };
 
-// ── Plugin entry points ───────────────────────────────────────────────────────
-
-/// Called by the host to fill all function pointers in the vtable.
-///
-/// # Safety
-/// `vtable` must be a valid, non-null pointer to a `PluginVTable` allocated by the host.
-#[no_mangle]
-pub unsafe extern "C" fn tablepro_plugin_init(vtable: *mut PluginVTable) {
-    if vtable.is_null() {
-        return;
-    }
-    let v = &mut *vtable;
-    v.api_version = API_VERSION;
-    v.create_driver = create_driver;
-    v.destroy_driver = destroy_driver;
-    v.connect = connect;
-    v.disconnect = disconnect;
-    v.ping = ping;
-    v.execute = execute;
-    v.cancel = cancel;
-    v.fetch_tables = fetch_tables;
-    v.fetch_columns = fetch_columns;
-    v.fetch_indexes = fetch_indexes;
-    v.fetch_foreign_keys = fetch_foreign_keys;
-    v.fetch_databases = fetch_databases;
-    v.fetch_ddl = fetch_ddl;
-    v.free_result = free_fns::free_result;
-    v.free_query_result = free_fns::free_query_result;
-    v.free_table_list = free_fns::free_table_list;
-    v.free_column_list = free_fns::free_column_list;
-    v.free_index_list = free_fns::free_index_list;
-    v.free_foreign_key_list = free_fns::free_foreign_key_list;
-    v.free_string_list = free_fns::free_string_list;
-    v.free_string = free_fns::free_string;
+pub struct SqliteDriver {
+    rt: tokio::runtime::Handle,
+    config: ConnectionConfig,
+    conn: Arc<Mutex<Option<Connection>>>,
+    interrupt: Arc<Mutex<Option<InterruptHandle>>>,
 }
 
-/// Returns static metadata for this plugin.
-#[no_mangle]
-pub extern "C" fn tablepro_plugin_metadata() -> PluginMetadata {
-    PluginMetadata {
-        api_version: API_VERSION,
-        type_id: string_to_ffi("sqlite".to_string()),
-        display_name: string_to_ffi("SQLite".to_string()),
-        default_port: 0,
+impl SqliteDriver {
+    pub fn new(rt_handle: tokio::runtime::Handle, config: ConnectionConfig) -> Self {
+        Self {
+            rt: rt_handle,
+            config,
+            conn: Arc::new(Mutex::new(None)),
+            interrupt: Arc::new(Mutex::new(None)),
+        }
     }
 }
 
-// ── Driver lifecycle ──────────────────────────────────────────────────────────
-
-unsafe extern "C" fn create_driver(config: *const DriverConfig) -> *mut DriverHandle {
-    if config.is_null() {
-        return std::ptr::null_mut();
-    }
-    let cfg = &*config;
-    let database = cfg.database.as_str().to_owned();
-
-    match SqliteDriver::new(database) {
-        Ok(boxed) => Box::into_raw(boxed) as *mut DriverHandle,
-        Err(_) => std::ptr::null_mut(),
-    }
+/// Run a sync rusqlite operation on a blocking thread, with the connection
+/// guarded by the std mutex. Errors out cleanly if disconnected.
+async fn with_conn<F, T>(driver: &SqliteDriver, f: F) -> Result<T, DriverError>
+where
+    F: FnOnce(&Connection) -> Result<T, DriverError> + Send + 'static,
+    T: Send + 'static,
+{
+    let conn_arc = driver.conn.clone();
+    driver
+        .rt
+        .spawn_blocking(move || -> Result<T, DriverError> {
+            let guard = conn_arc
+                .lock()
+                .map_err(|e| DriverError::Other(format!("Mutex poisoned: {e}")))?;
+            let conn = guard
+                .as_ref()
+                .ok_or_else(|| DriverError::Connection("Not connected".to_string()))?;
+            f(conn)
+        })
+        .await
+        .map_err(|e| DriverError::Other(e.to_string()))?
 }
 
-unsafe extern "C" fn destroy_driver(handle: *mut DriverHandle) {
-    if !handle.is_null() {
-        drop(Box::from_raw(handle as *mut SqliteDriver));
+#[async_trait]
+impl DatabaseDriver for SqliteDriver {
+    async fn connect(&self) -> Result<(), DriverError> {
+        let path = self.config.database.clone();
+        let conn_arc = self.conn.clone();
+        let interrupt_arc = self.interrupt.clone();
+
+        self.rt
+            .spawn_blocking(move || -> Result<(), DriverError> {
+                let conn = Connection::open(&path)
+                    .map_err(|e| DriverError::Connection(e.to_string()))?;
+                // Best-effort PRAGMAs — ignore errors to mirror legacy behavior.
+                let _ = conn.execute_batch("PRAGMA journal_mode=WAL;");
+                let _ = conn.execute_batch("PRAGMA busy_timeout=5000;");
+
+                let interrupt = conn.get_interrupt_handle();
+                {
+                    let mut g = interrupt_arc
+                        .lock()
+                        .map_err(|e| DriverError::Other(format!("Mutex poisoned: {e}")))?;
+                    *g = Some(interrupt);
+                }
+                {
+                    let mut g = conn_arc
+                        .lock()
+                        .map_err(|e| DriverError::Other(format!("Mutex poisoned: {e}")))?;
+                    *g = Some(conn);
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|e| DriverError::Other(e.to_string()))?
     }
-}
 
-// ── Connection ────────────────────────────────────────────────────────────────
-
-unsafe extern "C" fn connect(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() {
-        return err_result("Null handle".to_string());
+    fn disconnect(&self) {
+        if let Ok(mut g) = self.interrupt.lock() {
+            *g = None;
+        }
+        if let Ok(mut g) = self.conn.lock() {
+            *g = None;
+        }
     }
-    ops_basic::connect(handle)
-}
 
-unsafe extern "C" fn disconnect(handle: *mut DriverHandle) {
-    if handle.is_null() {
-        return;
+    async fn ping(&self) -> Result<(), DriverError> {
+        with_conn(self, ops::ping).await
     }
-    ops_basic::disconnect(handle);
-}
 
-unsafe extern "C" fn ping(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() {
-        return err_result("Null handle".to_string());
+    async fn execute(&self, query: &str) -> Result<QueryResult, DriverError> {
+        let sql = query.to_string();
+        with_conn(self, move |c| ops::execute(c, &sql)).await
     }
-    ops_basic::ping(handle)
-}
 
-// ── Query ─────────────────────────────────────────────────────────────────────
-
-unsafe extern "C" fn execute(
-    handle: *mut DriverHandle,
-    sql: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiQueryResult {
-    if handle.is_null() {
-        return ffi_helpers::err_query_result("Null handle".to_string());
+    async fn fetch_tables(&self) -> Result<Vec<TableInfo>, DriverError> {
+        with_conn(self, ops::fetch_tables).await
     }
-    ops_basic::execute(handle, sql)
-}
 
-unsafe extern "C" fn cancel(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() {
-        return err_result("Null handle".to_string());
+    async fn fetch_columns(
+        &self,
+        table: &str,
+        _schema: Option<&str>,
+    ) -> Result<Vec<ColumnInfo>, DriverError> {
+        let t = table.to_string();
+        with_conn(self, move |c| ops::fetch_columns(c, &t)).await
     }
-    ops_basic::cancel(handle)
-}
 
-// ── Schema ────────────────────────────────────────────────────────────────────
-
-unsafe extern "C" fn fetch_tables(
-    handle: *mut DriverHandle,
-) -> tablepro_plugin_sdk::FfiTableList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiTableList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_indexes(
+        &self,
+        table: &str,
+        _schema: Option<&str>,
+    ) -> Result<Vec<IndexInfo>, DriverError> {
+        let t = table.to_string();
+        with_conn(self, move |c| ops::fetch_indexes(c, &t)).await
     }
-    ops_basic::fetch_tables(handle)
-}
 
-unsafe extern "C" fn fetch_columns(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiColumnList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiColumnList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_foreign_keys(
+        &self,
+        table: &str,
+        _schema: Option<&str>,
+    ) -> Result<Vec<ForeignKeyInfo>, DriverError> {
+        let t = table.to_string();
+        with_conn(self, move |c| ops::fetch_foreign_keys(c, &t)).await
     }
-    schema::fetch_columns(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_indexes(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiIndexList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiIndexList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_databases(&self) -> Result<Vec<String>, DriverError> {
+        with_conn(self, ops::fetch_databases).await
     }
-    schema::fetch_indexes(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_foreign_keys(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiForeignKeyList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiForeignKeyList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_ddl(
+        &self,
+        table: &str,
+        _schema: Option<&str>,
+    ) -> Result<String, DriverError> {
+        let t = table.to_string();
+        with_conn(self, move |c| ops::fetch_ddl(c, &t)).await
     }
-    schema_ext::fetch_foreign_keys(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_databases(
-    handle: *mut DriverHandle,
-) -> tablepro_plugin_sdk::FfiStringList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiStringList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    fn cancel_query(&self) -> Result<(), DriverError> {
+        let guard = self
+            .interrupt
+            .lock()
+            .map_err(|e| DriverError::Other(format!("Mutex poisoned: {e}")))?;
+        match guard.as_ref() {
+            Some(h) => {
+                h.interrupt();
+                Ok(())
+            }
+            None => Err(DriverError::Connection(
+                "No active connection to cancel".to_string(),
+            )),
+        }
     }
-    schema_ext::fetch_databases(handle)
-}
 
-unsafe extern "C" fn fetch_ddl(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiString {
-    if handle.is_null() {
-        return string_to_ffi("ERROR: Null handle".to_string());
+    fn supports_schemas(&self) -> bool {
+        false
     }
-    schema_ext::fetch_ddl(handle, table, schema)
+
+    fn supports_transactions(&self) -> bool {
+        true
+    }
+
+    fn database_type_id(&self) -> &str {
+        "sqlite"
+    }
 }

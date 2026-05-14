@@ -1,221 +1,134 @@
-use mongodb::bson::{doc, Document};
-use mongodb::sync::Client;
-use tablepro_plugin_sdk::{
-    DriverHandle, FfiQueryResult, FfiResult, FfiStr, FfiString, FfiTableInfo, FfiTableList,
-};
+//! MongoDB query + collection-listing operations (async).
 
-use crate::bson_flatten::{bson_value_to_string, discover_fields};
-use crate::driver::MongoDriver;
-use crate::ffi_helpers::{
-    build_query_result, err_query_result, err_result, ok_result, string_to_ffi,
-};
+use futures_util::TryStreamExt;
+use mongodb::bson::{Bson, Document};
+use mongodb::Client;
 
-pub unsafe fn connect(handle: *mut DriverHandle) -> FfiResult {
-    let driver = &mut *(handle as *mut MongoDriver);
+use driver_common::{ColumnInfo, DriverError, QueryResult, TableInfo};
 
-    match Client::with_uri_str(&driver.connection_string) {
-        Ok(client) => {
-            // Verify connectivity by pinging the server
-            let db = if driver.database_name.is_empty() {
-                client.database("admin")
-            } else {
-                client.database(&driver.database_name)
-            };
-            match db.run_command(doc! { "ping": 1 }).run() {
-                Ok(_) => {
-                    driver.client = Some(client);
-                    ok_result()
-                }
-                Err(e) => err_result(format!("MongoDB ping failed: {}", e)),
-            }
-        }
-        Err(e) => err_result(format!("MongoDB connection failed: {}", e)),
-    }
-}
+use crate::bson_flatten::{bson_type_name, bson_value_to_string, discover_fields};
 
-pub unsafe fn disconnect(handle: *mut DriverHandle) {
-    let driver = &mut *(handle as *mut MongoDriver);
-    driver.client = None;
-}
-
-pub unsafe fn ping(handle: *mut DriverHandle) -> FfiResult {
-    let driver = &mut *(handle as *mut MongoDriver);
-    let db = match driver.current_db() {
-        Some(db) => db,
-        None => return err_result("Not connected".to_string()),
-    };
-    match db.run_command(doc! { "ping": 1 }).run() {
-        Ok(_) => ok_result(),
-        Err(e) => err_result(format!("Ping failed: {}", e)),
-    }
-}
-
-/// Execute a MongoDB query. The `sql` parameter is interpreted as a JSON command:
+/// Execute a MongoDB query. The `query` parameter is a JSON command:
 /// `{"collection": "users", "filter": {...}, "sort": {...}, "limit": 100}`
-///
-/// If the input is not valid JSON or missing "collection", returns an error.
-pub unsafe fn execute(handle: *mut DriverHandle, sql: FfiStr) -> FfiQueryResult {
-    let driver = &mut *(handle as *mut MongoDriver);
-    let input = sql.as_str().to_owned();
+pub async fn execute(
+    client: &Client,
+    db_name: &str,
+    query: &str,
+) -> Result<QueryResult, DriverError> {
+    let cmd: serde_json::Value = serde_json::from_str(query)
+        .map_err(|e| DriverError::Query(format!("Invalid JSON command: {e}")))?;
 
-    let db = match driver.current_db() {
-        Some(db) => db,
-        None => return err_query_result("Not connected".to_string()),
-    };
+    let collection_name = cmd
+        .get("collection")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| DriverError::Query("Missing \"collection\" field in command".to_string()))?
+        .to_string();
 
-    // Parse the JSON command
-    let cmd: serde_json::Value = match serde_json::from_str(&input) {
-        Ok(v) => v,
-        Err(e) => return err_query_result(format!("Invalid JSON command: {}", e)),
-    };
-
-    let collection_name = match cmd.get("collection").and_then(|v| v.as_str()) {
-        Some(name) => name.to_string(),
-        None => return err_query_result("Missing \"collection\" field in command".to_string()),
-    };
-
+    let db = client.database(db_name);
     let collection = db.collection::<Document>(&collection_name);
 
-    // Parse filter
-    let filter: Option<Document> = match cmd.get("filter") {
-        Some(serde_json::Value::Object(map)) => {
-            match mongodb::bson::to_document(&serde_json::Value::Object(map.clone())) {
-                Ok(doc) => Some(doc),
-                Err(e) => return err_query_result(format!("Invalid filter: {}", e)),
-            }
-        }
-        Some(serde_json::Value::Null) | None => None,
-        _ => return err_query_result("\"filter\" must be an object".to_string()),
-    };
+    let filter = parse_optional_doc(cmd.get("filter"), "filter")?;
+    let sort = parse_optional_doc(cmd.get("sort"), "sort")?;
+    let limit = cmd.get("limit").and_then(|v| v.as_i64()).unwrap_or(1000);
 
-    // Parse sort
-    let sort: Option<Document> = match cmd.get("sort") {
-        Some(serde_json::Value::Object(map)) => {
-            match mongodb::bson::to_document(&serde_json::Value::Object(map.clone())) {
-                Ok(doc) => Some(doc),
-                Err(e) => return err_query_result(format!("Invalid sort: {}", e)),
-            }
-        }
-        Some(serde_json::Value::Null) | None => None,
-        _ => return err_query_result("\"sort\" must be an object".to_string()),
-    };
+    let find_opts = mongodb::options::FindOptions::builder()
+        .sort(sort)
+        .limit(limit)
+        .build();
 
-    // Parse limit (default 1000 to prevent unbounded reads)
-    let limit = cmd
-        .get("limit")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(1000);
+    let cursor = collection
+        .find(filter.unwrap_or_default())
+        .with_options(find_opts)
+        .await
+        .map_err(|e| DriverError::Query(format!("find() failed: {e}")))?;
 
-    // Build find options
-    let mut find_opts = mongodb::options::FindOptions::default();
-    find_opts.sort = sort;
-    find_opts.limit = Some(limit);
+    let docs: Vec<Document> = cursor
+        .try_collect()
+        .await
+        .map_err(|e| DriverError::Query(format!("Cursor error: {e}")))?;
 
-    // Execute find
-    let cursor = match collection.find(filter.unwrap_or_default()).with_options(find_opts).run() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(format!("find() failed: {}", e)),
-    };
-
-    // Collect documents
-    let mut docs: Vec<Document> = Vec::new();
-    for result in cursor {
-        match result {
-            Ok(doc) => docs.push(doc),
-            Err(e) => return err_query_result(format!("Cursor error: {}", e)),
-        }
-    }
-
-    // Flatten to tabular form
-    documents_to_query_result(&docs)
+    Ok(documents_to_query_result(&docs))
 }
 
-/// Convert a list of BSON documents into an FfiQueryResult with flattened columns.
-fn documents_to_query_result(docs: &[Document]) -> FfiQueryResult {
+fn parse_optional_doc(
+    value: Option<&serde_json::Value>,
+    field_name: &str,
+) -> Result<Option<Document>, DriverError> {
+    match value {
+        Some(serde_json::Value::Object(map)) => {
+            let doc = mongodb::bson::to_document(&serde_json::Value::Object(map.clone()))
+                .map_err(|e| DriverError::Query(format!("Invalid {field_name}: {e}")))?;
+            Ok(Some(doc))
+        }
+        Some(serde_json::Value::Null) | None => Ok(None),
+        _ => Err(DriverError::Query(format!(
+            "\"{field_name}\" must be an object"
+        ))),
+    }
+}
+
+fn documents_to_query_result(docs: &[Document]) -> QueryResult {
     if docs.is_empty() {
-        return build_query_result(vec![], vec![], 0);
+        return QueryResult::empty();
     }
 
     let fields = discover_fields(docs);
 
-    // Build column metadata: (name, type_name, nullable, is_pk)
-    // Infer types from the first non-null value across documents
-    let columns: Vec<(String, String, bool, bool)> = fields
+    let columns: Vec<ColumnInfo> = fields
         .iter()
         .map(|field| {
             let type_name = docs
                 .iter()
                 .filter_map(|doc| doc.get(field))
-                .find(|v| !matches!(v, mongodb::bson::Bson::Null))
-                .map(crate::bson_flatten::bson_type_name)
+                .find(|v| !matches!(v, Bson::Null))
+                .map(bson_type_name)
                 .unwrap_or("unknown")
                 .to_string();
             let is_pk = field == "_id";
-            (field.clone(), type_name, true, is_pk)
+            ColumnInfo {
+                name: field.clone(),
+                type_name,
+                nullable: !is_pk,
+                is_primary_key: is_pk,
+            }
         })
         .collect();
 
-    // Build rows
     let rows: Vec<Vec<Option<String>>> = docs
         .iter()
         .map(|doc| {
             fields
                 .iter()
-                .map(|field| {
-                    doc.get(field)
-                        .and_then(bson_value_to_string)
-                })
+                .map(|field| doc.get(field).and_then(bson_value_to_string))
                 .collect()
         })
         .collect();
 
-    build_query_result(columns, rows, 0)
-}
-
-/// Fetch tables = list collections in the current database.
-/// Returns them as FfiTableList with table_type = "COLLECTION".
-pub unsafe fn fetch_tables(handle: *mut DriverHandle) -> FfiTableList {
-    let driver = &mut *(handle as *mut MongoDriver);
-    let db = match driver.current_db() {
-        Some(db) => db,
-        None => {
-            return FfiTableList {
-                items: std::ptr::null_mut(),
-                count: 0,
-                error: string_to_ffi("Not connected".to_string()),
-            }
-        }
-    };
-
-    match db.list_collection_names().run() {
-        Err(e) => FfiTableList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi(format!("Failed to list collections: {}", e)),
-        },
-        Ok(names) => {
-            let mut items: Vec<FfiTableInfo> = names
-                .into_iter()
-                .map(|name| FfiTableInfo {
-                    name: string_to_ffi(name),
-                    schema: string_to_ffi(driver.database_name.clone()),
-                    table_type: string_to_ffi("COLLECTION".to_string()),
-                    row_count_estimate: 0,
-                    has_row_count: false,
-                })
-                .collect();
-            let ptr = items.as_mut_ptr();
-            let count = items.len();
-            std::mem::forget(items);
-            FfiTableList {
-                items: ptr,
-                count,
-                error: FfiString::null(),
-            }
-        }
+    QueryResult {
+        columns,
+        rows,
+        affected_rows: 0,
+        execution_time_ms: 0.0,
+        truncated: false,
+        total_row_count: None,
     }
 }
 
-pub unsafe fn cancel(_handle: *mut DriverHandle) -> FfiResult {
-    err_result("Cancel not supported for MongoDB".to_string())
+/// Fetch tables = list collections in the given database.
+pub async fn fetch_tables(client: &Client, db_name: &str) -> Result<Vec<TableInfo>, DriverError> {
+    let db = client.database(db_name);
+    let names = db
+        .list_collection_names()
+        .await
+        .map_err(|e| DriverError::Query(format!("Failed to list collections: {e}")))?;
+
+    Ok(names
+        .into_iter()
+        .map(|name| TableInfo {
+            name,
+            schema: Some(db_name.to_string()),
+            table_type: "COLLECTION".to_string(),
+            row_count_estimate: None,
+        })
+        .collect())
 }

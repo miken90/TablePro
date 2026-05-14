@@ -4,11 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tablepro-plugin-sdk = { path = "../plugin-sdk" }
-mongodb = { version = "3", features = ["sync"] }
+driver-common = { path = "../driver-common" }
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+futures-util = "0.3"
+mongodb = "3"
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 
 [lib]
 name = "driver_mongodb"
-crate-type = ["cdylib"]
+crate-type = ["rlib"]

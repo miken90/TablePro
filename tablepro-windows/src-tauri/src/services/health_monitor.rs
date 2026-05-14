@@ -7,7 +7,7 @@ use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 
 use crate::models::ConnectionStatus;
-use crate::plugin::DatabaseDriver;
+use crate::drivers::DatabaseDriver;
 use crate::services::ConnectionManager;
 
 const PING_INTERVAL_SECS: u64 = 30;

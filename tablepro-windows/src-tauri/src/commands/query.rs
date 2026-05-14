@@ -10,16 +10,15 @@ use crate::services::sql_quoting::quote_identifier;
 
 /// Maximum rows returned by `execute_query` before truncation.
 ///
-/// The plugin ABI (`PluginVTable::execute`) returns a complete `FfiQueryResult`
-/// from the DLL — there is no cursor or chunking API in the current plugin SDK
-/// (API_VERSION = 1). Every row the driver produces is materialised in memory,
-/// serialised to JSON, and sent over the Tauri IPC bridge as a single message.
+/// Drivers return a complete `QueryResult` to Rust — there is no cursor or
+/// chunking API in the current driver trait. Every row the driver produces is
+/// materialised in memory, serialised to JSON, and sent over the Tauri IPC
+/// bridge as a single message.
 ///
-/// True streaming would require an ABI v2 that exposes a cursor-based
-/// `fetch_next_chunk(handle, max_rows) -> FfiQueryResult` on the vtable, plus
-/// a corresponding chunked IPC channel on the Tauri side. Until that work lands
-/// (targeted for Phase 02 driver-substrate), this hard cap prevents the single
-/// IPC payload from crashing or hanging the WebView.
+/// True streaming would require a cursor-based fetch API on the driver trait
+/// plus a corresponding chunked IPC channel on the Tauri side. Until that work
+/// lands, this hard cap prevents the single IPC payload from crashing or
+/// hanging the WebView.
 const MAX_RESULT_ROWS: usize = 50_000;
 
 #[derive(Debug, Clone, Serialize)]

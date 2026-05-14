@@ -1,6 +1,6 @@
 pub mod commands;
+pub mod drivers;
 pub mod models;
-pub mod plugin;
 pub mod services;
 pub mod storage;
 
@@ -30,6 +30,8 @@ use commands::schema::{
     switch_database,
 };
 use commands::settings::{get_settings, log_renderer_error, set_settings};
+use commands::spike_channel::spike_stream;
+use commands::query_streaming::execute_query_streaming;
 use commands::storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
@@ -44,7 +46,7 @@ use commands::ai::{
 use commands::routine_ops::{execute_routine, get_routine_source, preview_routine_sql};
 // bulk operations (dev-1)
 use commands::bulk_ops::{bulk_delete, bulk_delete_preview, bulk_insert, bulk_update, bulk_update_preview};
-use plugin::PluginManager;
+use drivers::DriverRegistry;
 use services::health_monitor::HealthMonitor;
 use services::ConnectionManager;
 use storage::{AiChatStore, ConnectionStore, FilterStore, HistoryStore, SettingsStore, TabStateStore};
@@ -84,17 +86,24 @@ pub fn run() {
 
     tracing::info!("TablePro starting");
 
-    // Locate the plugin directory next to the executable.
-    let plugin_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join("plugins")))
-        .unwrap_or_else(|| std::path::PathBuf::from("plugins"));
+    // Build the static driver registry. All engines compile in as rlibs;
+    // they share the host's Tokio runtime via the Handle captured here.
+    //
+    // We explicitly construct a multi-thread Tokio runtime up-front and
+    // hand its handle to Tauri via `async_runtime::set` so both Tauri
+    // commands AND every driver run on the same scheduler (Validation Q2).
+    let tokio_rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build Tokio runtime");
+    let rt_handle = tokio_rt.handle().clone();
+    tauri::async_runtime::set(rt_handle.clone());
+    // Keep the runtime alive for the lifetime of the process.
+    Box::leak(Box::new(tokio_rt));
 
-    let mut plugin_manager = PluginManager::new(plugin_dir);
-    plugin_manager.discover_plugins();
-    let plugin_manager = Arc::new(plugin_manager);
+    let driver_registry = Arc::new(DriverRegistry::new(rt_handle));
 
-    let connection_manager = ConnectionManager::new(Arc::clone(&plugin_manager));
+    let connection_manager = ConnectionManager::new(Arc::clone(&driver_registry));
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -126,7 +135,13 @@ pub fn run() {
         .manage(Mutex::new(connection_manager))
         .manage(Mutex::new(HealthMonitor::new()))
         .manage(Mutex::new(commands::ai::AiCancelState::new()))
-        .manage(Mutex::new(SettingsStore::new()))
+        .manage(Mutex::new({
+            let mut store = SettingsStore::new();
+            if let Err(e) = store.load() {
+                tracing::warn!("Failed to load settings: {e}");
+            }
+            store
+        }))
         .manage(Mutex::new({
             let mut store = TabStateStore::new();
             if let Err(e) = store.load() {
@@ -289,6 +304,10 @@ pub fn run() {
             bulk_update_preview,
             bulk_delete,
             bulk_delete_preview,
+            // phase-2 spike (throwaway)
+            spike_stream,
+            // phase-2 streaming query
+            execute_query_streaming,
         ])
         .on_window_event(|window, event| {
             match event {

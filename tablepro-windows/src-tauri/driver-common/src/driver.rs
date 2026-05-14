@@ -1,57 +1,59 @@
 use async_trait::async_trait;
 
-use crate::models::{AppError, ColumnInfo, ForeignKeyInfo, IndexInfo, QueryResult, TableInfo};
+use crate::error::DriverError;
+use crate::types::{ColumnInfo, ForeignKeyInfo, IndexInfo, QueryResult, TableInfo};
 
-/// Abstraction over any database backend, implemented by PluginDriverAdapter.
+/// Abstraction over any database backend, implemented by each compiled-in
+/// driver crate (`driver-postgres`, `driver-mysql`, ...).
 ///
-/// All methods are async to allow non-blocking I/O on the Tokio runtime.
-/// The trait is object-safe via `async_trait`.
+/// All async methods run on the host's Tokio runtime — drivers MUST NOT spin
+/// up their own runtime. Methods on `&self` allow shared use behind an `Arc`.
 #[async_trait]
 pub trait DatabaseDriver: Send + Sync {
     /// Open the physical connection using the config supplied at creation time.
-    async fn connect(&self) -> Result<(), AppError>;
+    async fn connect(&self) -> Result<(), DriverError>;
 
     /// Close the physical connection. Best-effort — must not panic.
     fn disconnect(&self);
 
     /// Verify the connection is alive (lightweight round-trip).
-    async fn ping(&self) -> Result<(), AppError>;
+    async fn ping(&self) -> Result<(), DriverError>;
 
     /// Execute any SQL and return the result set.
-    async fn execute(&self, query: &str) -> Result<QueryResult, AppError>;
+    async fn execute(&self, query: &str) -> Result<QueryResult, DriverError>;
 
     /// List all tables/views in the current database.
-    async fn fetch_tables(&self) -> Result<Vec<TableInfo>, AppError>;
+    async fn fetch_tables(&self) -> Result<Vec<TableInfo>, DriverError>;
 
     /// Column metadata for a table, optionally scoped to a schema.
     async fn fetch_columns(
         &self,
         table: &str,
         schema: Option<&str>,
-    ) -> Result<Vec<ColumnInfo>, AppError>;
+    ) -> Result<Vec<ColumnInfo>, DriverError>;
 
     /// Index descriptors for a table.
     async fn fetch_indexes(
         &self,
         table: &str,
         schema: Option<&str>,
-    ) -> Result<Vec<IndexInfo>, AppError>;
+    ) -> Result<Vec<IndexInfo>, DriverError>;
 
     /// Foreign-key constraints for a table.
     async fn fetch_foreign_keys(
         &self,
         table: &str,
         schema: Option<&str>,
-    ) -> Result<Vec<ForeignKeyInfo>, AppError>;
+    ) -> Result<Vec<ForeignKeyInfo>, DriverError>;
 
     /// All databases available on the server.
-    async fn fetch_databases(&self) -> Result<Vec<String>, AppError>;
+    async fn fetch_databases(&self) -> Result<Vec<String>, DriverError>;
 
     /// DDL statement that recreates the given table.
-    async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, AppError>;
+    async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, DriverError>;
 
     /// Request cancellation of any in-flight query on this driver instance.
-    fn cancel_query(&self) -> Result<(), AppError>;
+    fn cancel_query(&self) -> Result<(), DriverError>;
 
     /// Whether this engine uses named schemas (e.g. PostgreSQL public/private).
     fn supports_schemas(&self) -> bool;
@@ -59,6 +61,6 @@ pub trait DatabaseDriver: Send + Sync {
     /// Whether this engine supports multi-statement transactions.
     fn supports_transactions(&self) -> bool;
 
-    /// Stable identifier matching the plugin's reported `type_id`.
+    /// Stable identifier matching the engine's `db_type` in `ConnectionConfig`.
     fn database_type_id(&self) -> &str;
 }

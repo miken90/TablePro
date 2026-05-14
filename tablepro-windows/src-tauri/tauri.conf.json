@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "npm run build:drivers && npm run dev",
-    "beforeBuildCommand": "npm run build:drivers && npm run build",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
     "features": ["devtools"]
   },
   "app": {
@@ -63,7 +63,6 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "target/release/driver_*.dll": "plugins/",
       "driver-capabilities/*.capabilities.json": "driver-capabilities/"
     },
     "copyright": "Copyright 2026 TablePro",

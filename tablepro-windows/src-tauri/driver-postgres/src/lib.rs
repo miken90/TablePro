@@ -1,193 +1,181 @@
-mod driver;
-mod ffi_helpers;
-mod free_fns;
-mod ops_basic;
+//! PostgreSQL driver — statically linked into TablePro Windows.
+//!
+//! Implements `driver_common::DatabaseDriver` directly using `tokio-postgres`.
+//! Shares the host's Tokio runtime via `tokio::runtime::Handle` (no nested
+//! runtime — see `plans/reports/spike-postgres-rlib.md`).
+
+mod ops_query;
 mod ops_schema;
 
-use driver::PostgresDriver;
-use ffi_helpers::{string_to_ffi, err_result};
-use tablepro_plugin_sdk::{
-    API_VERSION,
-    DriverConfig, DriverHandle,
-    PluginMetadata, PluginVTable,
+use async_trait::async_trait;
+use tokio::sync::Mutex;
+use tokio_postgres::{Client, Config};
+
+use driver_common::{
+    ColumnInfo, ConnectionConfig, DatabaseDriver, DriverError, ForeignKeyInfo, IndexInfo,
+    QueryResult, TableInfo,
 };
 
-// ── Plugin entry points ───────────────────────────────────────────────────────
-
-/// Called by the host to fill all function pointers in the vtable.
+/// PostgreSQL driver instance.
 ///
-/// # Safety
-/// `vtable` must be a valid, non-null pointer to a `PluginVTable` allocated by the host.
-#[no_mangle]
-pub unsafe extern "C" fn tablepro_plugin_init(vtable: *mut PluginVTable) {
-    if vtable.is_null() { return; }
-    let v = &mut *vtable;
-    v.api_version       = API_VERSION;
-    v.create_driver     = create_driver;
-    v.destroy_driver    = destroy_driver;
-    v.connect           = connect;
-    v.disconnect        = disconnect;
-    v.ping              = ping;
-    v.execute           = execute;
-    v.cancel            = cancel;
-    v.fetch_tables      = fetch_tables;
-    v.fetch_columns     = fetch_columns;
-    v.fetch_indexes     = fetch_indexes;
-    v.fetch_foreign_keys = fetch_foreign_keys;
-    v.fetch_databases   = fetch_databases;
-    v.fetch_ddl         = fetch_ddl;
-    v.free_result       = free_fns::free_result;
-    v.free_query_result = free_fns::free_query_result;
-    v.free_table_list   = free_fns::free_table_list;
-    v.free_column_list  = free_fns::free_column_list;
-    v.free_index_list   = free_fns::free_index_list;
-    v.free_foreign_key_list = free_fns::free_foreign_key_list;
-    v.free_string_list  = free_fns::free_string_list;
-    v.free_string       = free_fns::free_string;
+/// Holds the connection config and a lazily-established `Client` behind a
+/// `tokio::sync::Mutex` (held across awaits during connect/query/etc.).
+pub struct PostgresDriver {
+    rt: tokio::runtime::Handle,
+    config: ConnectionConfig,
+    client: Mutex<Option<Client>>,
 }
 
-/// Returns static metadata for this plugin.
-#[no_mangle]
-pub extern "C" fn tablepro_plugin_metadata() -> PluginMetadata {
-    PluginMetadata {
-        api_version:  API_VERSION,
-        type_id:      string_to_ffi("postgres".to_string()),
-        display_name: string_to_ffi("PostgreSQL".to_string()),
-        default_port: 5432,
+impl PostgresDriver {
+    /// Build a driver bound to the host runtime. The connection is opened
+    /// lazily by `connect()`.
+    pub fn new(rt_handle: tokio::runtime::Handle, config: ConnectionConfig) -> Self {
+        Self {
+            rt: rt_handle,
+            config,
+            client: Mutex::new(None),
+        }
     }
-}
 
-// ── Driver lifecycle ──────────────────────────────────────────────────────────
-
-unsafe extern "C" fn create_driver(config: *const DriverConfig) -> *mut DriverHandle {
-    if config.is_null() { return std::ptr::null_mut(); }
-    let cfg = &*config;
-    let host     = cfg.host.as_str().to_owned();
-    let user     = cfg.user.as_str().to_owned();
-    let password = cfg.password.as_str().to_owned();
-    let database = cfg.database.as_str().to_owned();
-    let ssl_mode = cfg.ssl_mode.as_str().to_owned();
-    let port     = cfg.port;
-
-    match PostgresDriver::new(host, port, user, password, database, ssl_mode) {
-        Ok(boxed) => Box::into_raw(boxed) as *mut DriverHandle,
-        Err(_)    => std::ptr::null_mut(),
+    /// Build a tokio-postgres `Config` from our `ConnectionConfig`.
+    fn build_pg_config(&self) -> Config {
+        let mut cfg = Config::new();
+        cfg.host(&self.config.host);
+        cfg.port(self.config.port);
+        cfg.user(&self.config.user);
+        cfg.password(&self.config.password);
+        if !self.config.database.is_empty() {
+            cfg.dbname(&self.config.database);
+        }
+        cfg
     }
+
 }
 
-unsafe extern "C" fn destroy_driver(handle: *mut DriverHandle) {
-    if !handle.is_null() {
-        drop(Box::from_raw(handle as *mut PostgresDriver));
-    }
+/// Lock the client mutex and return an error if not connected.
+/// Macro avoids HRTB headaches with returning a future that borrows the guard.
+macro_rules! with_client {
+    ($self:ident, $client:ident => $body:expr) => {{
+        let guard = $self.client.lock().await;
+        let $client = guard
+            .as_ref()
+            .ok_or_else(|| DriverError::Connection("Not connected".to_string()))?;
+        $body
+    }};
 }
 
-// ── Connection ────────────────────────────────────────────────────────────────
+#[async_trait]
+impl DatabaseDriver for PostgresDriver {
+    async fn connect(&self) -> Result<(), DriverError> {
+        let ssl_mode = self.config.ssl_mode.clone();
+        let pg_cfg = self.build_pg_config();
+        let rt = self.rt.clone();
 
-unsafe extern "C" fn connect(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() { return err_result("Null handle".to_string()); }
-    ops_basic::connect(handle)
-}
-
-unsafe extern "C" fn disconnect(handle: *mut DriverHandle) {
-    if handle.is_null() { return; }
-    ops_basic::disconnect(handle);
-}
-
-unsafe extern "C" fn ping(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() { return err_result("Null handle".to_string()); }
-    ops_basic::ping(handle)
-}
-
-// ── Query ─────────────────────────────────────────────────────────────────────
-
-unsafe extern "C" fn execute(
-    handle: *mut DriverHandle,
-    sql: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiQueryResult {
-    if handle.is_null() {
-        return ffi_helpers::err_query_result("Null handle".to_string());
-    }
-    ops_basic::execute(handle, sql)
-}
-
-unsafe extern "C" fn cancel(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() { return err_result("Null handle".to_string()); }
-    ops_basic::cancel(handle)
-}
-
-// ── Schema ────────────────────────────────────────────────────────────────────
-
-unsafe extern "C" fn fetch_tables(
-    handle: *mut DriverHandle,
-) -> tablepro_plugin_sdk::FfiTableList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiTableList {
-            items: std::ptr::null_mut(), count: 0,
-            error: string_to_ffi("Null handle".to_string()),
+        let client = if ssl_mode == "disable" {
+            let (client, conn) = pg_cfg
+                .connect(tokio_postgres::NoTls)
+                .await
+                .map_err(|e| DriverError::Connection(e.to_string()))?;
+            rt.spawn(async move {
+                let _ = conn.await;
+            });
+            client
+        } else {
+            let mut builder = native_tls::TlsConnector::builder();
+            if ssl_mode == "prefer" || ssl_mode == "require" {
+                builder.danger_accept_invalid_certs(true);
+                builder.danger_accept_invalid_hostnames(true);
+            }
+            let tls = builder
+                .build()
+                .map_err(|e| DriverError::Connection(format!("TLS build error: {e}")))?;
+            let connector = postgres_native_tls::MakeTlsConnector::new(tls);
+            let (client, conn) = pg_cfg
+                .connect(connector)
+                .await
+                .map_err(|e| DriverError::Connection(e.to_string()))?;
+            rt.spawn(async move {
+                let _ = conn.await;
+            });
+            client
         };
-    }
-    ops_basic::fetch_tables(handle)
-}
 
-unsafe extern "C" fn fetch_columns(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiColumnList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiColumnList {
-            items: std::ptr::null_mut(), count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+        *self.client.lock().await = Some(client);
+        Ok(())
     }
-    ops_schema::fetch_columns(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_indexes(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiIndexList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiIndexList {
-            items: std::ptr::null_mut(), count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    fn disconnect(&self) {
+        // Best-effort: drop client without holding async lock.
+        // try_lock should succeed since no concurrent caller holds it across await.
+        if let Ok(mut guard) = self.client.try_lock() {
+            *guard = None;
+        }
     }
-    ops_schema::fetch_indexes(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_foreign_keys(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiForeignKeyList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiForeignKeyList {
-            items: std::ptr::null_mut(), count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn ping(&self) -> Result<(), DriverError> {
+        with_client!(self, c => c.simple_query("SELECT 1")
+            .await
+            .map(|_| ())
+            .map_err(|e| DriverError::Query(e.to_string())))
     }
-    ops_schema::fetch_foreign_keys(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_databases(
-    handle: *mut DriverHandle,
-) -> tablepro_plugin_sdk::FfiStringList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiStringList {
-            items: std::ptr::null_mut(), count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn execute(&self, query: &str) -> Result<QueryResult, DriverError> {
+        with_client!(self, c => ops_query::execute(c, query).await)
     }
-    ops_schema::fetch_databases(handle)
-}
 
-unsafe extern "C" fn fetch_ddl(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiString {
-    if handle.is_null() { return string_to_ffi("ERROR: Null handle".to_string()); }
-    ops_schema::fetch_ddl(handle, table, schema)
+    async fn fetch_tables(&self) -> Result<Vec<TableInfo>, DriverError> {
+        with_client!(self, c => ops_schema::fetch_tables(c).await)
+    }
+
+    async fn fetch_columns(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<ColumnInfo>, DriverError> {
+        with_client!(self, c => ops_schema::fetch_columns(c, table, schema).await)
+    }
+
+    async fn fetch_indexes(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<IndexInfo>, DriverError> {
+        with_client!(self, c => ops_schema::fetch_indexes(c, table, schema).await)
+    }
+
+    async fn fetch_foreign_keys(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<ForeignKeyInfo>, DriverError> {
+        with_client!(self, c => ops_schema::fetch_foreign_keys(c, table, schema).await)
+    }
+
+    async fn fetch_databases(&self) -> Result<Vec<String>, DriverError> {
+        with_client!(self, c => ops_schema::fetch_databases(c).await)
+    }
+
+    async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, DriverError> {
+        with_client!(self, c => ops_schema::fetch_ddl(c, table, schema).await)
+    }
+
+    fn cancel_query(&self) -> Result<(), DriverError> {
+        // tokio-postgres exposes `Client::cancel_token()` but it requires
+        // re-connecting with the cancel token; not wired in this phase.
+        Err(DriverError::Unsupported(
+            "Cancel not supported in this version".to_string(),
+        ))
+    }
+
+    fn supports_schemas(&self) -> bool {
+        true
+    }
+
+    fn supports_transactions(&self) -> bool {
+        true
+    }
+
+    fn database_type_id(&self) -> &str {
+        "postgres"
+    }
 }

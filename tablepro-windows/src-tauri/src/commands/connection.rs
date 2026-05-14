@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::models::{AppError, ConnectionConfig, ConnectionStatus, DriverCapabilities};
-use crate::plugin::{DatabaseDriver, PluginMetadataInfo};
+use crate::drivers::{DatabaseDriver, PluginMetadataInfo};
 use crate::services::health_monitor::HealthMonitor;
 use crate::services::ssh_tunnel::SshTunnelManager;
 use crate::services::ConnectionManager;
@@ -20,10 +20,10 @@ pub async fn test_connection(
     config: ConnectionConfig,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<(), AppError> {
-    // Grab plugin_manager briefly, then release the lock.
-    let plugin_manager = {
+    // Grab driver_registry briefly, then release the lock.
+    let registry = {
         let mgr = manager.lock().await;
-        mgr.plugin_manager()
+        mgr.driver_registry()
     };
 
     if config.ssh_enabled {
@@ -38,7 +38,7 @@ pub async fn test_connection(
         test_cfg.port = local_port;
 
         let driver: Arc<dyn DatabaseDriver> =
-            Arc::from(plugin_manager.create_driver(&test_cfg.db_type, &test_cfg)?);
+            Arc::from(registry.create_driver(&test_cfg.db_type, &test_cfg)?);
         driver.connect().await?;
         let ping = driver.ping().await;
         driver.disconnect();
@@ -47,7 +47,7 @@ pub async fn test_connection(
     }
 
     let driver: Arc<dyn DatabaseDriver> =
-        Arc::from(plugin_manager.create_driver(&config.db_type, &config)?);
+        Arc::from(registry.create_driver(&config.db_type, &config)?);
     driver.connect().await?;
     let ping = driver.ping().await;
     driver.disconnect();
@@ -66,10 +66,10 @@ pub async fn connect(
     manager: State<'_, Mutex<ConnectionManager>>,
     health_monitor: State<'_, Mutex<HealthMonitor>>,
 ) -> Result<String, AppError> {
-    // Both SSH and non-SSH paths: grab plugin_manager, release lock.
-    let plugin_manager = {
+    // Both SSH and non-SSH paths: grab driver_registry, release lock.
+    let registry = {
         let mgr = manager.lock().await;
-        mgr.plugin_manager()
+        mgr.driver_registry()
     };
 
     let (session_id, driver): (String, Arc<dyn DatabaseDriver>) = if config.ssh_enabled {
@@ -86,7 +86,7 @@ pub async fn connect(
         connect_cfg.port = local_port;
 
         let driver: Arc<dyn DatabaseDriver> =
-            Arc::from(plugin_manager.create_driver(&connect_cfg.db_type, &connect_cfg)?);
+            Arc::from(registry.create_driver(&connect_cfg.db_type, &connect_cfg)?);
         driver.connect().await.map_err(|e| {
             tracing::error!(db_type = %connect_cfg.db_type, "SSH connect failed: {e}");
             e
@@ -101,7 +101,7 @@ pub async fn connect(
     } else {
         let session_id = Uuid::new_v4().to_string();
         let driver: Arc<dyn DatabaseDriver> =
-            Arc::from(plugin_manager.create_driver(&config.db_type, &config)?);
+            Arc::from(registry.create_driver(&config.db_type, &config)?);
         driver.connect().await.map_err(|e| {
             tracing::error!(db_type = %config.db_type, "connect failed: {e}");
             e
@@ -190,10 +190,10 @@ pub async fn reconnect_session(
     }
 
     // Get config + plugin manager, then release lock
-    let (config, plugin_manager) = {
+    let (config, registry) = {
         let mgr = manager.lock().await;
         let config = mgr.get_config(&session_id)?.clone();
-        let pm = mgr.plugin_manager();
+        let pm = mgr.driver_registry();
         (config, pm)
     };
 
@@ -205,7 +205,7 @@ pub async fn reconnect_session(
 
     // Create new driver + connect (no lock held)
     let driver: Arc<dyn DatabaseDriver> =
-        Arc::from(plugin_manager.create_driver(&config.db_type, &config)?);
+        Arc::from(registry.create_driver(&config.db_type, &config)?);
     driver.connect().await?;
 
     // Insert new connection
@@ -242,7 +242,7 @@ pub async fn list_drivers(
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<Vec<PluginMetadataInfo>, AppError> {
     let mgr = manager.lock().await;
-    Ok(mgr.plugin_manager().list_plugins())
+    Ok(mgr.driver_registry().list_plugins())
 }
 
 /// Return capabilities for a specific driver type.
@@ -252,7 +252,7 @@ pub async fn get_driver_capabilities(
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<DriverCapabilities, AppError> {
     let mgr = manager.lock().await;
-    Ok(mgr.plugin_manager().get_capabilities(&db_type))
+    Ok(mgr.driver_registry().get_capabilities(&db_type))
 }
 
 /// List parsed SSH hosts from `~/.ssh/config`.

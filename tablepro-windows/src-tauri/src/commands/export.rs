@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use tokio::task;
 
 use crate::models::AppError;
-use crate::plugin::DatabaseDriver;
+use crate::drivers::DatabaseDriver;
 use crate::services::ConnectionManager;
 
 use super::export_formats::{create_output_file, map_join_err, map_xlsx_err, write_file_chunk};

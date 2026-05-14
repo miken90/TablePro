@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tablepro-plugin-sdk = { path = "../plugin-sdk" }
-tokio = { version = "1", features = ["rt-multi-thread", "net"] }
+driver-common = { path = "../driver-common" }
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net"] }
 tiberius = { version = "0.12", default-features = false, features = ["rustls", "tds73"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 
 [lib]
 name = "driver_mssql"
-crate-type = ["cdylib"]
+crate-type = ["rlib"]

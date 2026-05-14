@@ -822,7 +822,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
+ "futures-core",
  "memchr",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -1445,20 +1449,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "driver-common"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "driver-mongodb"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "driver-common",
+ "futures-util",
  "mongodb",
  "serde",
  "serde_json",
- "tablepro-plugin-sdk",
+ "tokio",
 ]
 
 [[package]]
 name = "driver-mssql"
 version = "0.1.0"
 dependencies = [
- "tablepro-plugin-sdk",
+ "async-trait",
+ "driver-common",
  "tiberius",
  "tokio",
  "tokio-util",
@@ -1468,8 +1486,9 @@ dependencies = [
 name = "driver-mysql"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "driver-common",
  "mysql_async",
- "tablepro-plugin-sdk",
  "tokio",
 ]
 
@@ -1477,9 +1496,10 @@ dependencies = [
 name = "driver-postgres"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "driver-common",
  "native-tls",
  "postgres-native-tls",
- "tablepro-plugin-sdk",
  "tokio",
  "tokio-postgres",
 ]
@@ -1488,17 +1508,20 @@ dependencies = [
 name = "driver-redis"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "driver-common",
  "redis",
  "serde_json",
- "tablepro-plugin-sdk",
+ "tokio",
 ]
 
 [[package]]
 name = "driver-sqlite"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "driver-common",
  "rusqlite",
- "tablepro-plugin-sdk",
  "tokio",
 ]
 
@@ -4974,11 +4997,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09d8f99a4090c89cc489a94833c901ead69bfbf3877b4867d5482e321ee875bc"
 dependencies = [
  "arc-swap",
+ "async-trait",
+ "bytes",
  "combine",
+ "futures-util",
  "itertools",
  "itoa",
  "num-bigint",
  "percent-encoding",
+ "pin-project-lite",
  "rustls 0.23.37",
  "rustls-native-certs 0.7.3",
  "rustls-pemfile 2.2.0",
@@ -4986,6 +5013,9 @@ dependencies = [
  "ryu",
  "sha1_smol",
  "socket2 0.5.10",
+ "tokio",
+ "tokio-rustls 0.26.4",
+ "tokio-util",
  "url",
 ]
 
@@ -6463,21 +6493,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "tablepro-plugin-sdk"
-version = "0.1.0"
-
-[[package]]
 name = "tablepro-windows"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
  "base64 0.22.1",
  "bytes",
  "dirs 5.0.1",
+ "driver-common",
+ "driver-mongodb",
+ "driver-mssql",
+ "driver-mysql",
+ "driver-postgres",
+ "driver-redis",
+ "driver-sqlite",
  "flate2",
  "futures",
- "libloading 0.8.9",
  "pbkdf2 0.12.2",
  "rand 0.8.5",
  "reqwest 0.12.28",
@@ -6489,7 +6521,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tablepro-plugin-sdk",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",

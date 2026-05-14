@@ -1,211 +1,226 @@
+//! MongoDB driver — statically linked into TablePro Windows.
+//!
+//! Implements `driver_common::DatabaseDriver` directly using `mongodb` (async).
+//! NoSQL → tabular adaptation:
+//!   - `fetch_tables`        → list collections in current DB
+//!   - `fetch_columns`       → sample up to 100 docs and infer fields/types
+//!   - `fetch_indexes`       → `listIndexes` on collection
+//!   - `fetch_foreign_keys`  → empty (not supported)
+//!   - `fetch_databases`     → server-wide DB list
+//!   - `fetch_ddl`           → descriptive comment (no DDL)
+//!   - `execute`             → JSON command `{collection,filter,sort,limit}` → find()
+//!
+//! See `bson_flatten.rs` for value/type rendering rules carried over from the
+//! cdylib FFI version.
+
 mod bson_flatten;
-mod driver;
-mod ffi_helpers;
-mod free_fns;
 mod ops_basic;
 mod ops_schema;
 
-use driver::MongoDriver;
-use ffi_helpers::{err_result, string_to_ffi};
-use tablepro_plugin_sdk::{
-    API_VERSION, DriverConfig, DriverHandle, PluginMetadata, PluginVTable,
+use async_trait::async_trait;
+use mongodb::Client;
+use tokio::sync::Mutex;
+
+use driver_common::{
+    ColumnInfo, ConnectionConfig, DatabaseDriver, DriverError, ForeignKeyInfo, IndexInfo,
+    QueryResult, TableInfo,
 };
 
-// ── Plugin entry points ───────────────────────────────────────────────────────
-
-/// Called by the host to fill all function pointers in the vtable.
+/// MongoDB driver instance.
 ///
-/// # Safety
-/// `vtable` must be a valid, non-null pointer to a `PluginVTable` allocated by the host.
-#[no_mangle]
-pub unsafe extern "C" fn tablepro_plugin_init(vtable: *mut PluginVTable) {
-    if vtable.is_null() {
-        return;
-    }
-    let v = &mut *vtable;
-    v.api_version = API_VERSION;
-    v.create_driver = create_driver;
-    v.destroy_driver = destroy_driver;
-    v.connect = connect;
-    v.disconnect = disconnect;
-    v.ping = ping;
-    v.execute = execute;
-    v.cancel = cancel;
-    v.fetch_tables = fetch_tables;
-    v.fetch_columns = fetch_columns;
-    v.fetch_indexes = fetch_indexes;
-    v.fetch_foreign_keys = fetch_foreign_keys;
-    v.fetch_databases = fetch_databases;
-    v.fetch_ddl = fetch_ddl;
-    v.free_result = free_fns::free_result;
-    v.free_query_result = free_fns::free_query_result;
-    v.free_table_list = free_fns::free_table_list;
-    v.free_column_list = free_fns::free_column_list;
-    v.free_index_list = free_fns::free_index_list;
-    v.free_foreign_key_list = free_fns::free_foreign_key_list;
-    v.free_string_list = free_fns::free_string_list;
-    v.free_string = free_fns::free_string;
+/// Holds the connection config and a lazily-established `Client` behind a
+/// `tokio::sync::Mutex`.
+pub struct MongoDriver {
+    rt: tokio::runtime::Handle,
+    config: ConnectionConfig,
+    client: Mutex<Option<Client>>,
 }
 
-/// Returns static metadata for this plugin.
-#[no_mangle]
-pub extern "C" fn tablepro_plugin_metadata() -> PluginMetadata {
-    PluginMetadata {
-        api_version: API_VERSION,
-        type_id: string_to_ffi("mongodb".to_string()),
-        display_name: string_to_ffi("MongoDB".to_string()),
-        default_port: 27017,
+impl MongoDriver {
+    /// Build a driver bound to the host runtime. Connection opens lazily via `connect()`.
+    pub fn new(rt_handle: tokio::runtime::Handle, config: ConnectionConfig) -> Self {
+        Self {
+            rt: rt_handle,
+            config,
+            client: Mutex::new(None),
+        }
     }
-}
 
-// ── Driver lifecycle ──────────────────────────────────────────────────────────
-
-unsafe extern "C" fn create_driver(config: *const DriverConfig) -> *mut DriverHandle {
-    if config.is_null() {
-        return std::ptr::null_mut();
+    /// Database name to use; falls back to "admin" if not specified.
+    fn db_name(&self) -> &str {
+        if self.config.database.is_empty() {
+            "admin"
+        } else {
+            &self.config.database
+        }
     }
-    let cfg = &*config;
-    let host = cfg.host.as_str().to_owned();
-    let user = cfg.user.as_str().to_owned();
-    let password = cfg.password.as_str().to_owned();
-    let database = cfg.database.as_str().to_owned();
-    let ssl_mode = cfg.ssl_mode.as_str().to_owned();
-    let port = cfg.port;
 
-    match MongoDriver::new(host, port, user, password, database, ssl_mode) {
-        Ok(boxed) => Box::into_raw(boxed) as *mut DriverHandle,
-        Err(_) => std::ptr::null_mut(),
+    /// Build a MongoDB connection URI from `ConnectionConfig`.
+    ///
+    /// If host already starts with `mongodb://` or `mongodb+srv://`, returned as-is.
+    fn build_uri(&self) -> String {
+        let host = &self.config.host;
+        if host.starts_with("mongodb://") || host.starts_with("mongodb+srv://") {
+            return host.clone();
+        }
+
+        let mut uri = String::from("mongodb://");
+        if !self.config.user.is_empty() {
+            uri.push_str(&percent_encode(&self.config.user));
+            if !self.config.password.is_empty() {
+                uri.push(':');
+                uri.push_str(&percent_encode(&self.config.password));
+            }
+            uri.push('@');
+        }
+        uri.push_str(host);
+        if self.config.port != 0 {
+            uri.push(':');
+            uri.push_str(&self.config.port.to_string());
+        }
+        uri.push('/');
+        if !self.config.database.is_empty() {
+            uri.push_str(&self.config.database);
+        }
+        uri
     }
 }
 
-unsafe extern "C" fn destroy_driver(handle: *mut DriverHandle) {
-    if !handle.is_null() {
-        drop(Box::from_raw(handle as *mut MongoDriver));
+/// Minimal percent-encoding for URI user/password components.
+fn percent_encode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for b in input.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
     }
+    out
 }
 
-// ── Connection ────────────────────────────────────────────────────────────────
-
-unsafe extern "C" fn connect(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() {
-        return err_result("Null handle".to_string());
-    }
-    ops_basic::connect(handle)
+/// Lock the client mutex and return an error if not connected.
+macro_rules! with_client {
+    ($self:ident, $client:ident => $body:expr) => {{
+        let guard = $self.client.lock().await;
+        let $client = guard
+            .as_ref()
+            .ok_or_else(|| DriverError::Connection("Not connected".to_string()))?;
+        $body
+    }};
 }
 
-unsafe extern "C" fn disconnect(handle: *mut DriverHandle) {
-    if handle.is_null() {
-        return;
+#[async_trait]
+impl DatabaseDriver for MongoDriver {
+    async fn connect(&self) -> Result<(), DriverError> {
+        let uri = self.build_uri();
+        let client = Client::with_uri_str(&uri)
+            .await
+            .map_err(|e| DriverError::Connection(format!("MongoDB connection failed: {e}")))?;
+
+        // Verify connectivity via ping.
+        let db = client.database(self.db_name());
+        db.run_command(mongodb::bson::doc! { "ping": 1 })
+            .await
+            .map_err(|e| DriverError::Connection(format!("MongoDB ping failed: {e}")))?;
+
+        // Touch rt to avoid dead-code warning — also keeps it ready for any
+        // future spawned background tasks (none today; mongodb manages its own).
+        let _ = self.rt.id();
+
+        *self.client.lock().await = Some(client);
+        Ok(())
     }
-    ops_basic::disconnect(handle);
-}
 
-unsafe extern "C" fn ping(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() {
-        return err_result("Null handle".to_string());
+    fn disconnect(&self) {
+        if let Ok(mut guard) = self.client.try_lock() {
+            *guard = None;
+        }
     }
-    ops_basic::ping(handle)
-}
 
-// ── Query ─────────────────────────────────────────────────────────────────────
-
-unsafe extern "C" fn execute(
-    handle: *mut DriverHandle,
-    sql: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiQueryResult {
-    if handle.is_null() {
-        return ffi_helpers::err_query_result("Null handle".to_string());
+    async fn ping(&self) -> Result<(), DriverError> {
+        let db_name = self.db_name().to_string();
+        with_client!(self, c => c.database(&db_name)
+            .run_command(mongodb::bson::doc! { "ping": 1 })
+            .await
+            .map(|_| ())
+            .map_err(|e| DriverError::Query(format!("Ping failed: {e}"))))
     }
-    ops_basic::execute(handle, sql)
-}
 
-unsafe extern "C" fn cancel(handle: *mut DriverHandle) -> tablepro_plugin_sdk::FfiResult {
-    if handle.is_null() {
-        return err_result("Null handle".to_string());
+    async fn execute(&self, query: &str) -> Result<QueryResult, DriverError> {
+        let db_name = self.db_name().to_string();
+        with_client!(self, c => ops_basic::execute(c, &db_name, query).await)
     }
-    ops_basic::cancel(handle)
-}
 
-// ── Schema ────────────────────────────────────────────────────────────────────
-
-unsafe extern "C" fn fetch_tables(
-    handle: *mut DriverHandle,
-) -> tablepro_plugin_sdk::FfiTableList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiTableList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_tables(&self) -> Result<Vec<TableInfo>, DriverError> {
+        let db_name = self.db_name().to_string();
+        with_client!(self, c => ops_basic::fetch_tables(c, &db_name).await)
     }
-    ops_basic::fetch_tables(handle)
-}
 
-unsafe extern "C" fn fetch_columns(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiColumnList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiColumnList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_columns(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<ColumnInfo>, DriverError> {
+        let db_name = schema
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| self.db_name().to_string());
+        with_client!(self, c => ops_schema::fetch_columns(c, &db_name, table).await)
     }
-    ops_schema::fetch_columns(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_indexes(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiIndexList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiIndexList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_indexes(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<IndexInfo>, DriverError> {
+        let db_name = schema
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| self.db_name().to_string());
+        with_client!(self, c => ops_schema::fetch_indexes(c, &db_name, table).await)
     }
-    ops_schema::fetch_indexes(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_foreign_keys(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiForeignKeyList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiForeignKeyList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_foreign_keys(
+        &self,
+        _table: &str,
+        _schema: Option<&str>,
+    ) -> Result<Vec<ForeignKeyInfo>, DriverError> {
+        // MongoDB has no foreign keys.
+        Ok(vec![])
     }
-    ops_schema::fetch_foreign_keys(handle, table, schema)
-}
 
-unsafe extern "C" fn fetch_databases(
-    handle: *mut DriverHandle,
-) -> tablepro_plugin_sdk::FfiStringList {
-    if handle.is_null() {
-        return tablepro_plugin_sdk::FfiStringList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi("Null handle".to_string()),
-        };
+    async fn fetch_databases(&self) -> Result<Vec<String>, DriverError> {
+        with_client!(self, c => ops_schema::fetch_databases(c).await)
     }
-    ops_schema::fetch_databases(handle)
-}
 
-unsafe extern "C" fn fetch_ddl(
-    handle: *mut DriverHandle,
-    table: tablepro_plugin_sdk::FfiStr,
-    schema: tablepro_plugin_sdk::FfiStr,
-) -> tablepro_plugin_sdk::FfiString {
-    if handle.is_null() {
-        return string_to_ffi("ERROR: Null handle".to_string());
+    async fn fetch_ddl(&self, table: &str, _schema: Option<&str>) -> Result<String, DriverError> {
+        Ok(format!(
+            "-- MongoDB collection '{table}'\n-- DDL is not applicable for MongoDB collections."
+        ))
     }
-    ops_schema::fetch_ddl(handle, table, schema)
+
+    fn cancel_query(&self) -> Result<(), DriverError> {
+        Err(DriverError::Unsupported(
+            "Cancel not supported for MongoDB".to_string(),
+        ))
+    }
+
+    fn supports_schemas(&self) -> bool {
+        // Mongo "schemas" map to databases — handled at a higher level; the
+        // trait `schema` argument is treated as DB override in our impl, but
+        // structurally Mongo collections live directly under a DB.
+        false
+    }
+
+    fn supports_transactions(&self) -> bool {
+        // Multi-document transactions exist on replica sets, but we do not
+        // wrap them in this driver yet.
+        false
+    }
+
+    fn database_type_id(&self) -> &str {
+        "mongodb"
+    }
 }

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::drivers::DriverRegistry;
 use crate::models::{AppError, ConnectionConfig, ConnectionStatus};
-use crate::plugin::{DatabaseDriver, PluginManager};
+use crate::drivers::DatabaseDriver;
 use crate::services::ssh_tunnel::SshTunnelManager;
 
 /// A live connection session holding its driver and current status.
@@ -14,26 +15,27 @@ struct ActiveConnection {
 
 /// Manages all active database connection sessions.
 ///
-/// Holds a shared reference to the PluginManager to create drivers on demand.
-/// SSH tunnels are tracked in a parallel `SshTunnelManager` keyed by session ID.
+/// Holds a shared reference to the `DriverRegistry` to create drivers on
+/// demand. SSH tunnels are tracked in a parallel `SshTunnelManager` keyed
+/// by session ID.
 pub struct ConnectionManager {
-    // Drop active connections before releasing plugin DLL/vtable state.
+    // Drop active connections before releasing driver state.
     connections: HashMap<String, ActiveConnection>,
     ssh_tunnels: SshTunnelManager,
-    plugin_manager: Arc<PluginManager>,
+    driver_registry: Arc<DriverRegistry>,
 }
 
 impl ConnectionManager {
-    pub fn new(plugin_manager: Arc<PluginManager>) -> Self {
+    pub fn new(driver_registry: Arc<DriverRegistry>) -> Self {
         Self {
-            plugin_manager,
+            driver_registry,
             connections: HashMap::new(),
             ssh_tunnels: SshTunnelManager::new(),
         }
     }
 
-    pub fn plugin_manager(&self) -> Arc<PluginManager> {
-        Arc::clone(&self.plugin_manager)
+    pub fn driver_registry(&self) -> Arc<DriverRegistry> {
+        Arc::clone(&self.driver_registry)
     }
 
     pub fn insert_connection(
@@ -137,7 +139,7 @@ impl ConnectionManager {
         new_config.database = database.to_string();
 
         let new_driver: Arc<dyn DatabaseDriver> = Arc::from(
-            self.plugin_manager
+            self.driver_registry
                 .create_driver(&new_config.db_type, &new_config)?,
         );
         new_driver.connect().await.map_err(|e| {

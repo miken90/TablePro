@@ -1,10 +1,9 @@
 //! DDL generation for the MSSQL driver.
 #![allow(clippy::get_first)]
 
-use tablepro_plugin_sdk::FfiString;
+use driver_common::DriverError;
 
-use crate::driver::MssqlDriver;
-use crate::ffi::string_to_ffi;
+use crate::{execute_simple, MssqlConn};
 
 fn escape_sq(s: &str) -> String {
     s.replace('\'', "''")
@@ -38,7 +37,11 @@ const FIXED_SIZE_TYPES: &[&str] = &[
     "rowversion",
 ];
 
-pub fn fetch_ddl(driver: &MssqlDriver, table: &str, schema: &str) -> FfiString {
+pub async fn fetch_ddl(
+    client: &mut MssqlConn,
+    table: &str,
+    schema: &str,
+) -> Result<String, DriverError> {
     let schema = if schema.is_empty() { "dbo" } else { schema };
     let et = escape_sq(table);
     let es = escape_sq(schema);
@@ -53,12 +56,8 @@ pub fn fetch_ddl(driver: &MssqlDriver, table: &str, schema: &str) -> FfiString {
          ORDER BY ORDINAL_POSITION"
     );
 
-    let cols = match driver.execute_query(&col_sql) {
-        Err(e) => return string_to_ffi(format!("-- Error: {e}")),
-        Ok((_, rows, _)) => rows,
-    };
-
-    let pk_cols = fetch_pk_cols(driver, &et, &es);
+    let (_, cols, _) = execute_simple(client, &col_sql).await?;
+    let pk_cols = fetch_pk_cols(client, &et, &es).await;
 
     let mut ddl = format!("CREATE TABLE [{bs}].[{bt}] (\n");
     let col_defs: Vec<String> = cols.iter().filter_map(|row| build_col_def(row)).collect();
@@ -78,20 +77,20 @@ pub fn fetch_ddl(driver: &MssqlDriver, table: &str, schema: &str) -> FfiString {
 
     ddl.push_str(&parts.join(",\n"));
     ddl.push_str("\n);");
-    string_to_ffi(ddl)
+    Ok(ddl)
 }
 
-fn fetch_pk_cols(driver: &MssqlDriver, et: &str, es: &str) -> Vec<String> {
+async fn fetch_pk_cols(client: &mut MssqlConn, et: &str, es: &str) -> Vec<String> {
     let sql = format!(
         "SELECT ku.COLUMN_NAME \
          FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc \
          JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku ON tc.CONSTRAINT_NAME = ku.CONSTRAINT_NAME \
          WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY' AND tc.TABLE_NAME = '{et}' AND tc.TABLE_SCHEMA = '{es}'"
     );
-    match driver.execute_query(&sql) {
+    match execute_simple(client, &sql).await {
         Ok((_, rows, _)) => rows
             .into_iter()
-            .filter_map(|row| row.into_iter().next()?.clone())
+            .filter_map(|row| row.into_iter().next()?)
             .collect(),
         Err(_) => vec![],
     }
