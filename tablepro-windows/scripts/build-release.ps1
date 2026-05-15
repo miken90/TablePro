@@ -134,22 +134,32 @@ function Assert-VersionConsistency {
     Invoke-FrontendBuild
 
     if ($Target -eq "portable" -or $Target -eq "all") {
-        Write-Host "[release] Building main app (release)..." -ForegroundColor Cyan
+        Write-Host "[release] Building main app via Tauri CLI (no bundle)..." -ForegroundColor Cyan
 
         # Force re-expansion of `tauri::generate_context!()` so the freshly built
         # frontend dist/ is embedded into the binary. Without this, cargo's
         # incremental cache may skip recompiling `tablepro-windows` and the
         # exe ends up referencing stale (or missing) asset paths, causing
         # WebView2 to fall back to `devUrl: localhost:1420` at runtime.
-        # Redirect stderr to $null so cargo's "Removed 0 files" notice doesn't
-        # surface as a PowerShell NativeCommandError when there's nothing to clean.
         $ErrorActionPreference = "Continue"
         cmd /c "cargo clean -p tablepro-windows --release --manifest-path src-tauri/Cargo.toml 2>nul"
         $ErrorActionPreference = "Stop"
 
-        cargo build --release --manifest-path src-tauri/Cargo.toml
-        if ($LASTEXITCODE -ne 0) {
-            throw "Cargo release build failed"
+        # Use `npx tauri build --no-bundle` instead of raw `cargo build --release`.
+        # The Tauri CLI runs the proper build pipeline that ensures
+        # `frontendDist` is embedded correctly; raw cargo build can produce a
+        # binary that falls back to `devUrl: localhost:1420` at runtime.
+        # `beforeBuildCommand` is suppressed because we already ran `vite build`
+        # via Invoke-FrontendBuild above.
+        $portableConfig = Join-Path ([System.IO.Path]::GetTempPath()) ("tablepro-tauri-portable-{0}.json" -f [Guid]::NewGuid())
+        '{"build":{"beforeBuildCommand":""},"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Path $portableConfig -Encoding utf8
+        try {
+            npx tauri build --no-bundle --config $portableConfig
+            if ($LASTEXITCODE -ne 0) {
+                throw "Tauri portable build failed"
+            }
+        } finally {
+            Remove-Item $portableConfig -Force -ErrorAction SilentlyContinue
         }
 
         Write-Host "[release] Packaging portable ZIP..." -ForegroundColor Cyan
