@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `scripts/build-release.ps1`: force `cargo clean -p tablepro-windows` before the portable release build so `tauri::generate_context!()` re-embeds the freshly built `dist/`. Prevents stale incremental cache from producing an exe that falls back to `devUrl: localhost:1420` at runtime.
 - Split MainLayout god component (503 LOC) into MainLayout shell (138 LOC), ConnectedLayout, and OverlayRegion
 - Wrap GridRow and GridHeader in React.memo with stabilized props for fewer re-renders during scroll/selection
 - Lazy-load 7 non-critical panels (AiChat, Settings, MongoDB, Redis, Shortcuts, Onboarding, Explain) with per-panel Suspense boundaries

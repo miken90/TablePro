@@ -135,6 +135,14 @@ function Assert-VersionConsistency {
 
     if ($Target -eq "portable" -or $Target -eq "all") {
         Write-Host "[release] Building main app (release)..." -ForegroundColor Cyan
+
+        # Force re-expansion of `tauri::generate_context!()` so the freshly built
+        # frontend dist/ is embedded into the binary. Without this, cargo's
+        # incremental cache may skip recompiling `tablepro-windows` and the
+        # exe ends up referencing stale (or missing) asset paths, causing
+        # WebView2 to fall back to `devUrl: localhost:1420` at runtime.
+        cargo clean -p tablepro-windows --release --manifest-path src-tauri/Cargo.toml 2>$null
+
         cargo build --release --manifest-path src-tauri/Cargo.toml
         if ($LASTEXITCODE -ne 0) {
             throw "Cargo release build failed"
