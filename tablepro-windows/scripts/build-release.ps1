@@ -141,7 +141,11 @@ function Assert-VersionConsistency {
         # incremental cache may skip recompiling `tablepro-windows` and the
         # exe ends up referencing stale (or missing) asset paths, causing
         # WebView2 to fall back to `devUrl: localhost:1420` at runtime.
-        cargo clean -p tablepro-windows --release --manifest-path src-tauri/Cargo.toml 2>$null
+        # Redirect stderr to $null so cargo's "Removed 0 files" notice doesn't
+        # surface as a PowerShell NativeCommandError when there's nothing to clean.
+        $ErrorActionPreference = "Continue"
+        cmd /c "cargo clean -p tablepro-windows --release --manifest-path src-tauri/Cargo.toml 2>nul"
+        $ErrorActionPreference = "Stop"
 
         cargo build --release --manifest-path src-tauri/Cargo.toml
         if ($LASTEXITCODE -ne 0) {
