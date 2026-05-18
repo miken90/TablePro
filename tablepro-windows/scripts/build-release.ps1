@@ -1,20 +1,12 @@
-# build-release.ps1 - Release build with selectable targets.
+# build-release.ps1 - Release build (installer only).
 #
 # Usage:
-#   scripts/build-release.ps1                  # default: all
-#   scripts/build-release.ps1 -Target portable
-#   scripts/build-release.ps1 -Target installer
-#   scripts/build-release.ps1 -Target all
+#   scripts/build-release.ps1
 #
-# Targets:
-#   portable  - Release exe + driver DLLs -> portable ZIP
-#   installer - Tauri bundle -> MSI + NSIS installers
-#   all       - Both portable + installer
+# Output:
+#   MSI + NSIS installers via `npx tauri build`
 
-param(
-    [ValidateSet("portable", "installer", "all")]
-    [string]$Target = "all"
-)
+param()
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot | Split-Path
@@ -123,94 +115,16 @@ function Assert-VersionConsistency {
     $conf = Get-Content "src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
     $version = $conf.version
     Assert-VersionConsistency
-    $arch = "x64"
     $releaseDir = "src-tauri\target\release"
     $bundleDir = Join-Path $releaseDir "bundle"
-    $outputZip = "target\TablePro-$version-$arch-portable.zip"
 
-    Write-Host ("[release] TablePro v{0} ({1}) - target: {2}" -f $version, $arch, $Target) -ForegroundColor Cyan
+    Write-Host ("[release] TablePro v{0} - installer build" -f $version) -ForegroundColor Cyan
     Write-Host ""
 
     Invoke-FrontendBuild
 
-    if ($Target -eq "portable" -or $Target -eq "all") {
-        Write-Host "[release] Building main app via Tauri CLI (no bundle)..." -ForegroundColor Cyan
-
-        # Force re-expansion of `tauri::generate_context!()` so the freshly built
-        # frontend dist/ is embedded into the binary. Without this, cargo's
-        # incremental cache may skip recompiling `tablepro-windows` and the
-        # exe ends up referencing stale (or missing) asset paths, causing
-        # WebView2 to fall back to `devUrl: localhost:1420` at runtime.
-        $ErrorActionPreference = "Continue"
-        cmd /c "cargo clean -p tablepro-windows --release --manifest-path src-tauri/Cargo.toml 2>nul"
-        $ErrorActionPreference = "Stop"
-
-        # Use `npx tauri build --no-bundle` instead of raw `cargo build --release`.
-        # The Tauri CLI runs the proper build pipeline that ensures
-        # `frontendDist` is embedded correctly; raw cargo build can produce a
-        # binary that falls back to `devUrl: localhost:1420` at runtime.
-        # `beforeBuildCommand` is suppressed because we already ran `vite build`
-        # via Invoke-FrontendBuild above.
-        $portableConfig = Join-Path ([System.IO.Path]::GetTempPath()) ("tablepro-tauri-portable-{0}.json" -f [Guid]::NewGuid())
-        '{"build":{"beforeBuildCommand":""},"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Path $portableConfig -Encoding utf8
-        try {
-            npx tauri build --no-bundle --config $portableConfig
-            if ($LASTEXITCODE -ne 0) {
-                throw "Tauri portable build failed"
-            }
-        } finally {
-            Remove-Item $portableConfig -Force -ErrorAction SilentlyContinue
-        }
-
-        Write-Host "[release] Packaging portable ZIP..." -ForegroundColor Cyan
-        $stagingDir = "target\portable-staging"
-        $resourcesDir = Join-Path $stagingDir "resources"
-        $capsStageDir = Join-Path $stagingDir "driver-capabilities"
-
-        if (Test-Path $stagingDir) {
-            Remove-Item $stagingDir -Recurse -Force
-        }
-
-        New-Item -ItemType Directory -Path $stagingDir | Out-Null
-
-        Copy-Item (Join-Path $releaseDir "tablepro-windows.exe") (Join-Path $stagingDir "TablePro.exe")
-
-        $wv2 = Join-Path $releaseDir "WebView2Loader.dll"
-        if (Test-Path $wv2) {
-            Copy-Item $wv2 $stagingDir
-        }
-
-        # Stage driver capability sidecar files alongside the exe
-        $capsDir = "src-tauri\driver-capabilities"
-        if (Test-Path $capsDir) {
-            New-Item -ItemType Directory -Path $capsStageDir -Force | Out-Null
-            Get-ChildItem "$capsDir\*.capabilities.json" -ErrorAction SilentlyContinue |
-                ForEach-Object { Copy-Item $_.FullName $capsStageDir -Force }
-        }
-
-        if (Test-Path "src-tauri\resources") {
-            New-Item -ItemType Directory -Path $resourcesDir -Force | Out-Null
-            Copy-Item "src-tauri\resources\*" $resourcesDir -Recurse
-        }
-
-        if (Test-Path $outputZip) {
-            Remove-Item $outputZip -Force
-        }
-
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::CreateFromDirectory(
-            $stagingDir,
-            $outputZip,
-            [System.IO.Compression.CompressionLevel]::Optimal,
-            $false
-        )
-        Remove-Item $stagingDir -Recurse -Force
-    }
-
-    if ($Target -eq "installer" -or $Target -eq "all") {
-        Write-Host "[release] Building Tauri bundle (MSI + NSIS)..." -ForegroundColor Cyan
-        Invoke-TauriReleaseBuild
-    }
+    Write-Host "[release] Building Tauri bundle (MSI + NSIS)..." -ForegroundColor Cyan
+    Invoke-TauriReleaseBuild
 
     $sw.Stop()
     $elapsed = [math]::Round($sw.Elapsed.TotalSeconds, 1)
@@ -220,23 +134,16 @@ function Assert-VersionConsistency {
     Write-Host ("[release] Build complete in {0}s" -f $elapsed) -ForegroundColor Green
     Write-Host ""
 
-    if (($Target -eq "portable" -or $Target -eq "all") -and (Test-Path $outputZip)) {
-        $zipSize = [math]::Round((Get-Item $outputZip).Length / 1MB, 1)
-        Write-Host ("  Portable : {0} ({1} MB)" -f $outputZip, $zipSize) -ForegroundColor White
+    $msi = Get-ChildItem (Join-Path $bundleDir "msi\*.msi") -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($msi) {
+        $msiSize = [math]::Round($msi.Length / 1MB, 1)
+        Write-Host ("  MSI      : {0} ({1} MB)" -f $msi.FullName, $msiSize) -ForegroundColor White
     }
 
-    if ($Target -eq "installer" -or $Target -eq "all") {
-        $msi = Get-ChildItem (Join-Path $bundleDir "msi\*.msi") -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($msi) {
-            $msiSize = [math]::Round($msi.Length / 1MB, 1)
-            Write-Host ("  MSI      : {0} ({1} MB)" -f $msi.FullName, $msiSize) -ForegroundColor White
-        }
-
-        $nsis = Get-ChildItem (Join-Path $bundleDir "nsis\*.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($nsis) {
-            $nsisSize = [math]::Round($nsis.Length / 1MB, 1)
-            Write-Host ("  NSIS     : {0} ({1} MB)" -f $nsis.FullName, $nsisSize) -ForegroundColor White
-        }
+    $nsis = Get-ChildItem (Join-Path $bundleDir "nsis\*.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($nsis) {
+        $nsisSize = [math]::Round($nsis.Length / 1MB, 1)
+        Write-Host ("  NSIS     : {0} ({1} MB)" -f $nsis.FullName, $nsisSize) -ForegroundColor White
     }
 
     Write-Host "========================================" -ForegroundColor Green

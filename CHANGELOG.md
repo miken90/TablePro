@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `scripts/build-release.ps1`: portable target now invokes `npx tauri build --no-bundle` (with `cargo clean -p tablepro-windows` first) instead of raw `cargo build --release`, so `tauri::generate_context!()` reliably embeds the freshly built `dist/`. Prevents the release exe from falling back to `devUrl: localhost:1420` at runtime.
+- `scripts/build-release.ps1`: removed portable target entirely; script now only builds MSI + NSIS installers via `npx tauri build`. Portable builds were unreliable due to `dist/` embedding issues with raw `cargo build`.
 - Split MainLayout god component (503 LOC) into MainLayout shell (138 LOC), ConnectedLayout, and OverlayRegion
 - Wrap GridRow and GridHeader in React.memo with stabilized props for fewer re-renders during scroll/selection
 - Lazy-load 7 non-critical panels (AiChat, Settings, MongoDB, Redis, Shortcuts, Onboarding, Explain) with per-panel Suspense boundaries
