@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Searchable Foreign Key dropdown selector in grid cell editor, dynamically querying referenced table metadata and records
+
+### Fixed
+
+- DatePicker cell editing formatting for HTML5 inputs, supporting dynamic `.showPicker()` triggers on click/focus and automatic NULL mapping for empty date/numeric inputs
+- Grid cell mouse click interception on custom dropdown editors (Foreign Key and Enum) by stopping event propagation on overlay elements
 - Performance settings section: configurable `streamingThreshold` (default 10K, range 1K–1M) and `storeMaxRows` (default 100K, range 10K–10M) with backend clamp on save
 - Dialect-aware ChangeTracker SQL generation: per-engine boolean literals (`1`/`0` for MySQL & MSSQL, `TRUE`/`FALSE` for Postgres/SQLite) and identifier quoting (backticks for MySQL, square brackets for MSSQL, ANSI double-quotes elsewhere)
 - EXPLAIN output detection: single-column `QUERY PLAN` results render without 80-char truncation and auto-size column width up to 4000px

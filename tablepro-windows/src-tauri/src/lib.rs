@@ -49,7 +49,7 @@ use commands::bulk_ops::{bulk_delete, bulk_delete_preview, bulk_insert, bulk_upd
 use commands::crash::{delete_crash_dump, list_crash_dumps};
 use commands::credential::{cred_delete, cred_load, cred_save};
 use drivers::DriverRegistry;
-use services::health_monitor::HealthMonitor;
+
 use services::ConnectionManager;
 use storage::{AiChatStore, ConnectionStore, FilterStore, HistoryStore, SettingsStore, TabStateStore};
 use tokio::sync::Mutex;
@@ -128,7 +128,7 @@ pub fn run() {
 
     builder
         .manage(Mutex::new(connection_manager))
-        .manage(Mutex::new(HealthMonitor::new()))
+
         .manage(Mutex::new(commands::ai::AiCancelState::new()))
         .manage(Mutex::new({
             let mut store = SettingsStore::new();
@@ -315,11 +315,6 @@ pub fn run() {
             match event {
                 tauri::WindowEvent::CloseRequested { .. } => {
                     tracing::info!("Window CloseRequested: {}", window.label());
-                    // Stop health monitor first
-                    let hm_state = window.state::<Mutex<HealthMonitor>>();
-                    if let Ok(mut hm) = hm_state.try_lock() {
-                        hm.stop_all();
-                    }
                     let state = window.state::<Mutex<ConnectionManager>>();
                     let lock_result = state.try_lock();
                     if let Ok(mut guard) = lock_result {

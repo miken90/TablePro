@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { toast } from "sonner";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type { QueryResult } from "../types/query";
 import type { ExplainResult } from "../ipc/commands";
@@ -103,47 +102,6 @@ function getDisplayRowCount(result: QueryResult): number {
   return result.affectedRows > 0 ? result.affectedRows : result.rows.length;
 }
 
-function isSelectLikeQuery(sql: string): boolean {
-  const normalized = sql.trimStart().toLowerCase();
-
-  if (
-    normalized.startsWith("select") ||
-    normalized.startsWith("show") ||
-    normalized.startsWith("describe") ||
-    normalized.startsWith("explain") ||
-    normalized.startsWith("pragma")
-  ) {
-    return true;
-  }
-
-  if (!normalized.startsWith("with")) {
-    return false;
-  }
-
-  const cteMatch = normalized.match(/\)\s*(select|show|describe|explain|pragma|insert|update|delete)\b/);
-  if (!cteMatch) {
-    return false;
-  }
-
-  return ["select", "show", "describe", "explain", "pragma"].includes(cteMatch[1]);
-}
-
-function getSuccessDescription(sql: string, result: QueryResult, elapsedMs: number): string {
-  if (result.affectedRows > 0) {
-    return `${result.affectedRows} row${result.affectedRows !== 1 ? "s" : ""} affected in ${elapsedMs}ms`;
-  }
-
-  if (result.rows.length > 0) {
-    return `${result.rows.length} row${result.rows.length !== 1 ? "s" : ""} in ${elapsedMs}ms`;
-  }
-
-  if (isSelectLikeQuery(sql)) {
-    return `0 rows in ${elapsedMs}ms`;
-  }
-
-  return `Statement executed in ${elapsedMs}ms`;
-}
-
 export function resolveActiveQueryConnectionId(): string | undefined {
   const { activeTabId, tabs } = useEditorStore.getState();
   const tabConnectionId = tabs.find((tab) => tab.id === activeTabId)?.connectionId;
@@ -241,7 +199,6 @@ async function runQuery(
   });
 
   const startMs = Date.now();
-  const loadingId = toast.loading("Executing query...");
   const logId = useQueryLogStore.getState().add({
     sql,
     source: "editor",
@@ -302,9 +259,8 @@ async function runQuery(
   if (activeStreamCancel === cancelHandle) activeStreamCancel = null;
 
   if (cancelled) {
-    // User-initiated cancel: leave isExecuting false, no toast.
+    // User-initiated cancel: leave isExecuting false.
     set({ isExecuting: false, durationMs: Date.now() - startMs });
-    toast.dismiss(loadingId);
     useQueryLogStore.getState().update(logId, {
       status: "error",
       durationMs: Date.now() - startMs,
@@ -318,9 +274,6 @@ async function runQuery(
   if (streamErr) {
     const classified = classifyError(streamErr);
     const errorMsg = classified.message;
-    const description = classified.hint
-      ? `${errorMsg}\n${classified.hint}`
-      : errorMsg;
     set({ error: errorMsg, isExecuting: false, durationMs: elapsedMs });
     useQueryLogStore.getState().update(logId, {
       status: "error",
@@ -328,8 +281,6 @@ async function runQuery(
       error: errorMsg,
     });
     commands.historyRecord(sql, null, elapsedMs, 0, "error").catch(() => {});
-    toast.dismiss(loadingId);
-    toast.error("Query failed", { description, duration: Infinity });
     return;
   }
 
@@ -364,10 +315,6 @@ async function runQuery(
   commands
     .historyRecord(sql, null, elapsedMs, displayRowCount, "success")
     .catch(() => {});
-  toast.dismiss(loadingId);
-  toast.success("Query executed", {
-    description: getSuccessDescription(sql, result, elapsedMs),
-  });
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
@@ -391,7 +338,6 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     if (check.blocked) {
       const message = "Read-only mode: write queries are blocked (Safe Mode Level 5).";
       set({ error: message });
-      toast.error("Query blocked", { description: message });
       return;
     }
 
@@ -436,20 +382,12 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   runExplain: async (sessionId, sql) => {
     set({ isExplaining: true, explainResult: null, error: null });
-    const loadingId = toast.loading("Analyzing query plan...");
     try {
       const result = await commands.explainQuery(sessionId, sql);
       set({ explainResult: result, isExplaining: false });
-      toast.dismiss(loadingId);
-      toast.success("Explain complete");
     } catch (err) {
       const classified = classifyError(err);
-      const description = classified.hint
-        ? `${classified.message}\n${classified.hint}`
-        : classified.message;
       set({ isExplaining: false, error: classified.message });
-      toast.dismiss(loadingId);
-      toast.error("Explain failed", { description, duration: Infinity });
     }
   },
 }));

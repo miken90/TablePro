@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Upload, X } from 'lucide-react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { bulkInsert } from '../../ipc/commands';
-import { useToast } from '../../hooks/useToast';
 import type { ColumnInfo } from '../../types/query';
 
 interface BulkInsertDialogProps {
@@ -75,7 +74,6 @@ export function BulkInsertDialog({
   open, sessionId, table, schema, columns, onClose, onSuccess,
 }: BulkInsertDialogProps) {
   const { t } = useTranslation();
-  const toast = useToast();
 
   const [rawText, setRawText] = useState('');
   const [parsedRows, setParsedRows] = useState<string[][]>([]);
@@ -117,7 +115,7 @@ export function BulkInsertDialog({
   const handleFileDrop = useCallback(
     async (file: File) => {
       if (file.size > MAX_FILE_SIZE) {
-        toast.error(t('grid.bulk.fileTooLarge'));
+        console.error(t('grid.bulk.fileTooLarge'));
         return;
       }
       const text = await file.text();
@@ -125,7 +123,7 @@ export function BulkInsertDialog({
       setRawText(text);
       setParsedRows(rows);
     },
-    [t, toast],
+    [t],
   );
 
   const handleDrop = useCallback(
@@ -183,20 +181,17 @@ export function BulkInsertDialog({
         }),
       );
 
-      const result = await bulkInsert(sessionId, table, schema, selectedColumns, mappedRows);
-      toast.success(
-        t('grid.bulk.insertSuccess', { count: result.rowsAffected, ms: result.durationMs }),
-      );
+      await bulkInsert(sessionId, table, schema, selectedColumns, mappedRows);
       onSuccess();
       onClose();
     } catch (err) {
-      toast.showError(t('grid.bulk.insertFailed'), err);
+      console.error(t('grid.bulk.insertFailed'), err);
     } finally {
       unlisten?.();
       setIsInserting(false);
       setProgress(null);
     }
-  }, [effectiveRows, selectedColumns, columnMapping, sessionId, table, schema, t, toast, onSuccess, onClose]);
+  }, [effectiveRows, selectedColumns, columnMapping, sessionId, table, schema, t, onSuccess, onClose]);
 
   if (!open) return null;
 

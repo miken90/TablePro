@@ -26,6 +26,7 @@ interface GridRowProps {
   virtualTop: number;
   enumValuesByColumn?: Record<string, string[]>;
   fkColumns?: Record<string, FkRef>;
+  sessionId?: string;
   /** Whether this row contains the active cell. */
   isActiveRow: boolean;
   /** Column index of the active cell (only meaningful when isActiveRow is true). */
@@ -171,12 +172,13 @@ export const GridRow = React.memo(function GridRow({
   onCellCancel,
   onCellContextMenu,
   onFkNavigate,
+  sessionId,
 }: GridRowProps) {
   return (
     <div
       className={getRowClassName(isSelected, changeType)}
-      style={{ top: virtualTop, height: 28 }}
-      onClick={(e) => onRowClick(rowIndex, e)}
+      style={{ top: virtualTop, height: 28, ...(editingCell ? { zIndex: 10 } : undefined) }}
+      onClick={(e) => { if ((e.target as HTMLElement).closest('[data-cell]')) return; onRowClick(rowIndex, e); }}
     >
       {/* Row number */}
       <div
@@ -199,15 +201,18 @@ export const GridRow = React.memo(function GridRow({
           && colIdx >= selectionCols[0]
           && colIdx <= selectionCols[1];
 
-        let cellCls = 'flex-shrink-0 px-2 flex items-center border-r border-border-subtle overflow-hidden cursor-default';
+        let cellCls = 'flex-shrink-0 px-2 flex items-center border-r border-border-subtle cursor-default';
+        if (!isEditing) cellCls += ' overflow-hidden';
+        else cellCls += ' overflow-visible relative';
         if (inSelection) cellCls += ' bg-blue-100/60 dark:bg-blue-900/40';
-        if (active) cellCls += ' ring-2 ring-inset ring-blue-500 z-[1]';
+        if (active && !isEditing) cellCls += ' ring-2 ring-inset ring-blue-500 z-[1]';
 
         return (
           <div
             key={col.name}
+            data-cell
             className={cellCls}
-            style={{ width, height: 28 }}
+            style={{ width, height: 28, ...(isEditing ? { zIndex: 50 } : undefined) }}
             title={!isEditing && cellValue != null ? truncateForTitle(cellValue) : undefined}
             onMouseDown={(e) => { e.stopPropagation(); onCellMouseDown?.(rowIndex, colIdx, e); }}
             onMouseEnter={() => onCellMouseEnter?.(rowIndex, colIdx)}
@@ -223,6 +228,8 @@ export const GridRow = React.memo(function GridRow({
                 onCommit={(val) => onCellCommit?.(rowIndex, colIdx, val)}
                 onCancel={() => onCellCancel?.()}
                 autoFocus
+                sessionId={sessionId}
+                fkRef={fkColumns?.[col.name]}
               />
             ) : (
               <CellContent

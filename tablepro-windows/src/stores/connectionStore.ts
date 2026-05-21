@@ -1,10 +1,9 @@
 import { create } from "zustand";
-import { toast } from "sonner";
 import { listen } from "@tauri-apps/api/event";
 import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
-import { classifyError } from "../ipc/error";
+
 import { useSettingsStore } from "./settingsStore";
 
 interface ConnectionState {
@@ -77,7 +76,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   selectConnection: (id) => set({ selectedConnectionId: id }),
 
   connect: async (id, config) => {
-    const loadingId = toast.loading("Connecting...");
     set((s) => {
       const statuses = new Map(s.connectionStatuses);
       statuses.set(id, "connecting");
@@ -92,20 +90,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         sessionIds.set(id, sessionId);
         return { connectionStatuses: statuses, sessionIds, selectedConnectionId: id };
       });
-      toast.dismiss(loadingId);
-      toast.success("Connected", { description: config.host ?? config.database ?? undefined });
     } catch (err) {
       set((s) => {
         const statuses = new Map(s.connectionStatuses);
         statuses.set(id, "error");
         return { connectionStatuses: statuses };
       });
-      toast.dismiss(loadingId);
-      const classified = classifyError(err);
-      const description = classified.hint
-        ? `${classified.message}\n${classified.hint}`
-        : classified.message;
-      toast.error("Connection failed", { description, duration: Infinity });
       throw err;
     }
   },
@@ -129,14 +119,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         selectedConnectionId: s.selectedConnectionId === id ? null : s.selectedConnectionId,
       };
     });
-    toast.info("Disconnected");
   },
 
   reconnect: async (connectionId: string) => {
     const state = get();
     const sessionId = state.sessionIds.get(connectionId);
     if (!sessionId) {
-      toast.error("Reconnect failed", { description: "No active session for this connection" });
       return;
     }
 
@@ -162,11 +150,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         statuses.set(connectionId, "error");
         return { connectionStatuses: statuses };
       });
-      const classified = classifyError(err);
-      const description = classified.hint
-        ? `${classified.message}\n${classified.hint}`
-        : classified.message;
-      toast.error("Reconnect failed", { description });
     } finally {
       set((s) => {
         const reconnectingIds = new Set(s.reconnectingIds);
@@ -251,7 +234,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 // Auto-subscribe to connection events from Rust backend
 if (typeof window !== "undefined") {
 void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => {
-  const { sessionId, host } = event.payload;
+  const { sessionId } = event.payload;
   const state = useConnectionStore.getState();
   for (const [connId, sid] of state.sessionIds) {
     if (sid === sessionId) {
@@ -264,10 +247,6 @@ void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => 
         const reconnectingIds = new Set(s.reconnectingIds);
         reconnectingIds.delete(connId);
         return { connectionStatuses: statuses, reconnectingIds };
-      });
-      toast.error("Connection lost", {
-        description: host ?? "Database connection was lost",
-        duration: Infinity,
       });
       break;
     }
@@ -286,7 +265,6 @@ void listen<{ sessionId: string }>("connection:reconnected", (event) => {
         reconnectingIds.delete(connId);
         return { connectionStatuses: statuses, reconnectingIds };
       });
-      toast.success("Connection restored");
       break;
     }
   }

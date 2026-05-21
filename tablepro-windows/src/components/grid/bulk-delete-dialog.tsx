@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, X } from 'lucide-react';
 import { bulkDelete, bulkDeletePreview } from '../../ipc/commands';
 import type { FilterCondition } from '../../ipc/commands';
-import { useToast } from '../../hooks/useToast';
 import type { ColumnInfo } from '../../types/query';
 
 interface BulkDeleteDialogProps {
@@ -41,7 +40,6 @@ export function BulkDeleteDialog({
   open, sessionId, table, schema, columns, onClose, onSuccess,
 }: BulkDeleteDialogProps) {
   const { t } = useTranslation();
-  const toast = useToast();
 
   const [filters, setFilters] = useState<FilterRow[]>(() => [makeFilter(columns)]);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
@@ -91,28 +89,25 @@ export function BulkDeleteDialog({
       const count = await bulkDeletePreview(sessionId, table, schema, filterConditions);
       setPreviewCount(count);
     } catch (err) {
-      toast.showError(t('grid.bulk.deleteFailed'), err);
+      console.error(t('grid.bulk.deleteFailed'), err);
     } finally {
       setIsPreviewing(false);
     }
-  }, [filtersValid, sessionId, table, schema, filterConditions, t, toast]);
+  }, [filtersValid, sessionId, table, schema, filterConditions, t]);
 
   const handleDelete = useCallback(async () => {
     if (!filtersValid) return;
     setIsDeleting(true);
     try {
-      const result = await bulkDelete(sessionId, table, schema, filterConditions);
-      toast.success(
-        t('grid.bulk.deleteSuccess', { count: result.rowsAffected, ms: result.durationMs }),
-      );
+      await bulkDelete(sessionId, table, schema, filterConditions);
       onSuccess();
       onClose();
     } catch (err) {
-      toast.showError(t('grid.bulk.deleteFailed'), err);
+      console.error(t('grid.bulk.deleteFailed'), err);
     } finally {
       setIsDeleting(false);
     }
-  }, [filtersValid, sessionId, table, schema, filterConditions, t, toast, onSuccess, onClose]);
+  }, [filtersValid, sessionId, table, schema, filterConditions, t, onSuccess, onClose]);
 
   if (!open) return null;
 

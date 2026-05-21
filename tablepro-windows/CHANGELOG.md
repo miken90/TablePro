@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Boolean cell editor dropdown (select box) option squishing and text overlapping
+- JSON cell editor textarea width clipping/clamping inside flex cell by adding absolute positioning coordinates
+- Search icon overlap with placeholder/text in foreign key cell editor search input by correcting non-standard padding class
+
 ## [0.5.0] - 2026-04-09
 
 ### Added

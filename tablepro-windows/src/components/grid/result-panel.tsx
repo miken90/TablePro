@@ -390,6 +390,7 @@ export function ResultPanel({
               {displayResult ? (
                 <DataGrid
                   result={displayResult}
+                  sessionId={sessionId ?? activeConnectionId ?? undefined}
                   pageOffset={0}
                   sorting={sorting}
                   onSortChange={handleSortChange}

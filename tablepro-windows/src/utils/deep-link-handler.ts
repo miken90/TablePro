@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import { useConnectionStore } from "../stores/connectionStore";
 
 // ---------------------------------------------------------------------------
@@ -8,7 +7,7 @@ import { useConnectionStore } from "../stores/connectionStore";
 //   tablepro://open/connection/{connection-id}
 //
 // On receive: look up saved connection by ID, trigger connect flow.
-// If not found: show error toast. Never crash on malformed URLs.
+// If not found: log error. Never crash on malformed URLs.
 // ---------------------------------------------------------------------------
 
 export type DeepLinkAction =
@@ -65,7 +64,7 @@ function resolveConnection(id: string) {
 }
 
 /**
- * Handle a parsed deep-link action. Shows appropriate toasts on error.
+ * Handle a parsed deep-link action.
  */
 export async function handleDeepLinkAction(action: DeepLinkAction): Promise<void> {
   if (action.type === "open-connection") {
@@ -78,9 +77,7 @@ export async function handleDeepLinkAction(action: DeepLinkAction): Promise<void
 
     const connection = resolveConnection(action.connectionId);
     if (!connection) {
-      toast.error("Connection not found", {
-        description: `No saved connection with ID "${action.connectionId}".`,
-      });
+      console.error(`[deep-link] Connection not found: ${action.connectionId}`);
       return;
     }
 
@@ -88,7 +85,6 @@ export async function handleDeepLinkAction(action: DeepLinkAction): Promise<void
     const status = store.getStatus(connection.id);
     if (status === "connected") {
       store.selectConnection(connection.id);
-      toast.info("Connection already active", { description: connection.name });
       return;
     }
 
@@ -96,7 +92,7 @@ export async function handleDeepLinkAction(action: DeepLinkAction): Promise<void
     try {
       await store.connect(connection.id, connection.config);
     } catch {
-      // connect() already shows an error toast via the store
+      // connect() already handles error state via the store
     }
   }
 
@@ -110,9 +106,7 @@ export async function handleDeepLinkAction(action: DeepLinkAction): Promise<void
         (c) => c.name.toLowerCase() === params.name.toLowerCase(),
       );
       if (existing) {
-        toast.warning("Connection already exists", {
-          description: `A connection named "${params.name}" already exists.`,
-        });
+        console.warn(`[deep-link] Connection already exists: ${params.name}`);
         return;
       }
     }
@@ -142,23 +136,20 @@ export async function handleDeepLinkAction(action: DeepLinkAction): Promise<void
 
     try {
       await store.saveConnection(conn);
-      toast.success("Connection imported", { description: conn.name });
     } catch {
-      toast.error("Failed to import connection");
+      console.error("[deep-link] Failed to import connection");
     }
   }
 }
 
 /**
  * Process a raw deep-link URL string end-to-end.
- * Safe to call with any input — logs and toasts on error.
+ * Safe to call with any input — logs on error.
  */
 export async function handleDeepLinkUrl(raw: string): Promise<void> {
   const action = parseDeepLinkUrl(raw);
   if (!action) {
-    toast.error("Unrecognised link", {
-      description: "This tablepro:// link is not supported.",
-    });
+    console.error("[deep-link] Unrecognised link:", raw);
     return;
   }
   await handleDeepLinkAction(action);

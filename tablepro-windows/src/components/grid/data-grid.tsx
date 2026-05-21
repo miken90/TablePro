@@ -46,6 +46,7 @@ export function DataGrid({
   onSelectColumn,
   onSelectAll,
   scrollRef,
+  sessionId,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -127,7 +128,7 @@ export function DataGrid({
       <div ref={parentRef} className="h-full overflow-auto focus:outline-none" tabIndex={0} onKeyDown={handleGridKeyDown}>
         <div style={{ minWidth: totalContentWidth }}>
           {/* Sticky header */}
-          <div className="sticky top-0 z-10 flex border-b border-border-subtle bg-surface">
+          <div className="sticky top-0 z-20 flex border-b border-border-subtle bg-surface">
             <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-text-muted text-xs border-r border-border-subtle select-none">
               #
             </div>
@@ -190,6 +191,7 @@ export function DataGrid({
                   onCellContextMenu={onCellContextMenu ? handleContextMenu : undefined}
                   enumValuesByColumn={enumValuesByColumn}
                   onFkNavigate={onFkNavigate}
+                  sessionId={sessionId}
                 />
               );
             })}

@@ -59,7 +59,18 @@
   - `cargo build --release --manifest-path src-tauri/Cargo.toml`
   - then separately diagnose Tauri bundling step failure.
 
+### Root cause identified (2026-05-19): LTO crashes rustc silently during release build
+- With `lto = true` (full LTO) and `codegen-units = 1`, rustc crashes silently during the final linking/codegen phase. No error output — process just exits with code 1.
+- `cargo check --release` passes fine (no codegen), only `cargo build --release` fails.
+- `lto = "thin"` also crashes. Only `lto = false` allows the build to complete.
+- Likely cause: rustc/LLVM memory or time limit with 400+ crates (aws-lc-sys, mongodb, tauri, 6 db drivers) under full LTO on Windows MSVC.
+- **Fix**: Set `lto = false` and `codegen-units = 16` in `[profile.release]`. Binary ~3.5 MB larger (23.5 vs 20 MB) but build is reliable (~2 min vs crash).
+- May be re-testable after Rust toolchain updates.
+
 ### Commands used frequently
 - Dev run: `powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"`
-- Release rust build: `powershell.exe -Command "cd tablepro-windows; cargo build --release --manifest-path src-tauri/Cargo.toml"`
-- Full bundle: `powershell.exe -Command "cd tablepro-windows; npm run tauri build"`
+- Release installer build: `powershell.exe -Command "cd tablepro-windows; npm run build:installer"`
+- Release portable build: `powershell.exe -Command "cd tablepro-windows; npm run build:portable"`
+- Full release build: `powershell.exe -Command "cd tablepro-windows; npm run build:release"`
+- Debug build: `powershell.exe -Command "cd tablepro-windows; npm run build:debug"`
+- Rust-only release: `powershell.exe -Command "cd tablepro-windows/src-tauri; cargo build --release"`

@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, X } from 'lucide-react';
 import { bulkUpdate, bulkUpdatePreview } from '../../ipc/commands';
 import type { FilterCondition, ColumnUpdate } from '../../ipc/commands';
-import { useToast } from '../../hooks/useToast';
 import type { ColumnInfo } from '../../types/query';
 
 interface BulkUpdateDialogProps {
@@ -58,7 +57,6 @@ export function BulkUpdateDialog({
   open, sessionId, table, schema, columns, onClose, onSuccess,
 }: BulkUpdateDialogProps) {
   const { t } = useTranslation();
-  const toast = useToast();
 
   const [setEntries, setSetEntries] = useState<SetEntry[]>(() => [makeSetEntry(columns)]);
   const [filters, setFilters] = useState<FilterRow[]>(() => [makeFilter(columns)]);
@@ -128,11 +126,11 @@ export function BulkUpdateDialog({
       const count = await bulkUpdatePreview(sessionId, table, schema, filterConditions);
       setPreviewCount(count);
     } catch (err) {
-      toast.showError(t('grid.bulk.updateFailed'), err);
+      console.error(t('grid.bulk.updateFailed'), err);
     } finally {
       setIsPreviewing(false);
     }
-  }, [filtersValid, sessionId, table, schema, filterConditions, t, toast]);
+  }, [filtersValid, sessionId, table, schema, filterConditions, t]);
 
   const handleUpdate = useCallback(async () => {
     if (!filtersValid || !setEntriesValid) return;
@@ -142,18 +140,15 @@ export function BulkUpdateDialog({
         column: e.column,
         value: e.setNull ? null : e.value,
       }));
-      const result = await bulkUpdate(sessionId, table, schema, updates, filterConditions);
-      toast.success(
-        t('grid.bulk.updateSuccess', { count: result.rowsAffected, ms: result.durationMs }),
-      );
+      await bulkUpdate(sessionId, table, schema, updates, filterConditions);
       onSuccess();
       onClose();
     } catch (err) {
-      toast.showError(t('grid.bulk.updateFailed'), err);
+      console.error(t('grid.bulk.updateFailed'), err);
     } finally {
       setIsUpdating(false);
     }
-  }, [filtersValid, setEntriesValid, setEntries, sessionId, table, schema, filterConditions, t, toast, onSuccess, onClose]);
+  }, [filtersValid, setEntriesValid, setEntries, sessionId, table, schema, filterConditions, t, onSuccess, onClose]);
 
   if (!open) return null;
 

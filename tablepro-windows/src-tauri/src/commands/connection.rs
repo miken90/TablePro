@@ -6,7 +6,6 @@ use uuid::Uuid;
 
 use crate::models::{AppError, ConnectionConfig, ConnectionStatus, DriverCapabilities};
 use crate::drivers::{DatabaseDriver, PluginMetadataInfo};
-use crate::services::health_monitor::HealthMonitor;
 use crate::services::ssh_tunnel::SshTunnelManager;
 use crate::services::ConnectionManager;
 
@@ -61,10 +60,8 @@ pub async fn test_connection(
 /// re-acquired briefly to insert the finished connection.
 #[tauri::command]
 pub async fn connect(
-    app: AppHandle,
     config: ConnectionConfig,
     manager: State<'_, Mutex<ConnectionManager>>,
-    health_monitor: State<'_, Mutex<HealthMonitor>>,
 ) -> Result<String, AppError> {
     // Both SSH and non-SSH paths: grab driver_registry, release lock.
     let registry = {
@@ -134,19 +131,6 @@ pub async fn connect(
 
     tracing::info!(session_id = %session_id, db_type = %config.db_type, ssh = config.ssh_enabled, "Session opened");
 
-    // Start health monitoring (skip SQLite — local file, no network)
-    if config.db_type != "sqlite" {
-        let mut hm = health_monitor.lock().await;
-        hm.start_monitoring(
-            session_id.clone(),
-            Arc::clone(&driver),
-            config.db_type.clone(),
-            config.host.clone(),
-            config.database.clone(),
-            app,
-        );
-    }
-
     Ok(session_id)
 }
 
@@ -155,12 +139,7 @@ pub async fn connect(
 pub async fn disconnect(
     session_id: String,
     manager: State<'_, Mutex<ConnectionManager>>,
-    health_monitor: State<'_, Mutex<HealthMonitor>>,
 ) -> Result<(), AppError> {
-    {
-        let mut hm = health_monitor.lock().await;
-        hm.stop_monitoring(&session_id);
-    }
     let mut mgr = manager.lock().await;
     mgr.disconnect(&session_id)
 }
@@ -181,14 +160,7 @@ pub async fn reconnect_session(
     app: AppHandle,
     session_id: String,
     manager: State<'_, Mutex<ConnectionManager>>,
-    health_monitor: State<'_, Mutex<HealthMonitor>>,
 ) -> Result<(), AppError> {
-    // Stop any existing monitoring
-    {
-        let mut hm = health_monitor.lock().await;
-        hm.stop_monitoring(&session_id);
-    }
-
     // Get config + plugin manager, then release lock
     let (config, registry) = {
         let mgr = manager.lock().await;
@@ -212,19 +184,6 @@ pub async fn reconnect_session(
     {
         let mut mgr = manager.lock().await;
         mgr.insert_connection(session_id.clone(), Arc::clone(&driver), config.clone());
-    }
-
-    // Restart health monitoring (skip SQLite)
-    if config.db_type != "sqlite" {
-        let mut hm = health_monitor.lock().await;
-        hm.start_monitoring(
-            session_id.clone(),
-            Arc::clone(&driver),
-            config.db_type.clone(),
-            config.host.clone(),
-            config.database.clone(),
-            app.clone(),
-        );
     }
 
     let _ = app.emit(

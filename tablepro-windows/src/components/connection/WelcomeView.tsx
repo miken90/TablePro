@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Database as DatabaseIcon, Download } from "lucide-react";
-import { toast } from "sonner";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { ConnectionForm } from "./ConnectionForm";
 import { ConnectionList } from "./connection-list";
@@ -91,9 +90,8 @@ export function WelcomeView() {
     try {
       const link = await buildImportLink(conn.id);
       await navigator.clipboard.writeText(link);
-      toast.success("Import link copied");
     } catch (err) {
-      toast.error(extractErrorMessage(err));
+      console.error("Failed to copy import link:", err);
     }
   }, []);
 
