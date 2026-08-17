@@ -49,6 +49,10 @@ Same trigger as Alert+, but confirming requires typing the affected table's name
 Any write statement (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER`, `CREATE`) is blocked outright — no dialog, no override.
 
 <Note>
+Safe Mode covers the SQL editor, the MongoDB and Redis panels, and the sidebar's **Truncate** / **Delete All Records** / **Drop** operations, which all execute through the same store. Grid cell edits and other structure commands use their own backend commands and are not classified by Safe Mode.
+</Note>
+
+<Note>
 Safe Mode classification is regex-based on the SQL text (destructive: `DELETE|DROP|TRUNCATE|ALTER`; DML: `INSERT|UPDATE|DELETE`). It does not parse the query, so it can't distinguish schema-qualified statements or detect writes hidden inside stored procedure calls.
 </Note>
 
