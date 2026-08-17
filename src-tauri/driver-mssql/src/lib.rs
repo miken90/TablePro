@@ -88,7 +88,14 @@ pub(crate) async fn execute_simple(
         .map_err(|e| DriverError::Query(e.to_string()))?;
 
     if results.is_empty() || results[0].is_empty() {
-        return Ok((vec![], vec![], 0));
+        // A successful INSERT/UPDATE/DELETE returns no result set at all, so
+        // `rows.len()` reported every write as "0 rows affected". tiberius's
+        // `simple_query` stream drops the DONE token counts (only `execute`
+        // surfaces them, and that discards rows), so read the count back from
+        // the connection instead: `@@ROWCOUNT` still holds the count of the
+        // statement that just ran.
+        let affected = read_rowcount(client).await;
+        return Ok((vec![], vec![], affected));
     }
 
     let first = &results[0];
@@ -108,6 +115,28 @@ pub(crate) async fn execute_simple(
     }
     let affected = rows.len() as i64;
     Ok((col_names, rows, affected))
+}
+
+/// Read `@@ROWCOUNT` for the statement that just ran on this connection.
+///
+/// Best effort: if the follow-up query fails, the write itself still
+/// succeeded, so report 0 rather than turning a completed statement into an
+/// error. For a multi-statement batch this is the last statement's count,
+/// which is what `@@ROWCOUNT` means.
+async fn read_rowcount(client: &mut MssqlConn) -> i64 {
+    let Ok(stream) = client.simple_query("SELECT @@ROWCOUNT").await else {
+        return 0;
+    };
+    let Ok(results) = stream.into_results().await else {
+        return 0;
+    };
+    results
+        .first()
+        .and_then(|set| set.first())
+        .and_then(|row| row.cells().next().map(|(_, data)| format_cell(data)))
+        .flatten()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
 }
 
 #[async_trait]

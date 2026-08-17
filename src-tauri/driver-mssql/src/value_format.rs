@@ -66,12 +66,21 @@ pub(crate) fn format_cell(data: &ColumnData<'_>) -> Option<String> {
                 format_time(dt.time())
             )
         }),
+        // Per TDS the datetime2 payload of a `datetimeoffset` is the value in
+        // UTC; the offset is carried alongside. Printing the payload as-is and
+        // appending the offset names a different instant than the server does
+        // (SSMS shows local time), so shift it back into local time first.
         ColumnData::DateTimeOffset(v) => v.map(|dto| {
             let dt = dto.datetime2();
+            let (day_shift, increments) = shift_time_by_minutes(
+                dt.time().increments(),
+                dt.time().scale(),
+                dto.offset(),
+            );
             format!(
                 "{} {} {}",
-                civil_date(i64::from(dt.date().days()) - DAYS_CE_TO_EPOCH),
-                format_time(dt.time()),
+                civil_date(i64::from(dt.date().days()) - DAYS_CE_TO_EPOCH + day_shift),
+                format_time_units(increments, dt.time().scale()),
                 format_offset(dto.offset())
             )
         }),
@@ -104,10 +113,14 @@ fn format_binary(bytes: &[u8]) -> String {
 
 /// `time`/`time(n)`: `increments` counts 10^-`scale` second units past midnight.
 fn format_time(t: tiberius::time::Time) -> String {
-    let scale = t.scale();
+    format_time_units(t.increments(), t.scale())
+}
+
+/// Render `increments` units of 10^-`scale` seconds past midnight as a clock.
+fn format_time_units(increments: u64, scale: u8) -> String {
     let divisor = 10u64.pow(u32::from(scale));
-    let whole_seconds = t.increments() / divisor;
-    let fraction = t.increments() % divisor;
+    let whole_seconds = increments / divisor;
+    let fraction = increments % divisor;
 
     let base = format!(
         "{:02}:{:02}:{:02}",
@@ -120,6 +133,26 @@ fn format_time(t: tiberius::time::Time) -> String {
     } else {
         format!("{base}.{fraction:0width$}", width = usize::from(scale))
     }
+}
+
+/// Add `minutes` to a time-of-day expressed in 10^-`scale` second units.
+///
+/// Returns the day carry (`-1`, `0` or `+1`) and the time within that day, so
+/// a `+05:30` offset applied to `22:00Z` lands on the next civil date.
+fn shift_time_by_minutes(increments: u64, scale: u8, minutes: i16) -> (i64, u64) {
+    let units_per_second = 10i128.pow(u32::from(scale));
+    let units_per_day = 86_400 * units_per_second;
+    let shifted = i128::from(increments) + i128::from(minutes) * 60 * units_per_second;
+
+    let mut day_shift = shifted.div_euclid(units_per_day);
+    let mut within_day = shifted.rem_euclid(units_per_day);
+    // `div_euclid`/`rem_euclid` already normalise negatives; this only guards
+    // the impossible case of a remainder at the day boundary.
+    if within_day == units_per_day {
+        within_day = 0;
+        day_shift += 1;
+    }
+    (day_shift as i64, within_day as u64)
 }
 
 /// Format seconds-past-midnight as a clock, keeping `decimals` fractional digits.
@@ -228,6 +261,40 @@ mod tests {
         assert_eq!(clock_from_seconds(3661.0, 0), "01:01:01");
         assert_eq!(clock_from_seconds(3661.5, 3), "01:01:01.500");
         assert_eq!(clock_from_seconds(86_399.0, 0), "23:59:59");
+    }
+
+    #[test]
+    fn offset_shift_moves_the_time_into_local_time() {
+        // 08:00:00Z at scale 0 with +05:30 is 13:30 the same day.
+        let (day, units) = shift_time_by_minutes(8 * 3600, 0, 330);
+        assert_eq!((day, units), (0, 13 * 3600 + 30 * 60));
+        assert_eq!(format_time_units(units, 0), "13:30:00");
+    }
+
+    #[test]
+    fn offset_shift_rolls_over_the_date_in_both_directions() {
+        // 22:00Z +05:30 → 03:30 the next day.
+        let (day, units) = shift_time_by_minutes(22 * 3600, 0, 330);
+        assert_eq!(day, 1);
+        assert_eq!(format_time_units(units, 0), "03:30:00");
+
+        // 02:00Z -08:00 → 18:00 the previous day.
+        let (day, units) = shift_time_by_minutes(2 * 3600, 0, -480);
+        assert_eq!(day, -1);
+        assert_eq!(format_time_units(units, 0), "18:00:00");
+
+        // A zero offset never moves the instant.
+        assert_eq!(shift_time_by_minutes(12_345, 3, 0), (0, 12_345));
+    }
+
+    #[test]
+    fn offset_shift_keeps_sub_second_precision() {
+        // 08:00:00.1234567 UTC at scale 7, +05:30.
+        let scale = 7u8;
+        let units = (8 * 3600) * 10u64.pow(7) + 1_234_567;
+        let (day, shifted) = shift_time_by_minutes(units, scale, 330);
+        assert_eq!(day, 0);
+        assert_eq!(format_time_units(shifted, scale), "13:30:00.1234567");
     }
 
     #[test]
