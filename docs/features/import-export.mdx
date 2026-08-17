@@ -35,10 +35,15 @@ The toolbar button is hidden for engines that do not support import/export (Mong
 3. Choose a format (CSV, JSON, SQL, or XLSX) and configure options
 4. Click **Export**, choose a save location
 
-Only the in-memory result currently shown is exported.
+The export re-runs the query that produced the grid, on the server, and writes
+what comes back. It runs **once**: the whole result is read into memory and
+then written out. Paging the query in chunks was dropped because no engine here
+guarantees the same row order across executions unless the query itself defines
+one, so consecutive chunks could repeat some rows and skip others.
 
 <Tip>
-Use `LIMIT` in your query to control export size for large tables.
+Use `LIMIT` in your query to control export size for large tables — a very
+large result is held in memory before it reaches the file.
 </Tip>
 
 ### Export Formats

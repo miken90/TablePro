@@ -12,6 +12,17 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- Grid saves no longer rewrite text data. Quoting is decided by the column's declared type, which the frontend now sends with the save payload, instead of by guessing from the value: a `varchar` postcode `007` stays `007` instead of becoming `7`, the literal strings `true`/`false` stay strings in a text column instead of becoming `1`/`0`, and values like `NaN`, `+5` or `inf` no longer break the save with an engine syntax error. When a column's type is unknown the value is quoted, which every supported engine coerces correctly.
+- "Copy as SQL" refuses to build an `UPDATE` when no primary key column is in the selection. It previously emitted `UPDATE "t" SET … ;` with no `WHERE`, which rewrites every row in the table when pasted, while the grid's own save path already declined the same edit.
+- Browsing a SQL Server table with no primary key works again. The pagination fallback ordered by every column, which SQL Server rejects for `text`, `ntext`, `image`, `xml`, `geography`, `geometry` and `hierarchyid` columns (Msg 306). The ordering key is now the primary key, then a unique index, then an identity column, then `%%physloc%%`.
+- SQL Server `datetimeoffset` values render the instant the server shows. The TDS payload is UTC, so printing it with the offset appended named a different point in time — a row SSMS shows as `2024-01-15 13:30:00 +05:30` rendered as `08:00:00 +05:30`.
+- Exports no longer skip or duplicate rows. The query used to be re-run per 10,000-row chunk with `LIMIT`/`OFFSET`, and without an `ORDER BY` in the query itself PostgreSQL and MySQL may return rows in a different order each time. The query now runs exactly once, which also stops a query with side effects from executing once per chunk plus once more for the row count.
+- Exporting an empty result set writes the header row instead of a zero-byte file.
+- SQL Server reports the real number of rows a write affected instead of always 0.
+- A grid save runs as one transaction on engines that support it, so a bulk delete that fails partway no longer leaves the earlier rows deleted.
+- A row count that cannot be determined is reported as unknown rather than as `0`, so the grid no longer claims an empty table while showing a full page of rows.
+- SQLite **Truncate Table** runs `DELETE FROM`, which SQLite optimises into a truncate, instead of emitting a `TRUNCATE` statement SQLite rejects as a syntax error.
+
 - Keyboard shortcuts that only the unmounted `useKeyboardShortcuts` dispatcher implemented now work: `Escape` cancels a running query, `Ctrl+T`/`Ctrl+W`/`Ctrl+Tab`/`Ctrl+Shift+Tab` manage tabs, `Ctrl+I` inserts a row, and `Ctrl+Shift+E` toggles the sidebar. The dead second dispatcher was deleted and all global shortcuts now route through the command registry, so user rebindings apply everywhere.
 - Table browsing now pages correctly on SQL Server: `fetch_rows` emits `OFFSET … ROWS FETCH NEXT … ROWS ONLY` instead of the `LIMIT`/`OFFSET` that engine rejects, deriving a deterministic ordering from the table's primary key when the grid is unsorted.
 - SQL Server driver no longer panics on non-character columns. Every value was read as a string, which aborted the process (release builds use `panic = "abort"`) as soon as a query returned an `int`, `bit`, date, decimal, GUID, or binary column.

@@ -13,7 +13,7 @@ For tables (not views), right-click offers:
 
 | Action | Effect |
 |--------|--------|
-| **Truncate Table** | Removes all rows, keeps table structure |
+| **Truncate Table** | Removes all rows, keeps table structure (SQLite has no `TRUNCATE`, so it runs `DELETE FROM`, which SQLite optimises into the same thing) |
 | **Delete All Records** | Deletes all rows (DML, not DDL) |
 | **Drop Table** | Permanently deletes the table and its data |
 
