@@ -438,7 +438,9 @@ export const useEditorStore = create<EditorState>()(
 
       setActiveTab: (id) => {
         const tab = get().tabs.find((t) => t.id === id);
-        const nextState: Partial<EditorState> = { activeTabId: id };
+        // Set when an unbound tab adopts the active connection, so the binding
+        // lands in the same update as the tab switch.
+        let bindToConnectionId: string | null = null;
         if (tab) {
           if (tab.connectionId) {
             useConnectionStore.getState().selectConnection(tab.connectionId);
@@ -450,17 +452,22 @@ export const useEditorStore = create<EditorState>()(
               });
             }
           } else {
-            // Auto-associate unbound tab with the active connection if connected
+            // Auto-associate unbound tab with the active connection if connected.
+            // This used to assign `tab.connectionId` in place — mutating an
+            // object inside zustand state, which no subscriber sees — and then
+            // schedule the real update on a timer that raced the same tick.
             const activeConnId = useConnectionStore.getState().selectedConnectionId;
             if (activeConnId && tab.type === 'query') {
-              tab.connectionId = activeConnId;
-              setTimeout(() => {
-                get().setTabConnectionId(id, activeConnId);
-              }, 0);
+              bindToConnectionId = activeConnId;
             }
           }
         }
-        set(nextState);
+        set((s) => ({
+          activeTabId: id,
+          tabs: bindToConnectionId
+            ? s.tabs.map((t) => (t.id === id ? { ...t, connectionId: bindToConnectionId! } : t))
+            : s.tabs,
+        }));
       },
 
       updateTabContent: (id, content) => {

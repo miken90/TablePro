@@ -93,16 +93,17 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         return { connectionStatuses: statuses, sessionIds, selectedConnectionId: id };
       });
 
-      // Auto-bind active query tab if it's currently unbound or bound to a disconnected connection
+      // Auto-bind the active query tab only when it has no connection of its
+      // own. A tab that names a connection keeps naming it even while that
+      // connection is down: silently re-pointing it at whatever was connected
+      // next meant a tab whose dev database had dropped could start running
+      // its SQL against production. The stale binding is surfaced instead —
+      // running in that tab reports that its connection is not connected.
       const activeTabId = useEditorStore.getState().activeTabId;
       if (activeTabId) {
         const activeTab = useEditorStore.getState().tabs.find((t: EditorTab) => t.id === activeTabId);
-        if (activeTab && activeTab.type === 'query') {
-          const tabConnId = activeTab.connectionId;
-          const isTabConnConnected = tabConnId ? get().sessionIds.has(tabConnId) : false;
-          if (!tabConnId || !isTabConnConnected) {
-            useEditorStore.getState().setTabConnectionId(activeTabId, id);
-          }
+        if (activeTab && activeTab.type === 'query' && !activeTab.connectionId) {
+          useEditorStore.getState().setTabConnectionId(activeTabId, id);
         }
       }
     } catch (err) {

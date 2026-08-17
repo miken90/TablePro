@@ -95,9 +95,20 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
     return stmt.trim() || queryText;
   };
 
+  /** Session for this tab, or an explanation of why it has none.
+   *
+   *  A tab keeps naming its own connection even after that connection drops,
+   *  so running in it has to say so rather than doing nothing at all. */
+  const requireSession = (): string | null => {
+    const sessionId = resolveActiveQuerySessionId();
+    if (sessionId) return sessionId;
+    useQueryStore.setState({ error: t("toolbar.tabNotConnected") });
+    return null;
+  };
+
   const handleRun = () => {
     if (!queryText.trim()) return;
-    const sessionId = resolveActiveQuerySessionId();
+    const sessionId = requireSession();
     if (!sessionId) return;
     onRunQuery?.();
     const stmt = getCurrentStatement();
@@ -106,13 +117,18 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
 
   // No session lookup here: the store cancels the run that is in flight, on
   // the session that started it, which may not be the active tab's session.
+  // It refuses to guess when several tabs are running and none is focused.
   const handleStop = () => {
-    void cancel();
+    void cancel().then((outcome) => {
+      if (outcome === "ambiguous") {
+        useQueryStore.setState({ error: t("toolbar.cancelAmbiguous") });
+      }
+    });
   };
 
   const handleRunAll = () => {
     if (!queryText.trim()) return;
-    const sessionId = resolveActiveQuerySessionId();
+    const sessionId = requireSession();
     if (!sessionId) return;
     onRunQuery?.();
     // Execute all text as-is (all statements)
