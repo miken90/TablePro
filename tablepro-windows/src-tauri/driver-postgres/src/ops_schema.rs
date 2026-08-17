@@ -4,11 +4,28 @@ use driver_common::{ColumnInfo, DriverError, ForeignKeyInfo, IndexInfo, TableInf
 use tokio_postgres::Client;
 use crate::pg_error::pg_query_error;
 
+/// List tables and views, excluding partition children.
+///
+/// Declarative partition children (`pg_class.relispartition = true`) are
+/// storage for their parent, not browsable tables in their own right: listing
+/// them flat alongside the parent shows the same rows twice and buries real
+/// tables under dozens of `sales_2024_01`-style entries. Every mainstream
+/// client hides them by default, and the sidebar here has no parent/child
+/// nesting to put them under, so excluding them is the simplest correct
+/// behavior. The parent (`relkind = 'p'`) still lists and still browses all
+/// partitions' rows.
+///
+/// The join keeps `information_schema.tables` as the source of truth so the
+/// privilege filtering baked into that view is preserved — `pg_class` alone
+/// would expose relations the connected user cannot read.
 pub async fn fetch_tables(client: &Client) -> Result<Vec<TableInfo>, DriverError> {
-    let sql = "SELECT table_name, table_type, table_schema \
-               FROM information_schema.tables \
-               WHERE table_schema NOT IN ('pg_catalog','information_schema') \
-               ORDER BY table_schema, table_name";
+    let sql = "SELECT t.table_name, t.table_type, t.table_schema \
+               FROM information_schema.tables t \
+               JOIN pg_class c ON c.relname = t.table_name \
+               JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.table_schema \
+               WHERE t.table_schema NOT IN ('pg_catalog','information_schema') \
+                 AND NOT c.relispartition \
+               ORDER BY t.table_schema, t.table_name";
     let rows = client
         .query(sql, &[])
         .await
