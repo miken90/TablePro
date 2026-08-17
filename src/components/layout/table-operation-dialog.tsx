@@ -11,24 +11,24 @@ interface TableOperationDialogProps {
   onCancel: () => void;
 }
 
+// All three operations are unrecoverable, so all three ask for the table name
+// to be typed. Enter alone cannot trigger any of them — `handleConfirm`
+// refuses until the typed name matches.
 const OPERATION_CONFIG = {
   truncate: {
     title: "Truncate Table",
     description: "This will remove all rows from the table. This action cannot be undone.",
     buttonLabel: "Truncate",
-    requireConfirmName: false,
   },
   "delete-all": {
     title: "Delete All Records",
     description: "This will delete all records from the table. This action cannot be undone.",
     buttonLabel: "Delete All",
-    requireConfirmName: false,
   },
   drop: {
     title: "Drop Table",
     description: "This will permanently delete the table and all its data. This action cannot be undone.",
     buttonLabel: "Drop Table",
-    requireConfirmName: true,
   },
 } as const;
 
@@ -53,9 +53,9 @@ export function TableOperationDialog({
   }, [open]);
 
   const handleConfirm = useCallback(() => {
-    if (config.requireConfirmName && confirmText !== tableName) return;
+    if (confirmText !== tableName) return;
     onConfirm();
-  }, [config.requireConfirmName, confirmText, tableName, onConfirm]);
+  }, [confirmText, tableName, onConfirm]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -67,7 +67,7 @@ export function TableOperationDialog({
 
   if (!open) return null;
 
-  const canConfirm = !config.requireConfirmName || confirmText === tableName;
+  const canConfirm = confirmText === tableName;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
@@ -92,21 +92,19 @@ export function TableOperationDialog({
           </span>
         </div>
 
-        {config.requireConfirmName && (
-          <div className="mb-4">
-            <label className="mb-1 block text-xs text-text-muted">
-              Type <strong>{tableName}</strong> to confirm:
-            </label>
-            <input
-              ref={inputRef}
-              type="text"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              placeholder={tableName}
-              className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
-            />
-          </div>
-        )}
+        <div className="mb-4">
+          <label className="mb-1 block text-xs text-text-muted">
+            Type <strong>{tableName}</strong> to confirm:
+          </label>
+          <input
+            ref={inputRef}
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder={tableName}
+            className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
+          />
+        </div>
 
         <div className="flex justify-end gap-2">
           <button

@@ -138,9 +138,38 @@ pub fn generate_create_table(
     ))
 }
 
+/// Build a destructive whole-table statement (`truncate`, `delete-all`,
+/// `drop`) with engine-correct identifier quoting. The sidebar builds these
+/// through this function so MariaDB, embedded quote characters, and schema
+/// qualification follow the same rules as every other generated statement.
+pub fn generate_table_operation(
+    operation: &str,
+    table_name: &str,
+    schema: Option<&str>,
+    driver_type: &str,
+) -> Result<String, AppError> {
+    validate_ident(table_name, "Table name")?;
+
+    let driver = normalize_driver_type(driver_type);
+    let quoted_table = quote_identifier(table_name, &driver);
+    let qualified = match schema.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(schema_name) => format!("{}.{}", quote_identifier(schema_name, &driver), quoted_table),
+        None => quoted_table,
+    };
+
+    match operation {
+        "truncate" => Ok(format!("TRUNCATE TABLE {qualified}")),
+        "delete-all" => Ok(format!("DELETE FROM {qualified}")),
+        "drop" => Ok(format!("DROP TABLE {qualified}")),
+        other => Err(AppError::DatabaseError(format!(
+            "Unsupported table operation '{other}'"
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{generate_create_table, ColumnDefinition};
+    use super::{generate_create_table, generate_table_operation, ColumnDefinition};
 
     fn col(name: &str, data_type: &str) -> ColumnDefinition {
         ColumnDefinition {
@@ -217,5 +246,51 @@ mod tests {
     fn rejects_empty_table_name() {
         let err = generate_create_table("   ", None, &[col("id", "INT")], "postgres").unwrap_err();
         assert!(err.to_string().contains("Table name cannot be empty"));
+    }
+
+    #[test]
+    fn table_operation_quotes_mariadb_with_backticks() {
+        assert_eq!(
+            generate_table_operation("truncate", "orders", Some("shop"), "mariadb").unwrap(),
+            "TRUNCATE TABLE `shop`.`orders`"
+        );
+        assert_eq!(
+            generate_table_operation("drop", "orders", None, "mariadb").unwrap(),
+            "DROP TABLE `orders`"
+        );
+    }
+
+    #[test]
+    fn table_operation_covers_each_engine_and_verb() {
+        assert_eq!(
+            generate_table_operation("delete-all", "orders", Some("public"), "postgres").unwrap(),
+            "DELETE FROM \"public\".\"orders\""
+        );
+        assert_eq!(
+            generate_table_operation("drop", "orders", Some("dbo"), "sqlserver").unwrap(),
+            "DROP TABLE [dbo].[orders]"
+        );
+        assert_eq!(
+            generate_table_operation("truncate", "orders", None, "mysql").unwrap(),
+            "TRUNCATE TABLE `orders`"
+        );
+    }
+
+    #[test]
+    fn table_operation_escapes_embedded_quote_characters() {
+        assert_eq!(
+            generate_table_operation("drop", "we`ird", None, "mariadb").unwrap(),
+            "DROP TABLE `we``ird`"
+        );
+        assert_eq!(
+            generate_table_operation("drop", "we\"ird", None, "postgres").unwrap(),
+            "DROP TABLE \"we\"\"ird\""
+        );
+    }
+
+    #[test]
+    fn table_operation_rejects_unknown_verb_and_empty_name() {
+        assert!(generate_table_operation("vacuum", "orders", None, "postgres").is_err());
+        assert!(generate_table_operation("drop", "  ", None, "postgres").is_err());
     }
 }

@@ -3,7 +3,9 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::models::AppError;
-use crate::services::ddl_generator::{generate_create_table, ColumnDefinition};
+use crate::services::ddl_generator::{
+    generate_create_table, generate_table_operation, ColumnDefinition,
+};
 use crate::services::schema_alter::{generate_alter_sql, AlterColumnChange};
 use crate::services::ConnectionManager;
 
@@ -75,6 +77,47 @@ pub async fn create_table(
     driver.execute(&ddl).await?;
 
     Ok(CreateTableResult { ddl })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableOperationPayload {
+    /// `truncate` | `delete-all` | `drop`
+    pub operation: String,
+    pub table: String,
+    pub schema: Option<String>,
+}
+
+/// Return the statement for a destructive whole-table operation without
+/// running it. The caller executes it through the normal query path so the
+/// statement is subject to Safe Mode like any other write.
+#[tauri::command]
+pub async fn generate_table_operation_sql(
+    session_id: String,
+    payload: TableOperationPayload,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<String, AppError> {
+    let driver_type = {
+        let mgr = manager.lock().await;
+        mgr.get_config(&session_id)?.db_type.clone()
+    };
+
+    let sql = generate_table_operation(
+        &payload.operation,
+        &payload.table,
+        payload.schema.as_deref(),
+        &driver_type,
+    )?;
+
+    tracing::info!(
+        session_id = %session_id,
+        table = %payload.table,
+        operation = %payload.operation,
+        db_type = %driver_type,
+        "generate_table_operation_sql"
+    );
+
+    Ok(sql)
 }
 
 #[derive(Debug, Clone, Deserialize)]

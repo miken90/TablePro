@@ -44,7 +44,9 @@ pub use settings::{get_settings, log_renderer_error, set_settings};
 pub use storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
-pub use structure::{apply_alter, create_table, generate_alter_sql_command};
+pub use structure::{
+    apply_alter, create_table, generate_alter_sql_command, generate_table_operation_sql,
+};
 pub use tab_state::{get_tab_state, mark_localstorage_migrated, set_tab_state};
 pub use ai::{ai_cancel_chat, ai_chat_stream, ai_list_models, ai_test_provider};
 pub use bulk_ops::{bulk_insert, bulk_update, bulk_update_preview};

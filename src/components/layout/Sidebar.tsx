@@ -5,6 +5,8 @@ import { useSchemaStore } from "../../stores/schemaStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useEditorStore } from "../../stores/editorStore";
+import { useQueryStore } from "../../stores/queryStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { SidebarTableNode } from "./sidebar-table-node";
 import { SidebarObjectGroup } from "./sidebar-object-group";
 import { CreateTableWizard } from "../structure/create-table-wizard";
@@ -27,6 +29,20 @@ interface SidebarProps {
 
 // Tags in display priority order
 const ORDERED_TAGS = ["production", "staging", "development", "testing", "local"] as const;
+
+/** Refresh the object tree once a statement parked behind the Safe Mode
+ *  confirmation dialog has run (or been abandoned). Without this a table
+ *  dropped after confirming stays visible until a manual refresh. */
+function refreshSchemaAfterSafeCheck(
+  sessionId: string,
+  refresh: (sessionId: string) => void,
+): void {
+  const unsubscribe = useQueryStore.subscribe((state) => {
+    if (state.pendingSafeCheck || state.isExecuting) return;
+    unsubscribe();
+    refresh(sessionId);
+  });
+}
 
 export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: SidebarProps) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
@@ -67,6 +83,8 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     tableName: string;
     schema?: string | null;
   } | null>(null);
+
+  const safeModeLevel = useSettingsStore((s) => s.settings.safeModeLevel);
 
   const { t } = useTranslation();
   const [dbContextMenu, setDbContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -545,28 +563,33 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
             const { operation, tableName, schema } = tableOpDialog;
             setTableOpDialog(null);
 
-            // Build qualified table name with proper quoting
-            const useBacktick = dbType === 'mysql';
-            const q = useBacktick ? '`' : '"';
-            const qualified = schema
-              ? `${q}${schema}${q}.${q}${tableName}${q}`
-              : `${q}${tableName}${q}`;
-
-            let sql: string;
-            switch (operation) {
-              case 'truncate':
-                sql = `TRUNCATE TABLE ${qualified}`;
-                break;
-              case 'delete-all':
-                sql = `DELETE FROM ${qualified}`;
-                break;
-              case 'drop':
-                sql = `DROP TABLE ${qualified}`;
-                break;
-            }
-
             try {
-              await commands.executeQuery(sessionId, sql);
+              // Quoting comes from the backend (`quote_identifier`), so
+              // MariaDB and embedded quote characters are handled the same
+              // way as in every other generated statement.
+              const sql = await commands.generateTableOperationSql(sessionId, {
+                operation,
+                table: tableName,
+                schema: schema ?? null,
+              });
+
+              // Executed through the query store, not `executeQuery`: that is
+              // the single place Safe Mode is enforced.
+              await useQueryStore
+                .getState()
+                .execute(sessionId, sql, undefined, safeModeLevel);
+
+              const { error, pendingSafeCheck } = useQueryStore.getState();
+              if (error) {
+                window.alert(`Operation failed: ${error}`);
+                return;
+              }
+              if (pendingSafeCheck) {
+                // Safe Mode is asking the user to confirm; refresh once the
+                // statement it is holding has actually finished.
+                refreshSchemaAfterSafeCheck(sessionId, fetchSchema);
+                return;
+              }
               // Refresh schema to reflect changes (e.g., dropped table)
               void fetchSchema(sessionId);
             } catch (err) {

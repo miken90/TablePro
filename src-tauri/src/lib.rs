@@ -35,7 +35,9 @@ use commands::query_streaming::execute_query_streaming;
 use commands::storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,
 };
-use commands::structure::{apply_alter, create_table, generate_alter_sql_command};
+use commands::structure::{
+    apply_alter, create_table, generate_alter_sql_command, generate_table_operation_sql,
+};
 use commands::tab_state::{get_tab_state, mark_localstorage_migrated, set_tab_state};
 use commands::ai::{
     ai_build_context, ai_cancel_chat, ai_chat_stream, ai_clear_all_conversations,
@@ -227,6 +229,7 @@ pub fn run() {
             fetch_approximate_count,
             create_table,
             generate_alter_sql_command,
+            generate_table_operation_sql,
             apply_alter,
             // settings
             get_settings,

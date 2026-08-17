@@ -292,6 +292,23 @@ export const applyAlter = (
   payload: GenerateAlterSqlPayload,
 ): Promise<void> =>
   invoke('apply_alter', { sessionId, payload });
+
+export type TableOperationKind = 'truncate' | 'delete-all' | 'drop';
+
+export interface TableOperationPayload {
+  operation: TableOperationKind;
+  table: string;
+  schema: string | null | undefined;
+}
+
+/** Build (but do not run) a destructive whole-table statement. The backend
+ *  owns identifier quoting; the caller runs the statement through the query
+ *  store so Safe Mode applies. */
+export const generateTableOperationSql = (
+  sessionId: string,
+  payload: TableOperationPayload,
+): Promise<string> =>
+  invoke('generate_table_operation_sql', { sessionId, payload });
 export interface ExportOptions {
   delimiter?: string;
   includeHeader?: boolean;
