@@ -1,21 +1,38 @@
 ---
 title: Import & Export
-description: Export query/table results to CSV, JSON, or SQL. Paste tabular data from the clipboard into the grid.
+description: Import .sql files, export query/table results to CSV, JSON, SQL, or XLSX, and paste tabular data from the clipboard into the grid.
 ---
 
 # Import & Export
 
-Export query or table results to CSV, JSON, or SQL, and paste tabular data from the clipboard into the grid.
+Import `.sql`/`.sql.gz` files, export query or table results to CSV, JSON, SQL, or XLSX, and paste tabular data from the clipboard into the grid.
+
+## Import a SQL File
+
+Requires an active connection. Open the import dialog any of three ways:
+
+- the **Import SQL** button (upload icon) on the main toolbar
+- `Ctrl+Shift+M`
+- the command palette (`Ctrl+Shift+P`) → **Import SQL**
+
+Then:
+
+1. Choose a `.sql` or `.sql.gz` file
+2. Review the preview — file size, statement count, and the first statements found in the file
+3. Set options: **Wrap in transaction (rollback on error)** (default on) and **Disable foreign key checks** (default off)
+4. Run the import; progress is reported as statements execute
+
+The schema tree refreshes when the import finishes, so tables created by the script appear without reconnecting.
 
 <Note>
-An `.sql`/`.sql.gz` file importer (`import_preview` / `import_sql_file`) and an XLSX export writer exist in the backend, but neither is wired to any menu, button, or shortcut in the current build. `Ctrl+Shift+M` is reserved for "Import SQL" in the shortcut registry but has no handler attached yet. This page only documents what's actually reachable from the UI.
+The toolbar button is hidden for engines that do not support import/export (MongoDB and Redis), which is the same capability check the export command enforces.
 </Note>
 
 ## Export Data
 
 1. Run a query or open a table (this produces a result in the grid)
 2. Click **Export** on the results toolbar
-3. Choose a format (CSV, JSON, or SQL) and configure options
+3. Choose a format (CSV, JSON, SQL, or XLSX) and configure options
 4. Click **Export**, choose a save location
 
 Only the in-memory result currently shown is exported.
@@ -50,9 +67,16 @@ Use `LIMIT` in your query to control export size for large tables.
 
     Generates `INSERT INTO "table" (...) VALUES (...);` statements; string values are quoted and single quotes are escaped by doubling.
   </Tab>
+  <Tab title="XLSX">
+    An Excel workbook with a single sheet: one header row plus the result rows.
+
+    Values that parse as a number are written as numeric cells; everything else is written as text. NULL is written as an empty string. Output is capped at Excel's sheet limit of 1,048,575 data rows, and cell text longer than 32,767 characters is truncated.
+
+    XLSX has no text preview or **Copy** action in the dialog — it is a binary file, not text.
+  </Tab>
 </Tabs>
 
-A live preview of the first 5 rows in the chosen format is shown in the export dialog. There's also a **Copy** action to copy the preview text without saving a file.
+For the text formats (CSV, JSON, SQL) the dialog shows a live preview of the first 5 rows and offers a **Copy** action to copy the full export text without saving a file.
 
 ## Clipboard Paste (CSV/TSV)
 
