@@ -15,9 +15,10 @@ Do not modify application source code in docs tasks.
 
 Keep documentation synchronized with current repository behavior, especially:
 
-- Windows runtime in `tablepro-windows/`
-- macOS `TablePro/` only when explicitly documenting upstream/reference behavior
-- Plugin ABI and discovery flow
+- Windows runtime in `tablepro-windows/` (the only product — this is a Windows-only,
+  personal, non-profit fork; upstream macOS code is gone and not a reference target)
+- Driver registry and the 6 compiled-in drivers (Postgres, MySQL, MSSQL, SQLite,
+  MongoDB, Redis)
 - Session-based IPC command contracts
 - Actual storage and security behavior
 
@@ -32,10 +33,11 @@ Keep documentation synchronized with current repository behavior, especially:
 ## Source-of-truth files for Windows runtime docs
 
 - `tablepro-windows/src-tauri/src/lib.rs`
-- `tablepro-windows/src-tauri/src/plugin/manager.rs`
-- `tablepro-windows/src-tauri/src/plugin/adapter.rs`
+- `tablepro-windows/src-tauri/src/drivers/registry.rs`
+- `tablepro-windows/src-tauri/src/drivers/driver_trait.rs`
 - `tablepro-windows/src-tauri/src/commands/query.rs`
 - `tablepro-windows/src-tauri/src/services/connection_manager.rs`
+- `tablepro-windows/src-tauri/src/services/credential_manager.rs`
 - `tablepro-windows/src-tauri/src/storage/connection_store.rs`
 - `tablepro-windows/src-tauri/src/storage/history_store.rs`
 - `tablepro-windows/src/stores/*.ts`
@@ -43,7 +45,10 @@ Keep documentation synchronized with current repository behavior, especially:
 ## Accuracy rules
 
 - Do not document APIs/features you cannot verify in code
-- Do not claim DPAPI at-rest connection password protection unless implemented in connection storage path
+- Credential storage: saved connection passwords are DPAPI-encrypted at rest by
+  default (`credential_store.rs`); mirroring into Windows Credential Manager is a
+  separate opt-in (`rememberCredentialsInOsKeychain`) — verify both layers against
+  `credential_store.rs` / `credential_manager.rs` / `connection_store.rs` before writing
 - Use `session_id` terminology for runtime command flow (not deprecated connection-id patterns)
 - Confirm links exist before adding them
 

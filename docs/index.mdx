@@ -1,97 +1,68 @@
 ---
 title: Introduction
-description: Native macOS client for every database - MySQL, PostgreSQL, SQLite, MongoDB, Redis, and 15+ more
+description: A Windows-only Tauri desktop client for PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, MSSQL, and Redis
 ---
 
 # TablePro
 
-Native macOS client for every database. Built on SwiftUI and AppKit. Ships under 50 MB, launches in under a second.
-
-{/* Screenshot: Main application window showing the SQL editor, sidebar with connections, and data grid */}
-<Frame caption="TablePro - Native macOS Database Client">
-  <img
-    className="block dark:hidden"
-    src="/images/hero.png"
-    alt="TablePro main interface"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/hero-dark.png"
-    alt="TablePro main interface"
-  />
-</Frame>
+A personal, non-profit, Windows-only database client. Built on Tauri v2 (Rust + React/TypeScript).
 
 ## Why TablePro?
 
 <CardGroup cols={2}>
-  <Card title="Native Performance" icon="bolt">
-    Swift & Apple frameworks. No Electron. Pure macOS responsiveness.
+  <Card title="Native Windows App" icon="bolt">
+    Tauri desktop shell — small footprint, no browser chrome.
   </Card>
-  <Card title="Multiple Databases" icon="database">
-    18+ databases: MySQL, PostgreSQL, SQLite, MongoDB, Redis, Oracle, and more.
+  <Card title="6 Databases" icon="database">
+    PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis — compiled-in Rust drivers, no plugin downloads.
   </Card>
   <Card title="Smart Autocomplete" icon="wand-magic-sparkles">
     Context-aware autocomplete with schema and syntax awareness.
   </Card>
   <Card title="Secure Connections" icon="lock">
-    SSH tunnels with password and key authentication.
+    SSH tunnels with password and key authentication. DPAPI-encrypted saved passwords.
   </Card>
   <Card title="AI SQL Assistant" icon="sparkles">
-    Inline suggestions, chat, and context-menu actions. Claude, OpenAI, Ollama, more.
+    Inline suggestions, chat, and context-menu actions. Claude, OpenAI, Ollama, and more.
   </Card>
 </CardGroup>
 
 ## Key Features
 
-**SQL Editor**: Syntax highlighting, autocomplete, line numbers.
-**Data Grid**: Spreadsheet-like interface with inline editing, sorting, filtering.
+**SQL Editor**: Syntax highlighting, autocomplete, Vim mode.
+**Data Grid**: Spreadsheet-like interface with inline editing, sorting, filtering, multi-row selection.
 **Table Structure**: Inspect and modify columns, indexes, foreign keys.
-**Import & Export**: CSV, JSON, SQL, and multiple export formats.
+**Import & Export**: CSV, JSON, SQL, and XLSX.
 **Query History**: Full-text search across query history.
-**AI Assistant**: Explain, optimize, or write SQL with Claude, OpenAI, or Ollama.
+**AI Assistant**: Explain, optimize, or write SQL with Claude, OpenAI, Ollama, and other OpenAI-compatible endpoints.
 
 ## Supported Databases
 
-| Database | Status | Default Port |
-|----------|--------|--------------|
-| MySQL | Fully Supported | 3306 |
-| MariaDB | Fully Supported | 3306 |
-| PostgreSQL | Fully Supported | 5432 |
-| SQLite | Fully Supported | N/A (file-based) |
-| Amazon Redshift | Fully Supported | 5439 |
-| MongoDB | Fully Supported | 27017 |
-| Redis | Fully Supported | 6379 |
-| Microsoft SQL Server | Fully Supported | 1433 |
-| ClickHouse | Fully Supported | 8123 |
-| Oracle Database | Fully Supported | 1521 |
-| DuckDB | Fully Supported | N/A (file-based) |
-| Cassandra / ScyllaDB | Fully Supported | 9042 |
-| Etcd | Fully Supported | 2379 |
-| Cloudflare D1 | Fully Supported | N/A (API-based) |
-| DynamoDB | Fully Supported | N/A (API-based) |
-| BigQuery | Fully Supported | N/A (API-based) |
+| Database | Daily-driver | Default Port |
+|----------|:---:|--------------|
+| PostgreSQL | ✓ | 5432 |
+| MySQL / MariaDB | ✓ | 3306 |
+| SQLite | ✓ | N/A (file-based) |
+| Microsoft SQL Server | | 1433 |
+| MongoDB | | 27017 |
+| Redis | | 6379 |
 
 ## System Requirements
 
-- **macOS**: 14.0 (Sonoma) or later
-- **Architecture**: Apple Silicon (arm64) or Intel (x86_64)
-- **Storage**: ~50 MB for the application (~200 MB recommended free disk space including data)
+- **Windows 10/11** (x64)
+- **Storage**: MSI/NSIS installer under ~15 MB
 
 ## Getting Started
 
 <CardGroup cols={2}>
   <Card title="Quick Start" icon="rocket" href="/quickstart">
-    Download and connect in 5 minutes
+    Download and connect in a few minutes
   </Card>
   <Card title="Installation" icon="download" href="/installation">
     System requirements and setup
   </Card>
 </CardGroup>
 
-## Open Source
+## License
 
-TablePro is free, open-source software licensed under the [GNU Affero General Public License v3.0 (AGPLv3)](https://www.gnu.org/licenses/agpl-3.0.html). The full source code is on GitHub.
-
-<Card title="GitHub Repository" icon="github" href="https://github.com/TableProApp/TablePro">
-  View source code, report issues, and contribute to TablePro.
-</Card>
+TablePro is licensed under the [GNU Affero General Public License v3.0 (AGPLv3)](https://www.gnu.org/licenses/agpl-3.0.html).

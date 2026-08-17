@@ -7,20 +7,6 @@ description: Every executed query is saved to a local SQLite database with FTS5 
 
 Every query you execute is automatically saved to a local SQLite database. Search with full-text search, filter by connection or time range, and re-run past queries. History persists across sessions.
 
-{/* Screenshot: Query history panel showing list of past queries */}
-<Frame caption="Query history panel">
-  <img
-    className="block dark:hidden"
-    src="/images/query-history.png"
-    alt="Query History"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/query-history-dark.png"
-    alt="Query History"
-  />
-</Frame>
-
 ## Accessing History
 
 ### History Panel
@@ -69,20 +55,6 @@ Filter queries by:
 - **Status**: Show only successful or failed queries
 - **Time range**: Today, this week, this month, all time
 
-{/* Screenshot: History panel with filter controls */}
-<Frame caption="History panel with filter controls">
-  <img
-    className="block dark:hidden"
-    src="/images/history-filters.png"
-    alt="History panel with filter controls"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/history-filters-dark.png"
-    alt="History panel with filter controls"
-  />
-</Frame>
-
 ## Searching History
 
 ### Full-Text Search
@@ -92,20 +64,6 @@ Type in the search box to find queries containing specific text:
 ```
 SELECT users  -- Find all queries containing "SELECT" and "users"
 ```
-
-{/* Screenshot: Search results in history */}
-<Frame caption="Searching query history">
-  <img
-    className="block dark:hidden"
-    src="/images/history-search.png"
-    alt="History search"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/history-search-dark.png"
-    alt="History search"
-  />
-</Frame>
 
 ### Search Tips
 
@@ -131,7 +89,7 @@ To re-run a query from history:
 1. Find the query in the history list
 2. Double-click the query
 3. It loads into the SQL editor
-4. Press `Cmd+Enter` to execute
+4. Press `Ctrl+Enter` to execute
 
 Or right-click and select **Run Query**.
 
@@ -143,20 +101,6 @@ To copy a query:
 2. Click the **Copy** (clipboard) button
 
 The full query text is copied to clipboard. A check icon appears briefly to confirm the copy.
-
-{/* Screenshot: Query history context menu */}
-<Frame caption="Query history context menu">
-  <img
-    className="block dark:hidden"
-    src="/images/history-context-menu.png"
-    alt="Query history context menu"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/history-context-menu-dark.png"
-    alt="Query history context menu"
-  />
-</Frame>
 
 ### Editing Before Running
 
@@ -224,20 +168,6 @@ To clear history for a specific connection:
 
 For long queries, click to expand and see the full text:
 
-{/* Screenshot: Expanded query detail view */}
-<Frame caption="Full query view">
-  <img
-    className="block dark:hidden"
-    src="/images/history-detail.png"
-    alt="Query detail"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/history-detail-dark.png"
-    alt="Query detail"
-  />
-</Frame>
-
 ### Execution Details
 
 Each history entry includes:
@@ -263,20 +193,6 @@ This is useful for debugging:
 2. Read the error message
 3. Load into editor
 4. Fix and re-run
-
-{/* Screenshot: Failed query entry with error message */}
-<Frame caption="Failed query entry with error message">
-  <img
-    className="block dark:hidden"
-    src="/images/history-failed-query.png"
-    alt="Failed query entry with error message"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/history-failed-query-dark.png"
-    alt="Failed query entry with error message"
-  />
-</Frame>
 
 ## Best Practices
 
@@ -319,10 +235,10 @@ For queries you want to keep permanently:
 
 | Action | Shortcut |
 |--------|----------|
-| Open history | `Cmd+Y` |
-| Search history | `Cmd+F` (when history is open) |
+| Open history | `Ctrl+Y` |
+| Search history | `Ctrl+F` (when history is open) |
 | Load selected query | `Enter` or double-click |
-| Copy query | `Cmd+C` |
+| Copy query | `Ctrl+C` |
 
 ## Troubleshooting
 

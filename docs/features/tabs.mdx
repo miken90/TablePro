@@ -7,20 +7,6 @@ description: Each tab keeps its own SQL, results, pagination, sorting, and filte
 
 Every tab is an independent workspace with its own SQL content, results, pagination, sorting, and filter state. Open as many as you need. They persist across app restarts.
 
-{/* Screenshot: Tab bar showing multiple open tabs */}
-<Frame caption="Tab bar with multiple query and table tabs">
-  <img
-    className="block dark:hidden"
-    src="/images/tabs.png"
-    alt="Query Tabs"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/tabs-dark.png"
-    alt="Query Tabs"
-  />
-</Frame>
-
 ## Tab Types
 
 | Type | Icon | Purpose |
@@ -28,7 +14,7 @@ Every tab is an independent workspace with its own SQL content, results, paginat
 | **Query Tab** | Document icon | Write and execute custom SQL |
 | **Table Tab** | Table icon (blue) | Browse table data with pagination and filtering |
 
-**Query tabs** start with an empty editor. Type SQL and press `Cmd+Enter` to execute.
+**Query tabs** start with an empty editor. Type SQL and press `Ctrl+Enter` to execute.
 
 **Table tabs** open when you click a table in the sidebar. They provide server-side pagination, inline editing with change tracking, structure view, and filter support.
 
@@ -57,27 +43,13 @@ Preview tabs are not saved across restarts.
 Disable preview tabs in **Settings** > **Tabs** if you prefer every click to open a permanent tab.
 </Tip>
 
-{/* Screenshot: Different tab types: Query and Table */}
-<Frame caption="Different tab types: Query and Table">
-  <img
-    className="block dark:hidden"
-    src="/images/tab-types.png"
-    alt="Different tab types: Query and Table"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/tab-types-dark.png"
-    alt="Different tab types: Query and Table"
-  />
-</Frame>
-
 ## Managing Tabs
 
 ### Creating Tabs
 
 | Action | How |
 |--------|-----|
-| New query tab | `Cmd+T` or click **+** in the tab bar |
+| New query tab | `Ctrl+T` or click **+** in the tab bar |
 | New query tab (toolbar) | Click the **SQL** button |
 | New table tab | Click a table name in the sidebar |
 
@@ -85,7 +57,7 @@ Disable preview tabs in **Settings** > **Tabs** if you prefer every click to ope
 
 | Action | How |
 |--------|-----|
-| Close current tab | `Cmd+W` |
+| Close current tab | `Ctrl+W` |
 | Close specific tab | Hover and click **x** |
 | Close other tabs | Right-click > **Close Other Tabs** |
 
@@ -95,9 +67,9 @@ Closing a tab with unsaved changes discards those changes. TablePro warns you be
 
 ### Switching Tabs
 
-- `Cmd+1` through `Cmd+9` to jump by position
-- `Cmd+Shift+[` / `Cmd+Option+Left` for previous tab
-- `Cmd+Shift+]` / `Cmd+Option+Right` for next tab
+- `Ctrl+1` through `Ctrl+9` to jump by position
+- `Ctrl+Shift+[` / `Ctrl+Alt+Left` for previous tab
+- `Ctrl+Shift+]` / `Ctrl+Alt+Right` for next tab
 
 Each tab preserves its full state when you switch away: SQL content, cursor position, results, scroll position, selected rows, sort/filter state, and pending changes.
 
@@ -105,44 +77,16 @@ Each tab preserves its full state when you switch away: SQL content, cursor posi
 
 Drag any tab to a new position. The tab bar scrolls horizontally when tabs overflow.
 
-{/* Screenshot: Drag and drop tab reordering */}
-<Frame caption="Drag and drop tab reordering">
-  <img
-    className="block dark:hidden"
-    src="/images/tab-reorder.png"
-    alt="Drag and drop tab reordering"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/tab-reorder-dark.png"
-    alt="Drag and drop tab reordering"
-  />
-</Frame>
-
 ### Pinning Tabs
 
 Right-click a tab > **Pin Tab**. Pinned tabs:
 
-- Cannot be closed via close button, `Cmd+W`, or context menu
+- Cannot be closed via close button, `Ctrl+W`, or context menu
 - Are not closed by **Close Other Tabs**
 - Are not replaced by table tab reuse
 - Persist across sessions
 
 Unpin via right-click > **Unpin Tab**.
-
-{/* Screenshot: Pinned tab with pin indicator */}
-<Frame caption="Pinned tab with pin indicator">
-  <img
-    className="block dark:hidden"
-    src="/images/pinned-tab.png"
-    alt="Pinned tab with pin indicator"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/pinned-tab-dark.png"
-    alt="Pinned tab with pin indicator"
-  />
-</Frame>
 
 ### Duplicating Tabs
 
@@ -183,20 +127,6 @@ Table tabs use SQL `LIMIT` and `OFFSET`. Only the current page loads from the da
 Server-side pagination is memory efficient. Only the visible page is kept in memory, even for tables with millions of rows.
 </Tip>
 
-{/* Screenshot: Server-side pagination in a table tab */}
-<Frame caption="Server-side pagination in a table tab">
-  <img
-    className="block dark:hidden"
-    src="/images/tab-pagination.png"
-    alt="Server-side pagination in a table tab"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/tab-pagination-dark.png"
-    alt="Server-side pagination in a table tab"
-  />
-</Frame>
-
 ### Query Tabs (Client-Side)
 
 Query tabs execute the full query and receive all results. For large result sets, TablePro paginates client-side without re-querying. Sorting is done locally on cached results.
@@ -213,17 +143,3 @@ Right-click any tab:
 | **Pin Tab** / **Unpin Tab** | Toggle pin state |
 | **Close Tab** | Close this tab |
 | **Close Other Tabs** | Close all except this one (respects pins) |
-
-{/* Screenshot: Tab context menu */}
-<Frame caption="Tab context menu">
-  <img
-    className="block dark:hidden"
-    src="/images/tab-context-menu.png"
-    alt="Tab context menu"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/tab-context-menu-dark.png"
-    alt="Tab context menu"
-  />
-</Frame>

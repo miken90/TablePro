@@ -7,37 +7,9 @@ description: Browse column definitions, indexes, foreign keys, and DDL with a vi
 
 Browse columns, indexes, foreign keys, and DDL for any table. Edit structure visually or with SQL.
 
-{/* Screenshot: Table structure view showing columns tab */}
-<Frame caption="Table structure view">
-  <img
-    className="block dark:hidden"
-    src="/images/table-structure.png"
-    alt="Table Structure"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/table-structure-dark.png"
-    alt="Table Structure"
-  />
-</Frame>
-
 Click a table in the sidebar, then click the **Structure** tab. Or right-click a table > **Show Structure**.
 
 ## Columns Tab
-
-{/* Screenshot: Columns tab with column list */}
-<Frame caption="Column definitions">
-  <img
-    className="block dark:hidden"
-    src="/images/structure-columns.png"
-    alt="Columns tab"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/structure-columns-dark.png"
-    alt="Columns tab"
-  />
-</Frame>
 
 | Property | Description |
 |----------|-------------|
@@ -50,20 +22,6 @@ Click a table in the sidebar, then click the **Structure** tab. Or right-click a
 
 ## Indexes Tab
 
-{/* Screenshot: Indexes tab showing index list */}
-<Frame caption="Table indexes">
-  <img
-    className="block dark:hidden"
-    src="/images/structure-indexes.png"
-    alt="Indexes tab"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/structure-indexes-dark.png"
-    alt="Indexes tab"
-  />
-</Frame>
-
 | Property | Description |
 |----------|-------------|
 | **Name** | Index name |
@@ -73,20 +31,6 @@ Click a table in the sidebar, then click the **Structure** tab. Or right-click a
 | **Primary** | Whether this is the primary key |
 
 ## Foreign Keys Tab
-
-{/* Screenshot: Foreign keys tab */}
-<Frame caption="Foreign key relationships">
-  <img
-    className="block dark:hidden"
-    src="/images/structure-fk.png"
-    alt="Foreign Keys tab"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/structure-fk-dark.png"
-    alt="Foreign Keys tab"
-  />
-</Frame>
 
 | Property | Description |
 |----------|-------------|
@@ -98,21 +42,7 @@ Click a table in the sidebar, then click the **Structure** tab. Or right-click a
 
 ## DDL Tab
 
-{/* Screenshot: DDL tab showing CREATE TABLE statement */}
-<Frame caption="DDL (CREATE TABLE) statement">
-  <img
-    className="block dark:hidden"
-    src="/images/structure-ddl.png"
-    alt="DDL tab"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/structure-ddl-dark.png"
-    alt="DDL tab"
-  />
-</Frame>
-
-Select all with `Cmd+A` and copy with `Cmd+C`. Useful for recreating tables, documenting schemas, or version control.
+Select all with `Ctrl+A` and copy with `Ctrl+C`. Useful for recreating tables, documenting schemas, or version control.
 
 ## Creating a New Table
 
@@ -124,7 +54,7 @@ Right-click in the sidebar and select **Create New Table...**. A visual editor o
 - **Foreign Keys tab** - define relationships with referenced tables, ON DELETE/ON UPDATE actions
 - **SQL Preview tab** - live-generated CREATE TABLE DDL with syntax highlighting
 
-Click **Create Table** (or `Cmd+Return`) to execute. The new table appears in the sidebar immediately.
+Click **Create Table** (or `Ctrl+Return`) to execute. The new table appears in the sidebar immediately.
 
 <Note>
 Supported databases: MySQL, MariaDB, PostgreSQL, SQLite, SQL Server, ClickHouse, and DuckDB. Each generates database-specific DDL syntax.
@@ -145,20 +75,6 @@ Structure modifications alter your database schema. Always backup important data
 3. Click the **Type** cell to open the type picker. Browse by category or search. For parametric types (`VARCHAR(255)`, `DECIMAL(10,2)`), type directly in the freeform field.
 4. Click **Apply** to preview and execute
 
-{/* Screenshot: Adding a new column in Structure editor */}
-<Frame caption="Adding a column">
-  <img
-    className="block dark:hidden"
-    src="/images/structure-add-column.png"
-    alt="Adding a new column in Structure editor"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/structure-add-column-dark.png"
-    alt="Adding a new column in Structure editor"
-  />
-</Frame>
-
 #### Modifying Columns
 
 Click a column, edit properties in the detail panel, then **Apply** to preview the ALTER TABLE SQL. Changes support undo/redo.
@@ -166,20 +82,6 @@ Click a column, edit properties in the detail panel, then **Apply** to preview t
 #### Removing Columns
 
 Select the column, click **-** or press Delete, confirm, then apply.
-
-{/* Screenshot: Type picker popover in Structure editor */}
-<Frame caption="Type picker popover">
-  <img
-    className="block dark:hidden"
-    src="/images/structure-type-picker.png"
-    alt="Type picker popover"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/structure-type-picker-dark.png"
-    alt="Type picker popover"
-  />
-</Frame>
 
 ### Context Menu
 
@@ -199,35 +101,7 @@ Multi-select rows first to copy or delete multiple items at once.
 
 Before applying, TablePro shows the generated ALTER TABLE SQL for review.
 
-{/* Screenshot: Schema change preview with ALTER TABLE statements */}
-<Frame caption="Schema change preview">
-  <img
-    className="block dark:hidden"
-    src="/images/schema-change-preview.png"
-    alt="Schema change preview with ALTER TABLE statements"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/schema-change-preview-dark.png"
-    alt="Schema change preview with ALTER TABLE statements"
-  />
-</Frame>
-
-`Cmd+Z` to undo, `Cmd+Shift+Z` to redo structure changes before applying.
-
-{/* Screenshot: Undo and redo for structure changes */}
-<Frame caption="Undo and redo for structure changes">
-  <img
-    className="block dark:hidden"
-    src="/images/structure-undo-redo.png"
-    alt="Undo and redo for structure changes"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/structure-undo-redo-dark.png"
-    alt="Undo and redo for structure changes"
-  />
-</Frame>
+`Ctrl+Z` to undo, `Ctrl+Shift+Z` to redo structure changes before applying.
 
 ### Reordering Columns
 

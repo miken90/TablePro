@@ -35,15 +35,7 @@
               "databases/sqlite",
               "databases/mongodb",
               "databases/redis",
-              "databases/redshift",
-              "databases/oracle",
-              "databases/clickhouse",
-              "databases/cassandra",
-              "databases/dynamodb",
               "databases/mssql",
-              "databases/duckdb",
-              "databases/cloudflare-d1",
-              "databases/bigquery",
               "databases/ssh-tunneling"
             ]
           },
@@ -65,9 +57,7 @@
               "features/keyboard-shortcuts",
               "features/deep-links",
               "features/safe-mode",
-              "features/connection-sharing",
-              "features/icloud-sync",
-              "features/ssh-profiles"
+              "features/connection-sharing"
             ]
           },
           {
@@ -81,20 +71,6 @@
         ]
       },
       {
-        "tab": "API",
-        "groups": [
-          {
-            "group": "API reference",
-            "pages": ["api/overview"]
-          },
-          {
-            "group": "License",
-            "icon": "key",
-            "pages": ["api/activate", "api/validate", "api/deactivate"]
-          }
-        ]
-      },
-      {
         "tab": "Development",
         "groups": [
           {
@@ -103,8 +79,7 @@
               "development/setup",
               "development/architecture",
               "development/code-style",
-              "development/building",
-              "development/plugin-registry"
+              "development/building"
             ]
           }
         ]

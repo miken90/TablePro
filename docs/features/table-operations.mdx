@@ -16,21 +16,6 @@ Permanently deletes a table and all its data.
 3. Configure options in the confirmation dialog
 4. Click **OK** to execute
 
-{/* Screenshot: Drop table confirmation dialog */}
-<Frame caption="Drop table confirmation with options">
-  <img
-    className="block dark:hidden"
-    src="/images/drop-table-dialog.png"
-    alt="Drop table dialog"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/drop-table-dialog-dark.png"
-    alt="Drop table dialog"
-  />
-</Frame>
-
-
 <Warning>
 Dropping a table is irreversible. Always backup important data before dropping tables.
 </Warning>
@@ -44,28 +29,13 @@ Removes all rows while keeping the table structure.
 3. Configure options in the confirmation dialog
 4. Click **OK** to execute
 
-
 <Note>
 Truncate is faster than `DELETE FROM table` because it skips per-row delete logs. It also resets auto-increment counters.
 </Note>
 
-{/* Screenshot: Truncate table confirmation with options */}
-<Frame caption="Truncate table confirmation with options">
-  <img
-    className="block dark:hidden"
-    src="/images/truncate-table-dialog.png"
-    alt="Truncate table confirmation with options"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/truncate-table-dialog-dark.png"
-    alt="Truncate table confirmation with options"
-  />
-</Frame>
-
 ## Batch Operations
 
-Hold `Cmd` and click to select multiple tables, then right-click and choose **Delete** or **Truncate**. The same options apply to all selected tables.
+Hold `Ctrl` and click to select multiple tables, then right-click and choose **Delete** or **Truncate**. The same options apply to all selected tables.
 
 ## View Management
 
@@ -77,20 +47,6 @@ Views appear in the sidebar with an eye icon and purple color.
 2. A SQL editor tab opens with a CREATE VIEW template adapted to your database type
 3. Modify the view name and SELECT query
 4. Execute to create
-
-{/* Screenshot: Create View with SQL template */}
-<Frame caption="Create View with SQL template">
-  <img
-    className="block dark:hidden"
-    src="/images/create-view-editor.png"
-    alt="Create View with SQL template"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/create-view-editor-dark.png"
-    alt="Create View with SQL template"
-  />
-</Frame>
 
 ### Edit View Definition
 
@@ -120,56 +76,13 @@ Right-click the view > **Drop View** > confirm. Dropping a view only removes the
 | Edit Definition | No | Yes |
 | Delete / Drop | Yes | Yes |
 
-{/* Screenshot: View-specific context menu options */}
-<Frame caption="View-specific context menu options">
-  <img
-    className="block dark:hidden"
-    src="/images/view-context-menu.png"
-    alt="View-specific context menu options"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/view-context-menu-dark.png"
-    alt="View-specific context menu options"
-  />
-</Frame>
-
 ## Database Operations
 
-Create a new database (MySQL/MariaDB): click the database name in the toolbar or press `Cmd+K`, click **Create**, enter a name, character set, and collation.
-
-{/* Screenshot: Create database dialog */}
-<Frame caption="Create database dialog">
-  <img
-    className="block dark:hidden"
-    src="/images/create-database.png"
-    alt="Create Database"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/create-database-dark.png"
-    alt="Create Database"
-  />
-</Frame>
-
+Create a new database (MySQL/MariaDB): click the database name in the toolbar or press `Ctrl+K`, click **Create**, enter a name, character set, and collation.
 
 ### Database Switcher
 
 Click the database name in the toolbar to browse databases on the current connection. Search by name, view recent databases, or double-click to switch.
-
-{/* Screenshot: Database switcher with search and recent databases */}
-<Frame caption="Database switcher with search and recent databases">
-  <img
-    className="block dark:hidden"
-    src="/images/database-switcher.png"
-    alt="Database switcher with search and recent databases"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/database-switcher-dark.png"
-    alt="Database switcher with search and recent databases"
-  />
-</Frame>
 
 ## MongoDB Collections
 

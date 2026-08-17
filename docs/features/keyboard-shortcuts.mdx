@@ -1,491 +1,89 @@
 ---
 title: Keyboard Shortcuts
-description: Complete list of keyboard shortcuts for the SQL editor, data grid, tabs, Vim mode, and customization
+description: Complete list of keyboard shortcuts for TablePro on Windows
 ---
 
 # Keyboard Shortcuts
 
-TablePro is keyboard-driven. Most actions have shortcuts, and most menu shortcuts are rebindable.
-
-<Warning>
-**Platform Note**: This documentation uses macOS shortcuts (`Cmd`, `Option`). On **Windows**, substitute `Ctrl` for `Cmd`, `Alt` for `Option`, and `Shift` works the same way. For example, `Cmd+Enter` becomes `Ctrl+Enter`, and `Option+Cmd+F` becomes `Alt+Ctrl+F`.
-</Warning>
+TablePro is keyboard-driven. Most actions have shortcuts, and the shortcuts below (except tab-switching) are rebindable in **Settings** > **Keyboard**.
 
 ## Quick Reference
 
-### Essential Shortcuts
+| Action | Shortcut |
+|--------|----------|
+| Run query | `Ctrl+Enter` |
+| Quick Switcher | `Ctrl+K` |
+| Toggle History | `Ctrl+H` |
+| Settings | `Ctrl+,` |
+| Save changes | `Ctrl+S` |
+| Command Palette | `Ctrl+Shift+P` |
+
+## Query
 
 | Action | Shortcut |
 |--------|----------|
-| Execute query | `Cmd+Enter` |
-| New connection | `Cmd+N` |
-| Open history | `Cmd+Y` |
-| Settings | `Cmd+,` |
-| Quick Switcher | `Cmd+P` |
-| Close window | `Cmd+W` |
-| Quit | `Cmd+Q` |
+| Run query | `Ctrl+Enter` |
+| Cancel query | `Escape` |
+| Explain query | `Ctrl+Shift+X` |
+| Format SQL | `Ctrl+Shift+F` |
+| Toggle comment | `Ctrl+/` |
 
-## SQL Editor
-
-### Query Execution
-
-| Action | Shortcut | Description |
-|--------|----------|-------------|
-| Execute query | `Cmd+Enter` | Run query at cursor, or all selected statements sequentially |
-| Explain query | `Option+Cmd+E` | Show execution plan for query at cursor |
-| Format SQL | `Option+Cmd+F` | Format SQL query (beautify and standardize SQL syntax) |
-
-<Tip>
-`Cmd+Enter` is the most important shortcut. It runs the query your cursor is in, or executes only the selected text. If your selection contains multiple statements, they run sequentially in a transaction.
-</Tip>
-
-### Text Editing
+## Edit
 
 | Action | Shortcut |
 |--------|----------|
-| Select all | `Cmd+A` |
-| Cut | `Cmd+X` |
-| Copy | `Cmd+C` |
-| Paste | `Cmd+V` |
-| Undo | `Cmd+Z` |
-| Redo | `Cmd+Shift+Z` |
-| Delete line | `Cmd+Shift+K` |
-| Duplicate line | `Cmd+Shift+D` |
+| New tab | `Ctrl+T` |
+| Close tab | `Ctrl+W` |
+| Next tab | `Ctrl+Tab` |
+| Previous tab | `Ctrl+Shift+Tab` |
+| Save changes | `Ctrl+S` |
+| Insert row | `Ctrl+I` |
+| Import SQL | `Ctrl+Shift+M` |
 
-### Navigation
-
-| Action | Shortcut |
-|--------|----------|
-| Go to beginning | `Cmd+Up` |
-| Go to end | `Cmd+Down` |
-| Move line up | `Option+Up` |
-| Move line down | `Option+Down` |
-
-### Find and Replace
+## Navigation
 
 | Action | Shortcut |
 |--------|----------|
-| Find | `Cmd+F` |
-| Find and replace | `Cmd+Option+F` |
-| Find next | `Cmd+G` |
-| Find previous | `Cmd+Shift+G` |
+| Quick Switcher | `Ctrl+K` |
+| Toggle sidebar | `Ctrl+Shift+E` |
+| Toggle AI Chat | `Ctrl+Shift+L` |
+| Toggle Inspector | `Ctrl+Shift+I` |
+| Toggle History | `Ctrl+H` |
+| Command Palette | `Ctrl+Shift+P` |
 
-### Selection
+## Settings
 
 | Action | Shortcut |
 |--------|----------|
-| Select word | `Cmd+D` |
-| Expand selection | `Cmd+Shift+Right` |
-| Shrink selection | `Cmd+Shift+Left` |
+| Settings | `Ctrl+,` |
+| Refresh schema | `F5` |
+| Keyboard Shortcuts help | `F1` |
 
 ## Data Grid
 
-### Navigation
+Standard grid navigation applies: arrow keys move between cells, `Tab`/`Shift+Tab` moves to the next/previous cell, `Enter` or `F2` edits a cell, `Escape` cancels an edit, and `Delete`/`Backspace` removes selected rows. Ctrl+Click extends row selection non-contiguously; Shift+Click selects a range.
 
-| Action | Shortcut |
-|--------|----------|
-| Move between cells | Arrow keys |
-| Next cell | `Tab` |
-| Previous cell | `Shift+Tab` |
-| First cell in row | `Home` |
-| Last cell in row | `End` |
-| First row | `Cmd+Home` |
-| Last row | `Cmd+End` |
-| Page up | `Page Up` |
-| Page down | `Page Down` |
+## Vim Mode
 
-### Editing
+When Vim mode is enabled (**Settings** > **Editor** > **Editing** > **Vim mode**), the SQL editor uses modal keybindings (Normal/Insert/Visual/Command-line), same as standard Vim. Vim mode only applies inside the SQL editor — it does not affect the data grid or other panels, and the shortcuts above still work.
 
-| Action | Shortcut |
-|--------|----------|
-| Edit cell | `Enter` or `F2` |
-| Cancel edit | `Escape` |
-| Delete row | `Delete` or `Backspace` |
-| Commit changes | `Cmd+S` |
+## Quick Switcher
 
-### Data Changes
-
-| Action | Shortcut |
-|--------|----------|
-| Undo change | `Cmd+Z` |
-| Redo change | `Cmd+Shift+Z` |
-| Commit all changes | `Cmd+S` |
-| Preview SQL | `Cmd+Shift+P` | Preview pending SQL before commit |
-
-### Selection
-
-| Action | Shortcut |
-|--------|----------|
-| Select cell | Click |
-| Select row | Click row number |
-| Select multiple cells | Click + drag |
-| Extend selection | Shift + click |
-| Add to selection | Cmd + click |
-| Select all | `Cmd+A` |
-
-### Clipboard
-
-| Action | Shortcut |
-|--------|----------|
-| Copy selection | `Cmd+C` |
-| Copy as CSV | `Cmd+Shift+C` |
-| Copy as JSON | `Cmd+Option+C` |
-| Copy as TSV | Available from context menu |
-
-## Application
-
-### Windows & Tabs
-
-| Action | Shortcut |
-|--------|----------|
-| Close window / tab | `Cmd+W` |
-| New query tab | `Cmd+T` |
-| Switch to tab 1-9 | `Cmd+1` through `Cmd+9` |
-| Next tab | `Cmd+Shift+]` or `Cmd+Option+Right` |
-| Previous tab | `Cmd+Shift+[` or `Cmd+Option+Left` |
-| Minimize | `Cmd+M` |
-| Zoom | `Cmd+Option+Z` |
-
-### Connections
-
-| Action | Shortcut |
-|--------|----------|
-| New connection | `Cmd+N` |
-| Switch connection | `Cmd+Option+C` |
-| Disconnect | `Cmd+D` |
-| Refresh connection | `Cmd+R` |
-
-### View
-
-| Action | Shortcut |
-|--------|----------|
-| Toggle sidebar | `Cmd+0` |
-| Toggle full screen | `Cmd+Control+F` |
-| Zoom in | `Cmd+=` |
-| Zoom out | `Cmd+-` |
-
-### Panels
-
-| Action | Shortcut |
-|--------|----------|
-| Query History | `Cmd+Y` |
-| Toggle Cell Inspector | `Cmd+Shift+I` |
-| Toggle Filter | `Cmd+Shift+L` |
-| Settings | `Cmd+,` |
-
-## Vim Mode Keybindings
-
-When Vim mode is enabled (**Settings** > **Editor** > **Editing** > **Vim mode**), the SQL editor uses modal keybindings. A mode indicator badge appears in the toolbar.
-
-### Modes
-
-| Key | Action |
-|-----|--------|
-| `Escape` | Return to Normal mode |
-| `i` / `I` | Insert before cursor / at line start |
-| `a` / `A` | Append after cursor / at line end |
-| `o` / `O` | Open line below / above |
-| `v` | Visual mode (character-wise) |
-| `V` | Visual Line mode (line-wise) |
-| `:` | Command-line mode |
-
-### Navigation (Normal Mode)
-
-| Key | Action |
-|-----|--------|
-| `h` / `j` / `k` / `l` | Left / Down / Up / Right |
-| `w` / `b` / `e` | Next word / Previous word / End of word |
-| `0` / `$` | Beginning / End of line |
-| `^` / `_` | First non-blank character of line |
-| `gg` / `G` | First line / Last line |
-
-### Operators (Normal Mode)
-
-| Key | Action |
-|-----|--------|
-| `dd` | Delete line |
-| `yy` | Yank (copy) line |
-| `cc` | Change line |
-| `x` | Delete character |
-| `p` / `P` | Paste after / before cursor |
-| `d` + motion | Delete with motion |
-| `y` + motion | Yank with motion |
-| `c` + motion | Change with motion |
-
-### Visual Mode
-
-| Key | Action |
-|-----|--------|
-| `d` | Delete selection |
-| `y` | Yank selection |
-| `c` | Change selection |
-
-### Command-Line Mode
-
-| Command | Action |
-|---------|--------|
-| `:w` | Execute query (`Cmd+Enter`) |
-| `:q` | Close tab |
-
-### Count Prefixes
-
-Prefix motions and operators with a number: `3j` (down 3 lines), `2dd` (delete 2 lines), `5x` (delete 5 characters).
-
-<Note>
-Vim mode keybindings only apply in the SQL editor. They don't affect the data grid or other panels. Standard shortcuts like `Cmd+Enter` work in all modes.
-</Note>
-
-## Filtering
-
-| Action | Shortcut |
-|--------|----------|
-| Toggle filter panel / Quick search | `Cmd+F` |
-| Quick search | Type in search field |
-| Apply filters | `Enter` (in filter field) |
-
-## Table Structure
-
-### Navigation
-
-| Action | Shortcut |
-|--------|----------|
-| Columns tab | `Cmd+1` |
-| Indexes tab | `Cmd+2` |
-| Foreign Keys tab | `Cmd+3` |
-| DDL tab | `Cmd+4` |
-
-## Import/Export
-
-| Action | Shortcut |
-|--------|----------|
-| Export data | `Cmd+Shift+E` |
-| Import data | `Cmd+Shift+I` |
-
-## Quick switcher
-
-The Quick Switcher (`Cmd+P`) lets you search and jump to any table, view, database, schema, or recent query. It uses fuzzy matching, so typing `usr` finds `users`, `user_settings`, etc.
-
-| Action | Shortcut |
-|--------|----------|
-| Open Quick Switcher | `Cmd+P` |
-| Navigate results | `Up` / `Down` arrows |
-| Open selected item | `Return` |
-| Dismiss | `Escape` |
-
-Results are grouped by type (tables, views, system tables, databases, schemas, recent queries) and ranked by match quality when searching.
-
-## Global Shortcuts
-
-### Standard macOS
-
-| Action | Shortcut |
-|--------|----------|
-| Quit application | `Cmd+Q` |
-| Hide application | `Cmd+H` |
-| Hide others | `Cmd+Option+H` |
-| Show all | - |
-| Preferences | `Cmd+,` |
-
-### Help
-
-| Action | Shortcut |
-|--------|----------|
-| Search documentation | `Cmd+?` |
+The Quick Switcher (`Ctrl+K`) searches and jumps to tables, views, databases, schemas, and recent queries with fuzzy matching. Results are grouped by type and ranked by match quality; the top match is pre-selected and updates as you type.
 
 ## Customizing Shortcuts
 
-Most menu shortcuts are rebindable in **Settings** > **Keyboard**.
+Most shortcuts above are rebindable in **Settings** > **Keyboard**:
 
-{/* Screenshot: Keyboard settings */}
-<Frame caption="Keyboard shortcut customization">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-keyboard.png"
-    alt="Keyboard settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-keyboard-dark.png"
-    alt="Keyboard settings"
-  />
-</Frame>
-
-### Rebinding a Shortcut
-
-1. Open **Settings** (`Cmd+,`) and select the **Keyboard** tab
+1. Open **Settings** (`Ctrl+,`) and select the **Keyboard** tab
 2. Find the action (use the search field to filter)
 3. Click the shortcut field next to the action
 4. Press the new key combination
-5. The shortcut updates immediately in the menu bar
-
-### Clearing a Shortcut
-
-1. Click the shortcut field for the action
-2. Press `Delete` or `Backspace`
-3. The shortcut is removed
-
-### Conflict Detection
-
-If you assign a shortcut already in use, TablePro shows a confirmation dialog:
-
-- **Cancel** -- keep the existing assignment
-- **Reassign** -- move the shortcut to the new action (clears the previous action's shortcut)
-
-<Warning>
-System-reserved shortcuts (`Cmd+Q`, `Cmd+H`, `Cmd+M`, `Cmd+,`) cannot be reassigned. TablePro warns if you try.
-</Warning>
-
-### Resetting to Defaults
-
-Click **Reset to Defaults** at the bottom of the Keyboard settings to restore all shortcuts to their original values.
-
-### Shortcut Categories
-
-| Category | Examples |
-|----------|----------|
-| **File** | New Connection, New Query Tab, Close Tab, Save Changes |
-| **Edit** | Copy as CSV, Copy as JSON, Export, Import |
-| **View** | Toggle Sidebar, Toggle Cell Inspector, Toggle Filter, Query History |
-| **Tabs** | Next Tab, Previous Tab |
+5. Click **Reset to Defaults** to restore all shortcuts to their original values
 
 <Note>
-Tab switching shortcuts (`Cmd+1` through `Cmd+9`) follow standard macOS convention and cannot be customized.
+Tab-switching shortcuts (`Ctrl+Tab` / `Ctrl+Shift+Tab`) are not in the rebindable command list.
 </Note>
-
-## Tips for Efficiency
-
-### Most Used Shortcuts
-
-Start with these five:
-
-1. `Cmd+Enter` - Execute query
-2. `Cmd+N` - New connection
-3. `Cmd+Y` - Query history
-4. `Cmd+F` - Find
-5. `Cmd+C` / `Cmd+V` - Copy/Paste
-
-### Workflow Tips
-
-**Quick query iteration**:
-1. Write query in editor
-2. `Cmd+Enter` to run
-3. Make changes
-4. `Cmd+Enter` again
-
-**Exploring data**:
-1. Click table in sidebar
-2. View data in grid
-3. `Cmd+Enter` with custom query
-4. `Cmd+Y` to find previous queries
-
-**Editing data**:
-1. Navigate with arrow keys
-2. `Enter` to edit cell
-3. Type new value
-4. `Tab` to move to next cell
-5. `Cmd+S` to save all changes
-
-### Memory Techniques
-
-**Group by context**:
-- All `Cmd+` shortcuts are primary actions
-- Add `Shift` for variations (e.g., `Cmd+Z` undo -> `Cmd+Shift+Z` redo)
-- Add `Option` for alternatives
-
-**Common patterns**:
-- `Cmd+[letter]` - Common action (N=new, W=close, Q=quit)
-- `Cmd+Shift+[letter]` - Variation of common action
-- Arrow keys - Navigation
-- `Tab` / `Shift+Tab` - Next/Previous
-
-## Cheat Sheet
-
-```
-=== SQL Editor ===
-Cmd+Enter      Execute query
-Opt+Cmd+E      Explain query
-Opt+Cmd+F      Format SQL
-Cmd+F          Find
-Cmd+Z          Undo
-Cmd+Shift+Z    Redo
-
-=== Data Grid ===
-Arrow keys     Navigate cells
-Enter          Edit cell
-Tab            Next cell
-Cmd+C          Copy
-Delete         Delete row
-
-=== Data Changes ===
-Cmd+S          Commit changes
-Cmd+Z          Undo
-Cmd+Shift+Z    Redo
-Cmd+Shift+P    Preview SQL
-
-=== Tabs ===
-Cmd+T          New query tab
-Cmd+W          Close tab
-Cmd+1-9        Switch to tab N
-Cmd+Shift+[    Previous tab
-Cmd+Shift+]    Next tab
-
-=== Vim Mode (when enabled) ===
-Escape         Normal mode
-i/a/o          Enter Insert mode
-v/V            Visual / Visual Line
-h/j/k/l        Left/Down/Up/Right
-w/b/e          Word motions
-^/_            First non-blank char
-dd/yy/cc       Delete/Yank/Change line
-:w             Execute query
-:q             Close tab
-
-=== Application ===
-Cmd+N          New connection
-Cmd+Y          Query history
-Cmd+Shift+L    Toggle Filter
-Cmd+Shift+I    Toggle Inspector
-Cmd+,          Settings
-Cmd+K          Quick Switcher
-Cmd+W          Close window
-Cmd+Q          Quit
-```
-
-## Accessibility
-
-### VoiceOver Support
-
-TablePro works with macOS VoiceOver:
-
-- Navigate with `Control+Option+Arrow` keys
-- Interact with `Control+Option+Space`
-- All UI elements are labeled
-
-### Keyboard-Only Navigation
-
-TablePro is fully usable without a mouse:
-
-1. `Tab` moves between major UI sections
-2. Arrow keys navigate within sections
-3. `Enter` or `Space` activates controls
-4. `Escape` dismisses dialogs/menus
-
-## Troubleshooting
-
-### Shortcut Not Working
-
-1. **Check focus**: Make sure the correct panel has focus
-2. **Check conflicts**: Another app may be capturing the shortcut
-3. **Check modifiers**: Verify you're pressing the right modifier keys
-
-### System-Wide Conflicts
-
-If a shortcut doesn't work, check **System Settings** > **Keyboard** > **Keyboard Shortcuts** for conflicts with:
-
-- Mission Control
-- Spotlight
-- Input Sources
-- App Shortcuts
 
 ## Next Steps
 

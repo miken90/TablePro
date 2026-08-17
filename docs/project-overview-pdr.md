@@ -2,22 +2,21 @@
 
 ## Purpose
 
-This document defines current product requirements for TablePro based on verified implementation state as of 2026-04-08.
+This document defines current product requirements for TablePro based on verified implementation state as of 2026-08-17.
 
 ## Product scope
 
-TablePro is a desktop database client with two platform codebases, but this repository workflow targets Windows implementation:
+TablePro is a Windows-only, personal, non-profit database client. The fork has permanently detached from its upstream macOS origin — no macOS code remains in this repository.
 
-- Reference/upstream macOS codebase: `TablePro/`
-- Active implementation target: `tablepro-windows/` (Tauri v2 + Rust + React)
+- Only product: `tablepro-windows/` (Tauri v2 + Rust + React)
 
 Windows implementation status in source:
 
-- Tauri runtime, IPC command surface, and DLL plugin loader are implemented
+- Tauri runtime and IPC command surface are implemented; drivers are compiled-in Rust crates (no plugin/DLL loader)
 - Session-based command routing (`session_id`) is implemented
 - Query/schema/data workflows are implemented with payload guardrails (`MAX_RESULT_ROWS = 50,000`)
 - SQL import/export and staged edit save flow are implemented
-- Connection health monitor, per-connection reconnect guard, AI chat, and inline AI suggestions are implemented
+- Per-connection user-initiated reconnect, AI chat, and inline AI suggestions are implemented
 - Driver capability substrate with sidecar metadata files is implemented
 - 6 database drivers: PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis
 - Tab state persistence via backend JSON file with localStorage migration is implemented
@@ -254,7 +253,7 @@ Host-side plugin loading must continue to use:
 ## Constraints and decisions
 
 - Documentation describes repository reality, not intended future state
-- Platform claims must state that Windows is the active implementation target in this repo and macOS is upstream/reference only
+- Platform claims must state that Windows is the only supported platform — no macOS code or reference target remains
 - Security claims must stay aligned with storage code
 
 ## Requirement change log

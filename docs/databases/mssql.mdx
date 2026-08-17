@@ -1,19 +1,15 @@
 ---
 title: Microsoft SQL Server
-description: Connect to SQL Server 2017+ and Azure SQL Database via FreeTDS with T-SQL query support
+description: Connect to SQL Server and Azure SQL Database with T-SQL query support
 ---
 
 # Microsoft SQL Server Connections
 
-TablePro connects to SQL Server 2017 and later via FreeTDS. This covers instances on Windows, Linux, Docker, and Azure SQL Database.
-
-<Warning>
-FreeTDS must be built before connecting to SQL Server. Run `scripts/build-freetds.sh` once to compile the required library.
-</Warning>
+TablePro connects to SQL Server via a compiled-in Rust driver (`tiberius`, TDS 7.3). No external library or build step is required. This covers instances on Windows, Linux, Docker, and Azure SQL Database.
 
 ## Quick Setup
 
-Run `scripts/build-freetds.sh` first. Click **New Connection**, select **SQL Server**, enter host/port/credentials/database, and click **Create**.
+Click **New Connection**, select **SQL Server**, enter host/port/credentials/database, and click **Create**.
 
 ## Connection Settings
 
@@ -33,11 +29,11 @@ Run `scripts/build-freetds.sh` first. Click **New Connection**, select **SQL Ser
 
 ## Features
 
-**Schema Selection**: Default schema is `dbo`. Switch with **Cmd+K**. Shows accessible schemas and tables.
+**Schema Selection**: Default schema is `dbo`. Switch tables with **Ctrl+K** (Quick Switcher). Shows accessible schemas and tables.
 
 **Table Info**: Columns (types, nullability, defaults), indexes (clustered/non-clustered), foreign keys, DDL with constraints.
 
-**Query Editor** (T-SQL, pagination with OFFSET/FETCH):
+**Query Editor** (T-SQL):
 
 ```sql
 -- Paginated results
@@ -74,7 +70,5 @@ ORDER BY TABLE_SCHEMA, TABLE_NAME;
 **Connection refused**: Enable TCP/IP in SQL Server Configuration Manager, verify SQL Server service running, check firewall port 1433, ensure Docker started.
 
 **Login failed**: Verify credentials, check mixed-mode authentication enabled: `SELECT SERVERPROPERTY('IsIntegratedSecurityOnly');` Set to 2 for mixed mode.
-
-**FreeTDS not found**: Run `scripts/build-freetds.sh` to compile and place library.
 
 **Limitations**: SQL Server Auth only, no Windows Auth, named instances unsupported (use IP:port), NTEXT/TEXT/IMAGE deprecated (use *MAX types).

@@ -1,284 +1,93 @@
 ---
 title: Building
-description: Debug builds, release builds for arm64/x86_64, DMG packaging, code signing, and CI/CD workflows
+description: Debug builds, release builds, packaging (MSI/NSIS), and CI for TablePro Windows
 ---
 
 # Building TablePro
 
-## Development Builds
+Windows-only. Every build, test, lint, and package command runs through PowerShell. Run from `tablepro-windows/` unless noted.
 
-### Using Xcode
+## Install Dependencies
 
-1. Open `TablePro.xcodeproj`
-2. Select the **TablePro** scheme
-3. Select **My Mac** as the destination
-4. `Cmd+R` to build and run, or `Cmd+B` to build only
-
-### Using Command Line
-
-```bash
-# Build for current architecture (Debug)
-xcodebuild -project TablePro.xcodeproj \
-    -scheme TablePro \
-    -configuration Debug \
-    build \
-    -skipPackagePluginValidation
-
-# Build and run
-xcodebuild -project TablePro.xcodeproj \
-    -scheme TablePro \
-    -configuration Debug \
-    build \
-    -skipPackagePluginValidation && open build/Debug/TablePro.app
+```powershell
+npm ci
 ```
 
-### Clean Build
+## Development
 
-If you hit build issues:
-
-```bash
-# Clean via xcodebuild
-xcodebuild -project TablePro.xcodeproj -scheme TablePro clean
-
-# Or clean derived data
-rm -rf ~/Library/Developer/Xcode/DerivedData
-
-# Or in Xcode: Cmd+Shift+K
+```powershell
+npm run dev          # frontend dev server
+npm run dev:tauri     # full Tauri dev app
 ```
 
-## Release Builds
+## Debug Build
 
-### Using the Build Script
-
-```bash
-# Apple Silicon (M1/M2/M3/M4/M5)
-scripts/build-release.sh arm64
-
-# Intel
-scripts/build-release.sh x86_64
-
-# Both architectures
-scripts/build-release.sh both
+```powershell
+npm run build:debug
 ```
 
-### Build Script Details
+## Quality Gates
 
-`build-release.sh` does the following:
+Frontend, from `tablepro-windows/`:
 
-1. **Prepares libraries**: Extracts the correct architecture from universal libraries
-2. **Builds the app**: Runs xcodebuild with Release configuration
-3. **Copies output**: Places the app in `build/Release/`
-4. **Restores icon**: Ensures the full app icon is included
-5. **Verifies architecture**: Confirms the binary matches the target
-
-### Output Location
-
-```
-build/Release/TablePro-arm64.app   # Apple Silicon
-build/Release/TablePro-x86_64.app  # Intel
+```powershell
+npx vitest run
+npx eslint .
+npm run build
 ```
 
-### Manual Release Build
+Rust, from `tablepro-windows/src-tauri/`:
 
-```bash
-# Set architecture
-ARCH=arm64  # or x86_64
-
-# Build
-xcodebuild \
-    -project TablePro.xcodeproj \
-    -scheme TablePro \
-    -configuration Release \
-    -arch $ARCH \
-    ONLY_ACTIVE_ARCH=YES \
-    CODE_SIGN_IDENTITY="" \
-    CODE_SIGNING_REQUIRED=NO \
-    clean build
+```powershell
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-## Native Libraries
+## Release Packaging
 
-TablePro uses native C libraries for database connectivity. These are hosted on a dedicated [GitHub Release](https://github.com/TableProApp/TablePro/releases/tag/libs-v1) and downloaded via `scripts/download-libs.sh`.
-
-### Library Setup
-
-```bash
-# Download libraries (skips if already present)
-scripts/download-libs.sh
-
-# Force re-download
-scripts/download-libs.sh --force
+```powershell
+npm run build:portable
+npm run build:installer
+npm run build:release
 ```
 
-The build script (`build-release.sh`) extracts the correct architecture slice automatically from the universal libraries.
+Or directly:
 
-## Creating DMG
-
-### Using the DMG Script
-
-```bash
-# Build the release first
-scripts/build-release.sh arm64
-
-# Then create DMG
-scripts/create-dmg.sh arm64
+```powershell
+npx tauri build
 ```
 
-### DMG Contents
-
-- TablePro.app
-- Applications folder shortcut
-- Background image (if configured)
-- License file (if included)
-
-### Output
+This produces both installer formats:
 
 ```
-build/Release/TablePro-arm64.dmg
-build/Release/TablePro-x86_64.dmg
+src-tauri\target\release\bundle\msi\TablePro_<version>_x64_en-US.msi
+src-tauri\target\release\bundle\nsis\TablePro_<version>_x64-setup.exe
 ```
+
+<Warning>
+`npx tauri build` can exit with a non-zero code on a transient PowerShell stderr-as-terminating-error during toolchain fetch, even when packaging actually succeeds — and conversely a clean exit code isn't proof the artifacts are real. Always verify by checking the bundle files exist with a sane size after wiping `src-tauri\target\release\bundle` and rebuilding.
+</Warning>
+
+## Version Bump
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version X.Y.Z
+```
+
+Updates `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` (main app crate only — driver crates stay independently versioned).
 
 ## Code Signing
 
-### Development Builds
-
-Unsigned by default. Fine for local testing.
-
-### Release Distribution
-
-To sign (requires Apple Developer account):
-
-```bash
-# Sign the app
-codesign --force --deep --sign "Developer ID Application: Your Name (TEAM_ID)" \
-    build/Release/TablePro-arm64.app
-
-# Verify signature
-codesign --verify --verbose build/Release/TablePro-arm64.app
-```
-
-### Notarization
-
-For distribution outside the App Store:
-
-```bash
-# Create ZIP for notarization
-ditto -c -k --keepParent build/Release/TablePro-arm64.app TablePro.zip
-
-# Submit for notarization
-xcrun notarytool submit TablePro.zip \
-    --apple-id "your@email.com" \
-    --team-id "TEAM_ID" \
-    --password "app-specific-password" \
-    --wait
-
-# Staple the ticket
-xcrun stapler staple build/Release/TablePro-arm64.app
-```
-
-## Build Configuration
-
-### Build Settings
-
-| Setting | Debug | Release |
-|---------|-------|---------|
-| Optimization | None (-O0) | Optimize for Speed (-O) |
-| Debug Information | Full | Stripped |
-| Assertions | Enabled | Disabled |
-| Code Signing | None | Developer ID (optional) |
-
-### Architecture Settings
-
-| Setting | Value |
-|---------|-------|
-| ARCHS | Standard (arm64, x86_64) |
-| ONLY_ACTIVE_ARCH | Yes (Debug), No (Release) |
-| VALID_ARCHS | arm64 x86_64 |
+CI imports a code-signing certificate from a GitHub secret (`WINDOWS_SIGN_CERT_BASE64` / `WINDOWS_SIGN_CERT_PASSWORD`) as a `.pfx` and signs the build via `Import-PfxCertificate`. Local builds are unsigned by default.
 
 ## Troubleshooting
 
-**Missing libraries**: Run `scripts/download-libs.sh` and verify libraries exist for your architecture.
+**PowerShell command chaining**: run one native command per `powershell.exe -Command` invocation — `-Command "a; b"` executes `b` even if `a` failed, and only reports `b`'s exit code.
 
-**Code signing errors**: Build script disables signing. For manual builds, add `CODE_SIGN_IDENTITY=""` and `CODE_SIGNING_REQUIRED=NO`.
+**Line endings**: pipe PowerShell output through `tr -d '\r'` before parsing in a non-Windows shell.
 
-**Architecture mismatch**: Clean build and ensure libraries match target. Use the build script.
+**Never run cargo/npm against a non-Windows toolchain** for this project — it is Windows-only and the results won't reflect the real build.
 
-**Xcode issues**: Delete derived data: `rm -rf ~/Library/Developer/Xcode/DerivedData`
+## CI
 
-## CI/CD
-
-### GitHub Actions
-
-Example CI workflow:
-
-```yaml
-name: Build
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  build:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.0.app
-
-      - name: Build
-        run: |
-          xcodebuild -project TablePro.xcodeproj \
-            -scheme TablePro \
-            -configuration Debug \
-            build \
-            -skipPackagePluginValidation
-
-      - name: Test
-        run: |
-          xcodebuild -project TablePro.xcodeproj \
-            -scheme TablePro \
-            test \
-            -skipPackagePluginValidation
-```
-
-### Release Workflow
-
-```yaml
-release:
-  runs-on: macos-latest
-  steps:
-    - uses: actions/checkout@v4
-
-    - name: Build Release (arm64)
-      run: scripts/build-release.sh arm64
-
-    - name: Build Release (x86_64)
-      run: scripts/build-release.sh x86_64
-
-    - name: Create DMGs
-      run: |
-        scripts/create-dmg.sh arm64
-        scripts/create-dmg.sh x86_64
-
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: release-dmgs
-        path: build/Release/*.dmg
-```
-
-## Build Sizes
-
-Typical sizes (v0.1.1):
-
-| Build | Size |
-|-------|------|
-| Debug app | ~15 MB |
-| Release app | ~10 MB |
-| DMG (arm64) | ~3.5 MB |
-| DMG (x86_64) | ~3.5 MB |
-
+The only CI pipeline is [`tablepro-windows/.github/workflows/windows-build.yml`](https://github.com/miken90/TablePro/blob/main/tablepro-windows/.github/workflows/windows-build.yml), which runs `cargo clippy`, `cargo test`, `npx vitest run`, `npx eslint .`, `npm run build`, and `npx tauri build`.

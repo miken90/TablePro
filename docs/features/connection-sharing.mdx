@@ -5,13 +5,13 @@ description: Export and import database connections as .tablepro files
 
 # Connection Sharing
 
-Export connections to a `.tablepro` file and share with your team. Passwords stay in your Keychain.
+Export connections to a `.tablepro` file and share with your team. Passwords are excluded from a plain export by default.
 
 ## Export
 
 Right-click a connection > **Export Connection...**. Select multiple first to export together. Or use **File** > **Export Connections...** for all.
 
-Exported: host, port, username, type, SSH/SSL config, color, tag, group, safe mode. Not exported: passwords, key passphrases, TOTP secrets.
+Exported: host, port, username, type, SSH/SSL config, color, tag, group, safe mode. Not exported: passwords, key passphrases (unless using Encrypted Export below).
 
 <Frame caption="Export connections">
   <img
@@ -64,7 +64,7 @@ Right-click > **Copy as Import Link**. Paste in Slack, a wiki, or a README.
 tablepro://import?name=Staging&host=db.example.com&port=5432&type=PostgreSQL&username=admin
 ```
 
-## Encrypted Export <sup>Pro</sup>
+## Encrypted Export
 
 Include passwords in the export, protected by a passphrase (AES-256-GCM).
 
@@ -88,40 +88,6 @@ When importing, TablePro prompts for the passphrase.
   />
 </Frame>
 
-## Linked Folders <sup>Pro</sup>
-
-Watch a shared directory for `.tablepro` files. Connections appear read-only in the sidebar. Each person enters their own password.
-
-**Settings** (`Cmd+,`) > **Sync** > **Linked Folders** > **Add Folder...**
-
-Works with Git repos, Dropbox, network drives.
-
-<Frame caption="Linked Folders settings">
-  <img
-    className="block dark:hidden"
-    src="/images/linked-folders-settings.png"
-    alt="Linked Folders"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/linked-folders-settings-dark.png"
-    alt="Linked Folders"
-  />
-</Frame>
-
-## Environment Variables <sup>Pro</sup>
-
-Use `$VAR` and `${VAR}` in `.tablepro` files. Resolved at connection time.
-
-```json
-{
-  "host": "${DB_HOST}",
-  "username": "$DB_USER"
-}
-```
-
-Works with `.env` files, 1Password CLI (`op run`), direnv.
-
 ## File Format
 
 JSON. Required fields: `name`, `host`, `type`.
@@ -141,19 +107,10 @@ JSON. Required fields: `name`, `host`, `type`.
   ],
   "groups": [
     { "name": "Backend", "color": "Blue" },
-    { "name": "Staging", "color": "Green", "parentGroupName": "Backend" }
+    { "name": "Staging", "color": "Green" }
   ],
   "tags": [{ "name": "production", "color": "Red" }]
 }
 ```
 
-Groups and tags match by name. Missing ones are created. Nested groups use `parentGroupName` to preserve hierarchy. Paths use `~/` for portability.
-
-## Sharing vs iCloud Sync
-
-| | Sharing | iCloud Sync |
-|---|---|---|
-| **For** | Team | Your Macs |
-| **How** | Files, links | CloudKit |
-| **Passwords** | Per-user (encrypted with Pro) | Optional sync |
-| **Requires** | Nothing (Pro for extras) | Pro + iCloud |
+Groups and tags match by name. Missing ones are created. Groups are a flat list (no nesting).

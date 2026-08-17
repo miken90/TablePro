@@ -26,10 +26,9 @@ TablePro supports Redis 6.0 and later. Keys are grouped by colon-separated names
 | **Port** | `6379` | |
 | **Password** | - | Leave empty for local dev |
 | **Database** | `0` | 0-15 |
-| **Key Separator** | `:` | Groups keys by prefix in sidebar |
 
 <Tip>
-Open URLs like `redis://:password@host:6379/0` or `rediss://` (TLS) from your browser. See [Connection URL Reference](/databases/connection-urls#redis).
+Paste a `redis://:password@host:6379/0` or `rediss://` (TLS) URL into **Import from URL** on the connection form. See [Connection URL Reference](/databases/connection-urls#redis).
 </Tip>
 
 ## Example Configurations
@@ -45,7 +44,7 @@ Configure in **SSL/TLS** section. Managed services require SSL/TLS. Use `rediss:
 
 ## Features
 
-**Namespace Browsing**: Keys grouped by separator (default `:`) in sidebar tree. `user:1`, `user:2` appear under `user` folder. Multi-level nesting supported (e.g., `app:cache:session:1`). Change separator in Advanced settings.
+**Namespace Browsing**: Keys grouped by colon (`:`) in sidebar tree. `user:1`, `user:2` appear under `user` folder. Multi-level nesting supported (e.g., `app:cache:session:1`).
 
 **Key-Value Viewing**: String (plain text), Hash (key-value rows), List (with index), Set (individual rows), Sorted Set (with scores), JSON (syntax-highlighted).
 
@@ -93,7 +92,7 @@ DBSIZE
 
 ## Troubleshooting
 
-**Connection refused**: Check Redis is running (`brew services start redis`), verify correct port in `redis.conf`, check `bind` directive.
+**Connection refused**: Check the Redis service is running, verify correct port in `redis.conf`, check `bind` directive.
 
 **Auth failed**: Verify password matches `requirepass` in `redis.conf`. For Redis 6.0+ ACL: `ACL SETUSER myuser on >password ~* +@all`
 

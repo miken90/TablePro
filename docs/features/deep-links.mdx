@@ -1,154 +1,39 @@
 ---
 title: Deep Links
-description: Open connections, tables, and queries from the terminal or other apps using database URLs or tablepro:// links
+description: Open a saved connection or import a new one via tablepro:// links
 ---
 
-TablePro supports two URL-based entry points: standard database URLs (`mysql://`, `postgresql://`, etc.) and the custom `tablepro://` scheme.
-
-## Database URLs
-
-Open any database connection directly using its standard URL. Works from the terminal, scripts, Alfred, Raycast, or any app that can open URLs.
-
-### Supported Schemes
-
-| Scheme | Database |
-|--------|----------|
-| `mysql://` | MySQL / MariaDB |
-| `postgresql://`, `postgres://` | PostgreSQL |
-| `mongodb://`, `mongodb+srv://` | MongoDB |
-| `redis://`, `rediss://` | Redis |
-| `mssql://`, `sqlserver://` | SQL Server |
-| `sqlite://` | SQLite (local file path) |
-
-### URL Format
-
-```
-scheme://[username[:password]@]host[:port][/database][?param=value]
-```
-
-### Examples
-
-```bash
-# MySQL
-open "mysql://root@localhost/mydb" -a TablePro
-
-# PostgreSQL with port and database
-open "postgresql://admin@db.example.com:5432/analytics" -a TablePro
-
-# MongoDB
-open "mongodb://localhost:27017/mydb" -a TablePro
-
-# Redis
-open "redis://localhost:6379" -a TablePro
-
-# SQLite (local file)
-open "sqlite:///Users/me/data/app.db" -a TablePro
-```
-
-TablePro checks if a saved connection matches the URL. If found, it reuses that connection. If the connection is already open, the existing window comes to front. Otherwise, a temporary connection is created.
-
-### Query Parameters
-
-Pass additional options as query parameters:
-
-| Parameter | Description |
-|-----------|-------------|
-| `table` | Open a specific table after connecting |
-| `filter_column`, `filter_operation`, `filter_value` | Apply a filter on the opened table |
-| `condition` | Apply a raw SQL WHERE condition |
-| `schema` | Switch to a specific schema (PostgreSQL) or database (MySQL) after connecting |
-
-```bash
-# Open a table with a filter
-open "mysql://root@localhost/mydb?table=users&filter_column=status&filter_operation=equal&filter_value=active" -a TablePro
-
-# Open with a raw SQL condition
-open "postgresql://admin@localhost/mydb?table=orders&condition=total%20%3E%20100" -a TablePro
-
-# Switch schema on connect
-open "postgresql://admin@localhost/mydb?schema=reporting" -a TablePro
-```
-
-<Warning>
-Passwords can be included in URLs (`mysql://user:pass@host/db`), but avoid sharing URLs that contain passwords. Prefer saved connections with Keychain-stored passwords.
-</Warning>
-
-## Custom Deep Links (tablepro://)
-
-TablePro registers a `tablepro://` URL scheme for opening connections, tables, and queries from your browser, terminal, Slack messages, or any app that supports links.
+TablePro registers a `tablepro://` URL scheme. There is no support for opening standard database URLs (`mysql://`, `postgresql://`, etc.) directly from the OS — those schemes are only used inside the app for **Import from URL** on the connection form.
 
 ## URL Patterns
 
 ### Open a Connection
 
 ```
-tablepro://connect/{name}
+tablepro://open/connection/{connection-id}
 ```
 
-Opens the saved connection matching `{name}`. If no match is found, an error alert appears.
-
-```bash
-open "tablepro://connect/Production"
-```
-
-### Open a Table
-
-```
-tablepro://connect/{name}/table/{table}
-tablepro://connect/{name}/database/{db}/table/{table}
-```
-
-Connects and opens the specified table. The second form targets a specific database on the connection.
-
-```bash
-open "tablepro://connect/Production/table/users"
-open "tablepro://connect/Production/database/analytics/table/events"
-```
-
-### Open a Query
-
-```
-tablepro://connect/{name}/query?sql={encoded_sql}
-```
-
-Connects and opens a new query tab with the SQL pre-filled. The SQL must be percent-encoded. A confirmation dialog shows the SQL before opening, so you can verify the query is safe.
-
-```bash
-open "tablepro://connect/Production/query?sql=SELECT%20*%20FROM%20users%20LIMIT%2010"
-```
+Looks up a saved connection by its internal ID and connects (or focuses it if already connected). If the ID isn't found, the link is silently ignored (logged to console).
 
 ### Import a Connection
 
 ```
-tablepro://import?name={n}&host={h}&port={p}&type={t}&username={u}&database={db}
+tablepro://import?name={n}&host={h}&port={p}&type={t}&username={u}
 ```
 
-Creates a new saved connection and opens the connection form for review. A confirmation dialog shows the connection details before adding, so you can reject unexpected imports. You can add a password before connecting.
+Creates a new saved connection directly — there is no review/confirmation dialog. If a connection with the same `name` already exists, the import is skipped (logged to console, no error shown to the user).
 
-```bash
-open "tablepro://import?name=Staging&host=db.example.com&port=5432&type=postgresql&username=admin&database=mydb"
-```
+**Required:** at least `name` or `host`.
+**Recognized parameters:** `name`, `host`, `port`, `type`, `username`. `type` defaults to `PostgreSQL` if omitted; `port` defaults to `5432`.
 
-**Required parameters:** `name`, `host`, `type`
-**Optional parameters:** `port` (defaults to the database type's standard port), `username`, `database`
+<Warning>
+The imported connection is saved without a password — you'll need to add it manually after import.
+</Warning>
 
-Supported `type` values: `MySQL`, `MariaDB`, `PostgreSQL`, `SQLite`, `MongoDB` (case-insensitive).
+## Triggering a Deep Link
 
+Type or paste the URL into a browser's address bar, or run from PowerShell/cmd:
 
-## Terminal Usage
-
-Use the `open` command to trigger deep links from your terminal:
-
-```bash
-# Connect
-open "tablepro://connect/Production"
-
-# Open a specific table
-open "tablepro://connect/Production/table/users"
-
-# Run a query
-open "tablepro://connect/Production/query?sql=SELECT%20count(*)%20FROM%20orders"
-
-# Import a new connection for review
-open "tablepro://import?name=Dev&host=localhost&port=3306&type=mysql&username=root&database=app"
+```powershell
+start "" "tablepro://open/connection/abc-123"
 ```

@@ -1,397 +1,132 @@
 ---
 title: Architecture
-description: MVVM structure, database driver protocol, actor-based SSH tunnels, and autocomplete engine internals
+description: Tauri v2 + Rust backend, React/TypeScript frontend, compiled-in database drivers
 ---
 
 # Architecture
 
-TablePro is built with:
+TablePro Windows is built with:
 
-- **SwiftUI** for the UI
-- **AppKit** for low-level macOS integration
-- **Swift Concurrency** (async/await, actors) for concurrent operations
-- **Native C libraries** for database connectivity
+- **Tauri v2** as the desktop shell (Rust backend + WebView2 frontend)
+- **Rust** for the backend: connection management, query execution, SSH tunneling
+- **React + TypeScript** for the frontend, state via **Zustand** stores
+- **CodeMirror** (with `@replit/codemirror-vim`) for the SQL editor
 
 ```mermaid
 block-beta
     columns 3
 
-    block:ui["User Interface"]:3
-        Views["Views<br>(SwiftUI)"]
-        ViewModels["ViewModels<br>(Observable)"]
-        Theme["Theme<br>(Colors)"]
+    block:ui["Frontend (React/TS)"]:3
+        Components["Components"]
+        Stores["Zustand<br>Stores"]
+        IPC["IPC<br>(Tauri invoke)"]
     end
 
-    block:logic["Business Logic"]:3
-        Drivers["Database<br>Drivers"]
-        Autocomplete["Autocomplete<br>Engine"]
-        SSH["SSH<br>Tunnel"]
+    block:backend["Backend (Rust)"]:3
+        Commands["Tauri<br>Commands"]
+        Services["Services<br>(connection, SSH, credentials)"]
+        Registry["Driver<br>Registry"]
     end
 
-    block:data["Data Layer"]:3
-        Models["Models<br>(Structs)"]
-        Storage["Storage<br>(JSON)"]
-        Keychain["Keychain<br>(Passwords)"]
-    end
-
-    block:native["Native Libraries"]:3
-        libmariadb["libmariadb<br>(MySQL)"]
-        libpq["libpq<br>(PostgreSQL)"]
-        SQLite["SQLite<br>(Built-in)"]
+    block:drivers["Compiled-in Drivers"]:3
+        PG["driver-postgres"]
+        MySQL["driver-mysql"]
+        MSSQL["driver-mssql"]
     end
 ```
-
-## Dependencies
-
-SPM dependencies:
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| **CodeEditSourceEditor** | 0.15.2+ | Tree-sitter-powered code editor for the SQL editor |
-| **Sparkle** | 2.x | Auto-update framework with EdDSA signing |
-
-<Note>
-CodeEditSourceEditor bundles a SwiftLint plugin that requires `-skipPackagePluginValidation` for CLI builds. See [Building](/development/building).
-</Note>
 
 ## Directory Structure
 
-<Tree>
-  <Tree.Folder name="TablePro" defaultOpen>
-    <Tree.Folder name="Core">
-      <Tree.Folder name="Database">
-        <Tree.File name="DatabaseDriver.swift" />
-        <Tree.File name="DatabaseManager.swift" />
-      </Tree.Folder>
-      <Tree.Folder name="Plugins">
-        <Tree.File name="PluginManager.swift" />
-        <Tree.File name="PluginDriverAdapter.swift" />
-      </Tree.Folder>
-      <Tree.Folder name="Autocomplete" />
-      <Tree.Folder name="Services" />
-      <Tree.Folder name="SSH" />
-    </Tree.Folder>
-    <Tree.Folder name="Views" />
-    <Tree.Folder name="Models" />
-    <Tree.Folder name="ViewModels" />
-    <Tree.Folder name="Extensions" />
-    <Tree.Folder name="Theme" />
-    <Tree.Folder name="Resources" />
-  </Tree.Folder>
-  <Tree.Folder name="Plugins" defaultOpen>
-    <Tree.Folder name="TableProPluginKit" />
-    <Tree.Folder name="MySQLDriverPlugin" />
-    <Tree.Folder name="PostgreSQLDriverPlugin" />
-    <Tree.File name="..." />
-  </Tree.Folder>
-  <Tree.Folder name="Libs" />
-  <Tree.Folder name="TableProTests" />
-  <Tree.Folder name="scripts" />
-</Tree>
-
-## Design Patterns
-
-### MVVM Architecture
-
-```mermaid
-flowchart LR
-    Model["Model<br>(Struct)"] <--> ViewModel["ViewModel<br>(Observable)"] <--> View["View<br>(SwiftUI)"]
+```
+tablepro-windows/
+├── src/                      # React/TypeScript frontend
+│   ├── components/
+│   ├── stores/                # Zustand state
+│   ├── ipc/                   # Tauri command wrappers
+│   └── hooks/
+└── src-tauri/
+    ├── src/
+    │   ├── commands/          # #[tauri::command] handlers
+    │   ├── drivers/            # registry.rs, driver_trait.rs, adapter.rs
+    │   ├── services/           # connection_manager, ssh_tunnel, credential_store, sql_generator
+    │   ├── storage/            # connection_store, history_store, settings_store
+    │   └── models/
+    ├── driver-common/          # shared driver types
+    ├── driver-postgres/
+    ├── driver-mysql/
+    ├── driver-mssql/
+    ├── driver-sqlite/
+    ├── driver-mongodb/
+    ├── driver-redis/
+    └── driver-capabilities/    # *.capabilities.json sidecars
 ```
 
-**Models**: Pure data structures (structs, enums)
-```swift
-struct DatabaseConnection: Codable, Identifiable {
-    let id: UUID
-    var name: String
-    var host: String
-    var port: Int
-    var type: DatabaseType
-}
-```
+## Driver Model
 
-**ViewModels**: Observable state containers
-```swift
-@MainActor
-class DatabaseManager: ObservableObject {
-    @Published var sessions: [DatabaseSession] = []
-    @Published var activeSessionId: UUID?
+There is no plugin/DLL loader. Each of the 6 drivers is a separate Rust crate implementing a shared `DatabaseDriver` trait (`src-tauri/src/drivers/driver_trait.rs`), compiled directly into the app binary and instantiated via `src-tauri/src/drivers/registry.rs`.
 
-    func connect(to connection: DatabaseConnection) async throws {
-        // Business logic
-    }
-}
-```
-
-**Views**: Declarative SwiftUI
-```swift
-struct ConnectionFormView: View {
-    @StateObject private var dbManager = DatabaseManager.shared
-
-    var body: some View {
-        Form {
-            // UI elements
-        }
-    }
-}
-```
-
-### Protocol-Oriented Design
-
-All database drivers conform to a single protocol:
-
-```swift
-protocol DatabaseDriver: AnyObject {
-    var connection: DatabaseConnection { get }
-    var status: ConnectionStatus { get }
-
-    func connect() async throws
-    func disconnect()
-    func execute(query: String) async throws -> QueryResult
-    func fetchTables() async throws -> [TableInfo]
+```rust
+pub trait DatabaseDriver: Send + Sync {
+    async fn connect(&self) -> Result<(), DriverError>;
+    async fn execute(&self, sql: &str) -> Result<QueryResult, DriverError>;
+    fn cancel_query(&self) -> Result<(), DriverError>;
+    fn supports_schemas(&self) -> bool;
+    fn database_type_id(&self) -> &str;
     // ...
 }
 ```
 
-Database drivers are implemented as `.tableplugin` bundles loaded at runtime. Each plugin implements `DriverPlugin` and `PluginDatabaseDriver` from the shared `TableProPluginKit` framework. `PluginDriverAdapter` bridges `PluginDatabaseDriver` to the core `DatabaseDriver` protocol.
+| Driver | Crate | Underlying library |
+|--------|-------|---------------------|
+| PostgreSQL | `driver-postgres` | `tokio-postgres` |
+| MySQL / MariaDB | `driver-mysql` | `mysql_async` (rustls) |
+| SQL Server | `driver-mssql` | `tiberius` (rustls) |
+| SQLite | `driver-sqlite` | `rusqlite` (bundled) |
+| MongoDB | `driver-mongodb` | `mongodb` |
+| Redis | `driver-redis` | `redis` (tokio-rustls) |
 
-### Actor Isolation
+<Note>
+`cancel_query` is only implemented for SQLite (`interrupt()`); the other 5 drivers return `Unsupported`.
+</Note>
 
-Concurrent operations use Swift actors:
+Each driver has a capability sidecar (`driver-capabilities/driver-<name>.capabilities.json`) declaring flags like `supportsSchemas`, `supportsDdl`, `supportsImportExport` — the frontend gates UI on these.
 
-```swift
-actor SSHTunnelManager {
-    static let shared = SSHTunnelManager()
+## Connection Lifecycle
 
-    private var tunnels: [UUID: SSHTunnel] = [:]
+1. Frontend calls `connect` with a `ConnectionConfig`
+2. `ConnectionManager` (`services/connection_manager.rs`) opens the driver connection and returns a `session_id`
+3. All subsequent commands (`execute_query`, `fetch_tables`, ...) are keyed by `session_id`, not the saved connection's ID — this keeps runtime identity independent of storage
+4. SSH tunneling, when enabled, goes through a built-in Rust SSH client (`russh`) — no external `ssh` binary or OpenSSH install required
 
-    func createTunnel(
-        connectionId: UUID,
-        sshHost: String,
-        // ...
-    ) async throws -> Int {
-        // Thread-safe tunnel management
-    }
-}
-```
+Reconnect is user-initiated (a **Reconnect** button appears on failure) — there is no automatic background health-check ping or retry-with-backoff loop.
 
-### Plugin System
+## Credential Storage
 
-Driver creation uses a plugin-based factory. `PluginManager` discovers and loads `.tableplugin` bundles at runtime. `DatabaseDriverFactory` looks up plugins via `DatabaseType.pluginTypeId` and wraps them with `PluginDriverAdapter` to conform to the core `DatabaseDriver` protocol. No switch statement or hardcoded driver list is needed.
+Saved connection passwords are DPAPI-encrypted at rest by default (`services/credential_store.rs`, Windows Data Protection API). Enabling **Remember credentials in OS keychain** in Settings additionally mirrors them into Windows Credential Manager (`services/credential_manager.rs`).
 
-## Key Components
+## Safe Mode
 
-### DatabaseManager
+A global (not per-connection) setting gates query execution before it reaches the driver, classified by regex against the SQL text — see [Safe Mode](/features/safe-mode) for the exact rules per level.
 
-Central manager for all database operations:
-
-- Manages active sessions
-- Coordinates connections/disconnections
-- Handles SSH tunnel lifecycle
-- Publishes state changes to UI
-
-```swift
-@MainActor
-class DatabaseManager: ObservableObject {
-    static let shared = DatabaseManager()
-
-    @Published var sessions: [DatabaseSession] = []
-    @Published var activeSessionId: UUID?
-
-    func connectToSession(_ connection: DatabaseConnection) async throws
-    func disconnectSession(_ id: UUID) async
-    func executeQuery(_ query: String) async throws -> QueryResult
-}
-```
-
-### Database Driver Plugins
-
-Each driver is a `.tableplugin` bundle under `Plugins/`. MySQL, PostgreSQL, and SQLite are built into the app bundle; the rest are distributed via the plugin registry and downloaded on demand.
-
-| Plugin | Database Types | C Bridge | Distribution |
-|--------|---------------|----------|--------------|
-| MySQLDriverPlugin | MySQL, MariaDB | CMariaDB (libmariadb) | Built-in |
-| PostgreSQLDriverPlugin | PostgreSQL, Redshift | CLibPQ (libpq) | Built-in |
-| SQLiteDriverPlugin | SQLite | Foundation sqlite3 | Built-in |
-| ClickHouseDriverPlugin | ClickHouse | URLSession HTTP | Registry |
-| MSSQLDriverPlugin | SQL Server | CFreeTDS | Registry |
-| MongoDBDriverPlugin | MongoDB | CLibMongoc | Registry |
-| RedisDriverPlugin | Redis | CRedis | Registry |
-| DuckDBDriverPlugin | DuckDB | CDuckDB | Registry |
-| OracleDriverPlugin | Oracle | OracleNIO (SPM) | Registry |
-
-### Autocomplete Engine
+## Query Execution Flow
 
 ```mermaid
 flowchart TB
-    Engine["CompletionEngine<br>(Entry)"]
-    Engine --> Context["SQLContext<br>Analyzer"]
-    Engine --> Schema["SQLSchema<br>Provider"]
-    Schema --> Tables["Tables"]
-    Schema --> Columns["Columns"]
-    Context --> Keywords["SQLKeywords"]
+    User["User presses Ctrl+Enter"]
+    User --> Store["queryStore.execute()"]
+    Store --> SafeMode["checkSafeMode()"]
+    SafeMode --> Invoke["invoke('execute_query_streaming')"]
+    Invoke --> Driver["DatabaseDriver.execute()"]
+    Driver --> Stream["Streamed QueryChunk events"]
+    Stream --> Grid["Columnar result store<br>(data grid)"]
 ```
 
-- **CompletionEngine**: Main entry point
-- **SQLContextAnalyzer**: Parses query context
-- **SQLSchemaProvider**: Provides schema information
-- **SQLKeywords**: SQL keyword definitions
+Each run mints a monotonic generation; stale streamed chunks from a superseded run are dropped by generation check.
 
-### SSH Tunnel Manager
-
-Actor-based SSH tunnel management:
-
-```swift
-actor SSHTunnelManager {
-    private var tunnels: [UUID: SSHTunnel] = [:]
-
-    func createTunnel(...) async throws -> Int
-    func closeTunnel(connectionId: UUID) async throws
-    func hasTunnel(connectionId: UUID) -> Bool
-}
-```
-
-Features:
-- Port forwarding via system `ssh`
-- Password and key authentication
-- Health monitoring
-- Automatic cleanup
-
-## Data Flow
-
-### Connection Flow
-
-```mermaid
-flowchart TB
-    User["User clicks Connect"]
-    User --> Form["ConnectionFormView<br>(UI Validation)"]
-    Form --> Manager["DatabaseManager<br>.connectToSession"]
-    Manager --> SSH["SSHTunnelManager"]
-    Manager --> Factory["DatabaseDriverFactory"]
-    Factory --> Plugin["PluginManager<br>(loads .tableplugin)"]
-    Plugin --> Adapter["PluginDriverAdapter"]
-    SSH --> Connected["Connection Established"]
-    Adapter --> Connected
-
-    subgraph optional ["if SSH enabled"]
-        SSH
-    end
-```
-
-### Query Execution Flow
-
-```mermaid
-flowchart TB
-    User["User executes query<br>(Cmd+Enter)"]
-    User --> Editor["EditorTextView<br>(Gets query)"]
-    Editor --> Manager["DatabaseManager<br>.executeQuery"]
-    Manager --> Driver["DatabaseDriver<br>.execute(query)"]
-    Driver --> Result["QueryResult<br>(Rows + Columns)"]
-    Result --> Grid["DataGridView<br>(Display results)"]
-```
-
-## State Management
-
-### Published Properties
-
-UI state uses `@Published`:
-
-```swift
-@MainActor
-class DatabaseManager: ObservableObject {
-    @Published var sessions: [DatabaseSession] = []
-    @Published var activeSessionId: UUID?
-    @Published var isConnecting = false
-}
-```
-
-### App Storage
-
-Settings persist via `@AppStorage`:
-
-```swift
-@AppStorage("appearance.theme") var theme: AppTheme = .system
-@AppStorage("editor.fontSize") var fontSize: Int = 13
-```
-
-### Environment
-
-Shared state via SwiftUI environment:
-
-```swift
-@main
-struct TableProApp: App {
-    @StateObject private var dbManager = DatabaseManager.shared
-
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(dbManager)
-        }
-    }
-}
-```
-
-## Error Handling
-
-### Driver Errors
-
-Each driver defines specific errors:
-
-```swift
-enum MySQLError: Error, LocalizedError {
-    case connectionFailed(String)
-    case queryFailed(String)
-    case authenticationFailed
-
-    var errorDescription: String? {
-        switch self {
-        case .connectionFailed(let msg): return "Connection failed: \(msg)"
-        case .queryFailed(let msg): return "Query failed: \(msg)"
-        case .authenticationFailed: return "Authentication failed"
-        }
-    }
-}
-```
-
-### Error Propagation
-
-Errors propagate through async/await:
-
-```swift
-func executeQuery(_ query: String) async throws -> QueryResult {
-    guard let driver = activeDriver else {
-        throw DatabaseError.notConnected
-    }
-    return try await driver.execute(query: query)
-}
-```
+<Warning>
+`queryStore`'s in-flight-cancel tracking is a module-level singleton, not per-tab — starting a query in one editor tab currently cancels an in-flight query in another tab. See [Upstream Parity Notes](/development/upstream-parity-notes) for related invariants worth re-auditing.
+</Warning>
 
 ## Testing
 
-### Unit Tests
-
-Tests live in `TableProTests/`:
-
-```swift
-final class MySQLDriverTests: XCTestCase {
-    func testConnectionString() throws {
-        let connection = DatabaseConnection(...)
-        let driver = MySQLDriver(connection: connection)
-        XCTAssertEqual(driver.connectionString, "expected")
-    }
-}
-```
-
-### Integration Tests
-
-```swift
-func testExecuteQuery() async throws {
-    let driver = MySQLDriver(connection: testConnection)
-    try await driver.connect()
-    defer { driver.disconnect() }
-
-    let result = try await driver.execute(query: "SELECT 1")
-    XCTAssertEqual(result.rowCount, 1)
-}
-```
-
+Rust: `cargo test --workspace` from `src-tauri/`. Frontend: `npx vitest run` from the project root.

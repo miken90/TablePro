@@ -1,86 +1,15 @@
 ---
 title: Appearance
-description: Theme engine with built-in presets, custom themes, color and font customization, import/export
+description: Theme mode and connection color coding
 ---
 
 # Appearance Settings
 
 Configure how TablePro looks in **Settings** > **Appearance**.
 
-{/* Screenshot: Appearance settings panel */}
-<Frame caption="Appearance settings with theme editor">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-appearance.png"
-    alt="Appearance settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-appearance-dark.png"
-    alt="Appearance settings"
-  />
-</Frame>
+## Theme Mode
 
-## Theme Engine
-
-TablePro ships with 9 built-in themes and supports custom themes. Community themes are available from the plugin registry. Each theme controls editor syntax colors, data grid colors, sidebar/toolbar styling, fonts, spacing, and layout tokens.
-
-### Theme Editor Layout
-
-The Appearance tab is a split view with two panels:
-
-- **Left panel**: Sections for "Built-in", "Registry", and "Custom". Each row shows a color thumbnail, theme name, and source label. Select a theme to activate and edit it.
-- **Right panel**: Three tabs: Fonts, Colors, and Layout.
-
-At the bottom of the sidebar, an action bar provides:
-
-| Button | Action |
-|--------|--------|
-| **+** menu | New Theme, Import... |
-| **-** button | Delete selected theme (disabled for built-in and registry themes) |
-| **Gear** menu | Duplicate, Export..., Uninstall (registry themes only) |
-
-### Built-in Themes
-
-| Theme | Appearance | Based On |
-|-------|------------|----------|
-| **Default Light** | Light | macOS system colors |
-| **Default Dark** | Dark | macOS system colors |
-| **Dracula** | Dark | Dracula color scheme |
-| **Solarized Light** | Light | Ethan Schoonover's Solarized |
-| **Solarized Dark** | Dark | Ethan Schoonover's Solarized |
-| **One Dark** | Dark | Atom One Dark |
-| **GitHub Light** | Light | GitHub UI |
-| **GitHub Dark** | Dark | GitHub UI |
-| **Nord** | Dark | Arctic north-bluish palette |
-
-### Appearance Mode
-
-Pick **Light**, **Dark**, or **Auto** at the top. Light and Dark each store a separate preferred theme. Auto follows the system and switches between the two automatically.
-
-When you select a theme from the list, it becomes the preferred theme for that theme's appearance (light or dark). Selecting a dark theme while in Light mode switches to Dark mode so you see the change right away.
-
-{/* Screenshot: Side-by-side light and dark themes */}
-<Frame caption="Light vs Dark theme">
-  <img
-    className="block dark:hidden"
-    src="/images/theme-comparison.png"
-    alt="Theme comparison"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/theme-comparison-dark.png"
-    alt="Theme comparison"
-  />
-</Frame>
-
-## Customizing Themes
-
-Select a theme and edit directly. Built-in themes auto-duplicate when you change colors or layout, preserving the original. Font changes apply without duplication.
-
-## Import, Export & Registry
-
-Export custom themes as JSON. Import from files or install from the plugin registry (**Settings > Plugins > Browse**, filter by Themes). Registry themes are read-only; duplicate to customize.
+Three options: **Light**, **Dark**, **System** (follows the OS setting). There is no custom theme editor, theme import/export, or theme registry.
 
 ## Connection Colors
 
@@ -104,75 +33,10 @@ Color-code connections for quick identification:
 3. Select a color from the palette
 4. Save the connection
 
-{/* Screenshot: Connection color picker */}
-<Frame caption="Connection color picker">
-  <img
-    className="block dark:hidden"
-    src="/images/connection-colors.png"
-    alt="Connection colors"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/connection-colors-dark.png"
-    alt="Connection colors"
-  />
-</Frame>
-
 ### Connection Color Display
 
-Connection colors show up in:
+Connection colors show up in the sidebar connection list, tab headers, and connection status bar.
 
-- Sidebar connection list
-- Tab headers
-- Connection status bar
-- Window title (when connected)
-
-<Warning>
+<Tip>
 Use red for production databases as a visual reminder to be careful with queries.
-</Warning>
-
-{/* Screenshot: Connection colors in sidebar and tabs */}
-<Frame caption="Connection colors displayed in sidebar and tabs">
-  <img
-    className="block dark:hidden"
-    src="/images/connection-colors-sidebar.png"
-    alt="Connection colors in sidebar and tabs"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/connection-colors-sidebar-dark.png"
-    alt="Connection colors in sidebar and tabs"
-  />
-</Frame>
-
-## Database Type Colors
-
-Each database type has a fixed color for quick identification:
-
-| Database | Color |
-|----------|-------|
-| MySQL | Orange |
-| MariaDB | Cyan |
-| PostgreSQL | Blue |
-| SQLite | Green |
-
-These appear on:
-
-- Database type icons
-- Connection type indicators
-- Sidebar icons
-
-{/* Screenshot: Database type colors */}
-<Frame caption="Database type color coding: MySQL, MariaDB, PostgreSQL, SQLite">
-  <img
-    className="block dark:hidden"
-    src="/images/database-type-colors.png"
-    alt="Database type colors"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/database-type-colors-dark.png"
-    alt="Database type colors"
-  />
-</Frame>
-
+</Tip>

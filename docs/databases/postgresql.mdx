@@ -1,11 +1,11 @@
 ---
 title: PostgreSQL
-description: Connect to PostgreSQL 12+ with schema browsing, JSONB display, and full libpq driver support
+description: Connect to PostgreSQL with schema browsing, JSONB display, and a compiled-in Rust driver
 ---
 
 # PostgreSQL Connections
 
-TablePro supports PostgreSQL 12 and later via the libpq C connector. Schema browsing, rich type display (JSONB, arrays, UUID, inet), and all standard PostgreSQL query features work out of the box.
+TablePro connects to PostgreSQL via a compiled-in Rust driver (`tokio-postgres`). No external library is required. Schema browsing, rich type display (JSONB, arrays, UUID, inet), and standard PostgreSQL query features work out of the box.
 
 ## Quick Setup
 
@@ -28,26 +28,12 @@ TablePro supports PostgreSQL 12 and later via the libpq C connector. Schema brow
 | **Database** | - | **Required** (unlike MySQL) |
 
 <Tip>
-Open URLs like `postgresql://user:pass@host/db` directly to connect. See [Connection URL Reference](/databases/connection-urls).
+Paste a `postgresql://user:pass@host/db` URL into **Import from URL** on the connection form to auto-fill the fields. See [Connection URL Reference](/databases/connection-urls).
 </Tip>
-
-{/* Screenshot: PostgreSQL connection form */}
-<Frame caption="PostgreSQL connection form">
-  <img
-    className="block dark:hidden"
-    src="/images/postgresql-connection-form.png"
-    alt="PostgreSQL connection form"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/postgresql-connection-form-dark.png"
-    alt="PostgreSQL connection form"
-  />
-</Frame>
 
 ## Example Configurations
 
-**Local**: host `localhost:5432`, user `postgres`, "trust" auth (no password) with Homebrew
+**Local**: host `localhost:5432`, user `postgres`, password auth
 **Docker**: host `localhost:5432`, password from `POSTGRES_PASSWORD` env
 **AWS RDS**: Use endpoint hostname, standard credentials
 **Heroku**: Parse `DATABASE_URL` for credentials
@@ -55,7 +41,7 @@ Open URLs like `postgresql://user:pass@host/db` directly to connect. See [Connec
 
 ## Features
 
-Sidebar displays all accessible schemas and tables. Switch databases/schemas with **Cmd+K**. Table info shows structure (columns, indexes, constraints) and DDL. Full PostgreSQL syntax support:
+Sidebar displays all accessible schemas and tables. Switch tables with **Ctrl+K** (Quick Switcher). Table info shows structure (columns, indexes, constraints) and DDL. Full PostgreSQL syntax support:
 
 ```sql
 -- JSONB queries
@@ -97,7 +83,7 @@ Supports `jsonb` (formatted JSON), `array`, `uuid`, `inet` (IP), `timestamp with
 
 ## Troubleshooting
 
-**Connection refused**: Check server is running (`brew services start postgresql@16`), verify `listen_addresses` in `postgresql.conf`, ensure firewall allows port 5432.
+**Connection refused**: Check the PostgreSQL service is running, verify `listen_addresses` in `postgresql.conf`, ensure firewall allows port 5432.
 
 **Auth failed**: Check `pg_hba.conf` for correct auth method (`md5`/`scram-sha-256` for passwords, `trust` for local dev). Reset password with `ALTER USER postgres WITH PASSWORD 'newpassword';`
 
@@ -111,11 +97,7 @@ Supports `jsonb` (formatted JSON), `array`, `uuid`, `inet` (IP), `timestamp with
 
 **Startup Commands** (Advanced tab): Set session variables like `SET timezone = 'UTC'; SET search_path TO myschema, public;` to apply automatically on connect.
 
-**~/.pgpass Support**: Use format `hostname:port:database:username:password` with wildcards (`*`). Must have `chmod 0600` permissions.
-
-**Pre-Connect Script** (Advanced tab): Run a shell script before connecting (e.g., to refresh credentials from a secrets manager). 10-second timeout.
-
-**PostgreSQL Extensions**: PostGIS, hstore, ltree work out of the box. Check with `SELECT * FROM pg_extension;`
+**PostgreSQL Extensions**: PostGIS, hstore, ltree work out of the box like any other SQL. Check with `SELECT * FROM pg_extension;`
 
 **Performance**: Use `EXPLAIN ANALYZE` for query optimization. `LIMIT` large exploratory queries, create indexes, enable pagination.
 

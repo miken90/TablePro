@@ -7,20 +7,6 @@ description: Queue cell edits, row inserts, and deletions locally before committ
 
 Changes in TablePro are queued in memory, not applied immediately. Edit cells, insert rows, delete rows, then review everything before committing. Nothing touches the database until you say so.
 
-{/* Screenshot: Data grid with pending changes highlighted */}
-<Frame caption="Data grid with pending changes highlighted">
-  <img
-    className="block dark:hidden"
-    src="/images/change-tracking.png"
-    alt="Change Tracking"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/change-tracking-dark.png"
-    alt="Change Tracking"
-  />
-</Frame>
-
 <Tip>
 Change tracking is per-tab. Switching tabs preserves your edits.
 </Tip>
@@ -37,20 +23,6 @@ To edit an existing cell:
 2. Enter the new value
 3. Press `Enter` to confirm or `Escape` to cancel
 
-{/* Screenshot: Modified cell highlighted in the data grid */}
-<Frame caption="Modified cells are highlighted">
-  <img
-    className="block dark:hidden"
-    src="/images/change-tracking-modified.png"
-    alt="Modified cells"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/change-tracking-modified-dark.png"
-    alt="Modified cells"
-  />
-</Frame>
-
 <Note>
 Changing a value back to its original automatically removes it from the queue.
 </Note>
@@ -66,20 +38,6 @@ To insert a new row:
 
 Edits to cells in a new row are folded into the insertion, not tracked as separate updates.
 
-{/* Screenshot: Newly added row with insertion indicator */}
-<Frame caption="Newly added row">
-  <img
-    className="block dark:hidden"
-    src="/images/change-new-row.png"
-    alt="Newly added row with insertion indicator"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/change-new-row-dark.png"
-    alt="Newly added row with insertion indicator"
-  />
-</Frame>
-
 ### Deleting Rows
 
 To delete rows:
@@ -90,20 +48,6 @@ To delete rows:
 
 Deleted rows stay visible until you commit or discard.
 
-{/* Screenshot: Deleted row with deletion indicator */}
-<Frame caption="Deleted row">
-  <img
-    className="block dark:hidden"
-    src="/images/change-deleted-row.png"
-    alt="Deleted row with deletion indicator"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/change-deleted-row-dark.png"
-    alt="Deleted row with deletion indicator"
-  />
-</Frame>
-
 <Warning>
 Batch deletion of multiple rows is tracked as a single undo action. Undoing a batch deletion restores all rows at once.
 </Warning>
@@ -112,7 +56,7 @@ Batch deletion of multiple rows is tracked as a single undo action. Undoing a ba
 
 ### Committing Changes
 
-Click **Commit** or press `Cmd+S`. TablePro generates parameterized SQL, executes it, clears the queue, and refreshes the grid.
+Click **Commit** or press `Ctrl+S`. TablePro generates parameterized SQL, executes it, clears the queue, and refreshes the grid.
 
 Generated SQL:
 
@@ -132,35 +76,21 @@ Click **Discard** to revert all pending changes. Modified cells return to their 
 
 ### Previewing Data SQL
 
-Click the **Preview SQL** button (eye icon) or press `Cmd+Shift+P` to see the exact SQL before committing. Use **Copy All** to copy to clipboard.
+Click the **Preview SQL** button (eye icon) or press `Ctrl+Shift+P` to see the exact SQL before committing. Use **Copy All** to copy to clipboard.
 
 <Tip>
 The preview inlines parameter values so you can verify exactly what will run. Destructive operations are highlighted with a warning banner.
 </Tip>
 
-{/* Screenshot: Commit and Discard buttons with pending changes count */}
-<Frame caption="Commit and Discard buttons with pending changes count">
-  <img
-    className="block dark:hidden"
-    src="/images/commit-discard-buttons.png"
-    alt="Commit and Discard buttons with pending changes count"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/commit-discard-buttons-dark.png"
-    alt="Commit and Discard buttons with pending changes count"
-  />
-</Frame>
-
 ## Undo & Redo
 
 | Action | Shortcut |
 |--------|----------|
-| Undo | `Cmd+Z` |
-| Redo | `Cmd+Shift+Z` |
+| Undo | `Ctrl+Z` |
+| Redo | `Ctrl+Shift+Z` |
 
 <Tip>
-Context-aware: `Cmd+Z` undoes text edits when the SQL editor is focused, data changes when the grid is focused.
+Context-aware: `Ctrl+Z` undoes text edits when the SQL editor is focused, data changes when the grid is focused.
 </Tip>
 
 Stacks are per-tab. Committing or discarding clears both stacks.
@@ -190,20 +120,6 @@ Table structure changes (columns, indexes, foreign keys) use the same queue-base
 - **Modified items**: changed fields are marked
 - **Deleted items**: shown with a deletion indicator
 
-{/* Screenshot: Schema changes highlighted in Structure tab */}
-<Frame caption="Schema changes highlighted in Structure tab">
-  <img
-    className="block dark:hidden"
-    src="/images/schema-change-indicators.png"
-    alt="Schema changes highlighted in Structure tab"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/schema-change-indicators-dark.png"
-    alt="Schema changes highlighted in Structure tab"
-  />
-</Frame>
-
 ## Previewing Schema SQL
 
 Before applying schema changes, preview the generated SQL:
@@ -213,7 +129,7 @@ Before applying schema changes, preview the generated SQL:
     Add, modify, or delete columns, indexes, or foreign keys in the Structure tab
   </Step>
   <Step title="Click Commit">
-    Click the Commit button or press `Cmd+S`
+    Click the Commit button or press `Ctrl+S`
   </Step>
   <Step title="Review SQL">
     A preview sheet shows all ALTER TABLE statements that will execute
@@ -222,20 +138,6 @@ Before applying schema changes, preview the generated SQL:
     Click **Apply Changes** to execute, or **Cancel** to go back and adjust
   </Step>
 </Steps>
-
-{/* Screenshot: Schema preview sheet showing ALTER TABLE statements */}
-<Frame caption="Schema change preview with generated SQL">
-  <img
-    className="block dark:hidden"
-    src="/images/schema-preview.png"
-    alt="Schema Preview"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/schema-preview-dark.png"
-    alt="Schema Preview"
-  />
-</Frame>
 
 <Tip>
 Copy individual SQL statements from the preview sheet using the copy button next to each statement.

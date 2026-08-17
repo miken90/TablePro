@@ -1,31 +1,17 @@
 ---
 title: Settings Overview
-description: All settings categories - General, Appearance, Editor, Data Grid, Tabs, Keyboard, AI, History, Plugins, Sync, and License
+description: All settings categories - General, Appearance, Editor, Connection, AI, Performance, Diagnostics, and Shortcuts
 ---
 
 # Settings Overview
 
-Open settings via **TablePro** > **Settings** or `Cmd+,`.
-
-{/* Screenshot: Settings window showing all categories */}
-<Frame caption="TablePro settings">
-  <img
-    className="block dark:hidden"
-    src="/images/settings.png"
-    alt="Settings window"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-dark.png"
-    alt="Settings window"
-  />
-</Frame>
+Open settings via `Ctrl+,` or the gear icon in the toolbar.
 
 ## Settings Categories
 
 <CardGroup cols={2}>
   <Card title="General" icon="gear">
-    Language, startup behavior, updates
+    Language, startup behavior
   </Card>
   <Card title="Appearance" icon="palette" href="/customization/appearance">
     Themes, colors, and fonts
@@ -33,29 +19,20 @@ Open settings via **TablePro** > **Settings** or `Cmd+,`.
   <Card title="Editor" icon="code" href="/customization/editor-settings">
     SQL editor configuration
   </Card>
-  <Card title="Data Grid" icon="table">
-    Row height, date format, display
-  </Card>
-  <Card title="Tabs" icon="rectangle-on-rectangle">
-    Tab reuse behavior
-  </Card>
-  <Card title="Keyboard" icon="keyboard" href="/features/keyboard-shortcuts#customizing-shortcuts">
-    Custom shortcuts
+  <Card title="Connection" icon="plug">
+    Credential storage, defaults
   </Card>
   <Card title="AI" icon="sparkles" href="/features/ai-chat">
     AI provider setup
   </Card>
-  <Card title="History" icon="clock-rotate-left">
-    History retention
+  <Card title="Performance" icon="gauge">
+    Streaming threshold, max stored rows
   </Card>
-  <Card title="Plugins" icon="puzzle-piece">
-    Manage drivers
+  <Card title="Diagnostics" icon="stethoscope">
+    Crash dump viewer
   </Card>
-  <Card title="Sync" icon="cloud" href="/features/icloud-sync">
-    iCloud sync (Pro)
-  </Card>
-  <Card title="License" icon="key">
-    License activation
+  <Card title="Shortcuts" icon="keyboard" href="/features/keyboard-shortcuts#customizing-shortcuts">
+    Custom shortcuts
   </Card>
 </CardGroup>
 
@@ -65,7 +42,7 @@ Open settings via **TablePro** > **Settings** or `Cmd+,`.
 
 | Option | Description |
 |--------|-------------|
-| **System** | Follow macOS system language (default) |
+| **System** | Follow OS system language (default) |
 | **English** | English |
 | **Tiếng Việt** | Vietnamese |
 | **Türkçe** | Turkish |
@@ -102,52 +79,9 @@ The timeout is enforced at the database level:
 The timeout applies when a new connection is established. Changing it requires reconnecting.
 </Note>
 
-{/* Screenshot: Query timeout setting */}
-<Frame caption="Query execution timeout configuration">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-query-timeout.png"
-    alt="Query timeout setting"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-query-timeout-dark.png"
-    alt="Query timeout setting"
-  />
-</Frame>
-
-### Software Update
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Automatically check for updates** | On | Periodically check for new versions in the background |
-| **Check for Updates...** | -- | Check right now |
-
-TablePro uses [Sparkle](https://sparkle-project.org/) for updates. When an update is available, a dialog shows release notes and an install option.
-
-Also available from the **TablePro** menu > **Check for Updates...**.
-
-### Privacy
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Share anonymous usage data** | On | Sends anonymous stats (OS version, architecture, locale, database types) every 24 hours |
-
-No personal information, queries, or database content is transmitted. Toggle off at any time.
-
-{/* Screenshot: General settings panel */}
-<Frame caption="General settings">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-general.png"
-    alt="General settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-general-dark.png"
-    alt="General settings"
-  />
-</Frame>
+<Note>
+TablePro has no auto-update mechanism and does not send usage telemetry.
+</Note>
 
 ## Data Grid Settings
 
@@ -155,7 +89,7 @@ No personal information, queries, or database content is transmitted. Toggle off
 
 | Setting | Default | Range | Description |
 |---------|---------|-------|-------------|
-| **Font family** | System Mono | System Mono, SF Mono, Menlo, Monaco, Courier New | Monospace font for data grid cells |
+| **Font family** | JetBrains Mono | Any installed monospace font | Font for data grid cells |
 | **Font size** | 13 pt | 10-18 pt | Text size in data grid cells |
 
 Affects all data grid cells, including NULL placeholders and cell editing overlays. A live preview is shown in the settings panel.
@@ -236,20 +170,6 @@ Larger page sizes use more memory but show more data at once.
 |---------|---------|-------------|
 | **Auto-show inspector on row select** | Off | Open the right sidebar automatically when selecting a row in a table tab |
 
-{/* Screenshot: Data Grid settings */}
-<Frame caption="Data Grid settings: row height, date format, NULL display">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-data-grid.png"
-    alt="Data Grid settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-data-grid-dark.png"
-    alt="Data Grid settings"
-  />
-</Frame>
-
 ## Tab Settings
 
 ### Reuse Clean Table Tab
@@ -271,20 +191,6 @@ When off (default), every table click opens a new tab.
 Enable this for single-tab browsing, similar to TablePlus's default behavior.
 </Tip>
 
-{/* Screenshot: Tab settings */}
-<Frame caption="Tab settings: reuse behavior">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-tabs.png"
-    alt="Tab settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-tabs-dark.png"
-    alt="Tab settings"
-  />
-</Frame>
-
 ### Preview Tabs
 
 | Setting | Default | Description |
@@ -294,16 +200,6 @@ Enable this for single-tab browsing, similar to TablePlus's default behavior.
 Single-clicking a table opens a preview tab that gets replaced on next click. Double-clicking or interacting with the tab (sorting, filtering, editing) makes it permanent.
 
 Preview tabs show "Preview" in the subtitle and are not persisted across restarts.
-
-### Tab Grouping
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Group all connections in one window** | Off | Tabs from different connections share the same window instead of opening separate windows |
-
-By default, each database connection opens its own window — tabs for the same connection are grouped together, while different connections get separate windows. Enable this setting to group all tabs into a single window regardless of which connection they belong to.
-
-The setting takes effect for newly opened connections. Existing windows keep their current grouping until closed.
 
 ## Keyboard Settings
 
@@ -318,25 +214,11 @@ Customize keyboard shortcuts for menu actions. See [Keyboard Shortcuts](/feature
 
 ### Conflict Detection
 
-Assigning a shortcut already in use shows a dialog with **Cancel** or **Reassign** options. System-reserved shortcuts (`Cmd+Q`, `Cmd+H`, `Cmd+M`, `Cmd+,`) cannot be reassigned.
+Assigning a shortcut already in use shows a dialog with **Cancel** or **Reassign** options.
 
 ### Reset to Defaults
 
 Click **Reset to Defaults** to restore all shortcuts.
-
-{/* Screenshot: Keyboard settings */}
-<Frame caption="Keyboard settings: shortcut customization">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-keyboard.png"
-    alt="Keyboard settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-keyboard-dark.png"
-    alt="Keyboard settings"
-  />
-</Frame>
 
 ## History Settings
 
@@ -373,194 +255,17 @@ Disabling auto cleanup with unlimited entries may cause the history database to 
 2. Click **Clear All History**
 3. Confirm the action
 
-{/* Screenshot: History settings */}
-<Frame caption="History settings: retention and cleanup">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-history.png"
-    alt="History settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-history-dark.png"
-    alt="History settings"
-  />
-</Frame>
-
-## Plugins Settings
-
-Manage database driver plugins from the **Plugins** tab in Settings.
-
-### Installed Plugins
-
-Split-view: plugin list on the left, details on the right. Each row shows version, capability, and source (built-in or user-installed). Filter by name using the search field.
-
-TablePro ships with 3 built-in database driver plugins (MySQL, PostgreSQL, SQLite) and 3 built-in export plugins (CSV, JSON, SQL). Additional plugins are available from the plugin registry and can be installed from the Browse tab or downloaded automatically when you select a database type:
-
-| Plugin | Database Types | Default Port | Distribution |
-|--------|---------------|--------------|--------------|
-| MySQL | MySQL, MariaDB | 3306 | Built-in |
-| PostgreSQL | PostgreSQL, Redshift | 5432 | Built-in |
-| SQLite | SQLite | -- | Built-in |
-| ClickHouse | ClickHouse | 8123 | Registry |
-| SQL Server | SQL Server | 1433 | Registry |
-| MongoDB | MongoDB | 27017 | Registry |
-| Redis | Redis | 6379 | Registry |
-| DuckDB | DuckDB | -- | Registry |
-| Oracle | Oracle | 1521 | Registry |
-
-Toggle plugins on/off in the detail pane. Disabled plugins hide their database type from the connection dialog.
-
-### Plugin Details
-
-Select a plugin to view version, bundle ID, capabilities, database type, and default port. Driver plugins can provide custom settings panels in this view.
-
-### Browse plugins
-
-The **Browse** tab uses the same split-view. Each row shows version, author, download count, and install status. Filter by name or category. Click a plugin for details, or install directly from the list.
-
-### Installing Third-Party Plugins
-
-1. Click the **+** button below the plugin list
-2. Select a `.zip` archive containing a `.tableplugin` bundle
-3. TablePro verifies the code signature and installs the plugin
-
-You can also drag and drop a `.tableplugin` or `.zip` file onto the Plugins settings view to install it.
-
-<Warning>
-Only install plugins from sources you trust. TablePro checks the code signature of sideloaded plugins but cannot guarantee their behavior.
-</Warning>
-
-### Uninstalling Plugins
-
-Select a user-installed plugin and click **-**, or use **Uninstall** in the detail pane. Built-in plugins can only be disabled, not uninstalled.
-
-### Advanced Settings
-
-Some settings are available via `defaults write` for advanced users:
-
-| Setting | Command | Description |
-|---------|---------|-------------|
-| Custom plugin registry | `defaults write com.TablePro com.TablePro.customRegistryURL <url>` | Use a private plugin registry |
-| Clear custom registry | `defaults delete com.TablePro com.TablePro.customRegistryURL` | Revert to default registry |
-
-## Sync settings
-
-Manage iCloud sync from the **Sync** tab in Settings. This is a Pro feature.
-
-### iCloud Sync toggle
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **iCloud Sync** | Off | Enable or disable iCloud sync across all Macs |
-
-### Status
-
-| Element | Description |
-|---------|-------------|
-| **iCloud Account** | Shows the current iCloud account status |
-| **Last Sync** | Timestamp of the most recent sync |
-| **Sync Now** | Manually trigger a sync |
-
-### Sync categories
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Connections** | On | Sync connection details (not passwords) |
-| **Groups & Tags** | On | Sync connection organization, including nested group hierarchy |
-| **App Settings** | On | Sync all 8 settings categories |
-| **Query History** | On | Sync query history |
-
-### History limit
-
-| Option | Description |
-|--------|-------------|
-| **100** | Sync last 100 queries |
-| **500** | Sync last 500 queries |
-| **1,000** | Sync last 1,000 queries |
-| **Unlimited** | Sync all query history |
-
-<Note>
-Passwords are never synced. They remain in each Mac's local Keychain.
-</Note>
-
-See [iCloud Sync](/features/icloud-sync) for full details on conflict resolution, sync behavior, and troubleshooting.
-
-{/* Screenshot: Sync settings */}
-<Frame caption="Sync settings: iCloud sync configuration">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-sync.png"
-    alt="Sync settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-sync-dark.png"
-    alt="Sync settings"
-  />
-</Frame>
-
-## License Settings
-
-Manage your license from the **License** tab in Settings.
-
-### Activating a License
-
-1. Open **Settings** (`Cmd+,`) and select the **License** tab
-2. Enter your license key
-3. Click **Activate**
-
-Once activated, the tab shows your registered email and license key.
-
-### Deactivating a License
-
-1. Open **Settings** > **License**
-2. Click **Deactivate...**
-3. Confirm
-
-<Note>
-Deactivating frees up the activation slot for use on a different machine.
-</Note>
-
-### Offline Use
-
-License validation is local (cryptographic signature). No internet needed after activation. Re-validates with the server every 7 days.
-
-{/* Screenshot: License settings */}
-<Frame caption="License activation and management">
-  <img
-    className="block dark:hidden"
-    src="/images/settings-license.png"
-    alt="License settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/settings-license-dark.png"
-    alt="License settings"
-  />
-</Frame>
-
 ## Settings Storage
 
 Settings are stored in:
 
 ```
-~/Library/Preferences/com.TablePro.plist
+%APPDATA%\TablePro\settings.json
 ```
 
 ### Resetting Settings
 
-To reset everything to defaults:
-
-```bash
-# Remove preferences file
-rm ~/Library/Preferences/com.TablePro.plist
-
-# Remove cached settings
-rm -rf ~/Library/Caches/com.TablePro
-```
-
-Then restart TablePro.
+To reset everything to defaults, delete the file above and restart TablePro. Saved connections (`connections.json`, `groups.json`) live alongside it and are unaffected.
 
 <Warning>
 Resetting preferences does not affect saved connections or query history.
@@ -570,4 +275,4 @@ Resetting preferences does not affect saved connections or query history.
 
 | Action | Shortcut |
 |--------|----------|
-| Open Settings | `Cmd+,` |
+| Open Settings | `Ctrl+,` |

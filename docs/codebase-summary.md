@@ -2,19 +2,15 @@
 
 ## Repository summary
 
-This summary reflects current repository structure as of 2026-04-08.
+This summary reflects current repository structure as of 2026-08-17. This is a Windows-only, personal, non-profit fork — the fork has permanently detached from upstream and no macOS code remains in the repo.
 
 ## Top-level structure
 
 ```text
 TablePro/
-├── tablepro-windows/        # Active Windows app (Tauri v2 + Rust + React)
-├── TablePro/                # Upstream/reference macOS app source
-├── Plugins/                 # Upstream/reference macOS plugin sources + shared plugin kit
-├── Libs/                    # Upstream/reference native/static libraries
+├── tablepro-windows/        # The only product (Tauri v2 + Rust + React)
 ├── docs/                    # Product and engineering docs
 ├── plans/                   # Planning artifacts and reports
-├── scripts/                 # Build/release utilities
 ├── CHANGELOG.md
 ├── README.md
 └── AGENTS.md

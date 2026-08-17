@@ -7,20 +7,6 @@ description: Schema-aware SQL autocomplete with alias resolution, 50ms debounce,
 
 Autocomplete analyzes your cursor position, the SQL syntax context, referenced tables and aliases, and your database schema to suggest only relevant completions at each point in the query.
 
-{/* Screenshot: Autocomplete popup showing mixed suggestions */}
-<Frame caption="Context-aware autocomplete">
-  <img
-    className="block dark:hidden"
-    src="/images/autocomplete.png"
-    alt="Autocomplete"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/autocomplete-dark.png"
-    alt="Autocomplete"
-  />
-</Frame>
-
 ## How Autocomplete Works
 
 The autocomplete engine analyzes four things:
@@ -48,20 +34,6 @@ FROM users WH|  -- Suggests: WHERE
 SELECT * FROM users WHERE name LIKE '%test%' ORD|  -- Suggests: ORDER
 ```
 
-{/* Screenshot: Keyword suggestions */}
-<Frame caption="SQL keyword suggestions">
-  <img
-    className="block dark:hidden"
-    src="/images/autocomplete-keywords.png"
-    alt="Keyword suggestions"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/autocomplete-keywords-dark.png"
-    alt="Keyword suggestions"
-  />
-</Frame>
-
 **Suggested keywords include**:
 
 | Category | Keywords |
@@ -80,20 +52,6 @@ SELECT * FROM |  -- Suggests all tables
 SELECT * FROM us|  -- Suggests tables starting with "us": users, user_roles
 SELECT * FROM users JOIN |  -- Suggests all tables
 ```
-
-{/* Screenshot: Table name suggestions */}
-<Frame caption="Table name suggestions">
-  <img
-    className="block dark:hidden"
-    src="/images/autocomplete-tables.png"
-    alt="Table suggestions"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/autocomplete-tables-dark.png"
-    alt="Table suggestions"
-  />
-</Frame>
 
 ### Column Names
 
@@ -116,20 +74,6 @@ FROM users u
 JOIN orders o ON u.id = o.|  -- Shows: id, user_id, total (from orders)
 ```
 
-{/* Screenshot: Column suggestions after alias */}
-<Frame caption="Column suggestions for aliased table">
-  <img
-    className="block dark:hidden"
-    src="/images/autocomplete-alias.png"
-    alt="Alias suggestions"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/autocomplete-alias-dark.png"
-    alt="Alias suggestions"
-  />
-</Frame>
-
 ### Functions
 
 SQL functions are suggested in appropriate contexts:
@@ -149,20 +93,6 @@ WHERE date_column > |  -- Suggests: NOW(), CURRENT_DATE, etc.
 | Date | NOW, CURRENT_DATE, DATE_FORMAT, DATEADD |
 | Math | ROUND, ABS, CEIL, FLOOR |
 | Conditional | COALESCE, NULLIF, CASE, IF |
-
-{/* Screenshot: SQL function suggestions */}
-<Frame caption="SQL function suggestions">
-  <img
-    className="block dark:hidden"
-    src="/images/autocomplete-functions.png"
-    alt="SQL function suggestions"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/autocomplete-functions-dark.png"
-    alt="SQL function suggestions"
-  />
-</Frame>
 
 ### Schema Names
 

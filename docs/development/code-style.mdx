@@ -1,217 +1,36 @@
 ---
 title: Code Style
-description: Swift conventions, SwiftLint/SwiftFormat rules, naming, access control, and file organization
+description: TypeScript/React and Rust conventions for TablePro Windows
 ---
 
-# Code Style Guide
-
-These conventions keep TablePro's codebase consistent and readable.
+# Code Style
 
 ## Tools
 
-| Tool | Purpose | Config File |
-|------|---------|-------------|
-| **SwiftLint** | Linting and static analysis | `.swiftlint.yml` |
-| **SwiftFormat** | Code formatting | `.swiftformat` |
+Enforced automatically — run before committing:
 
-### Running Tools
-
-```bash
-# Check for linting issues
-swiftlint lint
-
-# Auto-fix linting issues
-swiftlint --fix
-
-# Format code
-swiftformat .
-
-# Check formatting without applying
-swiftformat --lint .
+```powershell
+npx eslint .          # from tablepro-windows/
+cargo clippy --workspace --all-targets -- -D warnings   # from tablepro-windows/src-tauri/
 ```
 
-<Tip>
-Run these before committing. SwiftLint also runs automatically during Xcode builds.
-</Tip>
+`tablepro-windows/eslint.config.js` is the source of truth for frontend lint rules; there is no separate Prettier config or `rustfmt.toml` in this repo — `cargo fmt` defaults apply.
 
-## Architecture Principles
+## File Naming
 
-**Separation of Concerns**: Logic in viewmodels, presentation in views.
-**Value Types First**: Use `struct` for data, `class` for shared state.
-**Immutability**: Default to `let`; use `var` only when mutation is needed.
+- Frontend (`src/`): kebab-case for `.ts`/`.tsx` files (e.g. `connection-form-sections.tsx`), matching existing convention
+- Backend (`src-tauri/`): snake_case for `.rs` files, per standard Rust convention
 
-## Naming Conventions
+## Project Structure
 
-### Types
+- Frontend state: Zustand stores in `src/stores/`, one store per domain (`connectionStore.ts`, `queryStore.ts`, `schemaStore.ts`, ...)
+- Backend commands: `#[tauri::command]` handlers grouped by domain under `src-tauri/src/commands/`
+- Drivers: each database engine is its own crate (`driver-postgres`, `driver-mysql`, ...) implementing the shared `DatabaseDriver` trait from `driver_trait.rs`
 
-| Element | Convention | Example |
-|---------|------------|---------|
-| Classes/Structs | UpperCamelCase | `DatabaseConnection` |
-| Enums | UpperCamelCase | `DatabaseType` |
-| Enum cases | lowerCamelCase | `.postgresql` |
-| Protocols | UpperCamelCase | `DatabaseDriver` |
+## Modularization
 
-### Functions and Variables
+Split a file when it grows unwieldy rather than let it accumulate unrelated concerns — check existing sibling modules for the boundary convention before creating a new one (e.g. `commands/query.rs` vs `commands/query_streaming.rs`, `services/credential_store.rs` vs `services/credential_manager.rs`).
 
-| Element | Convention | Example |
-|---------|------------|---------|
-| Functions | lowerCamelCase | `executeQuery()` |
-| Variables | lowerCamelCase | `connectionString` |
-| Constants | lowerCamelCase | `maxRetryAttempts` |
-| Parameters | lowerCamelCase | `tableName: String` |
+## i18n
 
-### Boolean Properties
-
-Use `is`/`has`/`can` prefixes:
-
-```swift
-var isConnected: Bool
-var hasValidCredentials: Bool
-var canExecuteQuery: Bool
-```
-
-### Factory Methods
-
-Use `make` prefix:
-
-```swift
-func makeConnection() -> DatabaseConnection
-func makeDriver(for type: DatabaseType) -> DatabaseDriver
-```
-
-## Formatting
-
-### Indentation
-
-- **4 spaces** (never tabs)
-- Configure your editor to convert tabs to spaces
-
-### Line Length
-
-- **120 characters max** per line
-- Break long lines for readability
-
-```swift
-// Good: Line breaks for readability
-let result = try await driver.executeParameterized(
-    query: "SELECT * FROM users WHERE email = ?",
-    parameters: [email]
-)
-
-// Avoid: Long single line
-let result = try await driver.executeParameterized(query: "SELECT * FROM users WHERE email = ?", parameters: [email])
-```
-
-### Braces
-
-K&R style -- opening brace on same line:
-
-```swift
-// Good
-if condition {
-    doSomething()
-} else {
-    doSomethingElse()
-}
-
-// Bad
-if condition
-{
-    doSomething()
-}
-```
-
-### Spacing
-
-```swift
-// Space around operators
-let sum = a + b
-let isValid = count > 0 && name.isEmpty == false
-
-// No space for ranges
-for i in 0..<10 { }
-
-// Space after colon in type declarations
-var name: String
-func connect(host: String, port: Int)
-```
-
-## Access Control
-
-### Specify Explicitly
-
-Always specify access modifiers:
-
-```swift
-// Good: Explicit access
-private var connectionPool: [Connection] = []
-internal func processResult(_ result: QueryResult)
-public func connect() async throws
-
-// Avoid: Implicit internal
-var connectionPool: [Connection] = []  // Implicit internal
-```
-
-### Prefer Private
-
-Use the most restrictive access that works:
-
-```swift
-class DatabaseManager {
-    // Public API
-    public func connect() async throws { ... }
-
-    // Internal helpers
-    private func validateConnection() -> Bool { ... }
-    private var activeDriver: DatabaseDriver?
-}
-```
-
-### Extension Access
-
-Specify access on the extension, not individual members:
-
-```swift
-// Good
-public extension NSEvent {
-    var semanticKeyCode: KeyCode? { ... }
-}
-
-// Avoid
-extension NSEvent {
-    public var semanticKeyCode: KeyCode? { ... }
-}
-```
-
-## Optionals & Safety
-
-Never force unwrap. Use `if let`, `guard let`, or `as?` for safe optional handling.
-
-## SwiftUI Patterns
-
-Use @StateObject for viewmodels, @State for local state. Order property wrappers: Environment, StateObject, State, Binding, regular properties. Extract large views into subviews.
-
-## Limits
-
-### SwiftLint Limits
-
-| Metric | Warning | Error |
-|--------|---------|-------|
-| Function body length | 160 lines | 250 lines |
-| Type body length | 1100 lines | 1500 lines |
-| File length | 1200 lines | 1800 lines |
-| Cyclomatic complexity | 40 | 60 |
-
-### Handling Long Files
-
-Extract extensions into separate files:
-
-<Tree>
-  <Tree.File name="MainContentCoordinator.swift" />
-  <Tree.Folder name="Extensions" defaultOpen>
-    <Tree.File name="MainContentCoordinator+RowOperations.swift" />
-    <Tree.File name="MainContentCoordinator+Pagination.swift" />
-    <Tree.File name="MainContentCoordinator+Filtering.swift" />
-  </Tree.Folder>
-</Tree>
-
+User-facing strings go through `react-i18next` — add keys to both `src/i18n/locales/en.json` and `src/i18n/locales/vi.json` together, keeping them structurally in sync.

@@ -1,15 +1,15 @@
 # TablePro Project Roadmap
 
-> **Last Updated**: 2026-04-08
-> **Roadmap Baseline**: Windows v0.4.0 released
+> **Last Updated**: 2026-08-17
+> **Roadmap Baseline**: Windows v0.7.0 released
 
 ## Platform Status
 
+Windows-only, personal, non-profit fork. Upstream macOS code was permanently removed; it is no longer a reference target.
+
 | Platform | Status | Stack |
 |---|---|---|
-| macOS | Stable upstream/reference line for parity checks | SwiftUI + AppKit + native plugin bundles |
-| Windows | Active implementation target (pre-release) | Tauri v2 + Rust + React/TypeScript + DLL plugins |
-| Linux | Planned | Intended to follow the Tauri stack |
+| Windows | Active, only supported platform | Tauri v2 + Rust (drivers compiled in, no plugin/DLL system) + React/TypeScript |
 
 ## Recent completed work (Windows)
 
@@ -37,7 +37,7 @@
 
 | Area | Current state |
 |---|---|
-| Drivers | PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis (6 total, DLL plugins) |
+| Drivers | PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis (6 total, compiled-in Rust crates, no plugin/DLL system) |
 | Driver capabilities | Sidecar `.capabilities.json` per driver (7 boolean flags), frontend gating |
 | Connection | Save/list/delete, test, connect/disconnect, groups, tags/colors, tag filtering (chip bar + AND logic), session-based runtime IDs, per-connection reconnect guard |
 | Query | Execute/cancel, paginated browse, progress events, approximate count, payload guardrails (50K row truncation), EXPLAIN viewer (PG/MySQL/MSSQL/SQLite) |
@@ -49,13 +49,12 @@
 | Structure | Columns/indexes/FKs/DDL, create table flow, alter table generation/apply |
 | History | SQLite + FTS search, recent queries, delete/clear |
 | Security | DPAPI for stored secrets, SSH known_hosts TOFU verification |
-| Reliability | Connection health monitor (30s ping), per-connection reconnect, shutdown cleanup |
+| Reliability | Per-connection user-initiated reconnect (no automatic health-check ping), shutdown cleanup |
 | Tab persistence | Backend JSON file (`%APPDATA%/TablePro/tab-state.json`), one-time localStorage migration |
 | Commands | 21 namespaced command definitions, customizable keyboard shortcuts, conflict detection + swap |
 | Quick switcher | Grouped/ranked results with fuzzy scoring (exact > prefix > substring > fuzzy) |
 | Deep-links | `tablepro://open/connection/{id}` protocol via `tauri-plugin-deep-link` |
 | AI | Chat streaming, inline suggestions, provider/model settings, schema-context support, conversation persistence |
-| Updater | Tauri updater plugin for release builds |
 | Error handling | Error classifier with kind-based recovery hints, severity-aware toasts with action buttons |
 | Bulk operations | Bulk insert (TSV paste + CSV drag-drop, 500-row batches), bulk update (structured filter builder, dry-run preview) |
 | Stored procedures | Execute with param inputs + SQL preview, source viewer with syntax highlight, system procedure denylist |
@@ -64,38 +63,12 @@
 
 ## Remaining roadmap (planned)
 
-### v1.1 - Post-launch parity and licensing
+Scope is fixed to the 6 existing drivers (PostgreSQL, MySQL/MariaDB, MSSQL, SQLite, MongoDB, Redis) with PostgreSQL, MySQL/MariaDB, and SQLite as the daily-driver engines. No pricing, licensing, activation, subscription, or telemetry — permanently out of scope. No further driver expansion or plugin/DLL distribution system is planned.
 
 | Priority | Item | Notes |
 |---|---|---|
-| High | Licensing backend + signature verification | Parity with macOS licensing model |
-| High | License settings UI | Activation/deactivation and status display |
-| Medium | Health monitor auto-reconnect policy tuning | Current reconnect is user-triggered, per-connection |
-
-### v1.2 - Driver expansion
-
-| Priority | Item | Notes |
-|---|---|---|
-| Medium | Oracle driver | OCI dependencies and packaging constraints |
-| Medium | ClickHouse driver | HTTP protocol and metadata differences |
-| Medium | DuckDB driver | File-based analytics workflow |
-| Low | Redshift variant support | PostgreSQL-compatible with metadata differences |
-
-### v1.3 - Platform polish
-
-| Priority | Item | Notes |
-|---|---|---|
-| High | IPC payload chunking/streaming for very large result sets | Reduce single-payload pressure (ABI v1 has no cursor API) |
-| Medium | SSH agent auth + ssh config parsing | Pageant/OpenSSH agent parity |
+| High | IPC payload chunking/streaming for very large result sets | Reduce single-payload pressure |
 | Medium | Sidebar virtualization | Large-schema performance improvements |
-| Low | Windows file association for `.sqlite` | Optional OS integration |
-
-### v2.0 - Platform expansion
-
-| Priority | Item | Notes |
-|---|---|---|
-| High | Linux packaging (AppImage/deb/rpm) | CI/release matrix expansion |
-| Medium | Plugin distribution/registry workflow | Download/install/update plugins |
 
 ## Decision log (updated)
 

@@ -1,67 +1,55 @@
 ---
 title: Safe Mode
-description: Per-connection query execution controls - from no restrictions to full read-only lockdown
+description: Global query execution controls - from no restrictions to full read-only lockdown
 ---
 
 # Safe Mode
 
-Safe Mode is a per-connection setting that controls how TablePro handles query execution. Each connection can have its own level, from unrestricted access to complete write protection.
-
-Set the safe mode level when creating or editing a connection in the connection form.
+Safe Mode is a global setting that controls how TablePro handles query execution before it reaches the database. Click the level badge in the toolbar to cycle through levels.
 
 ## Levels
 
-TablePro provides 6 graduated safe mode levels:
+TablePro provides 6 levels:
 
-| Level | Icon | Write Queries | Read Queries | Authentication |
-|-------|------|--------------|--------------|----------------|
-| **Silent** | `lock.open` | Execute immediately | Execute immediately | None |
-| **Alert** | `exclamationmark.triangle` | Confirmation dialog | Execute immediately | None |
-| **Alert (Full)** | `exclamationmark.triangle.fill` | Confirmation dialog | Confirmation dialog | None |
-| **Safe Mode** | `lock.shield` | Confirmation + Touch ID | Execute immediately | Touch ID / password |
-| **Safe Mode (Full)** | `lock.shield.fill` | Confirmation + Touch ID | Confirmation + Touch ID | Touch ID / password |
-| **Read-Only** | `lock.fill` | Blocked entirely | Execute immediately | None |
+| Level | Write Queries (INSERT/UPDATE) | Destructive Queries (DELETE/DROP/TRUNCATE/ALTER) |
+|-------|-------------------------------|---------------------------------------------------|
+| **Off** | Execute immediately | Execute immediately |
+| **Silent** | Execute immediately | Execute immediately (logged to console) |
+| **Alert** | Execute immediately | Confirmation dialog |
+| **Alert+** | Confirmation dialog | Confirmation dialog |
+| **Safe Mode** | Confirmation, must type table name | Confirmation, must type table name |
+| **Read-Only** | Blocked entirely | Blocked entirely |
 
-New connections default to **Silent**.
-
-<Note>
-**Safe Mode** (Touch ID), **Safe Mode (Full)**, and **Read-Only** levels require a **Pro license**. The **Silent**, **Alert**, and **Alert (Full)** levels are available in the free version.
-</Note>
+New installs default to **Alert**.
 
 ## How It Works
 
+### Off
+
+No checks at all.
+
 ### Silent
 
-No restrictions. Queries execute immediately. TablePro still shows its built-in dangerous query warning for DROP, TRUNCATE, and DELETE-without-WHERE statements.
+Destructive queries (`DELETE`, `DROP`, `TRUNCATE`, `ALTER`) are logged to the console but still execute immediately. No dialog.
 
 ### Alert
 
-A confirmation dialog appears before executing write queries (INSERT, UPDATE, DELETE, DROP, TRUNCATE, ALTER, etc.). The dialog shows a preview of the SQL to be executed. Read queries run without prompts.
+A confirmation dialog appears before executing destructive queries. Plain `INSERT`/`UPDATE` and read queries run without prompts.
 
-### Alert (Full)
+### Alert+
 
-Same as Alert, but the confirmation dialog appears for ALL queries, including SELECT statements. Useful when you want to review every query before execution.
+Confirmation dialog for any DML (`INSERT`, `UPDATE`, `DELETE`) or destructive statement. Plain `SELECT` queries still run without prompts.
 
 ### Safe Mode
 
-Like Alert, but after confirming the dialog, you must also authenticate with Touch ID or your macOS password. Falls back to system password if Touch ID is unavailable.
-
-### Safe Mode (Full)
-
-Combines Alert (Full) and Safe Mode: every query requires both a confirmation dialog and Touch ID/password authentication.
+Same trigger as Alert+, but confirming requires typing the affected table's name into the dialog before the **Run Anyway** button is enabled.
 
 ### Read-Only
 
-All write operations are blocked. The UI disables:
+Any write statement (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER`, `CREATE`) is blocked outright — no dialog, no override.
 
-- Inline cell editing
-- Adding, deleting, and duplicating rows
-- Table truncate and drop operations
-- Import functionality
+<Note>
+Safe Mode classification is regex-based on the SQL text (destructive: `DELETE|DROP|TRUNCATE|ALTER`; DML: `INSERT|UPDATE|DELETE`). It does not parse the query, so it can't distinguish schema-qualified statements or detect writes hidden inside stored procedure calls.
+</Note>
 
-Read queries (SELECT) execute normally.
-
-NoSQL databases (MongoDB, Redis, etc.) can't be parsed for read vs. write operations, so all operations are treated as writes. Every query in Alert/Safe Mode triggers a confirmation. Read-Only blocks everything.
-
-The current safe mode level appears as a badge in the toolbar. Click it to change levels. Safe mode gates apply to query execution, saving cell edits, table operations, and sidebar changes. Silent still shows dangerous query warnings for DROP, TRUNCATE, and DELETE-without-WHERE.
-
+The current level shows as a badge in the toolbar; click it to cycle to the next level.

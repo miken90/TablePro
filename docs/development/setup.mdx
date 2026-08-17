@@ -1,236 +1,60 @@
 ---
 title: Development Setup
-description: Clone, build, and run TablePro locally with Xcode 15+, SwiftLint, and SwiftFormat
+description: Clone, build, and run TablePro Windows locally
 ---
 
 # Development Setup
 
-## Prerequisites
+## Requirements
 
-### Required Software
+| Requirement | Notes |
+|--------------|-------|
+| **Windows 10/11** | Target platform |
+| **Node.js** | For the frontend build |
+| **Rust toolchain** | For the Tauri backend |
+| **WebView2 Runtime** | Ships with Windows 10/11 by default |
 
-| Software | Version | Purpose |
-|----------|---------|---------|
-| **macOS** | 14.0+ (Sonoma) | Target platform |
-| **Xcode** | 15.0+ | Development IDE |
-| **Git** | Latest | Version control |
+## Clone and Install
 
-### Optional Tools
-
-| Tool | Purpose |
-|------|---------|
-| **SwiftLint** | Code linting |
-| **SwiftFormat** | Code formatting |
-| **Homebrew** | Package management |
-| **GitHub CLI (`gh`)** | Downloads pre-built native libraries from GitHub Releases |
-
-## Getting Started
-
-### Step 1: Clone and Bootstrap
-
-```bash
-git clone https://github.com/TableProApp/TablePro.git
-cd tablepro
-
-# Download pre-built native libraries from GitHub Releases
-scripts/download-libs.sh
-
-# Create required build config (empty is fine for development)
-touch Secrets.xcconfig
-
-# Install linting/formatting tools
-brew install swiftlint swiftformat
+```powershell
+git clone <this-repo-url>
+cd TablePro/tablepro-windows
+npm ci
 ```
 
-<Warning>
-Skipping `scripts/download-libs.sh` leaves `Libs/` without binaries, causing linker errors.
-</Warning>
+## Run in Development
 
-### Step 2: Open in Xcode
-
-```bash
-open TablePro.xcodeproj
+```powershell
+npm run dev:tauri
 ```
 
-### Step 3: Configure Signing
+This starts the Vite dev server and launches the Tauri app pointed at it.
 
-1. Select **TablePro** target
-2. Go to **Signing & Capabilities**
-3. Change **Team** to your own Apple Developer account (free account works for development)
+## Run Tests
 
-### Step 4: Build and Run
+```powershell
+npx vitest run
+```
 
-1. Select the **TablePro** scheme
-2. Select **My Mac** as the destination
-3. Press `Cmd+R` to build and run
+Rust tests, from `tablepro-windows/src-tauri/`:
 
-{/* Screenshot: Xcode with scheme selected */}
-<Frame caption="Xcode project setup">
-  <img
-    className="block dark:hidden"
-    src="/images/xcode-setup.png"
-    alt="Xcode setup"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/xcode-setup-dark.png"
-    alt="Xcode setup"
-  />
-</Frame>
+```powershell
+cargo test --workspace
+```
 
-## Project Structure
+## Lint
 
-<Tree>
-  <Tree.Folder name="tablepro" defaultOpen>
-    <Tree.Folder name="TablePro" defaultOpen>
-      <Tree.Folder name="Core" defaultOpen>
-        <Tree.Folder name="Database">
-          <Tree.File name="DatabaseDriver.swift" />
-          <Tree.File name="DatabaseManager.swift" />
-        </Tree.Folder>
-        <Tree.Folder name="Plugins">
-          <Tree.File name="PluginDriverAdapter.swift" />
-          <Tree.File name="PluginManager.swift" />
-        </Tree.Folder>
-        <Tree.Folder name="Services" />
-        <Tree.Folder name="Utilities" />
-      </Tree.Folder>
-      <Tree.Folder name="Models" />
-      <Tree.Folder name="Views">
-        <Tree.Folder name="Connection" />
-        <Tree.Folder name="Editor" />
-        <Tree.Folder name="Main" />
-        <Tree.Folder name="Results" />
-        <Tree.Folder name="Settings" />
-      </Tree.Folder>
-      <Tree.Folder name="ViewModels" />
-      <Tree.Folder name="Extensions" />
-      <Tree.Folder name="Theme" />
-      <Tree.Folder name="Resources" />
-    </Tree.Folder>
-    <Tree.Folder name="Plugins" defaultOpen>
-      <Tree.Folder name="TableProPluginKit" />
-      <Tree.Folder name="MySQLDriverPlugin" />
-      <Tree.Folder name="PostgreSQLDriverPlugin" />
-      <Tree.Folder name="SQLiteDriverPlugin" />
-      <Tree.Folder name="ClickHouseDriverPlugin" />
-      <Tree.Folder name="..." />
-    </Tree.Folder>
-    <Tree.Folder name="TableProTests" />
-    <Tree.Folder name="Libs" />
-    <Tree.Folder name="scripts">
-      <Tree.File name="build-release.sh" />
-      <Tree.File name="create-dmg.sh" />
-    </Tree.Folder>
-    <Tree.File name=".swiftlint.yml" />
-    <Tree.File name=".swiftformat" />
-  </Tree.Folder>
-</Tree>
+```powershell
+npx eslint .
+cargo clippy --workspace --all-targets -- -D warnings
+```
 
 ## Building
 
-### Development Build
-
-```bash
-# Build for current architecture (Debug)
-xcodebuild -project TablePro.xcodeproj -scheme TablePro -configuration Debug build -skipPackagePluginValidation
-
-# Or use Xcode: Cmd+B
-```
-
-### Release Build
-
-```bash
-# Apple Silicon
-scripts/build-release.sh arm64
-
-# Intel
-scripts/build-release.sh x86_64
-
-# Both architectures
-scripts/build-release.sh both
-```
-
-See [Building](/development/building) for detailed instructions.
-
-## Running Tests
-
-```bash
-# All tests
-xcodebuild -project TablePro.xcodeproj -scheme TablePro test -skipPackagePluginValidation
-
-# Specific test class
-xcodebuild -project TablePro.xcodeproj -scheme TablePro test -skipPackagePluginValidation \
-    -only-testing:TableProTests/TestClassName
-
-# Specific test method
-xcodebuild -project TablePro.xcodeproj -scheme TablePro test -skipPackagePluginValidation \
-    -only-testing:TableProTests/TestClassName/testMethodName
-```
-
-Or in Xcode: **Product** > **Test** (`Cmd+U`).
-
-## Code Quality
-
-### SwiftLint
-
-```bash
-# Check for issues
-swiftlint lint
-
-# Auto-fix fixable issues
-swiftlint --fix
-```
-
-SwiftLint also runs automatically during Xcode builds.
-
-### SwiftFormat
-
-```bash
-# Format all code
-swiftformat .
-
-# Check without applying
-swiftformat --lint .
-```
-
-<Tip>
-Run SwiftFormat before committing to keep code style consistent.
-</Tip>
-
-## Configuration Files
-
-### .swiftlint.yml
-
-SwiftLint rules and configuration:
-
-- Line length limits
-- Function complexity limits
-- Disabled rules
-- Custom rules
-
-### .swiftformat
-
-SwiftFormat options:
-
-- Indentation style
-- Brace placement
-- Import ordering
-- Other formatting rules
-
-## Development Workflow
-
-1. Create feature branch: `git checkout -b feature/my-feature`
-2. Make changes
-3. Lint: `swiftlint lint` and `swiftformat --lint .`
-4. Test: `xcodebuild -project TablePro.xcodeproj -scheme TablePro test -skipPackagePluginValidation`
-5. Commit: `git commit -m "Add my feature"`
-6. Push: `git push origin feature/my-feature`
-
-**Logging**: Use OSLog with `Logger(subsystem: "com.TablePro", category: "Name")`.
+See [Building](/development/building) for debug builds, release packaging (MSI/NSIS), and CI.
 
 ## Troubleshooting
 
-**Build fails**: Clean with `Cmd+Shift+K`, delete derived data, close/reopen Xcode.
-**SwiftLint errors**: Run `swiftlint --fix` for auto-fixable issues.
-**Missing libraries**: Run `scripts/download-libs.sh` and `touch Secrets.xcconfig`.
+**Build fails after pulling changes**: run `npm ci` again to pick up dependency changes, and `cargo clean` in `src-tauri/` if Rust build artifacts seem stale.
+
+**Non-Windows dev machines (e.g. WSL)**: all build/test/lint/package commands must run through Windows PowerShell against the Windows Rust/Node toolchains — running them against a Linux toolchain produces results that don't reflect the real (Windows-only) product.

@@ -5,7 +5,7 @@ description: Open and query .sqlite, .db, and .sqlite3 files directly - no serve
 
 # SQLite Databases
 
-SQLite is a self-contained, file-based database engine. No server required. The entire database lives in a single file on your Mac.
+SQLite is a self-contained, file-based database engine. No server required. The entire database lives in a single file.
 
 ## Quick Setup
 
@@ -15,15 +15,13 @@ SQLite is a self-contained, file-based database engine. No server required. The 
   </Step>
 </Steps>
 
-File-based database, no server/auth required. Double-click `.duckdb` files in Finder to open directly.
+File-based database, no server/auth required. `.sqlite`, `.sqlite3`, and `.db` files are registered file associations — double-click one in File Explorer to open it directly in TablePro.
 
 ## Common Locations
 
-**macOS apps**: Safari (`~/Library/Safari/History.db`), Photos (`~/Pictures/Photos Library.photoslibrary/database/Photos.sqlite`), Messages (`~/Library/Messages/chat.db`)
+**Development**: Rails (`./db/development.sqlite3`), Django (`./db.sqlite3`)
 
-**Development**: Rails (`./db/development.sqlite3`), Django (`./db.sqlite3`), iOS Simulator (`~/Library/Developer/CoreSimulator/...`), Core Data
-
-**Create new**: Point to a non-existent file path and TablePro creates it on connect. Or use `sqlite3 ~/path/to/new.db "SELECT 1;"`
+**Create new**: Point to a non-existent file path and TablePro creates it on connect.
 
 <Warning>
 System databases may be locked. Quit their parent app before opening.
@@ -77,7 +75,7 @@ Enable pagination for large tables, add indexes on frequently queried columns, u
 
 **Locked database**: Close other apps using it, wait for queries to finish, or check for WAL files (`database.sqlite-wal`, `database.sqlite-shm`).
 
-**Can't open**: Verify path exists, check permissions (`chmod 644`), avoid special characters in paths.
+**Can't open**: Verify path exists, check file permissions, avoid special characters in paths.
 
 **Corrupt database**: Run `PRAGMA integrity_check;` to check, try `.recover` to repair: `sqlite3 corrupt.sqlite ".recover" | sqlite3 recovered.sqlite`
 

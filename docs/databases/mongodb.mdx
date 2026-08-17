@@ -1,11 +1,11 @@
 ---
 title: MongoDB
-description: Connect to MongoDB 5.0+ with MQL shell queries, collection browsing, and BSON type display
+description: Connect to MongoDB with MQL shell queries, collection browsing, and BSON type display
 ---
 
 # MongoDB Connections
 
-TablePro supports MongoDB 5.0 and later. Collections appear as tables in the sidebar. Documents display with fields as columns, and nested objects render as formatted JSON.
+TablePro connects to MongoDB via a compiled-in Rust driver (`mongodb`). Collections appear as tables in the sidebar. Documents display with fields as columns, and nested objects render as formatted JSON.
 
 ## Quick Setup
 
@@ -29,22 +29,6 @@ TablePro supports MongoDB 5.0 and later. Collections appear as tables in the sid
 | **Password** | - | |
 | **Auth Database** | `admin` | Database to authenticate against |
 
-**Advanced** (Optional): Configure **Read Preference** (primary, secondary, nearest) and **Write Concern** (majority for stronger durability) for replica sets.
-
-{/* Screenshot: MongoDB connection form */}
-<Frame caption="MongoDB connection form">
-  <img
-    className="block dark:hidden"
-    src="/images/mongodb-connection-form.png"
-    alt="MongoDB connection form"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/mongodb-connection-form-dark.png"
-    alt="MongoDB connection form"
-  />
-</Frame>
-
 ## Example Configurations
 
 **Local**: host `localhost:27017`, no auth, database `myapp`
@@ -62,7 +46,9 @@ Configure in **SSL/TLS** section. MongoDB Atlas requires SSL/TLS - use **Require
 
 **Document Viewing**: Top-level fields as columns, nested objects as formatted JSON, arrays as JSON arrays, ObjectIds as strings, BSON types formatted appropriately. Schema inferred by sampling.
 
-**Collection Duplication**: Open **Create Table**, click **Duplicate**, select source collection. Uses `aggregate` with `$out`, recreates indexes. Result named `originalName_copy`.
+<Note>
+MongoDB does not support DDL (Create Table / structure editing) — collections are managed via MQL queries.
+</Note>
 
 **MongoDB Shell Queries** (MQL syntax):
 
@@ -95,7 +81,7 @@ db.products.distinct("category")
 
 ## Troubleshooting
 
-**Connection refused**: Check MongoDB is running (`brew services start mongodb-community`), verify host/port in `mongod.conf`, check `bindIp` setting.
+**Connection refused**: Check the MongoDB service is running, verify host/port in `mongod.conf`, check `bindIp` setting.
 
 **Auth failed**: Verify username/password/auth database. Check user roles with `db.getUsers();` Create user with `db.createUser({user:"appuser", pwd:"password", roles:[{role:"readWrite", db:"myapp"}]})`
 

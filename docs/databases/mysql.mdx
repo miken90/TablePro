@@ -1,11 +1,11 @@
 ---
 title: MySQL & MariaDB
-description: Connect to MySQL 5.7+/8.0+ and MariaDB 10.x+ using the same MariaDB C connector driver
+description: Connect to MySQL and MariaDB with a compiled-in Rust driver
 ---
 
 # MySQL & MariaDB Connections
 
-TablePro supports MySQL 5.7+, MySQL 8.0+, and MariaDB 10.x+. Both databases share compatible protocols and use the same connection interface.
+TablePro connects to MySQL and MariaDB via a compiled-in Rust driver (`mysql_async`, rustls). No external library is required. Both databases share compatible protocols and use the same connection interface.
 
 ## Quick Setup
 
@@ -28,22 +28,8 @@ TablePro supports MySQL 5.7+, MySQL 8.0+, and MariaDB 10.x+. Both databases shar
 | **Database** | Leave empty to see all databases (optional) |
 
 <Tip>
-Open URLs like `mysql://user:pass@host/db` from your browser to connect directly. See [Connection URL Reference](/databases/connection-urls) for details.
+Paste a `mysql://user:pass@host/db` URL into **Import from URL** on the connection form to auto-fill the fields. See [Connection URL Reference](/databases/connection-urls) for details.
 </Tip>
-
-{/* Screenshot: MySQL connection form */}
-<Frame caption="MySQL connection form">
-  <img
-    className="block dark:hidden"
-    src="/images/mysql-connection-form.png"
-    alt="MySQL connection form"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/mysql-connection-form-dark.png"
-    alt="MySQL connection form"
-  />
-</Frame>
 
 ## Example Configurations
 
@@ -88,7 +74,7 @@ SELECT * FROM category_tree;
 
 ## Troubleshooting
 
-**Connection refused**: Check MySQL is running (`brew services start mysql`), verify correct port/host, ensure `skip-networking` is not set.
+**Connection refused**: Check the MySQL service is running, verify correct port/host, ensure `skip-networking` is not set.
 
 **Access denied**: Verify credentials and user privileges with `SHOW GRANTS FOR 'user'@'host';`
 

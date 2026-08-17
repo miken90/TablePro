@@ -7,20 +7,6 @@ description: Spreadsheet-style grid with inline editing, type-specific editors, 
 
 Query results and table contents render in a spreadsheet-style grid. Edit cells inline, sort columns, copy in multiple formats, and paginate through large result sets.
 
-{/* Screenshot: Data grid showing query results with multiple columns */}
-<Frame caption="Data grid displaying query results">
-  <img
-    className="block dark:hidden"
-    src="/images/data-grid.png"
-    alt="Data Grid"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/data-grid-dark.png"
-    alt="Data Grid"
-  />
-</Frame>
-
 ## Viewing Data
 
 Click a table in the sidebar or run a `SELECT` query to load data into the grid. The header shows row count, execution time, and affected rows for UPDATE/DELETE queries.
@@ -45,21 +31,6 @@ Click a column header to sort:
 Sorting is done locally on the loaded data. For server-side sorting, use `ORDER BY` in your query.
 </Tip>
 
-{/* Screenshot: Column header with sort indicator */}
-<Frame caption="Column header with sort indicator">
-  <img
-    className="block dark:hidden"
-    src="/images/column-sorting.png"
-    alt="Column header with sort indicator"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/column-sorting-dark.png"
-    alt="Column header with sort indicator"
-  />
-</Frame>
-
-
 ## Data Editing
 
 ### Inline Editing
@@ -70,56 +41,13 @@ To edit a cell:
 2. Enter the new value
 3. Press `Enter` to confirm or `Escape` to cancel
 
-{/* Screenshot: Cell being edited with cursor */}
-<Frame caption="Inline cell editing">
-  <img
-    className="block dark:hidden"
-    src="/images/cell-editing.png"
-    alt="Cell editing"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/cell-editing-dark.png"
-    alt="Cell editing"
-  />
-</Frame>
-
-
 ### Date/Time Picker
 
 Date, datetime, timestamp, and time columns open a native date picker instead of a text field. The picker adapts to the column type (`DATE`: year/month/day, `DATETIME`/`TIMESTAMP`: adds hour/minute/second, `TIME`: hour/minute/second only). Outputs in `YYYY-MM-DD HH:MM:SS` format. If the existing value cannot be parsed, it defaults to now.
 
-{/* Screenshot: Date picker for editing date columns */}
-<Frame caption="Date picker for editing date columns">
-  <img
-    className="block dark:hidden"
-    src="/images/date-picker-editor.png"
-    alt="Date picker for editing date columns"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/date-picker-editor-dark.png"
-    alt="Date picker for editing date columns"
-  />
-</Frame>
-
 ### Foreign Key Lookup
 
 Foreign key columns open a searchable dropdown with values from the referenced table (e.g., `1 - John Doe`). Type to filter, double-click or press `Enter` to commit. Fetches up to 1,000 values; use the search field to narrow larger sets.
-
-{/* Screenshot: Foreign key lookup with search */}
-<Frame caption="Foreign key lookup with search">
-  <img
-    className="block dark:hidden"
-    src="/images/fk-lookup-popover.png"
-    alt="Foreign key lookup with search"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/fk-lookup-popover-dark.png"
-    alt="Foreign key lookup with search"
-  />
-</Frame>
 
 ### Boolean Cell Editor
 
@@ -131,20 +59,6 @@ BOOLEAN, BIT, and TINYINT(1) cells open a checkbox popover. Click to toggle, `En
 | PostgreSQL | `BOOLEAN` | `TRUE` / `FALSE` |
 | SQLite | `INTEGER` | `0` / `1` |
 
-{/* Screenshot: Boolean cell checkbox editor */}
-<Frame caption="Boolean cell checkbox editor">
-  <img
-    className="block dark:hidden"
-    src="/images/boolean-cell-editor.png"
-    alt="Boolean cell checkbox editor"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/boolean-cell-editor-dark.png"
-    alt="Boolean cell checkbox editor"
-  />
-</Frame>
-
 ### ENUM Column Editor
 
 ENUM cells open a searchable dropdown. Click a value to select and commit. Nullable columns show a NULL option at the top.
@@ -155,20 +69,6 @@ ENUM cells open a searchable dropdown. Click a value to select and commit. Nulla
 | PostgreSQL | User-defined enum types (`pg_enum`) |
 | SQLite | `CHECK(column IN (...))` constraints |
 
-{/* Screenshot: ENUM value selector */}
-<Frame caption="ENUM value selector">
-  <img
-    className="block dark:hidden"
-    src="/images/enum-editor-popover.png"
-    alt="ENUM value selector"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/enum-editor-popover-dark.png"
-    alt="ENUM value selector"
-  />
-</Frame>
-
 ### SET Column Editor
 
 SET cells (MySQL/MariaDB) open a checkbox popover. Check/uncheck values, then press `Enter` to commit or `Escape` to cancel.
@@ -177,37 +77,9 @@ SET cells (MySQL/MariaDB) open a checkbox popover. Check/uncheck values, then pr
 If ENUM/SET metadata is unavailable (e.g., from a complex query), the cell falls back to inline text editing.
 </Tip>
 
-{/* Screenshot: SET value multi-select editor */}
-<Frame caption="SET value multi-select editor">
-  <img
-    className="block dark:hidden"
-    src="/images/set-editor-popover.png"
-    alt="SET value multi-select editor"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/set-editor-popover-dark.png"
-    alt="SET value multi-select editor"
-  />
-</Frame>
-
 ### JSON Editor
 
 JSON/JSONB cells open a dedicated editor popover with real-time validation. Invalid JSON triggers a confirmation before saving. Values are minified on save.
-
-{/* Screenshot: JSON editor with validation */}
-<Frame caption="JSON editor with validation">
-  <img
-    className="block dark:hidden"
-    src="/images/json-editor-popover.png"
-    alt="JSON editor with validation"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/json-editor-popover-dark.png"
-    alt="JSON editor with validation"
-  />
-</Frame>
 
 ### Hex Editor (BLOB/Binary)
 
@@ -219,30 +91,16 @@ BLOBs larger than 10 KB are read-only. Use an external hex editor for large bina
 
 ### Multi-Row Editing
 
-Select multiple rows with `Cmd+click` (non-contiguous) or `Shift+click` (range) on row numbers. Press `Delete` to remove selected rows.
-
-{/* Screenshot: Multiple rows selected for editing */}
-<Frame caption="Multiple rows selected for editing">
-  <img
-    className="block dark:hidden"
-    src="/images/multi-row-selection.png"
-    alt="Multiple rows selected for editing"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/multi-row-selection-dark.png"
-    alt="Multiple rows selected for editing"
-  />
-</Frame>
+Select multiple rows with `Ctrl+click` (non-contiguous) or `Shift+click` (range) on row numbers. Press `Delete` to remove selected rows.
 
 ### Saving Changes
 
 Changes are queued, not applied immediately. Manage pending changes with:
 
-- **Preview SQL**: Click the **Preview SQL** button (eye icon) or press `Cmd+Shift+P` to review pending SQL statements before committing
-- **Commit**: Click the **Commit** button (or press `Cmd+S`) to apply all pending changes
+- **Preview SQL**: Click the **Preview SQL** button (eye icon) or press `Ctrl+Shift+P` to review pending SQL statements before committing
+- **Commit**: Click the **Commit** button (or press `Ctrl+S`) to apply all pending changes
 - **Discard**: Click the **Discard** button to revert all pending changes
-- **Undo/Redo**: Press `Cmd+Z` to undo or `Cmd+Shift+Z` to redo individual edits before committing
+- **Undo/Redo**: Press `Ctrl+Z` to undo or `Ctrl+Shift+Z` to redo individual edits before committing
 
 See [Change Tracking](/features/change-tracking) for full details on how changes are queued and applied.
 
@@ -267,21 +125,7 @@ Review all modifications before committing them to the database. See [Change Tra
 
 ## Cell Inspector
 
-The Cell Inspector is a right sidebar panel showing detailed information about the selected row or current table. Toggle with `Cmd+Shift+B` or via **View** > **Toggle Cell Inspector**.
-
-{/* Screenshot: Cell Inspector showing row details */}
-<Frame caption="Cell Inspector showing row details">
-  <img
-    className="block dark:hidden"
-    src="/images/cell-inspector.png"
-    alt="Cell Inspector"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/cell-inspector-dark.png"
-    alt="Cell Inspector"
-  />
-</Frame>
+The Cell Inspector is a right sidebar panel showing detailed information about the selected row or current table. Toggle with `Ctrl+Shift+B` or via **View** > **Toggle Cell Inspector**.
 
 ### Row Details Mode
 
@@ -297,51 +141,21 @@ Read-Only Safe Mode connections and complex query results are not editable. See 
 
 ## Keyboard Navigation
 
-Use arrow keys to move between cells. Press `Enter` to edit, `Escape` to cancel. `Tab` / `Shift+Tab` move to the next/previous cell. `Cmd+Home` / `Cmd+End` jump to first/last row.
-
+Use arrow keys to move between cells. Press `Enter` to edit, `Escape` to cancel. `Tab` / `Shift+Tab` move to the next/previous cell. `Ctrl+Home` / `Ctrl+End` jump to first/last row.
 
 ## Selecting & Copying
 
-Click a cell to select it. Drag to select a range, or Shift+click to select a range. Click row numbers to select entire rows, or Cmd+click for multiple non-contiguous rows.
+Click a cell to select it. Drag to select a range, or Shift+click to select a range. Click row numbers to select entire rows, or Ctrl+click for multiple non-contiguous rows.
 
-Select cells and press `Cmd+C` for TSV, `Cmd+Shift+C` for CSV, or `Cmd+Option+J` for JSON.
-
-{/* Screenshot: Copy options in context menu */}
-<Frame caption="Copy options in context menu">
-  <img
-    className="block dark:hidden"
-    src="/images/copy-context-menu.png"
-    alt="Copy options in context menu"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/copy-context-menu-dark.png"
-    alt="Copy options in context menu"
-  />
-</Frame>
+Select cells and press `Ctrl+C` for TSV, `Ctrl+Shift+C` for CSV, or `Ctrl+Alt+J` for JSON.
 
 ## Pagination
 
 Large result sets are paginated. Configure page size in **Settings** > **Data Grid** (Small: 100, Medium: 500, Large: 1,000, Custom: 10–100,000). Smaller pages load faster.
 
-{/* Screenshot: Pagination controls with page navigation */}
-<Frame caption="Pagination controls with page navigation">
-  <img
-    className="block dark:hidden"
-    src="/images/pagination-controls.png"
-    alt="Pagination controls with page navigation"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/pagination-controls-dark.png"
-    alt="Pagination controls with page navigation"
-  />
-</Frame>
-
 ## NULL Values and Display
 
 NULL values show as styled "NULL" text (customizable in **Settings** > **Data Grid**). Configure date format, row height, and alternate row colors in the same settings panel.
-
 
 ## MongoDB Collections
 
@@ -357,5 +171,4 @@ Changes preview as MongoDB shell commands:
 - Inserts: `db.collection.insertMany([...])`
 - Updates: `db.collection.updateOne({filter}, {$set: {...}})`
 - Deletes: `db.collection.deleteMany({_id: {$in: [...]}})`
-
 

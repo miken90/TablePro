@@ -10,7 +10,7 @@ Export data in five formats (CSV, JSON, SQL, MQL, XLSX), import SQL files with g
 ## Export Data
 
 1. Run a query or open a table
-2. Click **Export** in the toolbar (`Cmd+Shift+E`)
+2. Click **Export** in the toolbar (`Ctrl+Shift+E`)
 3. Choose a format, select tables, configure options
 4. Click **Export**
 
@@ -21,20 +21,6 @@ Export data in five formats (CSV, JSON, SQL, MQL, XLSX), import SQL files with g
 <Note>
 **Redis**: SQL and MQL exports are not available. Use CSV, JSON, or XLSX.
 </Note>
-
-{/* Screenshot: Export dialog with format options */}
-<Frame caption="Export dialog">
-  <img
-    className="block dark:hidden"
-    src="/images/export-dialog.png"
-    alt="Export dialog"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/export-dialog-dark.png"
-    alt="Export dialog"
-  />
-</Frame>
 
 ### Export Formats
 
@@ -54,18 +40,7 @@ Export data in five formats (CSV, JSON, SQL, MQL, XLSX), import SQL files with g
     | Formula sanitization | Yes |
 
     {/* Screenshot: CSV export options: delimiter, quoting, line breaks */}
-    <Frame caption="CSV export options">
-      <img
-        className="block dark:hidden"
-        src="/images/export-csv-options.png"
-        alt="CSV export options"
-      />
-      <img
-        className="hidden dark:block"
-        src="/images/export-csv-options-dark.png"
-        alt="CSV export options"
-      />
-    </Frame>
+    
   </Tab>
   <Tab title="JSON">
     Best for APIs, web apps, and NoSQL workflows. Exports as an array of objects.
@@ -77,18 +52,7 @@ Export data in five formats (CSV, JSON, SQL, MQL, XLSX), import SQL files with g
     | Preserve all values as strings | No |
 
     {/* Screenshot: JSON export options */}
-    <Frame caption="JSON export options">
-      <img
-        className="block dark:hidden"
-        src="/images/export-json-options.png"
-        alt="JSON export options"
-      />
-      <img
-        className="hidden dark:block"
-        src="/images/export-json-options-dark.png"
-        alt="JSON export options"
-      />
-    </Frame>
+    
   </Tab>
   <Tab title="SQL">
     Best for migrations, backups, and seeding databases.
@@ -109,18 +73,7 @@ Export data in five formats (CSV, JSON, SQL, MQL, XLSX), import SQL files with g
     | Include INSERT data | Yes |
 
     {/* Screenshot: SQL export options: structure, data, batch size */}
-    <Frame caption="SQL export options">
-      <img
-        className="block dark:hidden"
-        src="/images/export-sql-options.png"
-        alt="SQL export options"
-      />
-      <img
-        className="hidden dark:block"
-        src="/images/export-sql-options-dark.png"
-        alt="SQL export options"
-      />
-    </Frame>
+    
   </Tab>
   <Tab title="MQL">
     MongoDB only. Generates `insertMany()` scripts that run directly in `mongosh`.
@@ -152,18 +105,7 @@ Export data in five formats (CSV, JSON, SQL, MQL, XLSX), import SQL files with g
     Each table exports as a separate worksheet. Numbers are stored as numeric cells for proper Excel formatting. Handles 175K+ rows.
 
     {/* Screenshot: Excel export options */}
-    <Frame caption="Excel export options">
-      <img
-        className="block dark:hidden"
-        src="/images/export-xlsx-options.png"
-        alt="Excel export options"
-      />
-      <img
-        className="hidden dark:block"
-        src="/images/export-xlsx-options-dark.png"
-        alt="Excel export options"
-      />
-    </Frame>
+    
   </Tab>
 </Tabs>
 
@@ -183,10 +125,9 @@ Click a table in the sidebar and click **Export**, or run `SELECT * FROM table_n
 Export multiple tables at once via the export dialog's tree view. SQL exports support per-table options for structure, DROP, and data.
 </Tip>
 
-
 ## Clipboard Paste (CSV/TSV)
 
-Paste tabular data directly into the data grid. Press `Cmd+V` after selecting a row. Format is auto-detected: tabs parse as TSV, commas as CSV.
+Paste tabular data directly into the data grid. Press `Ctrl+V` after selecting a row. Format is auto-detected: tabs parse as TSV, commas as CSV.
 
 ## Import Data
 
@@ -200,7 +141,7 @@ Import `.sql` and `.sql.gz` files. Statements execute directly against your data
 
 <Steps>
   <Step title="Open Import Dialog">
-    Click **File** > **Import** (`Cmd+Shift+I`), or drag and drop a `.sql` / `.sql.gz` file onto the app.
+    Click **File** > **Import** (`Ctrl+Shift+I`), or drag and drop a `.sql` / `.sql.gz` file onto the app.
   </Step>
   <Step title="Configure Options">
     Set encoding, transaction wrapping, and foreign key check options.
@@ -209,20 +150,6 @@ Import `.sql` and `.sql.gz` files. Statements execute directly against your data
     Review the SQL preview, statement count, and file size. Click **Import** to execute.
   </Step>
 </Steps>
-
-{/* Screenshot: Import dialog with SQL preview */}
-<Frame caption="Import dialog with SQL file preview">
-  <img
-    className="block dark:hidden"
-    src="/images/import-dialog.png"
-    alt="Import dialog"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/import-dialog-dark.png"
-    alt="Import dialog"
-  />
-</Frame>
 
 ### Import Options
 
@@ -235,19 +162,5 @@ Import `.sql` and `.sql.gz` files. Statements execute directly against your data
 ## Progress and Errors
 
 During import, a progress bar shows statements processed, current statement, and overall completion.
-
-{/* Screenshot: Import progress bar */}
-<Frame caption="Import progress">
-  <img
-    className="block dark:hidden"
-    src="/images/import-progress.png"
-    alt="Import progress"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/import-progress-dark.png"
-    alt="Import progress"
-  />
-</Frame>
 
 Import stops on the first error. If wrapped in a transaction, all changes roll back automatically.

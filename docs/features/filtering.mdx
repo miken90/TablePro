@@ -7,20 +7,6 @@ description: Build WHERE clauses visually with 18 operators, quick search, and s
 
 The filter panel builds WHERE clauses without writing SQL. Pick columns, operators, and values visually, or switch to raw SQL mode for anything the builder can't express. Filters are per-tab, so each workspace keeps its own state.
 
-{/* Screenshot: Filter panel with multiple active filters */}
-<Frame caption="Filter panel with active filters">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-panel.png"
-    alt="Filter Panel"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-panel-dark.png"
-    alt="Filter Panel"
-  />
-</Frame>
-
 ## Overview
 
 The filtering system has five parts:
@@ -38,7 +24,7 @@ The Quick Filter Bar appears above the data grid and lets you filter instantly u
 
 ### Opening the Quick Filter Bar
 
-The filter bar is always visible above the grid. Click in the search field or press `Cmd+F` to focus it.
+The filter bar is always visible above the grid. Click in the search field or press `Ctrl+F` to focus it.
 
 ### Quick Filter Syntax
 
@@ -87,7 +73,7 @@ The quick filter bar is perfect for one-off lookups. For frequently-used filters
 Toggle the filter panel:
 
 - Click the **Filter** button in the toolbar
-- Or press `Cmd+F`
+- Or press `Ctrl+F`
 
 The panel appears above the data grid. The quick search field is automatically focused when the panel opens.
 
@@ -98,20 +84,6 @@ Each filter row has three parts:
 1. **Column** — which column to filter on
 2. **Operator** — the comparison operator
 3. **Value** — the value to compare against
-
-{/* Screenshot: Single filter row showing column, operator, and value */}
-<Frame caption="A single filter row">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-row.png"
-    alt="Filter row"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-row-dark.png"
-    alt="Filter row"
-  />
-</Frame>
 
 ### Adding and Managing Filters
 
@@ -133,20 +105,6 @@ Toggle between AND and OR logic using the segmented control in the filter header
 AND mode narrows results progressively. OR mode finds rows matching any of several conditions.
 </Tip>
 
-{/* Screenshot: AND/OR logic toggle in filter header */}
-<Frame caption="AND/OR logic toggle in filter header">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-and-or-toggle.png"
-    alt="AND/OR logic toggle in filter header"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-and-or-toggle-dark.png"
-    alt="AND/OR logic toggle in filter header"
-  />
-</Frame>
-
 ### Selecting and Applying Filters
 
 Each filter row has a checkbox for selective application:
@@ -162,20 +120,6 @@ Each filter row has a checkbox for selective application:
 <Note>
 Only valid filters with complete column, operator, and value (where required) can be applied. Invalid filters show a disabled play button.
 </Note>
-
-{/* Screenshot: Select All checkbox and Apply All button */}
-<Frame caption="Select All checkbox and Apply All button">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-select-all.png"
-    alt="Select All checkbox and Apply All button"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-select-all-dark.png"
-    alt="Select All checkbox and Apply All button"
-  />
-</Frame>
 
 ## Operators
 
@@ -210,20 +154,6 @@ IS NULL, IS NOT NULL, IS EMPTY, and IS NOT EMPTY hide the value field and show a
 
 BETWEEN shows two value fields with an "and" label between them. Both values are required.
 
-{/* Screenshot: BETWEEN filter with two value fields */}
-<Frame caption="BETWEEN filter with two value fields">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-between.png"
-    alt="BETWEEN filter"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-between-dark.png"
-    alt="BETWEEN filter"
-  />
-</Frame>
-
 ### IN / NOT IN Operators
 
 Enter comma-separated values to match against a list:
@@ -242,20 +172,6 @@ For conditions the visual builder can't express, switch to Raw SQL mode.
 2. Select **Raw SQL** at the top of the list
 3. The operator dropdown disappears and the value field becomes a free-text SQL input
 4. Type your WHERE clause condition directly
-
-{/* Screenshot: Raw SQL filter with arbitrary WHERE clause */}
-<Frame caption="Raw SQL filter mode">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-raw-sql.png"
-    alt="Raw SQL filter"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-raw-sql-dark.png"
-    alt="Raw SQL filter"
-  />
-</Frame>
 
 **Examples:**
 
@@ -285,20 +201,6 @@ Quick Search filters across all visible columns at once, without building indivi
 2. Type in the **Quick search across all columns...** field
 3. Press `Enter` to apply
 
-{/* Screenshot: Quick search field with search text */}
-<Frame caption="Quick search across all columns">
-  <img
-    className="block dark:hidden"
-    src="/images/quick-search.png"
-    alt="Quick search"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/quick-search-dark.png"
-    alt="Quick search"
-  />
-</Frame>
-
 Quick search is always visible when the filter panel is open. Click the **x** button to clear it.
 
 <Tip>
@@ -316,39 +218,11 @@ Save your current filter configuration as a named preset for quick reuse.
 3. Select **Save as Preset...**
 4. Enter a name and click **Save**
 
-{/* Screenshot: Save filter preset dialog */}
-<Frame caption="Save filter preset dialog">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-preset-save.png"
-    alt="Save filter preset dialog"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-preset-save-dark.png"
-    alt="Save filter preset dialog"
-  />
-</Frame>
-
 ### Loading a Preset
 
 1. Click the **folder** icon in the filter header
 2. Select a preset from the dropdown menu
 3. The saved filters replace the current filter list
-
-{/* Screenshot: Load saved filter presets */}
-<Frame caption="Load saved filter presets">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-preset-load.png"
-    alt="Load saved filter presets"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-preset-load-dark.png"
-    alt="Load saved filter presets"
-  />
-</Frame>
 
 ### Managing Presets
 
@@ -373,20 +247,6 @@ See the exact WHERE clause that will be sent to the database before applying.
 1. Build your filters
 2. Click the **SQL** button in the filter footer
 3. A sheet displays the generated WHERE clause
-
-{/* Screenshot: SQL preview sheet showing generated WHERE clause */}
-<Frame caption="SQL preview of generated filters">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-sql-preview.png"
-    alt="SQL Preview"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-sql-preview-dark.png"
-    alt="SQL Preview"
-  />
-</Frame>
 
 ### What the Preview Shows
 
@@ -435,20 +295,6 @@ Configure default filter behavior in the settings popover.
 
 Click the **gear** icon in the filter panel header to open the settings popover.
 
-{/* Screenshot: Filter settings popover */}
-<Frame caption="Filter settings">
-  <img
-    className="block dark:hidden"
-    src="/images/filter-settings.png"
-    alt="Filter settings"
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/filter-settings-dark.png"
-    alt="Filter settings"
-  />
-</Frame>
-
 ### Default Column
 
 Controls which column is pre-selected when adding a new filter:
@@ -486,7 +332,7 @@ Controls the filter panel behavior when opening a table:
 
 | Action | Shortcut |
 |--------|----------|
-| Toggle filter panel / Quick search | `Cmd+F` |
+| Toggle filter panel / Quick search | `Ctrl+F` |
 | Apply filter (in value field) | `Enter` |
 
 ## Next Steps
