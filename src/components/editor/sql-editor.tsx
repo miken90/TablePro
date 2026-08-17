@@ -7,6 +7,7 @@ import {
   useQueryStore,
 } from "../../stores/queryStore";
 import { useConnectionStore } from "../../stores/connectionStore";
+import { useCommandStore, getEffectiveBinding } from "../../hooks/useCommandRegistry";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useQueryProgress } from "../../hooks/useQueryProgress";
@@ -121,6 +122,26 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
   const queryProgress = useQueryProgress(activeSessionId);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  // "Format SQL" from the command palette. Registered here because formatting
+  // needs the editor view; the palette entry used to dispatch a window event
+  // nothing listened for, so it did nothing.
+  useEffect(() => {
+    if (!editorRuntime) return;
+    const { registerCommand, unregisterCommand } = useCommandStore.getState();
+    registerCommand({
+      id: "editor.formatSql",
+      label: "Format SQL",
+      shortcut: getEffectiveBinding("editor.formatSql")?.join("+"),
+      category: "Query",
+      when: () => !!viewRef.current,
+      action: () => {
+        const view = viewRef.current;
+        if (view) editorRuntime.formatEditorContent(view, dialect);
+      },
+    });
+    return () => unregisterCommand("editor.formatSql");
+  }, [editorRuntime, dialect]);
 
   // Init default tab
   useEffect(() => {

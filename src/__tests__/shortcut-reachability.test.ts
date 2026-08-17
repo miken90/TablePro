@@ -88,19 +88,20 @@ describe('every registry command is reachable', () => {
     }
   });
 
-  it('registers a handler for every globally dispatchable command', () => {
-    // Handlers registered by useMainLayoutCommands (global context)...
-    const globalHandlers = source('hooks/useMainLayoutCommands.ts');
-    // ...and by result-panel (table-browse context).
+  // Coverage of the global commands moved to `command-effects.test.ts`, which
+  // invokes each action and requires an observable effect. The check that used
+  // to live here only asserted that a command id string appeared in a source
+  // file, so it passed for actions that dispatched an event nothing listened
+  // for — the exact defect it was supposed to catch.
+
+  it('registers the table-browse handlers with real functions, not ids alone', () => {
+    // These two close over the result panel's own state, so they cannot be
+    // built outside React; assert the registration passes a handler reference.
     const gridHandlers = source('components/grid/result-panel.tsx');
-    const registered = globalHandlers + gridHandlers;
-
-    const missing = COMMAND_DEFINITIONS
-      .filter((d) => isGloballyDispatchable(d.id))
-      .filter((d) => !registered.includes(`'${d.id}'`) && !registered.includes(`"${d.id}"`))
-      .map((d) => d.id);
-
-    expect(missing).toEqual([]);
+    expect(gridHandlers).toContain("id: 'data.save'");
+    expect(gridHandlers).toContain('action: handleRequestSave');
+    expect(gridHandlers).toContain("id: 'data.insertRow'");
+    expect(gridHandlers).toContain('action: handleAddRow');
   });
 
   it('accounts for every command exactly once', () => {

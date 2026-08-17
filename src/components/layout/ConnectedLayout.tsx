@@ -17,7 +17,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { resolveActiveQuerySessionId, useQueryStore } from "../../stores/queryStore";
 import { useInspectorStore } from "../../stores/inspectorStore";
-import { useSchemaStore } from "../../stores/schemaStore";
+import { refreshActiveSchema, useSchemaStore } from "../../stores/schemaStore";
 import {
   useLayoutStore,
   SIDEBAR_MIN,
@@ -350,7 +350,9 @@ export function ConnectedLayout({
             onClose={() => useLayoutStore.getState().setImportOpen(false)}
             onComplete={() => {
               // Imported DDL/DML can change the schema the sidebar shows.
-              window.dispatchEvent(new CustomEvent("tablepro:refresh-schema"));
+              // This used to dispatch an event nothing listened for, so the
+              // tree kept showing the pre-import schema.
+              refreshActiveSchema();
             }}
           />
         </Suspense>

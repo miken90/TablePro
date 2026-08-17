@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useConnectionStore } from "./connectionStore";
 import type { RoutineCatalog, TableInfo } from "../types/schema";
 import type { ColumnInfo } from "../types/query";
 import type { DriverCapabilities } from "../types/capability";
@@ -38,6 +39,25 @@ interface SchemaState {
   selectDatabase: (sessionId: string, db: string | null) => Promise<void>;
   setCurrentSchema: (schema: string | null) => void;
   clearSchema: () => void;
+}
+
+/**
+ * Reload the object tree for whichever connection is selected.
+ *
+ * The single entry point for "refresh the schema": the F5 editor binding, the
+ * command palette entry and the post-import refresh all call this. Those three
+ * used to dispatch a `tablepro:refresh-schema` window event that nothing
+ * listened for, so two of them silently did nothing.
+ *
+ * Returns false when there is nothing connected to refresh.
+ */
+export function refreshActiveSchema(): boolean {
+  const connectionId = useConnectionStore.getState().selectedConnectionId;
+  if (!connectionId) return false;
+  const sessionId = useConnectionStore.getState().getSessionId(connectionId);
+  if (!sessionId) return false;
+  void useSchemaStore.getState().fetchSchema(sessionId);
+  return true;
 }
 
 export const useSchemaStore = create<SchemaState>((set, get) => ({
