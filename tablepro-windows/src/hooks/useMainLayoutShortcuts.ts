@@ -49,6 +49,10 @@ const LAYOUT_ACTIONS: Record<string, () => void> = {
     const ls = useLayoutStore.getState();
     ls.setCommandPaletteOpen(!ls.commandPaletteOpen);
   },
+  // ConnectedLayout renders the dialog and ignores the flag when no session
+  // is active, so the shortcut is a no-op rather than an error when
+  // disconnected.
+  'data.importSql': () => useLayoutStore.getState().setImportOpen(true),
 };
 
 // Commands handled by this hook

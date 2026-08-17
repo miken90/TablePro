@@ -111,6 +111,15 @@ export function useMainLayoutCommands() {
         },
       },
       {
+        id: "data.importSql",
+        label: "Import SQL",
+        shortcut: shortcutFor("data.importSql"),
+        category: "Edit" as const,
+        // The dialog itself is rendered by ConnectedLayout, which has the
+        // active session; it stays closed when nothing is connected.
+        action: () => useLayoutStore.getState().setImportOpen(true),
+      },
+      {
         id: "app.help",
         label: "Keyboard Shortcuts",
         shortcut: shortcutFor("app.help"),

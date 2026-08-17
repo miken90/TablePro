@@ -1,4 +1,8 @@
 {
+  "toolbar": {
+    "importSql": "Import SQL file ({{shortcut}})",
+    "importSqlAria": "Import SQL file"
+  },
   "common": {
     "connect": "Connect",
     "connecting": "Connecting…",

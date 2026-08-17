@@ -1,4 +1,8 @@
 {
+  "toolbar": {
+    "importSql": "Nhập tệp SQL ({{shortcut}})",
+    "importSqlAria": "Nhập tệp SQL"
+  },
   "common": {
     "connect": "Kết nối",
     "connecting": "Đang kết nối…",

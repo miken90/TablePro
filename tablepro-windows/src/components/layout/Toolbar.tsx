@@ -1,4 +1,5 @@
-import { Clock, Loader2, RefreshCw, Settings, Shield, Sparkles, Unplug } from "lucide-react";
+import { Clock, FileUp, Loader2, RefreshCw, Settings, Shield, Sparkles, Unplug } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { formatTagLabel, tagClassName } from "../connection/connection-tag-picker";
 import { useConnectionStore } from "../../stores/connectionStore";
 import {
@@ -7,11 +8,13 @@ import {
 } from "../../stores/queryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSchemaStore } from "../../stores/schemaStore";
+import { useLayoutStore } from "../../stores/layoutStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useEditorViewRef } from "../../contexts/editor-view-context";
 import { statementAtCursor } from "../../editor/statement-scanner";
 import { SafeModeConfirmDialog } from "../shared/SafeModeConfirmDialog";
 import { RunSplitButton } from "./run-split-button";
+import { getEffectiveBinding } from "../../hooks/useCommandRegistry";
 
 interface ToolbarProps {
   onToggleSidebar: () => void;
@@ -61,6 +64,10 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
   const capabilities = useSchemaStore((s) => s.capabilities);
   const isDocumentDb = capabilities.supportsCollections && !capabilities.supportsSqlEditor;
   const editorViewRef = useEditorViewRef();
+  const { t } = useTranslation();
+  // Show whatever binding the user actually has for Import SQL, not a
+  // hardcoded default the shortcut editor may have changed.
+  const importShortcut = (getEffectiveBinding("data.importSql") ?? []).join("+");
 
   const connection = selectedConnectionId ? connections.get(selectedConnectionId) : null;
   const isKeyValueDb = connection?.config?.dbType === "redis";
@@ -224,6 +231,20 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
             hasResult={!!queryResult}
             canCancel={capabilities.supportsQueryCancellation}
           />
+        )}
+
+        {/* Import SQL — sibling of the result panel's Export action, gated on
+            the same capability the export command checks. */}
+        {capabilities.supportsImportExport && (
+          <button
+            onClick={() => useLayoutStore.getState().setImportOpen(true)}
+            disabled={status !== "connected"}
+            className="rounded p-1 text-text-secondary hover:bg-surface-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+            title={t("toolbar.importSql", { shortcut: importShortcut })}
+            aria-label={t("toolbar.importSqlAria")}
+          >
+            <FileUp size={15} aria-hidden="true" />
+          </button>
         )}
 
         <button

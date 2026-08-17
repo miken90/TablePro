@@ -31,6 +31,7 @@ import { useFilterContext } from "../../hooks/useFilterContext";
 import { useTableCallbacks } from "../../hooks/useTableCallbacks";
 
 const AiChatPanel = lazy(() => import("../ai/ai-chat-panel").then(m => ({ default: m.AiChatPanel })));
+const ImportDialog = lazy(() => import("../import/import-dialog").then(m => ({ default: m.ImportDialog })));
 const MongodbQueryPanel = lazy(() => import("../mongodb/mongodb-query-panel").then(m => ({ default: m.MongodbQueryPanel })));
 const RedisCommandPanel = lazy(() => import("../redis/redis-command-panel").then(m => ({ default: m.RedisCommandPanel })));
 const ExplainPanel = lazy(() => import("../editor/explain-panel").then(m => ({ default: m.ExplainPanel })));
@@ -116,6 +117,7 @@ export function ConnectedLayout({
     ?? (queryResult && selectedRowIndex !== null ? (queryResult.rows[selectedRowIndex] ?? null) : null);
 
   const sessionId = resolveActiveQuerySessionId();
+  const importOpen = useLayoutStore((s) => s.importOpen);
   const isConnected = !!selectedConnectionId;
 
   return (
@@ -335,6 +337,23 @@ export function ConnectedLayout({
             </Suspense>
           </div>
         </>
+      )}
+
+      {/* SQL file import — opened by the `data.importSql` command (toolbar
+          button, command palette, or its keyboard shortcut). Lives here
+          because importing needs an active session. */}
+      {importOpen && isConnected && sessionId && (
+        <Suspense fallback={<PanelLoader />}>
+          <ImportDialog
+            open
+            sessionId={sessionId}
+            onClose={() => useLayoutStore.getState().setImportOpen(false)}
+            onComplete={() => {
+              // Imported DDL/DML can change the schema the sidebar shows.
+              window.dispatchEvent(new CustomEvent("tablepro:refresh-schema"));
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

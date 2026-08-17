@@ -54,6 +54,8 @@ interface LayoutState {
   settingsOpen: boolean;
   helpOpen: boolean;
   commandPaletteOpen: boolean;
+  /** SQL file import dialog (opened by the `data.importSql` command). */
+  importOpen: boolean;
 
   // View mode
   viewMode: ViewMode;
@@ -83,6 +85,7 @@ interface LayoutState {
   setSettingsOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setImportOpen: (open: boolean) => void;
   openTable: (tableName: string, schema?: string | null) => void;
   openStructure: (tableName: string, schema?: string | null) => void;
   switchToQueryMode: () => void;
@@ -110,6 +113,7 @@ export const useLayoutStore = create<LayoutState>()(
       settingsOpen: false,
       helpOpen: false,
       commandPaletteOpen: false,
+      importOpen: false,
       viewMode: "query",
       activeTableContext: null,
       structureTarget: null,
@@ -143,6 +147,7 @@ export const useLayoutStore = create<LayoutState>()(
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setHelpOpen: (open) => set({ helpOpen: open }),
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+      setImportOpen: (open) => set({ importOpen: open }),
       openTable: (tableName, schema) => {
         set((_state) => ({
           activeTableContext: { tableName, schema },

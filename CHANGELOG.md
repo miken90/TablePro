@@ -20,6 +20,10 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 - Table browser: when the row-count query fails or times out while the rows load fine, the count is now reported as unknown instead of collapsing to 0, and it no longer discards the approximate estimate. Pagination degrades honestly — next-page still works, jump-to-last is disabled.
 - Export: chunk pagination is dialect-aware instead of always emitting `LIMIT`/`OFFSET`, which is invalid on SQL Server. SQL Server exports now run in a single pass rather than producing a syntax error. The export command also refuses engines that declare `supportsImportExport: false` (MongoDB, Redis) with a clear message instead of a server-side SQL failure.
 
+### Added
+
+- SQL file import is reachable from the UI: an **Import SQL** toolbar button, the `Ctrl+Shift+M` shortcut, and a command palette entry. The dialog and its backend already existed but nothing referenced them.
+
 ### Changed
 
 - Drivers advertise a new `supportsQueryCancellation` capability. Engines that cannot cancel (SQL Server, MongoDB, Redis) now show a non-interactive "Running" indicator instead of a Stop button that did nothing.
