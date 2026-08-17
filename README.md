@@ -20,7 +20,7 @@
 
 ## About
 
-TablePro is a Windows-only desktop database client (`tablepro-windows/`), built with Tauri v2 + Rust + React/TypeScript. It is a personal fork detached from its upstream macOS origin — no macOS code remains in this repository.
+TablePro is a Windows-only desktop database client, built with Tauri v2 + Rust + React/TypeScript. It is a personal fork detached from its upstream macOS origin — no macOS code remains in this repository.
 
 It includes: session-based query execution, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, AI chat + inline AI, driver capability substrate, command registry with customizable shortcuts, deep-link support, and 6 compiled-in database drivers (PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis). No pricing, licensing, activation, subscription, telemetry, or auto-updater — permanently out of scope.
 
@@ -28,7 +28,7 @@ It includes: session-based query execution, schema explorer, inline editing + sa
 
 | Platform | Runtime status | Version |
 |---|---|---|
-| Windows | Active, only supported platform | `tablepro-windows/package.json` / `src-tauri/tauri.conf.json`, currently `0.7.0` |
+| Windows | Active, only supported platform | `package.json` / `src-tauri/tauri.conf.json`, currently `0.7.0` |
 
 ## Windows Feature Snapshot (implemented)
 

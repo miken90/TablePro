@@ -24,24 +24,24 @@ Your role is to analyze requirements, delegate to available specialized agents, 
 
 This repo has two platform codebases, but implementation default is Windows:
 
-- **Primary implementation target:** `tablepro-windows/`
+- **Primary implementation target:** the repository root
 - **Reference-only upstream:** `TablePro/` (macOS Swift/AppKit)
 
 Rules:
-1. Implement new features, fixes, tests, and release work in `tablepro-windows/` by default.
+1. Implement new features, fixes, tests, and release work at the repository root by default.
 2. Use `TablePro/` only to inspect behavior and parity when porting features.
 3. Do not run macOS/Xcode build, test, lint, or release flows unless the user explicitly asks for macOS work.
 
 ## Project Overview (Windows app)
 
-`tablepro-windows/` is a Tauri v2 desktop app using:
-- Rust backend (`tablepro-windows/src-tauri/`)
-- React + TypeScript frontend (`tablepro-windows/src/`)
-- Windows DLL plugin drivers (`tablepro-windows/src-tauri/driver-*`)
+This repository is a Tauri v2 desktop app using:
+- Rust backend (`src-tauri/`)
+- React + TypeScript frontend (`src/`)
+- Windows DLL plugin drivers (`src-tauri/driver-*`)
 
 ## Build, Test, and Release Commands (Default)
 
-Run from `tablepro-windows/` unless noted.
+Run from the repository root unless noted.
 
 ```bash
 # Install deps
@@ -66,14 +66,14 @@ npm run build:installer
 npm run build:release
 ```
 
-Rust commands run from `tablepro-windows/src-tauri/`:
+Rust commands run from `src-tauri/`:
 
 ```bash
 cargo test --workspace
 cargo clippy --workspace -- -D warnings
 ```
 
-Version bump (from `tablepro-windows/`):
+Version bump (from the repository root):
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version X.Y.Z
@@ -81,18 +81,18 @@ powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version X.Y.Z
 
 ## Windows Architecture Snapshot
 
-- **Host app:** Tauri commands/services in `tablepro-windows/src-tauri/src/commands` and `.../services`
-- **Plugin runtime:** DLL loading and ABI bridge in `tablepro-windows/src-tauri/src/plugin/`
-- **Plugin SDK:** `tablepro-windows/src-tauri/plugin-sdk/`
-- **Driver crates:** `tablepro-windows/src-tauri/driver-postgres`, `driver-mysql`, `driver-mssql`, `driver-sqlite`
-- **Frontend app:** React UI and state in `tablepro-windows/src/`
-- **Windows CI:** `tablepro-windows/.github/workflows/windows-build.yml`
+- **Host app:** Tauri commands/services in `src-tauri/src/commands` and `.../services`
+- **Plugin runtime:** DLL loading and ABI bridge in `src-tauri/src/plugin/`
+- **Plugin SDK:** `src-tauri/plugin-sdk/`
+- **Driver crates:** `src-tauri/driver-postgres`, `driver-mysql`, `driver-mssql`, `driver-sqlite`
+- **Frontend app:** React UI and state in `src/`
+- **Windows CI:** `.github/workflows/windows-build.yml`
 
 ## Porting Flow (macOS parity as reference)
 
 When asked to port a feature:
 1. Inspect `TablePro/` for expected behavior, edge cases, and UX intent.
-2. Map behavior to existing Windows architecture (`tablepro-windows/`).
+2. Map behavior to the existing Windows architecture.
 3. Implement only in Windows paths unless user explicitly asks for macOS edits.
 4. Add/adjust Rust and/or TS tests in Windows codebase.
 5. Validate with Windows commands above.
@@ -124,7 +124,7 @@ When asked to port a feature:
 ## CI/CD
 
 Windows pipeline source of truth:
-- `tablepro-windows/.github/workflows/windows-build.yml`
+- `.github/workflows/windows-build.yml`
 
 Current CI quality bar includes:
 - `cargo clippy --workspace -- -D warnings`

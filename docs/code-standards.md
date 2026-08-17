@@ -6,7 +6,7 @@ These standards keep TablePro code and documentation maintainable and aligned wi
 
 Scope:
 
-- Active implementation: `tablepro-windows/` (Rust + TypeScript)
+- Active implementation: the repository root (Rust + TypeScript)
 - Stable reference implementation: `TablePro/` (Swift)
 - Documentation set: `docs/`
 
@@ -20,7 +20,7 @@ Scope:
 
 ## 3. Repository-aware structure expectations
 
-### 3.1 Windows backend (`tablepro-windows/src-tauri/`)
+### 3.1 Windows backend (`src-tauri/`)
 
 Current layout:
 
@@ -52,7 +52,7 @@ Rules:
 - Register commands centrally in `lib.rs`
 - Keep driver-specific logic inside driver crates, not in host code
 
-### 3.2 Windows frontend (`tablepro-windows/src/`)
+### 3.2 Windows frontend (`src/`)
 
 Current layout:
 
@@ -222,7 +222,7 @@ When reviewing docs/code alignment, verify these first:
 2. `src-tauri/src/plugin/manager.rs` ABI entrypoints, discovery paths, and capability sidecar loading
 3. `src-tauri/src/commands/query.rs` and `commands/connection.rs` signatures/events
 4. `src-tauri/src/storage/*.rs` and frontend store persistence/security details
-5. `tablepro-windows/package.json` + `src-tauri/tauri.conf.json` version consistency
+5. `package.json` + `src-tauri/tauri.conf.json` version consistency
 6. `driver-capabilities/*.capabilities.json` flag count and defaults
 7. `hooks/useCommandRegistry.ts` command definitions and shortcut mappings
 

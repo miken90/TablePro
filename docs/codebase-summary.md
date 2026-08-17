@@ -7,8 +7,9 @@ This summary reflects current repository structure as of 2026-08-17. This is a W
 ## Top-level structure
 
 ```text
-TablePro/
-├── tablepro-windows/        # The only product (Tauri v2 + Rust + React)
+TablePro/                    # The only product (Tauri v2 + Rust + React)
+├── src/                     # React/TypeScript frontend
+├── src-tauri/               # Rust backend
 ├── docs/                    # Product and engineering docs
 ├── plans/                   # Planning artifacts and reports
 ├── CHANGELOG.md
@@ -16,9 +17,9 @@ TablePro/
 └── AGENTS.md
 ```
 
-## Active implementation area: `tablepro-windows/`
+## Active implementation area
 
-### Backend (`tablepro-windows/src-tauri/`)
+### Backend (`src-tauri/`)
 
 ```text
 src-tauri/
@@ -69,7 +70,7 @@ Verified runtime facts:
 | MongoDB | `driver-mongodb` | `mongodb` | 27017 | BSON/find() |
 | Redis | `driver-redis` | `redis` | 6379 | CLI commands |
 
-### Frontend (`tablepro-windows/src/`)
+### Frontend (`src/`)
 
 ```text
 src/
@@ -164,4 +165,4 @@ Areas most likely to drift:
 ---
 
 **Last Updated**: 2026-04-08  
-**Source of Truth for this summary**: direct reads of `tablepro-windows/` and docs
+**Source of Truth for this summary**: direct reads of the repository source and docs

@@ -1,11 +1,11 @@
 # Contributing
 
-This is a personal, non-profit, Windows-only fork. There is one product in this repo: `tablepro-windows/` (Tauri v2 + Rust + React/TypeScript).
+This is a personal, non-profit, Windows-only fork. There is one product in this repo (Tauri v2 + Rust + React/TypeScript), and it lives at the repository root.
 
 ## Layout
 
 ```text
-tablepro-windows/
+.
 ├── src/                # React/TypeScript frontend
 ├── src-tauri/
 │   ├── src/             # Tauri commands, services, storage
@@ -22,7 +22,7 @@ plans/                 # plans and reports
 
 ## Build and Test
 
-All commands run on Windows through PowerShell, from `tablepro-windows/` unless noted.
+All commands run on Windows through PowerShell, from the repository root unless noted.
 
 ```powershell
 npm ci
@@ -31,7 +31,7 @@ npm run test
 npm run lint
 ```
 
-Rust, from `tablepro-windows/src-tauri/`:
+Rust, from `src-tauri/`:
 
 ```powershell
 cargo test --workspace
@@ -50,7 +50,7 @@ docs: update keyboard shortcuts page
 
 ## CI
 
-The only CI pipeline is [`tablepro-windows/.github/workflows/windows-build.yml`](tablepro-windows/.github/workflows/windows-build.yml), running the same gates above.
+The only CI pipeline is [`.github/workflows/windows-build.yml`](.github/workflows/windows-build.yml), running the same gates above.
 
 ## License
 

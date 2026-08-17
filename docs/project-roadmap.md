@@ -92,9 +92,9 @@ Scope is fixed to the 6 existing drivers (PostgreSQL, MySQL/MariaDB, MSSQL, SQLi
 
 - This roadmap intentionally separates implemented state from planned backlog.
 - If command surfaces or release versioning changes, update this file with evidence from:
-  - `tablepro-windows/package.json`
-  - `tablepro-windows/src-tauri/tauri.conf.json`
-  - `tablepro-windows/src-tauri/src/lib.rs`
+  - `package.json`
+  - `src-tauri/tauri.conf.json`
+  - `src-tauri/src/lib.rs`
 
 ---
 

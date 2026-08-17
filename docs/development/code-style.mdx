@@ -10,11 +10,11 @@ description: TypeScript/React and Rust conventions for TablePro Windows
 Enforced automatically — run before committing:
 
 ```powershell
-npx eslint .          # from tablepro-windows/
-cargo clippy --workspace --all-targets -- -D warnings   # from tablepro-windows/src-tauri/
+npx eslint .          # from the repository root
+cargo clippy --workspace --all-targets -- -D warnings   # from src-tauri/
 ```
 
-`tablepro-windows/eslint.config.js` is the source of truth for frontend lint rules; there is no separate Prettier config or `rustfmt.toml` in this repo — `cargo fmt` defaults apply.
+`eslint.config.js` is the source of truth for frontend lint rules; there is no separate Prettier config or `rustfmt.toml` in this repo — `cargo fmt` defaults apply.
 
 ## File Naming
 

@@ -5,7 +5,7 @@ description: Debug builds, release builds, packaging (MSI/NSIS), and CI for Tabl
 
 # Building TablePro
 
-Windows-only. Every build, test, lint, and package command runs through PowerShell. Run from `tablepro-windows/` unless noted.
+Windows-only. Every build, test, lint, and package command runs through PowerShell. Run from the repository root unless noted.
 
 ## Install Dependencies
 
@@ -28,7 +28,7 @@ npm run build:debug
 
 ## Quality Gates
 
-Frontend, from `tablepro-windows/`:
+Frontend, from the repository root:
 
 ```powershell
 npx vitest run
@@ -36,7 +36,7 @@ npx eslint .
 npm run build
 ```
 
-Rust, from `tablepro-windows/src-tauri/`:
+Rust, from `src-tauri/`:
 
 ```powershell
 cargo test --workspace
@@ -90,4 +90,4 @@ CI imports a code-signing certificate from a GitHub secret (`WINDOWS_SIGN_CERT_B
 
 ## CI
 
-The only CI pipeline is [`tablepro-windows/.github/workflows/windows-build.yml`](https://github.com/miken90/TablePro/blob/main/tablepro-windows/.github/workflows/windows-build.yml), which runs `cargo clippy`, `cargo test`, `npx vitest run`, `npx eslint .`, `npm run build`, and `npx tauri build`.
+The only CI pipeline is [`.github/workflows/windows-build.yml`](https://github.com/miken90/TablePro/blob/main/.github/workflows/windows-build.yml), which runs `cargo clippy`, `cargo test`, `npx vitest run`, `npx eslint .`, `npm run build`, and `npx tauri build`.

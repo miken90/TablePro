@@ -16,8 +16,8 @@
 2. Check frontend crash breadcrumbs:
    - `%APPDATA%/TablePro/renderer-errors.log` (startup beacons + `window.error` + `unhandledrejection`).
 3. Check backend startup logs:
-   - `tablepro-windows/src-tauri/target/debug/stdout.log`
-   - `tablepro-windows/src-tauri/target/debug/stderr.log`
+   - `src-tauri/target/debug/stdout.log`
+   - `src-tauri/target/debug/stderr.log`
 4. If frontend log missing and backend silent after startup, inspect OS-level evidence:
    - Windows Event Log (`Application Error`, `Windows Error Reporting`, `Application Hang`)
    - `%LOCALAPPDATA%/CrashDumps`
@@ -31,7 +31,7 @@
   - PDB filename collision between bin/lib targets — reduced lib crate-type to `["rlib"]`.
   - Vite chokidar was not ignoring `src-tauri/` — added `server.watch.ignored`.
 - **Permanent fix**: `npm run dev:tauri` now runs `tauri dev --no-watch`. Ctrl+C and re-run to pick up Rust changes.
-- Dev command: `powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"`
+- Dev command: `powershell.exe -Command "npm run dev:tauri"`
 
 ### Root cause identified (2026-03-20): Tauri CLI `dev --no-watch` STILL kills app
 - **Even with `--no-watch`**, the Tauri CLI 2.10.1 `dev` command silently terminates the app process after ~2-5 minutes while idle.
@@ -44,7 +44,7 @@
   - `npm run dev:tauri:cli` preserved as fallback for `tauri dev --no-watch`
   - Script auto-cleans stale port 1420 processes, waits for Vite TCP listen, and kills Vite on app exit.
 - **Secondary fix**: `tauri-plugin-updater` was in Cargo.toml and capabilities but never registered in `tauri::Builder` — now properly initialized with `.plugin(tauri_plugin_updater::Builder::new().build())`
-- Dev command: `powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"`
+- Dev command: `powershell.exe -Command "npm run dev:tauri"`
 
 ### Known risky areas already addressed
 - Plugin/driver shutdown lifetime ordering in `ConnectionManager` (drop connections before plugin manager).
@@ -68,9 +68,9 @@
 - May be re-testable after Rust toolchain updates.
 
 ### Commands used frequently
-- Dev run: `powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"`
-- Release installer build: `powershell.exe -Command "cd tablepro-windows; npm run build:installer"`
-- Release portable build: `powershell.exe -Command "cd tablepro-windows; npm run build:portable"`
-- Full release build: `powershell.exe -Command "cd tablepro-windows; npm run build:release"`
-- Debug build: `powershell.exe -Command "cd tablepro-windows; npm run build:debug"`
-- Rust-only release: `powershell.exe -Command "cd tablepro-windows/src-tauri; cargo build --release"`
+- Dev run: `powershell.exe -Command "npm run dev:tauri"`
+- Release installer build: `powershell.exe -Command "npm run build:installer"`
+- Release portable build: `powershell.exe -Command "npm run build:portable"`
+- Full release build: `powershell.exe -Command "npm run build:release"`
+- Debug build: `powershell.exe -Command "npm run build:debug"`
+- Rust-only release: `powershell.exe -Command "cd src-tauri; cargo build --release"`

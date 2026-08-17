@@ -16,7 +16,7 @@
 
 ## Giới thiệu
 
-TablePro là ứng dụng quản lý cơ sở dữ liệu chỉ dành cho Windows (`tablepro-windows/`), xây dựng bằng Tauri v2 + Rust + React/TypeScript. Đây là fork cá nhân đã tách hẳn khỏi upstream macOS — không còn code macOS nào trong repo này.
+TablePro là ứng dụng quản lý cơ sở dữ liệu chỉ dành cho Windows, xây dựng bằng Tauri v2 + Rust + React/TypeScript. Đây là fork cá nhân đã tách hẳn khỏi upstream macOS — không còn code macOS nào trong repo này.
 
 Gồm: query theo session, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, AI chat + inline AI, driver capability substrate, command registry với shortcut tùy chỉnh, deep-link, và 6 driver cơ sở dữ liệu compiled-in (PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis). Không có pricing, licensing, activation, subscription, telemetry, hay auto-updater — vĩnh viễn ngoài phạm vi.
 
@@ -24,7 +24,7 @@ Gồm: query theo session, schema explorer, inline editing + save changes, SQL i
 
 | Nền tảng | Trạng thái | Phiên bản |
 |---|---|---|
-| Windows | Đang phát triển, nền tảng duy nhất được hỗ trợ | `tablepro-windows/package.json` / `src-tauri/tauri.conf.json`, hiện tại `0.7.0` |
+| Windows | Đang phát triển, nền tảng duy nhất được hỗ trợ | `package.json` / `src-tauri/tauri.conf.json`, hiện tại `0.7.0` |
 
 ## Tóm tắt tính năng Windows đã implement
 

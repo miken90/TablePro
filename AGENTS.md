@@ -21,7 +21,7 @@ Analyze user requirements, delegate tasks to appropriate sub-agents, and ensure 
 
 TablePro Windows — a Windows database client built with Tauri v2 + Rust + TypeScript/React. Ported from the macOS version (SwiftUI + AppKit).
 
-- **Windows source (ACTIVE)**: `tablepro-windows/` — Tauri v2 + Rust backend (`src-tauri/`) + React/TypeScript frontend (`src/`)
+- **Windows source (ACTIVE)**: the repository root — Tauri v2 + Rust backend (`src-tauri/`) + React/TypeScript frontend (`src/`)
 - **macOS source (READ-ONLY reference)**: `TablePro/`, `Plugins/`, `Libs/` — Swift codebase. **Do NOT modify, build, or run.** Use only to understand feature behavior, protocols, and logic when porting.
 - **Plans**: `plans/` — implementation plans, reports, phase files
 
@@ -31,12 +31,12 @@ TablePro Windows — a Windows database client built with Tauri v2 + Rust + Type
 
 ```bash
 # Build, run, test — always via powershell.exe
-powershell.exe -Command "cd tablepro-windows; npm install"
-powershell.exe -Command "cd tablepro-windows; npm run dev:tauri"
-powershell.exe -Command "cd tablepro-windows; npm run tauri build"
-powershell.exe -Command "cd tablepro-windows; cargo test --manifest-path src-tauri/Cargo.toml"
-powershell.exe -Command "cd tablepro-windows; cargo clippy --manifest-path src-tauri/Cargo.toml"
-powershell.exe -Command "cd tablepro-windows; npx vitest run"
+powershell.exe -Command "npm install"
+powershell.exe -Command "npm run dev:tauri"
+powershell.exe -Command "npm run tauri build"
+powershell.exe -Command "cargo test --manifest-path src-tauri/Cargo.toml"
+powershell.exe -Command "cargo clippy --manifest-path src-tauri/Cargo.toml"
+powershell.exe -Command "npx vitest run"
 ```
 
 > **Note:** `npm run dev:tauri` runs `scripts/dev.ps1` which launches Vite and `cargo run` independently (bypassing the Tauri CLI `dev` command, which silently kills the app on Windows after a few minutes). Close the app window to stop; the script auto-cleans up Vite. Use `npm run dev:tauri:cli` for the legacy `tauri dev --no-watch` fallback. When you need to pick up Rust changes, close and re-run.

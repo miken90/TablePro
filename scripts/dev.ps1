@@ -8,7 +8,7 @@
 # Stop:   Close the app window (script cleans up Vite automatically)
 
 $ErrorActionPreference = "Stop"
-$root = $PSScriptRoot | Split-Path  # tablepro-windows/
+$root = $PSScriptRoot | Split-Path  # repository root
 $scriptExitCode = 0
 
 function Get-ChildProcessIds {

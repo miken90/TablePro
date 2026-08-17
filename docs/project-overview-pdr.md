@@ -8,7 +8,7 @@ This document defines current product requirements for TablePro based on verifie
 
 TablePro is a Windows-only, personal, non-profit database client. The fork has permanently detached from its upstream macOS origin — no macOS code remains in this repository.
 
-- Only product: `tablepro-windows/` (Tauri v2 + Rust + React)
+- Only product: this repository (Tauri v2 + Rust + React)
 
 Windows implementation status in source:
 
@@ -267,4 +267,4 @@ Host-side plugin loading must continue to use:
 
 **Last Updated**: 2026-04-08  
 **Document Status**: Active  
-**Source Scope**: `tablepro-windows/` runtime + docs alignment
+**Source Scope**: repository-root runtime + docs alignment

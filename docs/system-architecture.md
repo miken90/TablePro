@@ -2,27 +2,27 @@
 
 ## 1. Scope and source of truth
 
-This document describes architecture reflected in current repository code as of 2026-04-08, focused on the active Windows implementation under `tablepro-windows/`.
+This document describes architecture reflected in current repository code as of 2026-04-08, focused on the active Windows implementation at the repository root.
 
 Primary verified sources:
 
-- `tablepro-windows/src-tauri/src/lib.rs`
-- `tablepro-windows/src-tauri/src/plugin/manager.rs`
-- `tablepro-windows/src-tauri/src/plugin/adapter.rs`
-- `tablepro-windows/src-tauri/src/services/connection_manager.rs`
-- `tablepro-windows/src-tauri/src/services/health_monitor.rs`
-- `tablepro-windows/src-tauri/src/commands/query.rs`
-- `tablepro-windows/src-tauri/src/commands/connection.rs`
-- `tablepro-windows/src-tauri/src/commands/tab_state.rs`
-- `tablepro-windows/src-tauri/src/storage/tab_state_store.rs`
-- `tablepro-windows/src-tauri/src/models/capability.rs`
-- `tablepro-windows/src-tauri/driver-mongodb/`
-- `tablepro-windows/src-tauri/driver-redis/`
-- `tablepro-windows/src-tauri/driver-capabilities/`
-- `tablepro-windows/src-tauri/src/commands/explain.rs`
-- `tablepro-windows/src-tauri/src/commands/bulk_ops.rs`
-- `tablepro-windows/src-tauri/src/commands/routine_ops.rs`
-- Frontend stores/components under `tablepro-windows/src/`
+- `src-tauri/src/lib.rs`
+- `src-tauri/src/plugin/manager.rs`
+- `src-tauri/src/plugin/adapter.rs`
+- `src-tauri/src/services/connection_manager.rs`
+- `src-tauri/src/services/health_monitor.rs`
+- `src-tauri/src/commands/query.rs`
+- `src-tauri/src/commands/connection.rs`
+- `src-tauri/src/commands/tab_state.rs`
+- `src-tauri/src/storage/tab_state_store.rs`
+- `src-tauri/src/models/capability.rs`
+- `src-tauri/driver-mongodb/`
+- `src-tauri/driver-redis/`
+- `src-tauri/driver-capabilities/`
+- `src-tauri/src/commands/explain.rs`
+- `src-tauri/src/commands/bulk_ops.rs`
+- `src-tauri/src/commands/routine_ops.rs`
+- Frontend stores/components under `src/`
 
 ## 2. High-level system view
 

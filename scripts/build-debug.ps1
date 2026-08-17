@@ -7,7 +7,7 @@
 # Run:    src-tauri\target\debug\tablepro-windows.exe
 
 $ErrorActionPreference = "Stop"
-$root = $PSScriptRoot | Split-Path  # tablepro-windows/
+$root = $PSScriptRoot | Split-Path  # repository root
 Push-Location $root
 
 try {

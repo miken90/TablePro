@@ -17,14 +17,14 @@ Thumbs.db
 *.pfx
 .env
 .env.*
-tablepro-windows/.tauri/
+.tauri/
 
 # Debug
 *.log
 
 # Build artifacts
 node_modules/
-tablepro-windows/src-tauri/target/
+src-tauri/target/
 dist/
 build/
 plans/
