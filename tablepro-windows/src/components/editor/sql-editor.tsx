@@ -175,10 +175,12 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
           runQuery: (view) => {
             const sessionId = resolveActiveQuerySessionId();
             if (!sessionId) return false;
-            const text = view.state.doc.toString();
-            const cursor = view.state.selection.main.head;
-            const stmt = runtime.statementAtCursor(text, cursor);
-            if (stmt.trim()) void execute(sessionId, stmt);
+            const selection = view.state.sliceDoc(
+              view.state.selection.main.from,
+              view.state.selection.main.to
+            ).trim();
+            const sqlToRun = selection || runtime.statementAtCursor(view.state.doc.toString(), view.state.selection.main.head);
+            if (sqlToRun.trim()) void execute(sessionId, sqlToRun);
             return true;
           },
           runAll: (view) => {
@@ -296,8 +298,10 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
     if (!view || !runtime || !activeTabId) return;
 
     const saved = stateMapRef.current.get(activeTabId);
+    let docContent: string;
     if (saved) {
       view.setState(saved);
+      docContent = saved.doc.toString();
     } else {
       const content = activeTab?.content ?? "";
       const newState = runtime.EditorState.create({
@@ -306,7 +310,9 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
       });
       view.setState(newState);
       stateMapRef.current.set(activeTabId, newState);
+      docContent = content;
     }
+    setQueryText(docContent);
 
     // Re-apply current settings to restored state (settings may have changed
     // while another tab was active; compartment reconfigure is idempotent)

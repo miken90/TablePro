@@ -56,6 +56,9 @@ export function useGridKeyboard({
   onSelectAll,
 }: UseGridKeyboardProps): UseGridKeyboardReturn {
 
+  // Track whether the last selection change was from keyboard navigation
+  const keyboardNavRef = useRef(false);
+
   const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (editingCell) return;
 
@@ -98,12 +101,16 @@ export function useGridKeyboard({
         return;
       default: return;
     }
+    keyboardNavRef.current = true;
     e.preventDefault();
   }, [editingCell, onMoveActive, onExtendActive, onMoveNext, onMovePrev, onMoveToFirst, onMoveToLast, onMoveToRowStart, onMoveToRowEnd, onMoveActivePage, onStartEditingActive, onClearSelection, onSelectAll, parentRef]);
 
-  // Auto-scroll active cell into view
+  // Auto-scroll active cell into view — only when navigating via keyboard
   /* eslint-disable react-hooks/exhaustive-deps -- intentionally granular: only scroll on row/col change */
   useEffect(() => {
+    if (!keyboardNavRef.current) return;
+    keyboardNavRef.current = false;
+
     if (!selection?.active || !parentRef.current) return;
 
     const displayIdx = rowIds

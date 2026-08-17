@@ -4,10 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tablepro-plugin-sdk = { path = "../plugin-sdk" }
+driver-common = { path = "../driver-common" }
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 rusqlite = { version = "0.32", features = ["bundled", "column_decltype"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [lib]
 name = "driver_sqlite"
-crate-type = ["cdylib"]
+crate-type = ["rlib"]

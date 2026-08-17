@@ -4,11 +4,15 @@ import { useQueryLogStore } from '../../stores/queryLogStore';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useChangeStore } from '../../stores/changeStore';
 import { useInspectorStore } from '../../stores/inspectorStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
-import type { ColumnInfo } from '../../types/query';
+import type { ColumnInfo, QueryResult } from '../../types/query';
 import { DataGrid } from './data-grid';
 import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
+import { TruncationBanner } from './truncation-banner';
+import { useQueryResultStore } from '../../stores/queryResultStore';
+import { RENDER_ROW_CAP, isExplainResult, readCell, truncateCell } from '../DataGrid/columnar-render';
 import { EmptyState } from '../shared/EmptyState';
 import { ExportDialog } from '../export/export-dialog';
 import { Database, Loader2 } from 'lucide-react';
@@ -41,6 +45,10 @@ interface ResultPanelProps {
   onRequestSaveRef?: MutableRefObject<(() => void) | null>;
   /** Ref that receives the add-row function. */
   onAddRowRef?: MutableRefObject<(() => void) | null>;
+  /** Ref that receives the delete-selected-rows function. */
+  onDeleteSelectedRef?: MutableRefObject<(() => void) | null>;
+  /** Ref that receives the clear-selection function. */
+  onClearSelectionRef?: MutableRefObject<(() => void) | null>;
   /** Hide internal ChangeToolbar (when ContextualBar owns change actions). */
   hideChangeToolbar?: boolean;
 }
@@ -48,7 +56,9 @@ interface ResultPanelProps {
 export function ResultPanel({
   tabId, tableName, schema, sessionId,
   activeWhereClause, quickSearchColumns = [],
-  onRowSelect: onRowSelectProp, onOpenQueryEditor, onSaveRef, onRequestSaveRef, onAddRowRef, hideChangeToolbar,
+  onRowSelect: onRowSelectProp, onOpenQueryEditor, onSaveRef, onRequestSaveRef, onAddRowRef,
+  onDeleteSelectedRef, onClearSelectionRef,
+  hideChangeToolbar,
 }: ResultPanelProps) {
   const queryResult = useQueryStore((s) => s.result);
   const queryError = useQueryStore((s) => s.error);
@@ -56,6 +66,16 @@ export function ResultPanel({
   const activeConnectionId = useQueryStore((s) => s.activeConnectionId);
   const queryText = useQueryStore((s) => s.queryText);
   const logEntries = useQueryLogStore((s) => s.entries);
+
+  // Streaming columnar store (T5/T6/T8) — primary source for the live
+  // query data grid. The legacy `useQueryStore.result` mirror is kept
+  // populated post-stream for non-grid readers (Export, StatusBar).
+  const columnar = useQueryResultStore((s) => s.columnar);
+  const streaming = useQueryResultStore((s) => s.streaming);
+  const streamError = useQueryResultStore((s) => s.streamError);
+  const streamDurationMs = useQueryResultStore((s) => s.durationMs);
+  const truncatedStream = useQueryResultStore((s) => s.truncated);
+  const storeRowCount = columnar?.row_count ?? 0;
 
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionIdForProgress = useConnectionStore((s) => s.getSessionId);
@@ -74,17 +94,52 @@ export function ResultPanel({
   const gridScrollRef = useRef<HTMLDivElement>(null);
 
   // --- Hooks ---
-  const tableData = useTableData({ tableName, schema, sessionId, activeWhereClause });
+  const tableData = useTableData({ tabId, tableName, schema, sessionId, activeWhereClause });
   const {
     tableResult, totalCount, approximateCount, isFetching, fetchError,
     page, pageSize, sorting, enumValuesByColumn, fkMap,
     setPage, setPageSize, setSorting, fetchTableData,
   } = tableData;
 
-  const result = isTableMode ? tableResult : queryResult;
-  const error = isTableMode ? fetchError : queryError;
-  const total = isTableMode ? totalCount : (queryResult?.rows.length ?? 0);
-  const loading = isTableMode ? isFetching : isExecuting;
+  // Build query-mode display result from the streaming columnar store.
+  // Caps render at RENDER_ROW_CAP and truncates each cell to 80 chars
+  // (skipped when the result is an EXPLAIN payload). Recomputes whenever
+  // a new `generation` lands or row_count grows during streaming.
+  const queryResultFromStream = useMemo<QueryResult | null>(() => {
+    if (isTableMode || !columnar) return null;
+    const explain = isExplainResult(columnar.columns);
+    const limit = Math.min(columnar.row_count, RENDER_ROW_CAP);
+    const rows: (string | null)[][] = new Array(limit);
+    for (let r = 0; r < limit; r++) {
+      rows[r] = columnar.data.map((col) => {
+        const v = readCell(col, r);
+        if (v === null) return null;
+        return truncateCell(v, explain);
+      });
+    }
+    return {
+      columns: columnar.columns,
+      rows,
+      affectedRows: columnar.affected_rows ?? 0,
+      executionTimeMs: streamDurationMs ?? 0,
+      truncated: truncatedStream || undefined,
+    };
+  }, [isTableMode, columnar, streamDurationMs, truncatedStream]);
+
+  const result = isTableMode ? tableResult : (queryResultFromStream ?? queryResult);
+  const error = isTableMode ? fetchError : (streamError ?? queryError);
+  const total = isTableMode ? totalCount : (queryResultFromStream?.rows.length ?? queryResult?.rows.length ?? 0);
+  const loading = isTableMode ? isFetching : (isExecuting || streaming);
+  
+  const exportSql = useMemo(() => {
+    if (!isTableMode || !tableName) return queryText;
+    const qualifiedTable = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
+    const wherePart = activeWhereClause ? ` WHERE ${activeWhereClause}` : '';
+    const orderBy = sorting && sorting.length > 0
+      ? ' ORDER BY ' + sorting.map(s => `"${s.id}" ${s.desc ? 'DESC' : 'ASC'}`).join(', ')
+      : '';
+    return `SELECT * FROM ${qualifiedTable}${wherePart}${orderBy}`;
+  }, [isTableMode, tableName, schema, activeWhereClause, sorting, queryText]);
 
   const changeTracking = useChangeTracking({
     tableName, schema, sessionId, result,
@@ -134,7 +189,7 @@ export function ResultPanel({
     getEffectiveCellValue, onRowSelectProp,
   });
   const {
-    selectedRows, selection, selectionRect, selectCell, selectRow,
+    selectedRows, selection, selectionRect, selectCell,
     handleRowSelect,
     editingCell, handleCellDoubleClick, handleCellCommit, handleCellCancel,
     contextMenu, handleCellContextMenu, closeContextMenu,
@@ -170,14 +225,12 @@ export function ResultPanel({
   }, [onSaveRef, handleSave]);
 
   // Auto-switch to Messages tab on error
-  /* eslint-disable react-hooks/set-state-in-effect -- auto-switch tab on error */
   useEffect(() => {
     if (error && !isTableMode && error !== lastAutoSwitchedErrorRef.current) {
       lastAutoSwitchedErrorRef.current = error;
       setActiveTab('messages');
     }
   }, [error, isTableMode]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const currentFkColumns = tableName ? fkMap[tableName] : undefined;
 
@@ -207,6 +260,25 @@ export function ResultPanel({
     if (onAddRowRef) onAddRowRef.current = handleAddRow;
     return () => { if (onAddRowRef) onAddRowRef.current = null; };
   }, [onAddRowRef, handleAddRow]);
+
+  // Expose delete-selected to parent via ref
+  useEffect(() => {
+    if (onDeleteSelectedRef) onDeleteSelectedRef.current = deleteContextRows;
+    return () => { if (onDeleteSelectedRef) onDeleteSelectedRef.current = null; };
+  }, [onDeleteSelectedRef, deleteContextRows]);
+
+  // Expose clear-selection to parent via ref
+  useEffect(() => {
+    if (onClearSelectionRef) onClearSelectionRef.current = resetSelection;
+    return () => { if (onClearSelectionRef) onClearSelectionRef.current = null; };
+  }, [onClearSelectionRef, resetSelection]);
+
+  // Sync selected row count to layout store for ContextualBar
+  const setSelectedRowCount = useLayoutStore((s) => s.setSelectedRowCount);
+  useEffect(() => {
+    setSelectedRowCount(selectedRows.size);
+    return () => { setSelectedRowCount(0); };
+  }, [selectedRows, setSelectedRowCount]);
 
   const handleConfirmExecute = useCallback(async () => {
     setConfirmExecuteOpen(false);
@@ -256,7 +328,7 @@ export function ResultPanel({
     return () => window.removeEventListener('keydown', handler);
   }, [isTableMode, handleRefreshTable, handleRequestSave]);
 
-  // Keyboard: Ctrl+C copy selection, Ctrl+V paste into selected rows
+  // Keyboard: Ctrl+C copy selection, Ctrl+V paste into selected rows, Delete key to delete selected rows
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !editingCell && selection.mode) {
@@ -267,10 +339,15 @@ export function ResultPanel({
         e.preventDefault();
         pasteIntoSelectedRows();
       }
+      // Delete/Backspace deletes selected rows in table mode
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !editingCell && isTableMode && selectedRows.size > 0 && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        deleteContextRows();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editingCell, selection.mode, selectedRows, isTableMode, copySelection, pasteIntoSelectedRows]);
+  }, [editingCell, selection.mode, selectedRows, isTableMode, copySelection, pasteIntoSelectedRows, deleteContextRows]);
 
   // Composed sort/page handlers that reset selection
   const handleSortChange = useCallback((colName: string) => {
@@ -340,10 +417,21 @@ export function ResultPanel({
         )}
         {!loading && activeTab === 'results' && (
           <>
+            <TruncationBanner />
+            {storeRowCount > RENDER_ROW_CAP && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="px-3 py-1 text-[11px] text-text-muted bg-surface-subtle border-b border-border-subtle"
+              >
+                Showing first {RENDER_ROW_CAP.toLocaleString()} of {storeRowCount.toLocaleString()} rows
+              </div>
+            )}
             <div className="flex-1 overflow-hidden">
               {displayResult ? (
                 <DataGrid
                   result={displayResult}
+                  sessionId={sessionId ?? activeConnectionId ?? undefined}
                   pageOffset={0}
                   sorting={sorting}
                   onSortChange={handleSortChange}
@@ -352,7 +440,7 @@ export function ResultPanel({
                   selection={selection}
                   selectionRect={selectionRect}
                   onCellClick={selectCell}
-                  onRowHeaderClick={(rowId) => selectRow(rowId, displayResult?.columns.length ?? 0)}
+                  onRowHeaderClick={(rowId) => handleRowSelect(rowId, 'toggle')}
                   changedRows={changeMap}
                   cellOverrideValues={cellOverrides}
                   editingCell={editingCell}
@@ -382,6 +470,7 @@ export function ResultPanel({
                   onSelectColumn={selectColumn}
                   onSelectAll={selectAll}
                   scrollRef={gridScrollRef}
+                  isTableMode={isTableMode}
                 />
               ) : (
                 <EmptyState icon={<Database size={24} />} message="Run a query to see results" description="Press Ctrl+Enter to execute the current statement" />
@@ -424,12 +513,13 @@ export function ResultPanel({
           onBulkInsert={isTableMode ? () => { closeContextMenu(); setBulkInsertOpen(true); } : undefined}
           onBulkUpdate={isTableMode ? () => { closeContextMenu(); setBulkUpdateOpen(true); } : undefined}
           onBulkDelete={isTableMode ? () => { closeContextMenu(); setBulkDeleteOpen(true); } : undefined}
+          selectedRowCount={selectedRows.has(contextMenu.rowIndex) ? selectedRows.size : 1}
         />
       )}
-      {showExport && displayResult && activeConnectionId && (
+      {showExport && displayResult && (sessionId || activeConnectionId) && (
         <ExportDialog
-          sessionId={activeConnectionId}
-          sql={queryText}
+          sessionId={(sessionId || activeConnectionId)!}
+          sql={exportSql}
           result={displayResult}
           onClose={() => setShowExport(false)}
         />

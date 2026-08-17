@@ -87,6 +87,21 @@ pub struct AppSettings {
     pub ai: AiSettingsConfig,
     #[serde(default)]
     pub has_completed_onboarding: bool,
+    #[serde(default = "default_streaming_threshold")]
+    pub streaming_threshold: usize,
+    #[serde(default = "default_store_max_rows")]
+    pub store_max_rows: usize,
+    /// Phase 3 Item 2: when true, connection passwords are mirrored into
+    /// Windows Credential Manager (in addition to the existing DPAPI flow).
+    #[serde(default)]
+    pub remember_credentials_in_os_keychain: bool,
+}
+
+fn default_streaming_threshold() -> usize {
+    10_000
+}
+fn default_store_max_rows() -> usize {
+    100_000
 }
 
 fn default_safe_mode_level() -> u32 {
@@ -115,7 +130,18 @@ impl Default for AppSettings {
             date_format: "iso".to_string(),
             ai: AiSettingsConfig::default(),
             has_completed_onboarding: false,
+            streaming_threshold: 10_000,
+            store_max_rows: 100_000,
+            remember_credentials_in_os_keychain: false,
         }
+    }
+}
+
+impl AppSettings {
+    /// Clamp performance-related fields to safe ranges.
+    pub fn clamp_perf(&mut self) {
+        self.streaming_threshold = self.streaming_threshold.clamp(1_000, 1_000_000);
+        self.store_max_rows = self.store_max_rows.clamp(10_000, 10_000_000);
     }
 }
 
@@ -312,11 +338,57 @@ mod tests {
     #[test]
     fn test_safe_mode_level_range() {
         for level in 0u32..=5 {
-            let mut s = AppSettings::default();
-            s.safe_mode_level = level;
+            let s = AppSettings {
+                safe_mode_level: level,
+                ..AppSettings::default()
+            };
             let json = serde_json::to_string(&s).unwrap();
             let d: AppSettings = serde_json::from_str(&json).unwrap();
             assert_eq!(d.safe_mode_level, level);
         }
+    }
+
+    #[test]
+    fn test_default_perf_settings() {
+        let s = AppSettings::default();
+        assert_eq!(s.streaming_threshold, 10_000);
+        assert_eq!(s.store_max_rows, 100_000);
+    }
+
+    #[test]
+    fn test_clamp_perf_clamps_out_of_range() {
+        let mut s = AppSettings {
+            streaming_threshold: 10,
+            store_max_rows: 100,
+            ..AppSettings::default()
+        };
+        s.clamp_perf();
+        assert_eq!(s.streaming_threshold, 1_000);
+        assert_eq!(s.store_max_rows, 10_000);
+
+        let mut s = AppSettings {
+            streaming_threshold: 9_999_999,
+            store_max_rows: 99_999_999,
+            ..AppSettings::default()
+        };
+        s.clamp_perf();
+        assert_eq!(s.streaming_threshold, 1_000_000);
+        assert_eq!(s.store_max_rows, 10_000_000);
+    }
+
+    #[test]
+    fn test_perf_serde_with_missing_fields_uses_defaults() {
+        let json = r#"{
+            "pageSize": 100,
+            "editorFont": "Consolas",
+            "editorFontSize": 14,
+            "vimMode": false,
+            "theme": "system",
+            "nullDisplay": "NULL",
+            "defaultTimeoutSecs": 30
+        }"#;
+        let d: AppSettings = serde_json::from_str(json).unwrap();
+        assert_eq!(d.streaming_threshold, 10_000);
+        assert_eq!(d.store_max_rows, 100_000);
     }
 }

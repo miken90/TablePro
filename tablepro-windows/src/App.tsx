@@ -3,7 +3,6 @@ import "./styles/globals.css";
 import "./i18n";
 import { MainLayout } from "./components/layout/MainLayout";
 import { ErrorBoundary } from "./components/shared/error-boundary";
-import { ToastProvider } from "./components/shared/toast-provider";
 import { SkipLink } from "./components/shared/skip-link";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { listen } from "@tauri-apps/api/event";
@@ -48,7 +47,6 @@ export default function App() {
       {/* Skip link: first focusable element for keyboard users */}
       <SkipLink />
       <MainLayout />
-      <ToastProvider />
       {/* Live region for screen reader announcements */}
       <div
         id="sr-announcer"

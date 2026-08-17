@@ -423,14 +423,25 @@ export const useEditorStore = create<EditorState>()(
       setActiveTab: (id) => {
         const tab = get().tabs.find((t) => t.id === id);
         const nextState: Partial<EditorState> = { activeTabId: id };
-        if (tab?.connectionId) {
-          useConnectionStore.getState().selectConnection(tab.connectionId);
-          // Background ping to detect stale connections
-          const sessionId = useConnectionStore.getState().sessionIds.get(tab.connectionId);
-          if (sessionId) {
-            void commands.getConnectionStatus(sessionId).catch(() => {
-              // Silently ignore — connection health will be surfaced via events
-            });
+        if (tab) {
+          if (tab.connectionId) {
+            useConnectionStore.getState().selectConnection(tab.connectionId);
+            // Background ping to detect stale connections
+            const sessionId = useConnectionStore.getState().sessionIds.get(tab.connectionId);
+            if (sessionId) {
+              void commands.getConnectionStatus(sessionId).catch(() => {
+                // Silently ignore — connection health will be surfaced via events
+              });
+            }
+          } else {
+            // Auto-associate unbound tab with the active connection if connected
+            const activeConnId = useConnectionStore.getState().selectedConnectionId;
+            if (activeConnId && tab.type === 'query') {
+              tab.connectionId = activeConnId;
+              setTimeout(() => {
+                get().setTabConnectionId(id, activeConnId);
+              }, 0);
+            }
           }
         }
         set(nextState);

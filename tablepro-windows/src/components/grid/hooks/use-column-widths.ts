@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { ColumnInfo, QueryResult } from '../../../types/query';
+import { isExplainResult, explainColumnWidth } from '../../DataGrid/columnar-render';
 
 export const DEFAULT_COL_WIDTH = 120;
 const MIN_COL_WIDTH = 80;
@@ -124,8 +125,18 @@ export function useColumnWidths({ result }: UseColumnWidthsProps): UseColumnWidt
   }, []);
 
   const resolvedWidths: Record<string, number> = {};
+  const explainMode = isExplainResult(result.columns);
+  const explainAutoWidth = explainMode
+    ? explainColumnWidth(rows as unknown[][])
+    : 0;
   for (const col of result.columns) {
-    resolvedWidths[col.name] = columnWidths[col.name] ?? DEFAULT_COL_WIDTH;
+    if (explainMode) {
+      // EXPLAIN: respect user override if set, else size to content.
+      resolvedWidths[col.name] =
+        columnWidths[col.name] ?? Math.max(DEFAULT_COL_WIDTH, explainAutoWidth);
+    } else {
+      resolvedWidths[col.name] = columnWidths[col.name] ?? DEFAULT_COL_WIDTH;
+    }
   }
 
   const columnsTotalWidth = visibleColumns.reduce(

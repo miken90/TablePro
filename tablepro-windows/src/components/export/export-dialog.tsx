@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { save as dialogSave } from '@tauri-apps/plugin-dialog';
-import { Download, X } from 'lucide-react';
+import { Download, X, Copy } from 'lucide-react';
 import type { ExportOptions } from '../../ipc/commands';
 import { exportToFile } from '../../ipc/commands';
 import { extractErrorMessage } from '../../ipc/error';
@@ -101,12 +101,69 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
   });
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const set = useCallback(
     <K extends keyof ExportOptions>(key: K, value: ExportOptions[K]) =>
       setOptions((prev) => ({ ...prev, [key]: value })),
     [],
   );
+
+  const getFullExportText = useCallback(() => {
+    const cols = result.columns;
+    const rows = result.rows;
+    const delim = options.delimiter ?? ',';
+    const tableName = options.tableName ?? 'export';
+
+    if (format === 'csv') {
+      const lines: string[] = [];
+      if (options.includeHeader !== false) {
+        lines.push(cols.map((c) => c.name).join(delim));
+      }
+      for (const row of rows) {
+        lines.push(row.map((v) => (v === null ? '' : v)).join(delim));
+      }
+      return lines.join('\n');
+    }
+
+    if (format === 'json') {
+      const data = rows.map((row) => {
+        if (options.arrayOfArrays) return row.map((v) => (v === null ? null : v));
+        const obj: Record<string, string | null> = {};
+        cols.forEach((c, i) => { obj[c.name] = row[i] ?? null; });
+        return obj;
+      });
+      return options.pretty
+        ? JSON.stringify(data, null, 2)
+        : JSON.stringify(data);
+    }
+
+    if (format === 'sql') {
+      const colList = cols.map((c) => `"${c.name}"`).join(', ');
+      const lines: string[] = [];
+      for (const row of rows) {
+        const vals = row.map((v) =>
+          v === null ? 'NULL' : `'${v.replace(/'/g, "''")}'`
+        );
+        lines.push(`INSERT INTO "${tableName}" (${colList}) VALUES (${vals.join(', ')});`);
+      }
+      return lines.join('\n');
+    }
+
+    return '';
+  }, [result, format, options]);
+
+  const handleCopy = useCallback(async () => {
+    setError(null);
+    const text = getFullExportText();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('Failed to copy text to clipboard');
+    }
+  }, [getFullExportText]);
 
   const handleExport = useCallback(async () => {
     setError(null);
@@ -289,6 +346,13 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
               className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
               Cancel
+            </button>
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/50"
+            >
+              <Copy size={12} />
+              {copied ? 'Copied!' : 'Copy'}
             </button>
             <button
               onClick={handleExport}

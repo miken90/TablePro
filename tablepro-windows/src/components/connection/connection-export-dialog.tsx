@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { save as dialogSave } from "@tauri-apps/plugin-dialog";
 import { X, Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import { exportConnections } from "../../ipc/commands";
 import { extractErrorMessage } from "../../ipc/error";
 import type { SavedConnection } from "../../types/connection";
@@ -67,20 +66,19 @@ export function ConnectionExportDialog({
 
     setExporting(true);
     try {
-      const result = await exportConnections(
+      await exportConnections(
         Array.from(selectedIds),
         filePath,
         includeCredentials,
         includeCredentials && passphrase ? passphrase : undefined,
       );
-      toast.success(t("connection.export.success", { count: result.count }));
       onClose();
     } catch (err) {
-      toast.error(extractErrorMessage(err));
+      console.error("Export failed:", extractErrorMessage(err));
     } finally {
       setExporting(false);
     }
-  }, [selectedIds, includeCredentials, passphrase, t, onClose]);
+  }, [selectedIds, includeCredentials, passphrase, onClose]);
 
   return (
     <div

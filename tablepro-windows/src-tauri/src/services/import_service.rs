@@ -77,7 +77,7 @@ pub fn preview(path: &str) -> Result<ImportPreview, AppError> {
 pub async fn execute<F>(
     path: &str,
     options: &ImportOptions,
-    driver: &dyn crate::plugin::DatabaseDriver,
+    driver: &dyn crate::drivers::DatabaseDriver,
     mut on_progress: F,
 ) -> Result<ImportResult, AppError>
 where

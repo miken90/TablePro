@@ -5,7 +5,7 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::models::AppError;
-use crate::plugin::DatabaseDriver;
+use crate::drivers::DatabaseDriver;
 use crate::services::ConnectionManager;
 
 // ── Result models ────────────────────────────────────────────────────────────
@@ -164,10 +164,10 @@ async fn explain_mysql(
 async fn explain_mssql_impl(
     sql: &str,
     config: &crate::models::ConnectionConfig,
-    plugin_manager: &Arc<crate::plugin::PluginManager>,
+    driver_registry: &Arc<crate::drivers::DriverRegistry>,
 ) -> Result<ExplainResult, AppError> {
     let temp_driver: Arc<dyn DatabaseDriver> =
-        Arc::from(plugin_manager.create_driver(&config.db_type, config)?);
+        Arc::from(driver_registry.create_driver(&config.db_type, config)?);
     temp_driver.connect().await?;
 
     // Execute with guaranteed cleanup of SHOWPLAN_XML.
@@ -473,11 +473,11 @@ pub async fn explain_query(
         "postgresql" | "postgres" => explain_postgres(&driver, &sql).await,
         "mysql" | "mariadb" => explain_mysql(&driver, &sql).await,
         "mssql" | "sqlserver" => {
-            let plugin_manager = {
+            let driver_registry = {
                 let mgr = manager.lock().await;
-                mgr.plugin_manager()
+                mgr.driver_registry()
             };
-            explain_mssql_impl(&sql, &config, &plugin_manager).await
+            explain_mssql_impl(&sql, &config, &driver_registry).await
         }
         "sqlite" => explain_sqlite(&driver, &sql).await,
         _ => Ok(ExplainResult {

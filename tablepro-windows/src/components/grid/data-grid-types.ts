@@ -52,4 +52,7 @@ export interface DataGridProps {
   onSelectAll?: () => void;
   /** Ref forwarded to the scroll container so parents can call scrollTo */
   scrollRef?: React.RefObject<HTMLDivElement>;
+  sessionId?: string;
+  /** Whether the grid is in table-browse mode (enables checkbox selection). */
+  isTableMode?: boolean;
 }

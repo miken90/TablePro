@@ -4,7 +4,6 @@ import { OnboardingStep } from "./onboarding-step";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { ConnectionConfig, SavedConnection } from "../../types/connection";
 import { classifyError } from "../../ipc/error";
-import { useToast } from "../../hooks/useToast";
 import { testConnection } from "../../ipc/commands";
 import {
   DB_TYPES,
@@ -26,7 +25,6 @@ interface AddConnectionStepProps {
 export function AddConnectionStep({ onNext, onBack, onSkip }: AddConnectionStepProps) {
   const { t } = useTranslation();
   const { saveConnection } = useConnectionStore();
-  const toast = useToast();
 
   // Local draft state - not saved to store until explicit save
   const [name, setName] = useState("");
@@ -74,10 +72,11 @@ export function AddConnectionStep({ onNext, onBack, onSkip }: AddConnectionStepP
         config,
       };
       await saveConnection(conn);
-      toast.success(t("onboarding.addConnection.connectionSaved"));
       onNext();
     } catch (err) {
-      toast.showError(t("error.connectionFailed"), err);
+      const classified = classifyError(err);
+      setError(classified.message);
+      setErrorHint(classified.hint);
     } finally {
       setIsSaving(false);
     }

@@ -1,61 +1,44 @@
 //! Table and column schema queries for the MSSQL driver.
 #![allow(clippy::get_first)]
 
-use tablepro_plugin_sdk::{
-    FfiColumnInfo, FfiColumnList, FfiString, FfiStringList, FfiTableInfo, FfiTableList,
-};
+use driver_common::{ColumnInfo, DriverError, TableInfo};
 
-use crate::driver::MssqlDriver;
-use crate::ffi::string_to_ffi;
-
-pub use crate::schema_indexes::{fetch_foreign_keys, fetch_indexes};
+use crate::{execute_simple, MssqlConn};
 
 fn escape_sq(s: &str) -> String {
     s.replace('\'', "''")
 }
 
-pub fn fetch_tables(driver: &MssqlDriver) -> FfiTableList {
+pub async fn fetch_tables(client: &mut MssqlConn) -> Result<Vec<TableInfo>, DriverError> {
     let sql = "SELECT TABLE_NAME, TABLE_SCHEMA, TABLE_TYPE \
                FROM INFORMATION_SCHEMA.TABLES \
                WHERE TABLE_CATALOG = DB_NAME() \
                ORDER BY TABLE_NAME";
 
-    match driver.execute_query(sql) {
-        Err(e) => FfiTableList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi(e),
-        },
-        Ok((_, rows, _)) => {
-            let mut items: Vec<FfiTableInfo> = rows
-                .into_iter()
-                .filter_map(|row| {
-                    let name = row.get(0)?.clone()?;
-                    let schema = row.get(1)?.clone().unwrap_or_default();
-                    let raw_type = row.get(2)?.clone().unwrap_or_default();
-                    let table_type = if raw_type == "VIEW" { "VIEW" } else { "TABLE" };
-                    Some(FfiTableInfo {
-                        name: string_to_ffi(name),
-                        schema: string_to_ffi(schema),
-                        table_type: string_to_ffi(table_type.to_owned()),
-                        row_count_estimate: 0,
-                        has_row_count: false,
-                    })
-                })
-                .collect();
-            let count = items.len();
-            let ptr = items.as_mut_ptr();
-            std::mem::forget(items);
-            FfiTableList {
-                items: ptr,
-                count,
-                error: FfiString::null(),
-            }
-        }
-    }
+    let (_, rows, _) = execute_simple(client, sql).await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let name = row.get(0)?.clone()?;
+            let schema = row.get(1)?.clone().unwrap_or_default();
+            let raw_type = row.get(2)?.clone().unwrap_or_default();
+            let table_type = if raw_type == "VIEW" { "VIEW" } else { "TABLE" };
+            Some(TableInfo {
+                name,
+                schema: if schema.is_empty() { None } else { Some(schema) },
+                table_type: table_type.to_owned(),
+                row_count_estimate: None,
+            })
+        })
+        .collect())
 }
 
-pub fn fetch_columns(driver: &MssqlDriver, table: &str, schema: &str) -> FfiColumnList {
+pub async fn fetch_columns(
+    client: &mut MssqlConn,
+    table: &str,
+    schema: &str,
+) -> Result<Vec<ColumnInfo>, DriverError> {
     let schema = if schema.is_empty() { "dbo" } else { schema };
     let et = escape_sq(table);
     let es = escape_sq(schema);
@@ -75,65 +58,30 @@ pub fn fetch_columns(driver: &MssqlDriver, table: &str, schema: &str) -> FfiColu
         ORDER BY c.ORDINAL_POSITION"
     );
 
-    match driver.execute_query(&sql) {
-        Err(e) => FfiColumnList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi(e),
-        },
-        Ok((_, rows, _)) => {
-            let mut items: Vec<FfiColumnInfo> = rows
-                .into_iter()
-                .filter_map(|row| {
-                    let name = row.get(0)?.clone()?;
-                    let type_name = row.get(1)?.clone().unwrap_or_default();
-                    let nullable = row.get(2)?.as_deref() == Some("YES");
-                    let is_pk = row.get(5)?.as_deref() == Some("1");
-                    Some(FfiColumnInfo {
-                        name: string_to_ffi(name),
-                        type_name: string_to_ffi(type_name),
-                        nullable,
-                        is_primary_key: is_pk,
-                    })
-                })
-                .collect();
-            let count = items.len();
-            let ptr = items.as_mut_ptr();
-            std::mem::forget(items);
-            FfiColumnList {
-                items: ptr,
-                count,
-                error: FfiString::null(),
-            }
-        }
-    }
+    let (_, rows, _) = execute_simple(client, &sql).await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let name = row.get(0)?.clone()?;
+            let type_name = row.get(1)?.clone().unwrap_or_default();
+            let nullable = row.get(2)?.as_deref() == Some("YES");
+            let is_pk = row.get(5)?.as_deref() == Some("1");
+            Some(ColumnInfo {
+                name,
+                type_name,
+                nullable,
+                is_primary_key: is_pk,
+            })
+        })
+        .collect())
 }
 
-pub fn fetch_databases(driver: &MssqlDriver) -> FfiStringList {
+pub async fn fetch_databases(client: &mut MssqlConn) -> Result<Vec<String>, DriverError> {
     let sql = "SELECT name FROM sys.databases ORDER BY name";
-    match driver.execute_query(sql) {
-        Err(e) => FfiStringList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi(e),
-        },
-        Ok((_, rows, _)) => {
-            let mut items: Vec<FfiString> = rows
-                .into_iter()
-                .filter_map(|row| row.into_iter().next()?.map(string_to_ffi))
-                .collect();
-            let count = items.len();
-            let ptr = items.as_mut_ptr();
-            std::mem::forget(items);
-            FfiStringList {
-                items: ptr,
-                count,
-                error: FfiString::null(),
-            }
-        }
-    }
-}
-
-pub fn fetch_ddl(driver: &MssqlDriver, table: &str, schema: &str) -> FfiString {
-    crate::ddl::fetch_ddl(driver, table, schema)
+    let (_, rows, _) = execute_simple(client, sql).await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| row.into_iter().next()?)
+        .collect())
 }

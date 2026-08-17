@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { X, AlertTriangle, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import {
   importConnectionsPreview,
   confirmImport,
@@ -89,7 +88,7 @@ export function ConnectionImportDialog({
         if (msg.includes("encrypted") || msg.includes("passphrase")) {
           setStep("passphrase");
         } else {
-          toast.error(msg);
+          console.error("Import preview failed:", msg);
           onClose();
         }
       } finally {
@@ -119,7 +118,7 @@ export function ConnectionImportDialog({
       if (msg.toLowerCase().includes("passphrase") || msg.toLowerCase().includes("incorrect")) {
         setPassphraseError(t("connection.import.wrongPassphrase"));
       } else {
-        toast.error(msg);
+        console.error("Import passphrase failed:", msg);
       }
     } finally {
       setLoading(false);
@@ -140,22 +139,19 @@ export function ConnectionImportDialog({
           existingId: action === "replace" ? item?.existingId : undefined,
         };
       });
-      const result = await confirmImport(
+      await confirmImport(
         filePath,
         passphrase || undefined,
         entries,
       );
-      toast.success(
-        t("connection.import.success", { count: result.importedCount }),
-      );
       onImported();
       onClose();
     } catch (err) {
-      toast.error(extractErrorMessage(err));
+      console.error("Import failed:", extractErrorMessage(err));
     } finally {
       setImporting(false);
     }
-  }, [preview, resolutions, filePath, passphrase, t, onImported, onClose]);
+  }, [preview, resolutions, filePath, passphrase, onImported, onClose]);
 
   const setResolution = useCallback((index: number, action: string) => {
     setResolutions((prev) => {

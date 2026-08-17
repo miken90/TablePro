@@ -3,6 +3,10 @@ import { classifyError } from "../../ipc/error";
 
 interface Props {
   children: React.ReactNode;
+  /** Region name for logging (e.g. "sidebar", "editor"). */
+  name?: string;
+  /** Custom fallback UI. When omitted the default error card is shown. */
+  fallback?: React.ReactNode;
 }
 
 interface State {
@@ -17,11 +21,12 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error("[ErrorBoundary]", error, info.componentStack);
+    console.error(`[ErrorBoundary:${this.props.name ?? "unknown"}]`, error, info.componentStack);
   }
 
   render() {
     if (this.state.error) {
+      if (this.props.fallback) return this.props.fallback;
       const classified = classifyError(this.state.error);
       return (
         <div className="flex h-full items-center justify-center p-8">

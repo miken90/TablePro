@@ -1,70 +1,62 @@
+use redis::aio::MultiplexedConnection;
 use redis::{cmd, Value};
-use tablepro_plugin_sdk::FfiQueryResult;
 
-use crate::driver::RedisDriver;
-use crate::ffi_helpers::{build_query_result, err_query_result, message_result};
+use driver_common::{DriverError, QueryResult};
+
+use crate::helpers::{build_query_result, message_result};
 use crate::ops_basic::format_value;
 
 /// SCAN keys with pattern matching, returning Key|Type|TTL|Value grid.
-pub fn scan_keys(driver: &mut RedisDriver, pattern: &str, count: usize) -> FfiQueryResult {
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-
+pub async fn scan_keys(
+    conn: &mut MultiplexedConnection,
+    pattern: &str,
+    count: usize,
+) -> Result<QueryResult, DriverError> {
     // Collect keys via SCAN
     let mut keys: Vec<String> = Vec::new();
     let mut cursor: u64 = 0;
     loop {
-        let result: (u64, Vec<String>) = match cmd("SCAN")
+        let (next, batch): (u64, Vec<String>) = cmd("SCAN")
             .arg(cursor)
             .arg("MATCH")
             .arg(pattern)
             .arg("COUNT")
             .arg(count)
-            .query(conn)
-        {
-            Ok(r) => r,
-            Err(e) => return err_query_result(format!("SCAN failed: {e}")),
-        };
-
-        cursor = result.0;
-        keys.extend(result.1);
-
+            .query_async(conn)
+            .await
+            .map_err(|e| DriverError::Query(format!("SCAN failed: {e}")))?;
+        cursor = next;
+        keys.extend(batch);
         if cursor == 0 || keys.len() >= count {
             break;
         }
     }
-
     keys.truncate(count);
 
-    if keys.is_empty() {
-        let columns = vec![
-            ("Key".to_string(), "string".to_string(), false, true),
-            ("Type".to_string(), "string".to_string(), false, false),
-            ("TTL".to_string(), "integer".to_string(), false, false),
-            ("Value".to_string(), "string".to_string(), true, false),
-        ];
-        return build_query_result(columns, vec![], 0);
-    }
-
-    // Fetch type, TTL, and value preview for each key using pipeline
     let columns = vec![
-        ("Key".to_string(), "string".to_string(), false, true),
-        ("Type".to_string(), "string".to_string(), false, false),
-        ("TTL".to_string(), "integer".to_string(), false, false),
-        ("Value".to_string(), "string".to_string(), true, false),
+        ("Key", "string", false, true),
+        ("Type", "string", false, false),
+        ("TTL", "integer", false, false),
+        ("Value", "string", true, false),
     ];
 
+    if keys.is_empty() {
+        return Ok(build_query_result(columns, vec![], 0));
+    }
+
     let mut rows: Vec<Vec<Option<String>>> = Vec::with_capacity(keys.len());
-
     for key in &keys {
-        let key_type: String = match cmd("TYPE").arg(key).query(conn) {
-            Ok(v) => v,
-            Err(_) => "unknown".to_string(),
-        };
+        let key_type: String = cmd("TYPE")
+            .arg(key)
+            .query_async(conn)
+            .await
+            .unwrap_or_else(|_| "unknown".to_string());
 
-        let ttl: i64 = cmd("TTL").arg(key).query(conn).unwrap_or(-1);
+        let ttl: i64 = cmd("TTL")
+            .arg(key)
+            .query_async(conn)
+            .await
+            .unwrap_or(-1);
 
         let ttl_str = if ttl == -1 {
             "No Expiry".to_string()
@@ -74,7 +66,7 @@ pub fn scan_keys(driver: &mut RedisDriver, pattern: &str, count: usize) -> FfiQu
             ttl.to_string()
         };
 
-        let value_preview = get_value_preview(conn, key, &key_type);
+        let value_preview = get_value_preview(conn, key, &key_type).await;
 
         rows.push(vec![
             Some(key.clone()),
@@ -84,33 +76,37 @@ pub fn scan_keys(driver: &mut RedisDriver, pattern: &str, count: usize) -> FfiQu
         ]);
     }
 
-    build_query_result(columns, rows, 0)
+    Ok(build_query_result(columns, rows, 0))
 }
 
 /// Get a preview of a key's value based on its type.
-fn get_value_preview(conn: &mut redis::Connection, key: &str, key_type: &str) -> String {
+async fn get_value_preview(
+    conn: &mut MultiplexedConnection,
+    key: &str,
+    key_type: &str,
+) -> String {
     match key_type {
-        "string" => match cmd("GET").arg(key).query::<Value>(conn) {
+        "string" => match cmd("GET").arg(key).query_async::<Value>(conn).await {
             Ok(v) => truncate_preview(&format_value(&v), 200),
             Err(_) => "(error)".to_string(),
         },
-        "hash" => match cmd("HLEN").arg(key).query::<i64>(conn) {
+        "hash" => match cmd("HLEN").arg(key).query_async::<i64>(conn).await {
             Ok(len) => format!("({len} fields)"),
             Err(_) => "(hash)".to_string(),
         },
-        "list" => match cmd("LLEN").arg(key).query::<i64>(conn) {
+        "list" => match cmd("LLEN").arg(key).query_async::<i64>(conn).await {
             Ok(len) => format!("({len} items)"),
             Err(_) => "(list)".to_string(),
         },
-        "set" => match cmd("SCARD").arg(key).query::<i64>(conn) {
+        "set" => match cmd("SCARD").arg(key).query_async::<i64>(conn).await {
             Ok(len) => format!("({len} members)"),
             Err(_) => "(set)".to_string(),
         },
-        "zset" => match cmd("ZCARD").arg(key).query::<i64>(conn) {
+        "zset" => match cmd("ZCARD").arg(key).query_async::<i64>(conn).await {
             Ok(len) => format!("({len} members)"),
             Err(_) => "(zset)".to_string(),
         },
-        "stream" => match cmd("XLEN").arg(key).query::<i64>(conn) {
+        "stream" => match cmd("XLEN").arg(key).query_async::<i64>(conn).await {
             Ok(len) => format!("({len} entries)"),
             Err(_) => "(stream)".to_string(),
         },
@@ -128,213 +124,221 @@ fn truncate_preview(s: &str, max: usize) -> String {
 
 // ── CLI command handlers ─────────────────────────────────────────────────────
 
-pub fn cmd_get(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_get(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.is_empty() {
-        return err_query_result("Usage: GET key".to_string());
+        return Err(DriverError::Query("Usage: GET key".to_string()));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-    match cmd("GET").arg(&args[0]).query::<Value>(conn) {
-        Ok(v) => message_result(&format_value(&v)),
-        Err(e) => err_query_result(format!("GET failed: {e}")),
-    }
+    let v: Value = cmd("GET")
+        .arg(&args[0])
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("GET failed: {e}")))?;
+    Ok(message_result(&format_value(&v)))
 }
 
-pub fn cmd_set(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_set(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.len() < 2 {
-        return err_query_result("Usage: SET key value [EX seconds|PX ms] [NX|XX]".to_string());
+        return Err(DriverError::Query(
+            "Usage: SET key value [EX seconds|PX ms] [NX|XX]".to_string(),
+        ));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
     let mut command = cmd("SET");
     for arg in args {
         command.arg(arg);
     }
-    match command.query::<Value>(conn) {
-        Ok(v) => message_result(&format_value(&v)),
-        Err(e) => err_query_result(format!("SET failed: {e}")),
-    }
+    let v: Value = command
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("SET failed: {e}")))?;
+    Ok(message_result(&format_value(&v)))
 }
 
-pub fn cmd_del(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_del(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.is_empty() {
-        return err_query_result("Usage: DEL key [key ...]".to_string());
+        return Err(DriverError::Query(
+            "Usage: DEL key [key ...]".to_string(),
+        ));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
     let mut command = cmd("DEL");
     for arg in args {
         command.arg(arg);
     }
-    match command.query::<i64>(conn) {
-        Ok(count) => {
-            let columns = vec![("Deleted".to_string(), "integer".to_string(), false, false)];
-            let rows = vec![vec![Some(count.to_string())]];
-            build_query_result(columns, rows, count)
-        }
-        Err(e) => err_query_result(format!("DEL failed: {e}")),
-    }
+    let count: i64 = command
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("DEL failed: {e}")))?;
+    let columns = vec![("Deleted", "integer", false, false)];
+    let rows = vec![vec![Some(count.to_string())]];
+    Ok(build_query_result(columns, rows, count))
 }
 
-pub fn cmd_exists(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_exists(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.is_empty() {
-        return err_query_result("Usage: EXISTS key [key ...]".to_string());
+        return Err(DriverError::Query(
+            "Usage: EXISTS key [key ...]".to_string(),
+        ));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
     let mut command = cmd("EXISTS");
     for arg in args {
         command.arg(arg);
     }
-    match command.query::<i64>(conn) {
-        Ok(count) => message_result(&count.to_string()),
-        Err(e) => err_query_result(format!("EXISTS failed: {e}")),
-    }
+    let count: i64 = command
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("EXISTS failed: {e}")))?;
+    Ok(message_result(&count.to_string()))
 }
 
-pub fn cmd_type(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_type(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.is_empty() {
-        return err_query_result("Usage: TYPE key".to_string());
+        return Err(DriverError::Query("Usage: TYPE key".to_string()));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-    match cmd("TYPE").arg(&args[0]).query::<String>(conn) {
-        Ok(t) => message_result(&t),
-        Err(e) => err_query_result(format!("TYPE failed: {e}")),
-    }
+    let t: String = cmd("TYPE")
+        .arg(&args[0])
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("TYPE failed: {e}")))?;
+    Ok(message_result(&t))
 }
 
-pub fn cmd_ttl(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_ttl(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.is_empty() {
-        return err_query_result("Usage: TTL key".to_string());
+        return Err(DriverError::Query("Usage: TTL key".to_string()));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-    match cmd("TTL").arg(&args[0]).query::<i64>(conn) {
-        Ok(v) => message_result(&v.to_string()),
-        Err(e) => err_query_result(format!("TTL failed: {e}")),
-    }
+    let v: i64 = cmd("TTL")
+        .arg(&args[0])
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("TTL failed: {e}")))?;
+    Ok(message_result(&v.to_string()))
 }
 
-pub fn cmd_pttl(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_pttl(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.is_empty() {
-        return err_query_result("Usage: PTTL key".to_string());
+        return Err(DriverError::Query("Usage: PTTL key".to_string()));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-    match cmd("PTTL").arg(&args[0]).query::<i64>(conn) {
-        Ok(v) => message_result(&v.to_string()),
-        Err(e) => err_query_result(format!("PTTL failed: {e}")),
-    }
+    let v: i64 = cmd("PTTL")
+        .arg(&args[0])
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("PTTL failed: {e}")))?;
+    Ok(message_result(&v.to_string()))
 }
 
-pub fn cmd_expire(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_expire(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.len() < 2 {
-        return err_query_result("Usage: EXPIRE key seconds".to_string());
+        return Err(DriverError::Query("Usage: EXPIRE key seconds".to_string()));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-    match cmd("EXPIRE").arg(&args[0]).arg(&args[1]).query::<i64>(conn) {
-        Ok(v) => message_result(&v.to_string()),
-        Err(e) => err_query_result(format!("EXPIRE failed: {e}")),
-    }
+    let v: i64 = cmd("EXPIRE")
+        .arg(&args[0])
+        .arg(&args[1])
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("EXPIRE failed: {e}")))?;
+    Ok(message_result(&v.to_string()))
 }
 
-pub fn cmd_persist(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_persist(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.is_empty() {
-        return err_query_result("Usage: PERSIST key".to_string());
+        return Err(DriverError::Query("Usage: PERSIST key".to_string()));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-    match cmd("PERSIST").arg(&args[0]).query::<i64>(conn) {
-        Ok(v) => message_result(&v.to_string()),
-        Err(e) => err_query_result(format!("PERSIST failed: {e}")),
-    }
+    let v: i64 = cmd("PERSIST")
+        .arg(&args[0])
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("PERSIST failed: {e}")))?;
+    Ok(message_result(&v.to_string()))
 }
 
-pub fn cmd_rename(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_rename(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     if args.len() < 2 {
-        return err_query_result("Usage: RENAME key newkey".to_string());
+        return Err(DriverError::Query("Usage: RENAME key newkey".to_string()));
     }
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-    match cmd("RENAME").arg(&args[0]).arg(&args[1]).query::<Value>(conn) {
-        Ok(v) => message_result(&format_value(&v)),
-        Err(e) => err_query_result(format!("RENAME failed: {e}")),
-    }
+    let v: Value = cmd("RENAME")
+        .arg(&args[0])
+        .arg(&args[1])
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("RENAME failed: {e}")))?;
+    Ok(message_result(&format_value(&v)))
 }
 
-pub fn cmd_keys(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
+pub async fn cmd_keys(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     let pattern = args.first().map(|s| s.as_str()).unwrap_or("*");
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
-    match cmd("KEYS").arg(pattern).query::<Vec<String>>(conn) {
-        Ok(keys) => {
-            let columns = vec![("Key".to_string(), "string".to_string(), false, false)];
-            let rows: Vec<Vec<Option<String>>> =
-                keys.into_iter().map(|k| vec![Some(k)]).collect();
-            build_query_result(columns, rows, 0)
-        }
-        Err(e) => err_query_result(format!("KEYS failed: {e}")),
-    }
+    let keys: Vec<String> = cmd("KEYS")
+        .arg(pattern)
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("KEYS failed: {e}")))?;
+    let columns = vec![("Key", "string", false, false)];
+    let rows: Vec<Vec<Option<String>>> = keys.into_iter().map(|k| vec![Some(k)]).collect();
+    Ok(build_query_result(columns, rows, 0))
 }
 
-pub fn cmd_scan(driver: &mut RedisDriver, args: &[String]) -> FfiQueryResult {
-    // SCAN cursor [MATCH pattern] [COUNT count]
+pub async fn cmd_scan(
+    conn: &mut MultiplexedConnection,
+    args: &[String],
+) -> Result<QueryResult, DriverError> {
     let cursor_str = args.first().map(|s| s.as_str()).unwrap_or("0");
-    let conn = match driver.conn() {
-        Ok(c) => c,
-        Err(e) => return err_query_result(e),
-    };
     let mut command = cmd("SCAN");
     command.arg(cursor_str);
-    // Pass remaining args as-is (MATCH, COUNT, etc.)
     for arg in args.iter().skip(1) {
         command.arg(arg);
     }
-    match command.query::<(u64, Vec<String>)>(conn) {
-        Ok((next_cursor, keys)) => {
-            let columns = vec![
-                ("Cursor".to_string(), "string".to_string(), false, false),
-                ("Key".to_string(), "string".to_string(), false, false),
-            ];
-            if keys.is_empty() {
-                let rows = vec![vec![Some(next_cursor.to_string()), Some("(empty)".to_string())]];
-                return build_query_result(columns, rows, 0);
-            }
-            let mut rows: Vec<Vec<Option<String>>> = Vec::with_capacity(keys.len());
-            for (i, key) in keys.into_iter().enumerate() {
-                let cursor_cell = if i == 0 {
-                    Some(next_cursor.to_string())
-                } else {
-                    Some(String::new())
-                };
-                rows.push(vec![cursor_cell, Some(key)]);
-            }
-            build_query_result(columns, rows, 0)
-        }
-        Err(e) => err_query_result(format!("SCAN failed: {e}")),
+    let (next_cursor, keys): (u64, Vec<String>) = command
+        .query_async(conn)
+        .await
+        .map_err(|e| DriverError::Query(format!("SCAN failed: {e}")))?;
+
+    let columns = vec![
+        ("Cursor", "string", false, false),
+        ("Key", "string", false, false),
+    ];
+    if keys.is_empty() {
+        let rows = vec![vec![Some(next_cursor.to_string()), Some("(empty)".to_string())]];
+        return Ok(build_query_result(columns, rows, 0));
     }
+    let mut rows: Vec<Vec<Option<String>>> = Vec::with_capacity(keys.len());
+    for (i, key) in keys.into_iter().enumerate() {
+        let cursor_cell = if i == 0 {
+            Some(next_cursor.to_string())
+        } else {
+            Some(String::new())
+        };
+        rows.push(vec![cursor_cell, Some(key)]);
+    }
+    Ok(build_query_result(columns, rows, 0))
 }

@@ -4,12 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tablepro-plugin-sdk = { path = "../plugin-sdk" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+driver-common = { path = "../driver-common" }
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 tokio-postgres = "0.7"
 postgres-native-tls = "0.5"
 native-tls = "0.2"
 
 [lib]
 name = "driver_postgres"
-crate-type = ["cdylib"]
+crate-type = ["rlib"]

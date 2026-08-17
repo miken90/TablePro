@@ -31,6 +31,24 @@ impl fmt::Display for AppError {
 
 impl std::error::Error for AppError {}
 
+impl AppError {
+    /// Return the raw inner message without the kind prefix.
+    ///
+    /// Used by the streaming query path to send the actual database error
+    /// to the frontend without wrapping it as "Database error: …".
+    pub fn inner_message(&self) -> String {
+        match self {
+            AppError::DatabaseError(msg) => msg.clone(),
+            AppError::IoError(msg) => msg.clone(),
+            AppError::ConfigError(msg) => msg.clone(),
+            AppError::NotFound(msg) => msg.clone(),
+            AppError::NotConnected => "Not connected".to_string(),
+            AppError::PluginError(msg) => msg.clone(),
+            AppError::Other(msg) => msg.clone(),
+        }
+    }
+}
+
 impl From<std::io::Error> for AppError {
     fn from(e: std::io::Error) -> Self {
         AppError::IoError(e.to_string())

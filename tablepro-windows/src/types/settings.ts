@@ -63,6 +63,10 @@ export interface AppSettings {
   language: string;
   ai: AiSettings;
   hasCompletedOnboarding: boolean;
+  streamingThreshold: number;
+  storeMaxRows: number;
+  /** Phase 3 Item 2: opt-in to mirror passwords into Windows Credential Manager. */
+  rememberCredentialsInOsKeychain: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -80,4 +84,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: "en",
   ai: DEFAULT_AI_SETTINGS,
   hasCompletedOnboarding: false,
+  streamingThreshold: 10_000,
+  storeMaxRows: 100_000,
+  rememberCredentialsInOsKeychain: false,
 };

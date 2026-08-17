@@ -1,72 +1,210 @@
-//! driver-mssql — SQL Server driver plugin for TablePro.
+//! SQL Server driver — statically linked into TablePro Windows.
 //!
-//! Exports `tablepro_plugin_init` and `tablepro_plugin_metadata` per the
-//! PluginVTable contract (API version 1).
+//! Implements `driver_common::DatabaseDriver` directly using `tiberius`.
+//! Shares the host's Tokio runtime via `tokio::runtime::Handle` (no nested
+//! runtime — see `plans/reports/spike-postgres-rlib.md`).
 
 mod ddl;
-mod driver;
-mod ffi;
-mod free;
-mod handlers;
 mod schema;
 mod schema_indexes;
 
-use tablepro_plugin_sdk::{PluginMetadata, PluginVTable, API_VERSION};
+use async_trait::async_trait;
+use tiberius::{AuthMethod, Client, Config};
+use tokio::net::TcpStream;
+use tokio::sync::Mutex;
+use tokio_util::compat::{Compat, TokioAsyncWriteCompatExt};
 
-use ffi::string_to_ffi;
+use driver_common::{
+    ColumnInfo, ConnectionConfig, DatabaseDriver, DriverError, ForeignKeyInfo, IndexInfo,
+    QueryResult, TableInfo,
+};
 
-// ── Plugin entry points ────────────────────────────────────────────────────────
+pub type MssqlConn = Client<Compat<TcpStream>>;
 
-#[no_mangle]
-pub extern "C" fn tablepro_plugin_metadata() -> PluginMetadata {
-    PluginMetadata {
-        api_version: API_VERSION,
-        type_id: string_to_ffi("mssql".to_owned()),
-        display_name: string_to_ffi("SQL Server".to_owned()),
-        default_port: 1433,
+/// SQL Server driver instance.
+pub struct MssqlDriver {
+    #[allow(dead_code)]
+    rt: tokio::runtime::Handle,
+    config: ConnectionConfig,
+    client: Mutex<Option<MssqlConn>>,
+}
+
+impl MssqlDriver {
+    pub fn new(rt_handle: tokio::runtime::Handle, config: ConnectionConfig) -> Self {
+        Self {
+            rt: rt_handle,
+            config,
+            client: Mutex::new(None),
+        }
+    }
+
+    fn build_tiberius_config(&self) -> Config {
+        let mut cfg = Config::new();
+        cfg.host(&self.config.host);
+        cfg.port(self.config.port);
+        cfg.authentication(AuthMethod::sql_server(
+            &self.config.user,
+            &self.config.password,
+        ));
+        if !self.config.database.is_empty() {
+            cfg.database(&self.config.database);
+        }
+        if self.config.ssl_mode != "verify-full" {
+            cfg.trust_cert();
+        }
+        cfg
     }
 }
 
-#[no_mangle]
-/// Fill every function pointer in `vtable`.
-///
-/// # Safety
-/// `vtable` must be a valid, non-null pointer to a `PluginVTable` allocated
-/// by the host. The pointer must remain valid for the duration of this call.
-pub unsafe extern "C" fn tablepro_plugin_init(vtable: *mut PluginVTable) {
-    if vtable.is_null() {
-        return;
+/// Lock the client mutex (mut, since tiberius queries take `&mut Client`).
+macro_rules! with_client {
+    ($self:ident, $client:ident => $body:expr) => {{
+        let mut guard = $self.client.lock().await;
+        let $client = guard
+            .as_mut()
+            .ok_or_else(|| DriverError::Connection("Not connected".to_string()))?;
+        $body
+    }};
+}
+
+/// Run a SQL statement and return `(column_names, rows, affected)`.
+/// All values rendered as strings via `Option<&str>` (matches old behavior).
+#[allow(clippy::type_complexity)]
+pub(crate) async fn execute_simple(
+    client: &mut MssqlConn,
+    sql: &str,
+) -> Result<(Vec<String>, Vec<Vec<Option<String>>>, i64), DriverError> {
+    let query = client
+        .simple_query(sql)
+        .await
+        .map_err(|e| DriverError::Query(e.to_string()))?;
+
+    let results = query
+        .into_results()
+        .await
+        .map_err(|e| DriverError::Query(e.to_string()))?;
+
+    if results.is_empty() || results[0].is_empty() {
+        return Ok((vec![], vec![], 0));
     }
-    (*vtable).api_version = API_VERSION;
 
-    // Lifecycle
-    (*vtable).create_driver = handlers::create_driver;
-    (*vtable).destroy_driver = handlers::destroy_driver;
+    let first = &results[0];
+    let col_names: Vec<String> = first[0]
+        .columns()
+        .iter()
+        .map(|c| c.name().to_owned())
+        .collect();
 
-    // Connection
-    (*vtable).connect = handlers::connect;
-    (*vtable).disconnect = handlers::disconnect;
-    (*vtable).ping = handlers::ping;
+    let mut rows: Vec<Vec<Option<String>>> = Vec::with_capacity(first.len());
+    for row in first {
+        let cells: Vec<Option<String>> = (0..col_names.len())
+            .map(|i| row.get::<&str, _>(i).map(|s| s.to_owned()))
+            .collect();
+        rows.push(cells);
+    }
+    let affected = rows.len() as i64;
+    Ok((col_names, rows, affected))
+}
 
-    // Query
-    (*vtable).execute = handlers::execute;
-    (*vtable).cancel = handlers::cancel;
+#[async_trait]
+impl DatabaseDriver for MssqlDriver {
+    async fn connect(&self) -> Result<(), DriverError> {
+        let cfg = self.build_tiberius_config();
+        let tcp = TcpStream::connect(cfg.get_addr())
+            .await
+            .map_err(|e| DriverError::Connection(e.to_string()))?;
+        tcp.set_nodelay(true)
+            .map_err(|e| DriverError::Connection(e.to_string()))?;
+        let client = Client::connect(cfg, tcp.compat_write())
+            .await
+            .map_err(|e| DriverError::Connection(e.to_string()))?;
+        *self.client.lock().await = Some(client);
+        Ok(())
+    }
 
-    // Schema
-    (*vtable).fetch_tables = handlers::fetch_tables;
-    (*vtable).fetch_columns = handlers::fetch_columns;
-    (*vtable).fetch_indexes = handlers::fetch_indexes;
-    (*vtable).fetch_foreign_keys = handlers::fetch_foreign_keys;
-    (*vtable).fetch_databases = handlers::fetch_databases;
-    (*vtable).fetch_ddl = handlers::fetch_ddl;
+    fn disconnect(&self) {
+        if let Ok(mut guard) = self.client.try_lock() {
+            *guard = None;
+        }
+    }
 
-    // Free
-    (*vtable).free_result = free::free_result;
-    (*vtable).free_query_result = free::free_query_result;
-    (*vtable).free_table_list = free::free_table_list;
-    (*vtable).free_column_list = free::free_column_list;
-    (*vtable).free_index_list = free::free_index_list;
-    (*vtable).free_foreign_key_list = free::free_foreign_key_list;
-    (*vtable).free_string_list = free::free_string_list;
-    (*vtable).free_string = free::free_string;
+    async fn ping(&self) -> Result<(), DriverError> {
+        with_client!(self, c => execute_simple(c, "SELECT 1").await.map(|_| ()))
+    }
+
+    async fn execute(&self, query: &str) -> Result<QueryResult, DriverError> {
+        with_client!(self, c => {
+            let (cols, rows, affected) = execute_simple(c, query).await?;
+            Ok(QueryResult {
+                columns: cols
+                    .into_iter()
+                    .map(|name| ColumnInfo {
+                        name,
+                        type_name: String::new(),
+                        nullable: true,
+                        is_primary_key: false,
+                    })
+                    .collect(),
+                rows,
+                affected_rows: affected,
+                execution_time_ms: 0.0,
+                truncated: false,
+                total_row_count: None,
+            })
+        })
+    }
+
+    async fn fetch_tables(&self) -> Result<Vec<TableInfo>, DriverError> {
+        with_client!(self, c => schema::fetch_tables(c).await)
+    }
+
+    async fn fetch_columns(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<ColumnInfo>, DriverError> {
+        with_client!(self, c => schema::fetch_columns(c, table, schema.unwrap_or("")).await)
+    }
+
+    async fn fetch_indexes(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<IndexInfo>, DriverError> {
+        with_client!(self, c => schema_indexes::fetch_indexes(c, table, schema.unwrap_or("")).await)
+    }
+
+    async fn fetch_foreign_keys(
+        &self,
+        table: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<ForeignKeyInfo>, DriverError> {
+        with_client!(self, c => schema_indexes::fetch_foreign_keys(c, table, schema.unwrap_or("")).await)
+    }
+
+    async fn fetch_databases(&self) -> Result<Vec<String>, DriverError> {
+        with_client!(self, c => schema::fetch_databases(c).await)
+    }
+
+    async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, DriverError> {
+        with_client!(self, c => ddl::fetch_ddl(c, table, schema.unwrap_or("")).await)
+    }
+
+    fn cancel_query(&self) -> Result<(), DriverError> {
+        Err(DriverError::Unsupported(
+            "Cancel not supported in this version".to_string(),
+        ))
+    }
+
+    fn supports_schemas(&self) -> bool {
+        true
+    }
+
+    fn supports_transactions(&self) -> bool {
+        true
+    }
+
+    fn database_type_id(&self) -> &str {
+        "mssql"
+    }
 }

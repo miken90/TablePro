@@ -1,10 +1,12 @@
 import { create } from "zustand";
-import { toast } from "sonner";
 import { listen } from "@tauri-apps/api/event";
 import type { ConnectionGroup, ConnectionStatus, SavedConnection } from "../types/connection";
 import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
-import { classifyError } from "../ipc/error";
+
+import { useSettingsStore } from "./settingsStore";
+import { useEditorStore } from "./editorStore";
+import type { EditorTab } from "./editorStore";
 
 interface ConnectionState {
   connections: Map<string, SavedConnection>;
@@ -76,7 +78,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   selectConnection: (id) => set({ selectedConnectionId: id }),
 
   connect: async (id, config) => {
-    const loadingId = toast.loading("Connecting...");
     set((s) => {
       const statuses = new Map(s.connectionStatuses);
       statuses.set(id, "connecting");
@@ -91,20 +92,25 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         sessionIds.set(id, sessionId);
         return { connectionStatuses: statuses, sessionIds, selectedConnectionId: id };
       });
-      toast.dismiss(loadingId);
-      toast.success("Connected", { description: config.host ?? config.database ?? undefined });
+
+      // Auto-bind active query tab if it's currently unbound or bound to a disconnected connection
+      const activeTabId = useEditorStore.getState().activeTabId;
+      if (activeTabId) {
+        const activeTab = useEditorStore.getState().tabs.find((t: EditorTab) => t.id === activeTabId);
+        if (activeTab && activeTab.type === 'query') {
+          const tabConnId = activeTab.connectionId;
+          const isTabConnConnected = tabConnId ? get().sessionIds.has(tabConnId) : false;
+          if (!tabConnId || !isTabConnConnected) {
+            useEditorStore.getState().setTabConnectionId(activeTabId, id);
+          }
+        }
+      }
     } catch (err) {
       set((s) => {
         const statuses = new Map(s.connectionStatuses);
         statuses.set(id, "error");
         return { connectionStatuses: statuses };
       });
-      toast.dismiss(loadingId);
-      const classified = classifyError(err);
-      const description = classified.hint
-        ? `${classified.message}\n${classified.hint}`
-        : classified.message;
-      toast.error("Connection failed", { description, duration: Infinity });
       throw err;
     }
   },
@@ -128,14 +134,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         selectedConnectionId: s.selectedConnectionId === id ? null : s.selectedConnectionId,
       };
     });
-    toast.info("Disconnected");
   },
 
   reconnect: async (connectionId: string) => {
     const state = get();
     const sessionId = state.sessionIds.get(connectionId);
     if (!sessionId) {
-      toast.error("Reconnect failed", { description: "No active session for this connection" });
       return;
     }
 
@@ -155,17 +159,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     try {
       await commands.reconnectSession(sessionId);
       // Success state is set by the connection:reconnected event listener
-    } catch (err) {
+    } catch {
       set((s) => {
         const statuses = new Map(s.connectionStatuses);
         statuses.set(connectionId, "error");
         return { connectionStatuses: statuses };
       });
-      const classified = classifyError(err);
-      const description = classified.hint
-        ? `${classified.message}\n${classified.hint}`
-        : classified.message;
-      toast.error("Reconnect failed", { description });
     } finally {
       set((s) => {
         const reconnectingIds = new Set(s.reconnectingIds);
@@ -177,6 +176,16 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   saveConnection: async (connection) => {
     await commands.saveConnection(connection);
+    // Phase 3 Item 2: optionally mirror password into Windows Credential Manager.
+    try {
+      const useKeychain = useSettingsStore.getState().settings.rememberCredentialsInOsKeychain;
+      const pwd = connection.config.password;
+      if (useKeychain && pwd && pwd.length > 0) {
+        await commands.credSave(connection.id, pwd);
+      }
+    } catch (e) {
+      console.warn("cred_save failed (non-fatal):", e);
+    }
     set((s) => {
       const connections = new Map(s.connections);
       connections.set(connection.id, connection);
@@ -186,6 +195,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   deleteConnection: async (id) => {
     await commands.deleteConnection(id);
+    // Always clean up CredMan entry (idempotent on missing entries).
+    try {
+      await commands.credDelete(id);
+    } catch (e) {
+      console.warn("cred_delete failed (non-fatal):", e);
+    }
     set((s) => {
       const connections = new Map(s.connections);
       connections.delete(id);
@@ -234,7 +249,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 // Auto-subscribe to connection events from Rust backend
 if (typeof window !== "undefined") {
 void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => {
-  const { sessionId, host } = event.payload;
+  const { sessionId } = event.payload;
   const state = useConnectionStore.getState();
   for (const [connId, sid] of state.sessionIds) {
     if (sid === sessionId) {
@@ -247,10 +262,6 @@ void listen<{ sessionId: string; host?: string }>("connection:lost", (event) => 
         const reconnectingIds = new Set(s.reconnectingIds);
         reconnectingIds.delete(connId);
         return { connectionStatuses: statuses, reconnectingIds };
-      });
-      toast.error("Connection lost", {
-        description: host ?? "Database connection was lost",
-        duration: Infinity,
       });
       break;
     }
@@ -269,7 +280,6 @@ void listen<{ sessionId: string }>("connection:reconnected", (event) => {
         reconnectingIds.delete(connId);
         return { connectionStatuses: statuses, reconnectingIds };
       });
-      toast.success("Connection restored");
       break;
     }
   }

@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-17
+
+### Added
+
+- Searchable Foreign Key dropdown selector in grid cell editor, dynamically querying referenced table metadata and records
+
+### Removed
+
+- Tauri updater plugin and in-app auto-update notification UI
+
+### Fixed
+
+- SQL Editor: fixed queryText synchronization on editor mount and tab switch, resolving the disabled Run button bug.
+- Granular UPDATE SQL generation: copying or generating SQL for edited rows now sets only the columns that were modified, rather than updating all columns. Excludes primary key columns from the `SET` clause of generated SQL UPDATE queries.
+- SQL Editor: added support for executing selected SQL statements in Ctrl+Enter keybinding and Run toolbar button, falling back to cursor statement or full text.
+- SQL Editor: automatically bind active query tabs to the selected database connection when establishing a connection or switching to an unbound tab.
+- DatePicker cell editing formatting for HTML5 inputs, supporting dynamic `.showPicker()` triggers on click/focus and automatic NULL mapping for empty date/numeric inputs
+- Grid cell mouse click interception on custom dropdown editors (Foreign Key and Enum) by stopping event propagation on overlay elements
+- Performance settings section: configurable `streamingThreshold` (default 10K, range 1K–1M) and `storeMaxRows` (default 100K, range 10K–10M) with backend clamp on save
+- Dialect-aware ChangeTracker SQL generation: per-engine boolean literals (`1`/`0` for MySQL & MSSQL, `TRUE`/`FALSE` for Postgres/SQLite) and identifier quoting (backticks for MySQL, square brackets for MSSQL, ANSI double-quotes elsewhere)
+- EXPLAIN output detection: single-column `QUERY PLAN` results render without 80-char truncation and auto-size column width up to 4000px
+- Crash dump auto-collect: Rust panics are serialised to `%LOCALAPPDATA%\TablePro\crashes\panic-<ts>.json` with secret redaction; WER native dumps in `%LOCALAPPDATA%\CrashDumps\` are surfaced via `list_crash_dumps` / `delete_crash_dump` Tauri commands
+- Dual credential storage: opt-in `rememberCredentialsInOsKeychain` setting (default off) and Tauri commands (`cred_save`, `cred_load`, `cred_delete`) that mirror connection passwords into Windows Credential Manager under the `TablePro/<connection-uuid>` namespace. Wired into `connectionStore.saveConnection` (mirrors when toggle ON) and `connectionStore.deleteConnection` (always cleans up CredMan entry).
+- Export dialog button on the table browser toolbar, passing active table browse sessionId and full query text instead of queryStore parameters
+- Grid cell editing text selection: double-clicking now respects standard browser selection instead of forcing a select-all highlight, while keyboard activation (Enter) retains select-all
+- Diagnostics settings tab: crash dump viewer that lists Rust panic JSON dumps + WER native dumps with size and per-entry delete; refuses paths outside known directories.
+
+### Changed
+
+- Cache table query results, pagination, sorting, and enum columns per tab ID via `useTableDataStore` to prevent automatic re-fetching when switching between tabs
+- `scripts/build-release.ps1`: removed portable target entirely; script now only builds MSI + NSIS installers via `npx tauri build`. Portable builds were unreliable due to `dist/` embedding issues with raw `cargo build`.
+- Split MainLayout god component (503 LOC) into MainLayout shell (138 LOC), ConnectedLayout, and OverlayRegion
+- Wrap GridRow and GridHeader in React.memo with stabilized props for fewer re-renders during scroll/selection
+- Lazy-load 7 non-critical panels (AiChat, Settings, MongoDB, Redis, Shortcuts, Onboarding, Explain) with per-panel Suspense boundaries
+- Add ErrorBoundary around sidebar, editor, inspector, overlays, and status bar regions
+- Drivers compiled into binary (was: dynamic DLL plugins via `libloading`)
+
+### Removed
+
+- `plugin-sdk` crate
+- DLL plugin loading via `PluginManager`
+- `libloading` dependency
+
+### Performance
+
+- ~2x RAM reduction on large query results (FFI clone eliminated)
+
+### Fixed
+
+- Grid column selection: clicking a cell no longer resets pointer to the first column
+- Onboarding dialog: settings now loaded from disk on startup, so skipped/completed onboarding persists across restarts
+
 ## [0.6.0] - 2026-04-10
 
 ### Added

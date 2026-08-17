@@ -10,16 +10,15 @@ use crate::services::sql_quoting::quote_identifier;
 
 /// Maximum rows returned by `execute_query` before truncation.
 ///
-/// The plugin ABI (`PluginVTable::execute`) returns a complete `FfiQueryResult`
-/// from the DLL — there is no cursor or chunking API in the current plugin SDK
-/// (API_VERSION = 1). Every row the driver produces is materialised in memory,
-/// serialised to JSON, and sent over the Tauri IPC bridge as a single message.
+/// Drivers return a complete `QueryResult` to Rust — there is no cursor or
+/// chunking API in the current driver trait. Every row the driver produces is
+/// materialised in memory, serialised to JSON, and sent over the Tauri IPC
+/// bridge as a single message.
 ///
-/// True streaming would require an ABI v2 that exposes a cursor-based
-/// `fetch_next_chunk(handle, max_rows) -> FfiQueryResult` on the vtable, plus
-/// a corresponding chunked IPC channel on the Tauri side. Until that work lands
-/// (targeted for Phase 02 driver-substrate), this hard cap prevents the single
-/// IPC payload from crashing or hanging the WebView.
+/// True streaming would require a cursor-based fetch API on the driver trait
+/// plus a corresponding chunked IPC channel on the Tauri side. Until that work
+/// lands, this hard cap prevents the single IPC payload from crashing or
+/// hanging the WebView.
 const MAX_RESULT_ROWS: usize = 50_000;
 
 #[derive(Debug, Clone, Serialize)]
@@ -212,7 +211,7 @@ pub async fn execute_query(
         }
         Err(error) => {
             // Safety net: detect connection-level errors and emit connection:lost
-            let error_lower = error.to_string().to_lowercase();
+            let error_lower = error.inner_message().to_lowercase();
             if error_lower.contains("connection")
                 || error_lower.contains("broken pipe")
                 || error_lower.contains("connection reset")
@@ -222,7 +221,7 @@ pub async fn execute_query(
                     "connection:lost",
                     serde_json::json!({
                         "sessionId": &session_id,
-                        "message": error.to_string(),
+                        "message": error.inner_message(),
                     }),
                 );
             }
@@ -233,7 +232,7 @@ pub async fn execute_query(
                     session_id,
                     query_id,
                     elapsed_ms,
-                    error: error.to_string(),
+                    error: error.inner_message(),
                 },
             );
             Err(error)

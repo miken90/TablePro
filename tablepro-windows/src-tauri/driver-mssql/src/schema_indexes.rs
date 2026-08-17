@@ -3,18 +3,19 @@
 
 use std::collections::HashMap;
 
-use tablepro_plugin_sdk::{
-    FfiForeignKeyInfo, FfiForeignKeyList, FfiIndexInfo, FfiIndexList, FfiString,
-};
+use driver_common::{DriverError, ForeignKeyInfo, IndexInfo};
 
-use crate::driver::MssqlDriver;
-use crate::ffi::string_to_ffi;
+use crate::{execute_simple, MssqlConn};
 
 fn escape_bracket(s: &str) -> String {
     s.replace(']', "]]")
 }
 
-pub fn fetch_indexes(driver: &MssqlDriver, table: &str, schema: &str) -> FfiIndexList {
+pub async fn fetch_indexes(
+    client: &mut MssqlConn,
+    table: &str,
+    schema: &str,
+) -> Result<Vec<IndexInfo>, DriverError> {
     let schema = if schema.is_empty() { "dbo" } else { schema };
     let bt = escape_bracket(table);
     let bs = escape_bracket(schema);
@@ -28,17 +29,11 @@ pub fn fetch_indexes(driver: &MssqlDriver, table: &str, schema: &str) -> FfiInde
          ORDER BY i.name, ic.key_ordinal"
     );
 
-    match driver.execute_query(&sql) {
-        Err(e) => FfiIndexList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi(e),
-        },
-        Ok((_, rows, _)) => build_index_list(rows),
-    }
+    let (_, rows, _) = execute_simple(client, &sql).await?;
+    Ok(build_index_list(rows))
 }
 
-fn build_index_list(rows: Vec<Vec<Option<String>>>) -> FfiIndexList {
+fn build_index_list(rows: Vec<Vec<Option<String>>>) -> Vec<IndexInfo> {
     let mut map: HashMap<String, (bool, String, Vec<String>)> = HashMap::new();
     for row in &rows {
         let idx_name = match row.get(0).and_then(|v| v.as_deref()) {
@@ -59,39 +54,25 @@ fn build_index_list(rows: Vec<Vec<Option<String>>>) -> FfiIndexList {
         entry.2.push(col_name);
     }
 
-    let mut items: Vec<FfiIndexInfo> = map
+    let mut items: Vec<IndexInfo> = map
         .into_iter()
-        .map(|(name, (is_unique, idx_type, cols))| {
-            let mut col_strings: Vec<FfiString> = cols.into_iter().map(string_to_ffi).collect();
-            let col_count = col_strings.len();
-            let col_ptr = col_strings.as_mut_ptr();
-            std::mem::forget(col_strings);
-            FfiIndexInfo {
-                name: string_to_ffi(name),
-                columns: col_ptr,
-                column_count: col_count,
-                is_unique,
-                index_type: string_to_ffi(idx_type),
-            }
+        .map(|(name, (is_unique, idx_type, cols))| IndexInfo {
+            name,
+            columns: cols,
+            is_unique,
+            index_type: idx_type,
         })
         .collect();
 
-    items.sort_by(|a, b| {
-        let an = unsafe { a.name.to_string_copy() };
-        let bn = unsafe { b.name.to_string_copy() };
-        an.cmp(&bn)
-    });
-    let count = items.len();
-    let ptr = items.as_mut_ptr();
-    std::mem::forget(items);
-    FfiIndexList {
-        items: ptr,
-        count,
-        error: FfiString::null(),
-    }
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+    items
 }
 
-pub fn fetch_foreign_keys(driver: &MssqlDriver, table: &str, schema: &str) -> FfiForeignKeyList {
+pub async fn fetch_foreign_keys(
+    client: &mut MssqlConn,
+    table: &str,
+    schema: &str,
+) -> Result<Vec<ForeignKeyInfo>, DriverError> {
     let schema = if schema.is_empty() { "dbo" } else { schema };
     let bt = escape_bracket(table);
     let bs = escape_bracket(schema);
@@ -107,36 +88,21 @@ pub fn fetch_foreign_keys(driver: &MssqlDriver, table: &str, schema: &str) -> Ff
          ORDER BY fk.name"
     );
 
-    match driver.execute_query(&sql) {
-        Err(e) => FfiForeignKeyList {
-            items: std::ptr::null_mut(),
-            count: 0,
-            error: string_to_ffi(e),
-        },
-        Ok((_, rows, _)) => {
-            let mut items: Vec<FfiForeignKeyInfo> = rows
-                .into_iter()
-                .filter_map(|row| {
-                    let name = row.get(0)?.clone()?;
-                    let column = row.get(1)?.clone()?;
-                    let ref_table = row.get(2)?.clone()?;
-                    let ref_col = row.get(3)?.clone()?;
-                    Some(FfiForeignKeyInfo {
-                        name: string_to_ffi(name),
-                        column: string_to_ffi(column),
-                        referenced_table: string_to_ffi(ref_table),
-                        referenced_column: string_to_ffi(ref_col),
-                    })
-                })
-                .collect();
-            let count = items.len();
-            let ptr = items.as_mut_ptr();
-            std::mem::forget(items);
-            FfiForeignKeyList {
-                items: ptr,
-                count,
-                error: FfiString::null(),
-            }
-        }
-    }
+    let (_, rows, _) = execute_simple(client, &sql).await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| {
+            let name = row.get(0)?.clone()?;
+            let column = row.get(1)?.clone()?;
+            let ref_table = row.get(2)?.clone()?;
+            let ref_col = row.get(3)?.clone()?;
+            Some(ForeignKeyInfo {
+                name,
+                column,
+                referenced_table: ref_table,
+                referenced_column: ref_col,
+            })
+        })
+        .collect())
 }

@@ -364,6 +364,7 @@
       "appearance": "Giao diện",
       "connection": "Kết nối",
       "ai": "AI",
+      "performance": "Hiệu năng",
       "shortcuts": "Phím tắt"
     },
     "general": {
@@ -451,6 +452,13 @@
         "inlineSuggestions": "Gợi ý nội tuyến"
       }
     },
+    "performance": {
+      "title": "Hiệu năng",
+      "streamingThreshold": "Ngưỡng truyền dòng (số hàng)",
+      "streamingThresholdDesc": "Truy vấn trả về nhiều hàng hơn ngưỡng này sẽ truyền theo khối thay vì tải hết một lần. Cao hơn = dùng nhiều RAM hơn, thấp hơn = nhiều khối hơn.",
+      "storeMaxRows": "Số hàng tối đa lưu",
+      "storeMaxRowsDesc": "Số hàng tối đa giữ trong bộ nhớ. Vượt ngưỡng, các hàng sẽ bị bỏ (dùng Xuất để lấy đầy đủ). Cao hơn = dùng nhiều RAM hơn."
+    },
     "shortcuts": {
       "title": "Phím tắt",
       "description": "Nhấn vào phím tắt để tùy chỉnh. Phím tắt tùy chỉnh được tô sáng bằng màu xanh.",
@@ -498,7 +506,9 @@
     "openTable": "Mở bảng",
     "copyTableName": "Sao chép tên bảng",
     "copySelect": "Sao chép SELECT *",
-    "viewStructure": "Xem cấu trúc"
+    "viewStructure": "Xem cấu trúc",
+    "refreshTables": "Tải lại danh sách bảng",
+    "refreshDatabases": "Tải lại danh sách cơ sở dữ liệu"
   },
   "history": {
     "title": "Lịch sử truy vấn",
@@ -567,15 +577,6 @@
     "platform": "Nền tảng",
     "userAgent": "User Agent",
     "copyright": "© 2026 TablePro. Bảo lưu mọi quyền."
-  },
-  "update": {
-    "available": "Có bản cập nhật: {{version}}",
-    "published": "Ngày phát hành: {{date}}",
-    "downloading": "Đang tải bản cập nhật…",
-    "downloaded": "Đã tải {{bytes}}",
-    "later": "Để sau",
-    "updateNow": "Cập nhật ngay",
-    "installing": "Đang cài đặt…"
   },
   "safeMode": {
     "confirmQuery": "Xác nhận truy vấn",

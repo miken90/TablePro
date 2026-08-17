@@ -364,6 +364,7 @@
       "appearance": "Appearance",
       "connection": "Connection",
       "ai": "AI",
+      "performance": "Performance",
       "shortcuts": "Shortcuts"
     },
     "general": {
@@ -449,9 +450,16 @@
         "explainQuery": "Explain Query",
         "fixError": "Fix Error",
         "inlineSuggestions": "Inline Suggestions"
-      }
-    },
-    "shortcuts": {
+        }
+        },
+        "performance": {
+        "title": "Performance",
+        "streamingThreshold": "Streaming threshold (rows)",
+        "streamingThresholdDesc": "Queries returning more rows than this stream chunked instead of loading all at once. Higher = more RAM, lower = more chunks.",
+        "storeMaxRows": "Store max rows",
+        "storeMaxRowsDesc": "Maximum rows kept in memory. Beyond this, rows are dropped (use Export for full data). Higher = more RAM."
+        },
+        "shortcuts": {
       "title": "Keyboard Shortcuts",
       "description": "Click on a shortcut to customize it. Custom bindings are highlighted in blue.",
       "resetAll": "Reset All",
@@ -498,7 +506,9 @@
     "openTable": "Open Table",
     "copyTableName": "Copy Table Name",
     "copySelect": "Copy SELECT *",
-    "viewStructure": "View Structure"
+    "viewStructure": "View Structure",
+    "refreshTables": "Refresh Tables",
+    "refreshDatabases": "Refresh Databases"
   },
   "history": {
     "title": "Query History",
@@ -567,15 +577,6 @@
     "platform": "Platform",
     "userAgent": "User Agent",
     "copyright": "© 2026 TablePro. All rights reserved."
-  },
-  "update": {
-    "available": "Update available: {{version}}",
-    "published": "Published: {{date}}",
-    "downloading": "Downloading update…",
-    "downloaded": "Downloaded {{bytes}}",
-    "later": "Later",
-    "updateNow": "Update Now",
-    "installing": "Installing…"
   },
   "safeMode": {
     "confirmQuery": "Confirm Query",
