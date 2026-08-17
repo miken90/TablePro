@@ -14,7 +14,8 @@ interface ResultToolbarProps {
   result: QueryResult | null;
   error: string | null;
   isTableMode: boolean;
-  total: number;
+  /** Exact row count, or `null` when it could not be determined. */
+  total: number | null;
   filteredTotal?: number | null;
   approximateCount?: number | null;
   quickSearchColumns?: ColumnInfo[];
@@ -146,8 +147,12 @@ export function ResultToolbar({
                   : isTableMode
                     ? (typeof approximateCount === 'number' && approximateCount > 0
                       ? t("resultToolbar.approximateRows", { count: approximateCount.toLocaleString() })
-                      : `${total.toLocaleString()} ${t("common.rows")}`)
-                    : `${total} ${t("common.rows")}`}
+                      // `total === null` means the count query failed; say so
+                      // rather than reporting a fabricated 0.
+                      : total === null
+                        ? t("resultToolbar.unknownRows")
+                        : `${total.toLocaleString()} ${t("common.rows")}`)
+                    : `${total ?? 0} ${t("common.rows")}`}
               {result.affectedRows > 0 && ` · ${result.affectedRows} ${t("common.affected")}`}
               {' · '}
               {result.executionTimeMs.toFixed(1)}ms

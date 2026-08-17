@@ -17,6 +17,25 @@ function buildOrderByClause(sorting: SortingState): string | null {
   return sorting.map(s => `"${s.id}" ${s.desc ? 'DESC' : 'ASC'}`).join(', ');
 }
 
+/**
+ * Resolve the exact filtered row count, or `null` when it cannot be determined.
+ *
+ * The count query is issued separately from the row fetch, so it can fail or
+ * time out while rows load fine. Returning `0` in that case makes the UI claim
+ * an empty table while it is rendering rows, so an undeterminable count is
+ * reported as unknown instead.
+ */
+export async function resolveTotalCount(
+  fetchCount: () => Promise<number>,
+): Promise<number | null> {
+  try {
+    const fetched = await fetchCount();
+    return typeof fetched === 'number' && Number.isFinite(fetched) ? fetched : null;
+  } catch {
+    return null;
+  }
+}
+
 interface UseTableDataProps {
   tabId?: string;
   tableName?: string;
@@ -27,7 +46,8 @@ interface UseTableDataProps {
 
 export interface UseTableDataReturn {
   tableResult: QueryResult | null;
-  totalCount: number;
+  /** `null` when the count query failed — unknown, not zero. */
+  totalCount: number | null;
   approximateCount: number | null;
   isFetching: boolean;
   fetchError: string | null;
@@ -91,7 +111,7 @@ export function useTableData({
     useTableDataStore.getState().setTabData(activeTabId, { tableResult: val });
   }, [activeTabId]);
 
-  const setTotalCount = useCallback((val: number) => {
+  const setTotalCount = useCallback((val: number | null) => {
     useTableDataStore.getState().setTabData(activeTabId, { totalCount: val });
   }, [activeTabId]);
 
@@ -156,12 +176,17 @@ export function useTableData({
     try {
       const rows = await fetchRowsFiltered(sid, tbl, sch, offset, ps, where || null, orderBy);
       if (seq !== fetchSeqRef.current) return;
-      let count = 0;
-      try { count = await fetchCountFiltered(sid, tbl, sch, where || null); } catch { /* ignore */ }
+      // The rows landed. If the count query fails or times out the count is
+      // *unknown*, not zero — and blanking the approximate estimate would
+      // throw away the only figure we still have.
+      const count = await resolveTotalCount(
+        () => fetchCountFiltered(sid, tbl, sch, where || null),
+      );
       if (seq !== fetchSeqRef.current) return;
       setTableResult(rows);
-      setTotalCount(typeof count === 'number' ? count : 0);
-      setApproximateCount(null);
+      setTotalCount(count);
+      // An exact count supersedes the estimate; an unknown one keeps it.
+      if (count !== null) setApproximateCount(null);
 
       // Cache the key representing successful fetch parameters
       const currentKey = `${sid}:${sch}:${tbl}:${pg}:${ps}:${where ?? ''}:${JSON.stringify(sort)}`;

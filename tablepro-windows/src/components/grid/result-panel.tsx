@@ -485,6 +485,7 @@ export function ResultPanel({
                 onPageSizeChange={handlePageSizeChange}
                 isLoading={loading}
                 approximateCount={isTableMode ? approximateCount : null}
+                rowsOnPage={tableResult?.rows.length ?? 0}
               />
             )}
           </>

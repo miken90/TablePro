@@ -301,7 +301,10 @@
       "firstPage": "Trang đầu",
       "previousPage": "Trang trước",
       "nextPage": "Trang sau",
-      "lastPage": "Trang cuối"
+      "lastPage": "Trang cuối",
+      "unknownTotal": "không rõ",
+      "pageUnknownTotal": "Trang {{page}}",
+      "lastPageUnknown": "Không thể tới trang cuối — chưa rõ tổng số hàng"
     },
     "noChangesPreview": "-- Không có thay đổi để xem trước"
   },
@@ -310,7 +313,8 @@
     "exportResults": "Xuất kết quả",
     "rowsOfTotal": "{{count}} / {{total}} hàng",
     "truncatedRows": "{{count}} / {{total}} hàng (đã cắt bớt)",
-    "approximateRows": "~{{count}} hàng"
+    "approximateRows": "~{{count}} hàng",
+    "unknownRows": "Không lấy được số hàng"
   },
   "resultStatusBar": {
     "noQueries": "Chưa có truy vấn nào được thực thi.",

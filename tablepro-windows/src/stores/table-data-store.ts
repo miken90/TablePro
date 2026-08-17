@@ -9,7 +9,9 @@ export interface TabDataState {
   schema: string | null;
   activeWhereClause: string | null;
   tableResult: QueryResult | null;
-  totalCount: number;
+  /** Exact filtered row count, or `null` when the count query failed or timed
+   *  out. `null` means "unknown" — never conflate it with zero rows. */
+  totalCount: number | null;
   approximateCount: number | null;
   page: number;
   pageSize: number;

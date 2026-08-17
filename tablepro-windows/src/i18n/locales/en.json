@@ -301,7 +301,10 @@
       "firstPage": "First page",
       "previousPage": "Previous page",
       "nextPage": "Next page",
-      "lastPage": "Last page"
+      "lastPage": "Last page",
+      "unknownTotal": "unknown",
+      "pageUnknownTotal": "Page {{page}}",
+      "lastPageUnknown": "Last page unavailable — total row count unknown"
     },
     "noChangesPreview": "-- No changes to preview"
   },
@@ -310,7 +313,8 @@
     "exportResults": "Export results",
     "rowsOfTotal": "{{count}} of {{total}} rows",
     "truncatedRows": "{{count}} of {{total}} rows (truncated)",
-    "approximateRows": "~{{count}} rows"
+    "approximateRows": "~{{count}} rows",
+    "unknownRows": "Row count unavailable"
   },
   "resultStatusBar": {
     "noQueries": "No queries executed yet.",
