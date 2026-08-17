@@ -9,7 +9,11 @@ use tokio::task;
 
 use crate::models::AppError;
 use crate::drivers::DatabaseDriver;
+use crate::services::export_paging::{append_page, inspect_query, plan_export_read, ExportRead};
+use crate::services::sql_generator::Dialect;
+use crate::services::sql_pagination::{pagination_style, PaginationStyle};
 use crate::services::ConnectionManager;
+use crate::storage::SettingsStore;
 
 use super::export_formats::{create_output_file, map_join_err, map_xlsx_err, write_file_chunk};
 use super::export_writers::{
@@ -63,6 +67,7 @@ fn batch_rows(rows: &[Vec<Option<String>>], size: usize) -> Vec<&[Vec<Option<Str
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn export_to_file(
     app: AppHandle,
     session_id: String,
@@ -71,6 +76,7 @@ pub async fn export_to_file(
     file_path: String,
     options: ExportOptions,
     manager: State<'_, Mutex<ConnectionManager>>,
+    settings: State<'_, Mutex<SettingsStore>>,
 ) -> Result<ExportResult, AppError> {
     let file_path = {
         // dev-only: WSL host path bridge
@@ -140,24 +146,56 @@ pub async fn export_to_file(
         )));
     }
 
-    // The user's query runs exactly once.
+    // How the export reads the query.
     //
-    // Chunking used to wrap it as `SELECT * FROM (…) LIMIT n OFFSET m`. Unless
-    // the query itself defines a total order, PostgreSQL and MySQL are free to
-    // return rows in a different order for each execution, so consecutive
-    // pages could skip rows and repeat others — the same silent corruption
-    // `sql_pagination` already refuses to risk on SQL Server. A second
-    // execution for the row count made it worse: a query with side effects
-    // (`INSERT … RETURNING`) ran once per chunk plus once more.
+    // Below the in-memory limit the whole result is read in one execution and
+    // held in memory - convenient, and bounded by the limit itself. Above it,
+    // reading in chunks is only safe when the query defines its own row order:
+    // without a top-level ORDER BY, PostgreSQL and MySQL may return rows in a
+    // different order per execution, so pages repeat and skip rows.
     //
-    // The cost is memory: the whole result set is materialised before it is
-    // written, where chunking held at most CHUNK_SIZE rows. Correct output is
-    // worth more than the ceiling, and a driver-level cursor is what would fix
-    // both — the driver trait has no such API today.
-    let result = driver.execute(&sql).await?;
-    let columns = result.columns.clone();
-    let total = result.rows.len() as u64;
-    tracing::info!(session_id = %session_id, "export total rows: {}", total);
+    // The limit is the user's `store_max_rows` performance setting - the same
+    // knob that caps how many rows the grid keeps in memory - so one number
+    // governs how much of a result this app will hold at once.
+    let max_rows_in_memory = settings.lock().await.get().store_max_rows as u64;
+    let dialect = Dialect::from_db_type(&driver_type);
+    let shape = inspect_query(&sql);
+    // A statement that already carries LIMIT/OFFSET/FETCH cannot take a
+    // pagination tail, and SQL Server has no LIMIT form at all.
+    let can_page = pagination_style(dialect) == PaginationStyle::LimitOffset && !shape.has_row_limit;
+
+    let (first_result, mut next_offset) = if can_page {
+        // One read that doubles as the probe: threshold + 1 rows tells us
+        // whether the result fits, and if it does we already have all of it.
+        let probe = driver
+            .execute(&append_page(&sql, max_rows_in_memory + 1, 0))
+            .await?;
+        match plan_export_read(probe.rows.len() as u64, max_rows_in_memory, shape.has_order_by) {
+            ExportRead::WholeResult => (probe, None),
+            ExportRead::ContinueInChunks => {
+                // Keep the rows already read (dropping the extra probe row) and
+                // continue from there; the ORDER BY makes that boundary stable.
+                let mut first = probe;
+                first.rows.truncate(max_rows_in_memory as usize);
+                (first, Some(max_rows_in_memory))
+            }
+            ExportRead::NeedsOrdering => {
+                return Err(AppError::ExportNeedsOrdering(format!(
+                    "This query returns more than {max_rows_in_memory} rows. Add an ORDER BY that puts the rows in a fixed order so the export can read them in chunks, or narrow the query."
+                )));
+            }
+        }
+    } else {
+        (driver.execute(&sql).await?, None)
+    };
+
+    let columns = first_result.columns.clone();
+    let mut total = first_result.rows.len() as u64;
+    tracing::info!(
+        session_id = %session_id,
+        chunked = next_offset.is_some(),
+        "export first read: {} rows", total
+    );
 
     let output_file = if format == "xlsx" {
         None
@@ -190,55 +228,75 @@ pub async fn export_to_file(
     let mut xlsx_row_limit_hit = false;
 
     // Write in batches so the file handle sees bounded writes.
-    for chunk_rows in batch_rows(&result.rows, CHUNK_SIZE as usize) {
-        match format.as_str() {
-            "csv" => {
-                header_written = write_csv_chunk(
-                    &mut buf, chunk_rows, &columns, &delimiter,
-                    include_header, header_written, &mut rows_exported,
-                )?;
+    let mut pending_rows = first_result.rows;
+    loop {
+        for chunk_rows in batch_rows(&pending_rows, CHUNK_SIZE as usize) {
+            match format.as_str() {
+                "csv" => {
+                    header_written = write_csv_chunk(
+                        &mut buf, chunk_rows, &columns, &delimiter,
+                        include_header, header_written, &mut rows_exported,
+                    )?;
+                }
+                "json" => {
+                    let file = output_file.as_ref().cloned()
+                        .ok_or_else(|| AppError::IoError("Missing output file".to_string()))?;
+                    json_first_row = write_json_chunk(
+                        file, chunk_rows, &columns, array_of_arrays,
+                        pretty, json_first_row, &mut rows_exported,
+                    ).await?;
+                }
+                "sql" => {
+                    let opts = SqlChunkOpts {
+                        table_name: &table_name,
+                        driver_type: &driver_type,
+                        include_create_table,
+                        batch_size,
+                    };
+                    header_written = write_sql_chunk(
+                        &mut buf, chunk_rows, &columns, &opts, header_written, &mut rows_exported,
+                    )?;
+                }
+                "xlsx" => {
+                    let ws = xlsx_worksheet.as_mut().expect("xlsx worksheet initialised before loop");
+                    let state = XlsxChunkState { row_limit: XLSX_MAX_ROWS, session_id: session_id.clone() };
+                    let opts = XlsxChunkOpts {
+                        xlsx_row, xlsx_row_limit_hit, include_header, header_written,
+                    };
+                    (header_written, xlsx_row, xlsx_row_limit_hit) = write_xlsx_chunk(
+                        ws, chunk_rows, &columns, opts, &mut rows_exported, &state,
+                    )?;
+                }
+                _ => return Err(AppError::ConfigError(format!("Unknown format: {format}"))),
             }
-            "json" => {
-                let file = output_file.as_ref().cloned()
-                    .ok_or_else(|| AppError::IoError("Missing output file".to_string()))?;
-                json_first_row = write_json_chunk(
-                    file, chunk_rows, &columns, array_of_arrays,
-                    pretty, json_first_row, &mut rows_exported,
-                ).await?;
+
+            // Flush text buffer.
+            if !buf.is_empty() && matches!(format.as_str(), "csv" | "sql") {
+                let bytes = std::mem::take(&mut buf);
+                write_file_chunk(output_file.as_ref().cloned().ok_or_else(|| AppError::IoError("Missing output file handle".to_string()))?, bytes).await?;
+                buf = Vec::with_capacity(64 * 1024);
             }
-            "sql" => {
-                let opts = SqlChunkOpts {
-                    table_name: &table_name,
-                    driver_type: &driver_type,
-                    include_create_table,
-                    batch_size,
-                };
-                header_written = write_sql_chunk(
-                    &mut buf, chunk_rows, &columns, &opts, header_written, &mut rows_exported,
-                )?;
-            }
-            "xlsx" => {
-                let ws = xlsx_worksheet.as_mut().expect("xlsx worksheet initialised before loop");
-                let state = XlsxChunkState { row_limit: XLSX_MAX_ROWS, session_id: session_id.clone() };
-                let opts = XlsxChunkOpts {
-                    xlsx_row, xlsx_row_limit_hit, include_header, header_written,
-                };
-                (header_written, xlsx_row, xlsx_row_limit_hit) = write_xlsx_chunk(
-                    ws, chunk_rows, &columns, opts, &mut rows_exported, &state,
-                )?;
-            }
-            _ => return Err(AppError::ConfigError(format!("Unknown format: {format}"))),
+
+            let _ = app.emit("export:progress", ExportProgress { current: rows_exported, total, format: format.clone() });
+            if xlsx_row_limit_hit { break; }
         }
 
-        // Flush text buffer.
-        if !buf.is_empty() && matches!(format.as_str(), "csv" | "sql") {
-            let bytes = std::mem::take(&mut buf);
-            write_file_chunk(output_file.as_ref().cloned().ok_or_else(|| AppError::IoError("Missing output file handle".to_string()))?, bytes).await?;
-            buf = Vec::with_capacity(64 * 1024);
+        // Chunked read: pull the next page in the query's own order.
+        match next_offset {
+            Some(offset) if !xlsx_row_limit_hit => {
+                let page = driver
+                    .execute(&append_page(&sql, CHUNK_SIZE, offset))
+                    .await?;
+                let read = page.rows.len() as u64;
+                total += read;
+                pending_rows = page.rows;
+                next_offset = if read < CHUNK_SIZE { None } else { Some(offset + read) };
+                if pending_rows.is_empty() {
+                    break;
+                }
+            }
+            _ => break,
         }
-
-        let _ = app.emit("export:progress", ExportProgress { current: rows_exported, total, format: format.clone() });
-        if xlsx_row_limit_hit { break; }
     }
 
     // Finalize JSON.

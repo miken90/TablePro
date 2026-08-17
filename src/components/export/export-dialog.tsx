@@ -4,6 +4,8 @@ import { Download, X, Copy } from 'lucide-react';
 import type { ExportOptions } from '../../ipc/commands';
 import { exportToFile } from '../../ipc/commands';
 import { extractErrorMessage } from '../../ipc/error';
+import { useTranslation } from 'react-i18next';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { ExportProgress } from './export-progress';
 import type { QueryResult } from '../../types/query';
 
@@ -14,6 +16,15 @@ interface ExportDialogProps {
   sql: string;
   result: QueryResult;
   onClose: () => void;
+}
+
+/** The backend's typed refusal for an unordered result too large to hold. */
+function isNeedsOrderingError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { kind?: string }).kind === 'ExportNeedsOrdering'
+  );
 }
 
 const FORMAT_EXTENSIONS: Record<ExportFormat, string> = {
@@ -108,6 +119,8 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
   });
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
+  const storeMaxRows = useSettingsStore((s) => s.settings.storeMaxRows);
   const [copied, setCopied] = useState(false);
 
   const set = useCallback(
@@ -191,10 +204,17 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
       setIsExporting(true);
       await exportToFile(sessionId, sql, format, filePath, options);
     } catch (e) {
-      setError(extractErrorMessage(e));
+      // The backend refuses to page an unordered result larger than the
+      // in-memory limit; that refusal has its own error kind so the message
+      // can be translated and can name the limit the user can change.
+      setError(
+        isNeedsOrderingError(e)
+          ? t('exportDialog.orderByRequired', { rows: storeMaxRows.toLocaleString() })
+          : extractErrorMessage(e),
+      );
       setIsExporting(false);
     }
-  }, [sessionId, sql, format, options]);
+  }, [sessionId, sql, format, options, t, storeMaxRows]);
 
   const handleExportComplete = useCallback(() => {
     setIsExporting(false);

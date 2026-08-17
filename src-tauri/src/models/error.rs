@@ -12,6 +12,11 @@ pub enum AppError {
     NotFound(String),
     NotConnected,
     PluginError(String),
+    /// Export refused: the result is larger than the in-memory limit and the
+    /// query has no top-level `ORDER BY`, so it cannot be read in chunks
+    /// without repeating or skipping rows. The frontend matches on this
+    /// variant to show a translated, actionable message.
+    ExportNeedsOrdering(String),
     Other(String),
 }
 
@@ -24,6 +29,7 @@ impl fmt::Display for AppError {
             AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
             AppError::NotConnected => write!(f, "Not connected"),
             AppError::PluginError(msg) => write!(f, "Plugin error: {msg}"),
+            AppError::ExportNeedsOrdering(msg) => write!(f, "{msg}"),
             AppError::Other(msg) => write!(f, "{msg}"),
         }
     }
@@ -44,6 +50,7 @@ impl AppError {
             AppError::NotFound(msg) => msg.clone(),
             AppError::NotConnected => "Not connected".to_string(),
             AppError::PluginError(msg) => msg.clone(),
+            AppError::ExportNeedsOrdering(msg) => msg.clone(),
             AppError::Other(msg) => msg.clone(),
         }
     }

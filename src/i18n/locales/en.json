@@ -1,5 +1,7 @@
 {
   "toolbar": {
+    "tabNotConnected": "This tab is not connected. Connect its database from the sidebar, or open a new tab on a connected database.",
+    "cancelAmbiguous": "Queries are running in more than one tab. Switch to the tab whose query you want to stop, then press Stop.",
     "importSql": "Import SQL file ({{shortcut}})",
     "importSqlAria": "Import SQL file"
   },
@@ -560,7 +562,8 @@
     "includeCreateTable": "Include CREATE TABLE statement",
     "previewFirst5": "Preview (first 5 rows)",
     "exportComplete": "Export complete",
-    "exporting": "Exporting…"
+    "exporting": "Exporting…",
+    "orderByRequired": "This result is larger than {{rows}} rows. Add an ORDER BY to the query so the export can read it in ordered chunks, or narrow the query with a WHERE clause. The limit is the \"Store max rows\" setting."
   },
   "importDialog": {
     "title": "Import SQL File",

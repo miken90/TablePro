@@ -1,5 +1,7 @@
 {
   "toolbar": {
+    "tabNotConnected": "Thẻ này chưa kết nối. Hãy kết nối cơ sở dữ liệu của nó từ thanh bên, hoặc mở thẻ mới trên một kết nối đang hoạt động.",
+    "cancelAmbiguous": "Có truy vấn đang chạy ở nhiều thẻ. Hãy chuyển sang thẻ chứa truy vấn bạn muốn dừng, rồi bấm Dừng.",
     "importSql": "Nhập tệp SQL ({{shortcut}})",
     "importSqlAria": "Nhập tệp SQL"
   },
@@ -560,7 +562,8 @@
     "includeCreateTable": "Bao gồm câu lệnh CREATE TABLE",
     "previewFirst5": "Xem trước (5 hàng đầu)",
     "exportComplete": "Xuất hoàn tất",
-    "exporting": "Đang xuất…"
+    "exporting": "Đang xuất…",
+    "orderByRequired": "Kết quả này lớn hơn {{rows}} hàng. Hãy thêm ORDER BY vào truy vấn để xuất theo từng khối có thứ tự, hoặc thu hẹp truy vấn bằng mệnh đề WHERE. Giới hạn này là thiết lập \"Số hàng tối đa lưu\"."
   },
   "importDialog": {
     "title": "Nhập tệp SQL",

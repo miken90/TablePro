@@ -13,6 +13,7 @@ pub(crate) mod import_streamer;
 pub mod ddl_generator;
 pub mod schema_alter;
 pub mod browse_ordering;
+pub mod export_paging;
 pub mod sql_generator;
 pub(crate) mod sql_generator_ops;
 pub mod sql_pagination;
