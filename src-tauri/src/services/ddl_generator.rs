@@ -158,6 +158,11 @@ pub fn generate_table_operation(
     };
 
     match operation {
+        // SQLite has no TRUNCATE. A bare `DELETE FROM` is the documented
+        // equivalent — SQLite optimises an unqualified delete into a truncate
+        // internally — so the sidebar action works instead of erroring with a
+        // syntax error the user cannot act on.
+        "truncate" if driver == "sqlite" => Ok(format!("DELETE FROM {qualified}")),
         "truncate" => Ok(format!("TRUNCATE TABLE {qualified}")),
         "delete-all" => Ok(format!("DELETE FROM {qualified}")),
         "drop" => Ok(format!("DROP TABLE {qualified}")),
@@ -286,6 +291,23 @@ mod tests {
             generate_table_operation("drop", "we\"ird", None, "postgres").unwrap(),
             "DROP TABLE \"we\"\"ird\""
         );
+    }
+
+    #[test]
+    fn table_operation_maps_truncate_to_delete_on_sqlite() {
+        // SQLite rejects TRUNCATE outright.
+        assert_eq!(
+            generate_table_operation("truncate", "orders", None, "sqlite").unwrap(),
+            "DELETE FROM \"orders\""
+        );
+        assert_eq!(
+            generate_table_operation("truncate", "orders", None, "sqlite3").unwrap(),
+            "DELETE FROM \"orders\""
+        );
+        // Other engines keep TRUNCATE.
+        assert!(generate_table_operation("truncate", "orders", None, "postgres")
+            .unwrap()
+            .starts_with("TRUNCATE TABLE"));
     }
 
     #[test]
