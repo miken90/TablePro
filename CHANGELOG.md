@@ -12,6 +12,8 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- Table browsing now pages correctly on SQL Server: `fetch_rows` emits `OFFSET … ROWS FETCH NEXT … ROWS ONLY` instead of the `LIMIT`/`OFFSET` that engine rejects, deriving a deterministic ordering from the table's primary key when the grid is unsorted.
+- SQL Server driver no longer panics on non-character columns. Every value was read as a string, which aborted the process (release builds use `panic = "abort"`) as soon as a query returned an `int`, `bit`, date, decimal, GUID, or binary column.
 - Query cancellation now actually stops the running statement on PostgreSQL (out-of-band cancel request) and MySQL/MariaDB (`KILL QUERY` on a second connection, leaving the session intact). Previously Cancel was a no-op on every engine except SQLite.
 - Cancellation state is now owned per editor tab. Running a query in one tab no longer cancels a query still running in another tab, and cancelling a tab cancels only that tab.
 - PostgreSQL: declarative partition children are no longer listed in the sidebar next to their parent table, which previously showed the same rows twice and buried ordinary tables.

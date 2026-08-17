@@ -7,6 +7,7 @@
 mod ddl;
 mod schema;
 mod schema_indexes;
+mod value_format;
 
 use async_trait::async_trait;
 use tiberius::{AuthMethod, Client, Config};
@@ -18,6 +19,8 @@ use driver_common::{
     ColumnInfo, ConnectionConfig, DatabaseDriver, DriverError, ForeignKeyInfo, IndexInfo,
     QueryResult, TableInfo,
 };
+
+use value_format::format_cell;
 
 pub type MssqlConn = Client<Compat<TcpStream>>;
 
@@ -68,7 +71,7 @@ macro_rules! with_client {
 }
 
 /// Run a SQL statement and return `(column_names, rows, affected)`.
-/// All values rendered as strings via `Option<&str>` (matches old behavior).
+/// Values are rendered to display strings by [`value_format::format_cell`].
 #[allow(clippy::type_complexity)]
 pub(crate) async fn execute_simple(
     client: &mut MssqlConn,
@@ -97,9 +100,10 @@ pub(crate) async fn execute_simple(
 
     let mut rows: Vec<Vec<Option<String>>> = Vec::with_capacity(first.len());
     for row in first {
-        let cells: Vec<Option<String>> = (0..col_names.len())
-            .map(|i| row.get::<&str, _>(i).map(|s| s.to_owned()))
-            .collect();
+        // Render from the typed `ColumnData`. Reading every column as `&str`
+        // panics on the first non-character value, and tiberius's `get` aborts
+        // rather than erroring — see `value_format`.
+        let cells: Vec<Option<String>> = row.cells().map(|(_, data)| format_cell(data)).collect();
         rows.push(cells);
     }
     let affected = rows.len() as i64;

@@ -1,12 +1,16 @@
 use serde::Serialize;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{watch, Mutex};
 use uuid::Uuid;
 
+use crate::drivers::DatabaseDriver;
 use crate::models::{AppError, QueryResult};
-use crate::services::ConnectionManager;
+use crate::services::sql_generator::Dialect;
+use crate::services::sql_pagination::paginate_owned_query;
 use crate::services::sql_quoting::quote_identifier;
+use crate::services::ConnectionManager;
 
 /// Maximum rows returned by `execute_query` before truncation.
 ///
@@ -276,14 +280,59 @@ pub async fn fetch_rows(
         _ => String::new(),
     };
 
-    let order_part = match &order_by {
-        Some(o) if !o.trim().is_empty() => format!(" ORDER BY {o}"),
-        _ => String::new(),
+    let dialect = Dialect::from_db_type(&driver_type);
+    let tail = match paginate_owned_query(order_by.as_deref(), limit, offset, dialect) {
+        Some(tail) => tail,
+        None => {
+            // SQL Server pages with OFFSET/FETCH, which is only legal after an
+            // ORDER BY, and the grid browses unsorted by default. Fall back to
+            // a deterministic ordering derived from the table itself rather
+            // than an arbitrary one that would let pages skip or repeat rows.
+            let ordering = deterministic_ordering(&driver, &table, schema.as_deref(), &driver_type)
+                .await?;
+            paginate_owned_query(Some(&ordering), limit, offset, dialect).ok_or_else(|| {
+                AppError::DatabaseError(format!(
+                    "Cannot page through '{table}' without a stable ordering"
+                ))
+            })?
+        }
     };
 
-    let sql =
-        format!("SELECT * FROM {qualified}{where_part}{order_part} LIMIT {limit} OFFSET {offset}");
+    let sql = format!("SELECT * FROM {qualified}{where_part}{tail}");
     driver.execute(&sql).await
+}
+
+/// Build an ordering that makes paginated browsing of `table` stable.
+///
+/// Prefers the primary key. Falling back to every column keeps pagination
+/// stable in content terms: rows can only tie when they are identical in every
+/// column, and swapping two identical rows between pages is unobservable.
+async fn deterministic_ordering(
+    driver: &Arc<dyn DatabaseDriver>,
+    table: &str,
+    schema: Option<&str>,
+    driver_type: &str,
+) -> Result<String, AppError> {
+    let columns = driver.fetch_columns(table, schema).await?;
+    if columns.is_empty() {
+        return Err(AppError::DatabaseError(format!(
+            "No columns found for '{table}'; cannot order rows for pagination"
+        )));
+    }
+
+    let primary_keys: Vec<&crate::models::ColumnInfo> =
+        columns.iter().filter(|c| c.is_primary_key).collect();
+    let ordering_columns = if primary_keys.is_empty() {
+        columns.iter().collect::<Vec<_>>()
+    } else {
+        primary_keys
+    };
+
+    Ok(ordering_columns
+        .iter()
+        .map(|c| quote_identifier(&c.name, driver_type))
+        .collect::<Vec<_>>()
+        .join(", "))
 }
 
 /// Return total row count for a table.
