@@ -89,6 +89,10 @@ interface LayoutState {
   closeStructure: () => void;
   setFilterColumns: (cols: ColumnInfo[]) => void;
   setSelectedRowIndex: (index: number | null) => void;
+
+  // Grid row selection count (for contextual bar delete button)
+  selectedRowCount: number;
+  setSelectedRowCount: (count: number) => void;
 }
 
 export const useLayoutStore = create<LayoutState>()(
@@ -167,6 +171,8 @@ export const useLayoutStore = create<LayoutState>()(
       closeStructure: () => set({ structureTarget: null }),
       setFilterColumns: (cols) => set({ filterColumns: cols }),
       setSelectedRowIndex: (index) => set({ selectedRowIndex: index }),
+      selectedRowCount: 0,
+      setSelectedRowCount: (count) => set({ selectedRowCount: count }),
     }),
     {
       name: "tablepro-layout",

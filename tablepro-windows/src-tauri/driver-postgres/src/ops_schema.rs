@@ -2,6 +2,7 @@
 
 use driver_common::{ColumnInfo, DriverError, ForeignKeyInfo, IndexInfo, TableInfo};
 use tokio_postgres::Client;
+use crate::pg_error::pg_query_error;
 
 pub async fn fetch_tables(client: &Client) -> Result<Vec<TableInfo>, DriverError> {
     let sql = "SELECT table_name, table_type, table_schema \
@@ -11,7 +12,7 @@ pub async fn fetch_tables(client: &Client) -> Result<Vec<TableInfo>, DriverError
     let rows = client
         .query(sql, &[])
         .await
-        .map_err(|e| DriverError::Query(e.to_string()))?;
+        .map_err(pg_query_error)?;
 
     Ok(rows
         .iter()
@@ -54,7 +55,7 @@ pub async fn fetch_columns(
     let rows = client
         .query(sql.as_str(), &[])
         .await
-        .map_err(|e| DriverError::Query(e.to_string()))?;
+        .map_err(pg_query_error)?;
 
     Ok(rows
         .iter()
@@ -101,7 +102,7 @@ pub async fn fetch_indexes(
     let rows = client
         .query(sql.as_str(), &[])
         .await
-        .map_err(|e| DriverError::Query(e.to_string()))?;
+        .map_err(pg_query_error)?;
 
     Ok(rows
         .iter()
@@ -139,7 +140,7 @@ pub async fn fetch_foreign_keys(
     let rows = client
         .query(sql.as_str(), &[])
         .await
-        .map_err(|e| DriverError::Query(e.to_string()))?;
+        .map_err(pg_query_error)?;
 
     Ok(rows
         .iter()
@@ -157,7 +158,7 @@ pub async fn fetch_databases(client: &Client) -> Result<Vec<String>, DriverError
     let rows = client
         .query(sql, &[])
         .await
-        .map_err(|e| DriverError::Query(e.to_string()))?;
+        .map_err(pg_query_error)?;
 
     Ok(rows
         .iter()
@@ -209,7 +210,7 @@ pub async fn fetch_ddl(
     let cols_rows = client
         .query(cols_sql.as_str(), &[])
         .await
-        .map_err(|e| DriverError::Query(e.to_string()))?;
+        .map_err(pg_query_error)?;
     let cons_rows = client
         .query(cons_sql.as_str(), &[])
         .await

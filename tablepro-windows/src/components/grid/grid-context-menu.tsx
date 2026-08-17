@@ -22,6 +22,8 @@ interface GridContextMenuProps {
   onBulkInsert?: () => void;
   onBulkUpdate?: () => void;
   onBulkDelete?: () => void;
+  /** Number of selected rows (for label display). */
+  selectedRowCount?: number;
 }
 
 function Item({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
@@ -50,7 +52,7 @@ export function GridContextMenu({
   onCopyAsInsert, onCopyAsUpdate, onCopyRowTsv, onCopyCell, onCopyAsJson,
   isTableMode, onEditValue, onSetNull, onDuplicateRow, onDeleteRow,
   isDeletedRow, isPkColumn, selectionMode, onCopySelection,
-  onBulkInsert, onBulkUpdate, onBulkDelete,
+  onBulkInsert, onBulkUpdate, onBulkDelete, selectedRowCount,
 }: GridContextMenuProps) {
   const { t } = useTranslation();
   return (
@@ -88,7 +90,7 @@ export function GridContextMenu({
               <Item label="Duplicate Row" onClick={onDuplicateRow} disabled={isDeletedRow} />
             )}
             {onDeleteRow && (
-              <Item label="Delete Row" onClick={onDeleteRow} />
+              <Item label={(selectedRowCount ?? 0) > 1 ? `Delete ${selectedRowCount} Rows` : 'Delete Row'} onClick={onDeleteRow} />
             )}
             {(onBulkInsert || onBulkUpdate || onBulkDelete) && (
               <>

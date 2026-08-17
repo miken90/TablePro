@@ -47,6 +47,7 @@ export function DataGrid({
   onSelectAll,
   scrollRef,
   sessionId,
+  isTableMode,
 }: DataGridProps) {
   const nullDisplay = useSettingsStore(s => s.settings.nullDisplay);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -98,9 +99,18 @@ export function DataGrid({
   }, [isDragging, onUpdateDrag]);
 
   const handleRowHeaderClick = useCallback((rowId: number, e: React.MouseEvent) => {
-    if (e.shiftKey) { onRowSelect?.(rowId, 'range'); } else { onRowHeaderClick?.(rowId); }
+    if (e.shiftKey) {
+      onRowSelect?.(rowId, 'range');
+    } else if (e.ctrlKey || e.metaKey) {
+      onRowSelect?.(rowId, 'toggle');
+    } else if (isTableMode) {
+      // In table mode, checkbox click always toggles
+      onRowSelect?.(rowId, 'toggle');
+    } else {
+      onRowHeaderClick?.(rowId);
+    }
     parentRef.current?.focus();
-  }, [onRowSelect, onRowHeaderClick]);
+  }, [onRowSelect, onRowHeaderClick, isTableMode]);
 
   const handleCellDblClick = useCallback((rowId: number, colIdx: number) => {
     onCellDoubleClick?.(rowId, colIdx);
@@ -129,8 +139,25 @@ export function DataGrid({
         <div style={{ minWidth: totalContentWidth }}>
           {/* Sticky header */}
           <div className="sticky top-0 z-20 flex border-b border-border-subtle bg-surface">
-            <div className="w-10 flex-shrink-0 px-1 py-1.5 text-center text-text-muted text-xs border-r border-border-subtle select-none">
-              #
+            <div
+              className="w-10 flex-shrink-0 px-1 py-1.5 flex items-center justify-center text-text-muted text-xs border-r border-border-subtle select-none"
+            >
+              {isTableMode ? (
+                <input
+                  type="checkbox"
+                  checked={selectedRows.size > 0 && selectedRows.size === rows.length}
+                  ref={(el) => { if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < rows.length; }}
+                  onChange={() => {
+                    if (selectedRows.size === rows.length) onClearSelection?.();
+                    else onSelectAll?.();
+                  }}
+                  className="w-3.5 h-3.5 accent-accent-blue cursor-pointer"
+                  tabIndex={-1}
+                  title="Select all rows"
+                />
+              ) : (
+                '#'
+              )}
             </div>
             <GridHeader
               columns={visibleColumns}
@@ -192,6 +219,7 @@ export function DataGrid({
                   enumValuesByColumn={enumValuesByColumn}
                   onFkNavigate={onFkNavigate}
                   sessionId={sessionId}
+                  isTableMode={isTableMode}
                 />
               );
             })}

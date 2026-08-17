@@ -189,10 +189,11 @@ pub fn generate_update_sql(
 
     let dialect = Dialect::from_db_type(driver_type);
     rows.iter()
-        .map(|row| {
+        .filter_map(|row| {
             let set_clause = columns
                 .iter()
                 .enumerate()
+                .filter(|(_, col)| !primary_keys.contains(col))
                 .map(|(idx, col)| {
                     let value = row.get(idx).unwrap_or(&Value::Null);
                     format!(
@@ -203,6 +204,10 @@ pub fn generate_update_sql(
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
+
+            if set_clause.is_empty() {
+                return None;
+            }
 
             let where_clause = primary_keys
                 .iter()
@@ -220,9 +225,9 @@ pub fn generate_update_sql(
                 .join(" AND ");
 
             if where_clause.is_empty() {
-                format!("UPDATE {quoted_table} SET {set_clause};")
+                Some(format!("UPDATE {quoted_table} SET {set_clause};"))
             } else {
-                format!("UPDATE {quoted_table} SET {set_clause} WHERE {where_clause};")
+                Some(format!("UPDATE {quoted_table} SET {set_clause} WHERE {where_clause};"))
             }
         })
         .collect::<Vec<_>>()
@@ -570,7 +575,7 @@ mod tests {
         );
         assert_eq!(
             sql,
-            "UPDATE \"public\".\"users\" SET \"id\"=7, \"name\"='Neo' WHERE \"id\"=7;"
+            "UPDATE \"public\".\"users\" SET \"name\"='Neo' WHERE \"id\"=7;"
         );
     }
 
@@ -754,5 +759,36 @@ mod tests {
             "postgres",
         );
         assert!(sql.contains("VALUES (TRUE)"));
+    }
+
+    #[test]
+    fn test_generate_update_sql_excludes_primary_keys() {
+        let sql = generate_update_sql(
+            "users",
+            None,
+            &["id".to_string(), "name".to_string(), "age".to_string()],
+            &[vec![Value::from(1), Value::from("Bob"), Value::from(25)]],
+            &["id".to_string()],
+            "postgres",
+        );
+        // "id" is primary key, so it should not be in SET clause, but should be in WHERE clause
+        assert_eq!(
+            sql,
+            "UPDATE \"users\" SET \"name\"='Bob', \"age\"=25 WHERE \"id\"=1;"
+        );
+    }
+
+    #[test]
+    fn test_generate_update_sql_empty_set_skipped() {
+        let sql = generate_update_sql(
+            "users",
+            None,
+            &["id".to_string()],
+            &[vec![Value::from(1)]],
+            &["id".to_string()],
+            "postgres",
+        );
+        // No non-primary key columns, so it should generate an empty string
+        assert_eq!(sql, "");
     }
 }

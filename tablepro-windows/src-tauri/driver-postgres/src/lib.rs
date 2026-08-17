@@ -6,6 +6,7 @@
 
 mod ops_query;
 mod ops_schema;
+mod pg_error;
 
 use async_trait::async_trait;
 use tokio::sync::Mutex;
@@ -75,7 +76,7 @@ impl DatabaseDriver for PostgresDriver {
             let (client, conn) = pg_cfg
                 .connect(tokio_postgres::NoTls)
                 .await
-                .map_err(|e| DriverError::Connection(e.to_string()))?;
+                .map_err(pg_error::pg_conn_error)?;
             rt.spawn(async move {
                 let _ = conn.await;
             });
@@ -93,7 +94,7 @@ impl DatabaseDriver for PostgresDriver {
             let (client, conn) = pg_cfg
                 .connect(connector)
                 .await
-                .map_err(|e| DriverError::Connection(e.to_string()))?;
+                .map_err(pg_error::pg_conn_error)?;
             rt.spawn(async move {
                 let _ = conn.await;
             });
@@ -116,7 +117,7 @@ impl DatabaseDriver for PostgresDriver {
         with_client!(self, c => c.simple_query("SELECT 1")
             .await
             .map(|_| ())
-            .map_err(|e| DriverError::Query(e.to_string())))
+            .map_err(pg_error::pg_query_error))
     }
 
     async fn execute(&self, query: &str) -> Result<QueryResult, DriverError> {

@@ -14,6 +14,7 @@ interface CellEditorProps {
   autoFocus?: boolean;
   sessionId?: string;
   fkRef?: FkRef;
+  trigger?: 'click' | 'keyboard';
 }
 
 function formatToHtml5(val: string | null, type: 'date' | 'time' | 'datetime-local'): string {
@@ -59,6 +60,7 @@ export function CellEditor({
   autoFocus = true,
   sessionId,
   fkRef,
+  trigger,
 }: CellEditorProps) {
   const category = categorizeColumn(typeName);
   const isDateTime = typeName.toLowerCase().includes("timestamp") || typeName.toLowerCase().includes("datetime");
@@ -79,7 +81,7 @@ export function CellEditor({
   useEffect(() => {
     if (autoFocus && inputRef.current) {
       inputRef.current.focus();
-      if ("select" in inputRef.current && typeof inputRef.current.select === "function") {
+      if (trigger !== 'click' && "select" in inputRef.current && typeof inputRef.current.select === "function") {
         inputRef.current.select();
       }
       if (category === "date" && "showPicker" in inputRef.current) {
@@ -90,7 +92,7 @@ export function CellEditor({
         }
       }
     }
-  }, [autoFocus, category]);
+  }, [autoFocus, category, trigger]);
 
   const handleCommit = useCallback(() => {
     if (committedRef.current) return;

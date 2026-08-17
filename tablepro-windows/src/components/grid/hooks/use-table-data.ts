@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { SortingState } from '@tanstack/react-table';
 import { useSchemaStore } from '../../../stores/schemaStore';
 import { useQueryLogStore } from '../../../stores/queryLogStore';
+import { useTableDataStore, DEFAULT_TAB_DATA } from '../../../stores/table-data-store';
 import {
   fetchApproximateCount as fetchApproxCount,
   fetchCountFiltered,
@@ -17,6 +18,7 @@ function buildOrderByClause(sorting: SortingState): string | null {
 }
 
 interface UseTableDataProps {
+  tabId?: string;
   tableName?: string;
   schema?: string | null;
   sessionId?: string;
@@ -34,9 +36,9 @@ export interface UseTableDataReturn {
   sorting: SortingState;
   enumValuesByColumn: Record<string, string[]>;
   fkMap: Record<string, Record<string, import('../../../stores/schemaStore').FkRef>>;
-  setPage: React.Dispatch<React.SetStateAction<number>>;
-  setPageSize: React.Dispatch<React.SetStateAction<number>>;
-  setSorting: React.Dispatch<React.SetStateAction<SortingState>>;
+  setPage: (value: React.SetStateAction<number>) => void;
+  setPageSize: (value: React.SetStateAction<number>) => void;
+  setSorting: (value: React.SetStateAction<SortingState>) => void;
   fetchTableData: (
     sid: string, tbl: string, sch: string | null,
     pg: number, ps: number, where: string | null, sort: SortingState,
@@ -45,22 +47,96 @@ export interface UseTableDataReturn {
 }
 
 export function useTableData({
-  tableName, schema, sessionId, activeWhereClause,
+  tabId, tableName, schema, sessionId, activeWhereClause,
 }: UseTableDataProps): UseTableDataReturn {
-  const [tableResult, setTableResult] = useState<QueryResult | null>(null);
-  const [totalCount, setTotalCount] = useState(0);
-  const [approximateCount, setApproximateCount] = useState<number | null>(null);
+  const activeTabId = tabId || 'default';
+  const tabData = useTableDataStore((s) => s.tabs[activeTabId]) || DEFAULT_TAB_DATA;
+  const {
+    tableResult, totalCount, approximateCount, page, pageSize, sorting,
+    enumValuesByColumn, fetchError,
+  } = tabData;
+
   const [isFetching, setIsFetching] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [enumValuesByColumn, setEnumValuesByColumn] = useState<Record<string, string[]>>({});
   const fetchSeqRef = useRef(0);
 
   const isTableMode = !!tableName && !!sessionId;
   const fkMap = useSchemaStore((s) => s.fkMap);
   const fetchForeignKeysForTable = useSchemaStore((s) => s.fetchForeignKeysForTable);
+
+  const setPage = useCallback((valOrFunc: React.SetStateAction<number>) => {
+    const current = useTableDataStore.getState().getTabData(activeTabId).page;
+    const next = typeof valOrFunc === 'function' ? valOrFunc(current) : valOrFunc;
+    useTableDataStore.getState().setTabData(activeTabId, { page: next });
+  }, [activeTabId]);
+
+  const setPageSize = useCallback((valOrFunc: React.SetStateAction<number>) => {
+    const current = useTableDataStore.getState().getTabData(activeTabId).pageSize;
+    const next = typeof valOrFunc === 'function' ? valOrFunc(current) : valOrFunc;
+    useTableDataStore.getState().setTabData(activeTabId, { pageSize: next });
+  }, [activeTabId]);
+
+  const setSorting = useCallback((valOrFunc: React.SetStateAction<SortingState>) => {
+    const current = useTableDataStore.getState().getTabData(activeTabId).sorting;
+    const next = typeof valOrFunc === 'function' ? (valOrFunc as (prev: SortingState) => SortingState)(current) : valOrFunc;
+    useTableDataStore.getState().setTabData(activeTabId, { sorting: next });
+  }, [activeTabId]);
+
+  const setEnumValuesByColumn = useCallback((valOrFunc: React.SetStateAction<Record<string, string[]>>) => {
+    const current = useTableDataStore.getState().getTabData(activeTabId).enumValuesByColumn;
+    const next = typeof valOrFunc === 'function' ? valOrFunc(current) : valOrFunc;
+    useTableDataStore.getState().setTabData(activeTabId, { enumValuesByColumn: next });
+  }, [activeTabId]);
+
+  const setTableResult = useCallback((val: QueryResult | null) => {
+    useTableDataStore.getState().setTabData(activeTabId, { tableResult: val });
+  }, [activeTabId]);
+
+  const setTotalCount = useCallback((val: number) => {
+    useTableDataStore.getState().setTabData(activeTabId, { totalCount: val });
+  }, [activeTabId]);
+
+  const setApproximateCount = useCallback((val: number | null) => {
+    useTableDataStore.getState().setTabData(activeTabId, { approximateCount: val });
+  }, [activeTabId]);
+
+  const setFetchError = useCallback((val: string | null) => {
+    useTableDataStore.getState().setTabData(activeTabId, { fetchError: val });
+  }, [activeTabId]);
+
+  // Reset/initialize tab state when tableName or schema changes for this tab ID
+  useEffect(() => {
+    if (!activeTabId || !tableName) return;
+    const cached = useTableDataStore.getState().getTabData(activeTabId);
+    if (cached.tableName !== tableName || cached.schema !== schema) {
+      useTableDataStore.getState().setTabData(activeTabId, {
+        tableName,
+        schema: schema ?? null,
+        tableResult: null,
+        totalCount: 0,
+        approximateCount: null,
+        page: 1,
+        pageSize: 100,
+        sorting: [],
+        enumValuesByColumn: {},
+        fetchedKey: null,
+        fetchError: null,
+      });
+    }
+  }, [activeTabId, tableName, schema]);
+
+  // Reset page when filter changes for this tab ID
+  useEffect(() => {
+    if (!activeTabId) return;
+    const cached = useTableDataStore.getState().getTabData(activeTabId);
+    const filterStr = activeWhereClause ?? null;
+    if (cached.activeWhereClause !== filterStr) {
+      useTableDataStore.getState().setTabData(activeTabId, {
+        activeWhereClause: filterStr,
+        page: 1,
+        fetchedKey: null, // Clear key to trigger reload
+      });
+    }
+  }, [activeTabId, activeWhereClause]);
 
   const fetchTableData = useCallback(async (
     sid: string, tbl: string, sch: string | null,
@@ -86,6 +162,11 @@ export function useTableData({
       setTableResult(rows);
       setTotalCount(typeof count === 'number' ? count : 0);
       setApproximateCount(null);
+
+      // Cache the key representing successful fetch parameters
+      const currentKey = `${sid}:${sch}:${tbl}:${pg}:${ps}:${where ?? ''}:${JSON.stringify(sort)}`;
+      useTableDataStore.getState().setTabData(activeTabId, { fetchedKey: currentKey });
+
       useQueryLogStore.getState().update(logId, { status: 'success', durationMs: Date.now() - startMs, rowCount: rows.rows.length });
     } catch (err) {
       if (seq !== fetchSeqRef.current) return;
@@ -97,9 +178,9 @@ export function useTableData({
     } finally {
       if (seq === fetchSeqRef.current) setIsFetching(false);
     }
-  }, []);
+  }, [activeTabId, setTableResult, setTotalCount, setApproximateCount, setFetchError]);
 
-  // Fetch table data when dependencies change
+  // Fetch table data when dependencies change, bypassing if cached
   useEffect(() => {
     if (!isTableMode) {
       setTableResult(null);
@@ -107,25 +188,15 @@ export function useTableData({
       setApproximateCount(null);
       return;
     }
-    fetchTableData(sessionId!, tableName!, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
-  }, [isTableMode, sessionId, tableName, schema, page, pageSize, activeWhereClause, sorting, fetchTableData]);
 
-  // Reset state when table changes
-  const prevTableRef = useRef(tableName);
-  const prevFilterRef = useRef(activeWhereClause);
-  useEffect(() => {
-    if (prevTableRef.current !== tableName) {
-      setPage(1);
-      setSorting([]);
-      setApproximateCount(null);
-      setEnumValuesByColumn({});
-      prevTableRef.current = tableName;
+    const currentKey = `${sessionId}:${schema}:${tableName}:${page}:${pageSize}:${activeWhereClause ?? ''}:${JSON.stringify(sorting)}`;
+    const cachedKey = useTableDataStore.getState().getTabData(activeTabId).fetchedKey;
+    if (currentKey === cachedKey) {
+      return; // Skip auto-reload
     }
-    if (prevFilterRef.current !== activeWhereClause) {
-      setPage(1);
-      prevFilterRef.current = activeWhereClause;
-    }
-  }, [tableName, activeWhereClause]);
+
+    fetchTableData(sessionId!, tableName!, schema ?? null, page, pageSize, activeWhereClause ?? null, sorting);
+  }, [isTableMode, sessionId, tableName, schema, page, pageSize, activeWhereClause, sorting, fetchTableData, activeTabId, setTableResult, setTotalCount, setApproximateCount]);
 
   // Fetch FK info
   useEffect(() => {
@@ -145,7 +216,7 @@ export function useTableData({
         if (!cancelled) setApproximateCount(null);
       });
     return () => { cancelled = true; };
-  }, [isTableMode, sessionId, tableName, schema]);
+  }, [isTableMode, sessionId, tableName, schema, setApproximateCount]);
 
   // Fetch enum values
   useEffect(() => {
@@ -178,14 +249,14 @@ export function useTableData({
       setEnumValuesByColumn(next);
     })();
     return () => { cancelled = true; };
-  }, [isTableMode, sessionId, tableName, schema, tableResult]);
+  }, [isTableMode, sessionId, tableName, schema, tableResult, setEnumValuesByColumn]);
 
   const resetTableState = useCallback(() => {
     setPage(1);
     setSorting([]);
     setApproximateCount(null);
     setEnumValuesByColumn({});
-  }, []);
+  }, [setPage, setSorting, setApproximateCount, setEnumValuesByColumn]);
 
   return {
     tableResult,

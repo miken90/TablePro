@@ -2,6 +2,7 @@
 
 use driver_common::{ColumnInfo, DriverError, QueryResult};
 use tokio_postgres::{Client, SimpleQueryMessage};
+use crate::pg_error::pg_query_error;
 
 /// Check if SQL is a single statement (no semicolons outside quotes/comments).
 /// Conservative: returns false if uncertain — caller falls back to simple_query.
@@ -131,7 +132,7 @@ async fn execute_extended(client: &Client, sql: &str) -> Result<QueryResult, Dri
         let n = client
             .execute(&stmt, &[])
             .await
-            .map_err(|e| DriverError::Query(e.to_string()))?;
+            .map_err(pg_query_error)?;
         return Ok(build_result(vec![], vec![], n as i64));
     }
 
@@ -139,7 +140,7 @@ async fn execute_extended(client: &Client, sql: &str) -> Result<QueryResult, Dri
     let messages = client
         .simple_query(sql)
         .await
-        .map_err(|e| DriverError::Query(e.to_string()))?;
+        .map_err(pg_query_error)?;
 
     let columns: Vec<(String, String, bool, bool)> = typed_columns
         .into_iter()
@@ -165,7 +166,7 @@ async fn execute_simple(client: &Client, sql: &str) -> Result<QueryResult, Drive
     let messages = client
         .simple_query(sql)
         .await
-        .map_err(|e| DriverError::Query(e.to_string()))?;
+        .map_err(pg_query_error)?;
 
     let mut columns: Vec<(String, String, bool, bool)> = vec![];
     let mut data_rows: Vec<Vec<Option<String>>> = vec![];

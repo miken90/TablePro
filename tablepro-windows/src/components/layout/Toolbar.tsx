@@ -73,10 +73,15 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
     disconnected: "bg-zinc-400",
   };
 
-  /** Extract the current statement at cursor from the editor, or fall back to full queryText. */
+  /** Extract the current statement at cursor or selected text from the editor, or fall back to full queryText. */
   const getCurrentStatement = (): string => {
     const view = editorViewRef.current;
     if (!view) return queryText;
+    const selection = view.state.sliceDoc(
+      view.state.selection.main.from,
+      view.state.selection.main.to
+    ).trim();
+    if (selection) return selection;
     const doc = view.state.doc.toString();
     const cursor = view.state.selection.main.head;
     const stmt = statementAtCursor(doc, cursor);

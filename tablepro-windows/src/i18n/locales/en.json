@@ -506,7 +506,9 @@
     "openTable": "Open Table",
     "copyTableName": "Copy Table Name",
     "copySelect": "Copy SELECT *",
-    "viewStructure": "View Structure"
+    "viewStructure": "View Structure",
+    "refreshTables": "Refresh Tables",
+    "refreshDatabases": "Refresh Databases"
   },
   "history": {
     "title": "Query History",
