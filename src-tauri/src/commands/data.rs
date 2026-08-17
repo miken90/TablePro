@@ -30,6 +30,22 @@ pub struct SaveResult {
     pub statements_executed: usize,
 }
 
+/// `(BEGIN, COMMIT, ROLLBACK)` for a dialect.
+///
+/// All drivers hold a single connection behind a mutex, so these land on the
+/// same session as the statements they wrap.
+fn transaction_keywords(dialect: Dialect) -> (&'static str, &'static str, &'static str) {
+    match dialect {
+        Dialect::Mssql => (
+            "BEGIN TRANSACTION",
+            "COMMIT TRANSACTION",
+            "ROLLBACK TRANSACTION",
+        ),
+        Dialect::MySql => ("START TRANSACTION", "COMMIT", "ROLLBACK"),
+        _ => ("BEGIN", "COMMIT", "ROLLBACK"),
+    }
+}
+
 #[tauri::command]
 pub async fn save_changes(
     session_id: String,
@@ -57,6 +73,19 @@ pub async fn save_changes(
     let started_at = Instant::now();
     let mut executed_statements: Vec<&str> = Vec::with_capacity(statements.len());
 
+    // A grid save is one edit as far as the user is concerned. Executed one
+    // statement at a time in autocommit, a bulk delete that failed on row 30
+    // left the first 29 rows permanently gone with no way back.
+    //
+    // Engines that report `supports_transactions() == false` (MongoDB, Redis)
+    // keep the sequential behavior — they have no SQL transaction to open, and
+    // the grid save path does not reach them.
+    let transactional = statements.len() > 1 && driver.supports_transactions();
+    let (begin, commit, rollback) = transaction_keywords(dialect);
+    if transactional {
+        driver.execute(begin).await?;
+    }
+
     for sql in &statements {
         tracing::info!(session_id = %session_id, "save_changes: {}", sql);
         executed_statements.push(sql.as_str());
@@ -66,6 +95,16 @@ pub async fn save_changes(
                 total_affected += result.affected_rows;
             }
             Err(error) => {
+                if transactional {
+                    if let Err(rollback_error) = driver.execute(rollback).await {
+                        // Nothing better to do: report the original failure,
+                        // but make the failed rollback visible.
+                        tracing::error!(
+                            session_id = %session_id,
+                            "save_changes rollback failed: {}", rollback_error
+                        );
+                    }
+                }
                 let elapsed_ms = started_at.elapsed().as_millis() as i64;
                 let history_sql = executed_statements.join(";\n");
                 let store = history_store.lock().await;
@@ -81,6 +120,10 @@ pub async fn save_changes(
                 return Err(error);
             }
         }
+    }
+
+    if transactional {
+        driver.execute(commit).await?;
     }
 
     let elapsed_ms = started_at.elapsed().as_millis() as i64;
@@ -141,4 +184,32 @@ pub async fn generate_row_sql(
     };
 
     Ok(sql)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transaction_keywords;
+    use crate::services::sql_generator::Dialect;
+
+    #[test]
+    fn transaction_keywords_match_each_engine() {
+        assert_eq!(
+            transaction_keywords(Dialect::Postgres),
+            ("BEGIN", "COMMIT", "ROLLBACK")
+        );
+        assert_eq!(
+            transaction_keywords(Dialect::Sqlite),
+            ("BEGIN", "COMMIT", "ROLLBACK")
+        );
+        // MySQL's BEGIN is a label statement in stored programs; START
+        // TRANSACTION is the unambiguous spelling.
+        assert_eq!(
+            transaction_keywords(Dialect::MySql),
+            ("START TRANSACTION", "COMMIT", "ROLLBACK")
+        );
+        assert_eq!(
+            transaction_keywords(Dialect::Mssql),
+            ("BEGIN TRANSACTION", "COMMIT TRANSACTION", "ROLLBACK TRANSACTION")
+        );
+    }
 }
