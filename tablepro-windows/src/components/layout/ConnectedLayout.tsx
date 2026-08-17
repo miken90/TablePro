@@ -1,5 +1,5 @@
 import type React from "react";
-import { lazy, Suspense, type MutableRefObject } from "react";
+import { lazy, Suspense, useRef, type MutableRefObject } from "react";
 import { Sidebar } from "./Sidebar";
 import { EditorTabBar } from "../editor/EditorTabBar";
 import { SqlEditor } from "../editor/sql-editor";
@@ -53,6 +53,9 @@ export function ConnectedLayout({
   addRowRef,
 }: ConnectedLayoutProps) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
+  const deleteSelectedRef = useRef<(() => void) | null>(null);
+  const clearSelectionRef = useRef<(() => void) | null>(null);
+  const selectedRowCount = useLayoutStore((s) => s.selectedRowCount);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
   const connections = useConnectionStore((s) => s.connections);
   const activeTabId = useEditorStore((s) => s.activeTabId);
@@ -168,6 +171,9 @@ export function ConnectedLayout({
                 columns={filterColumns}
                 onSave={isDocumentDb ? () => {} : () => requestSaveRef.current?.()}
                 onAddRow={isDocumentDb ? undefined : () => addRowRef.current?.()}
+                selectedRowCount={selectedRowCount}
+                onDeleteSelected={isDocumentDb ? undefined : () => deleteSelectedRef.current?.()}
+                onDeselectAll={() => clearSelectionRef.current?.()}
               />
               <div className="flex-1 overflow-hidden">
                 <ResultPanel
@@ -182,6 +188,8 @@ export function ConnectedLayout({
                   onSaveRef={pendingSaveRef}
                   onRequestSaveRef={requestSaveRef}
                   onAddRowRef={addRowRef}
+                  onDeleteSelectedRef={deleteSelectedRef}
+                  onClearSelectionRef={clearSelectionRef}
                   hideChangeToolbar
                 />
               </div>

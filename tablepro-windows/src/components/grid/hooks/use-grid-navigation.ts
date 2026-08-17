@@ -9,7 +9,7 @@ interface UseGridNavigationProps {
   displayRowCount: number;
   visibleColCount: number;
   tableName?: string;
-  setEditingCell: React.Dispatch<React.SetStateAction<{ rowIdx: number; colIdx: number } | null>>;
+  setEditingCell: React.Dispatch<React.SetStateAction<{ rowIdx: number; colIdx: number; trigger?: 'click' | 'keyboard' } | null>>;
 }
 
 export interface UseGridNavigationReturn {
@@ -115,10 +115,9 @@ export function useGridNavigation({
       return { active: coord, anchor: coord, extent: coord, mode: 'cell' };
     });
   }, [getDisplayIdx, getLogicalRowId, displayRowCount, setSelection]);
-
   const startEditingActive = useCallback(() => {
     if (!selection.active || !tableName) return;
-    setEditingCell({ rowIdx: selection.active.row, colIdx: selection.active.col });
+    setEditingCell({ rowIdx: selection.active.row, colIdx: selection.active.col, trigger: 'keyboard' });
   }, [selection.active, tableName, setEditingCell]);
 
   // --- Range/extend selection ---

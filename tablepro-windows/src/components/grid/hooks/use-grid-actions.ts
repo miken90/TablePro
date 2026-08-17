@@ -29,7 +29,7 @@ export interface UseGridActionsReturn extends UseGridNavigationReturn, UseGridCl
   selectRow: (rowId: number, colCount: number) => void;
   clearSelection: () => void;
   handleRowSelect: (rowIdx: number, mode: 'single' | 'range' | 'toggle') => void;
-  editingCell: { rowIdx: number; colIdx: number } | null;
+  editingCell: { rowIdx: number; colIdx: number; trigger?: 'click' | 'keyboard' } | null;
   resetSelection: () => void;
   querySearchTerm: string;
   queryFilteredIndices: number[] | null;
@@ -48,7 +48,7 @@ export function useGridActions({
   getEffectiveCellValue, onRowSelectProp,
 }: UseGridActionsProps): UseGridActionsReturn {
   const [selection, setSelection] = useState<GridSelection>(EMPTY_SELECTION);
-  const [editingCell, setEditingCell] = useState<{ rowIdx: number; colIdx: number } | null>(null);
+  const [editingCell, setEditingCell] = useState<{ rowIdx: number; colIdx: number; trigger?: 'click' | 'keyboard' } | null>(null);
   const [showExport, setShowExport] = useState(false);
 
   const setQuickSearch = useFilterStore((s) => s.setQuickSearch);
@@ -154,18 +154,44 @@ export function useGridActions({
   const clearSelection = useCallback(() => setSelection(EMPTY_SELECTION), []);
 
   const handleRowSelect = useCallback((rowIdx: number, mode: 'single' | 'range' | 'toggle') => {
-    if (mode === 'single' || mode === 'toggle') {
+    if (mode === 'single') {
       selectRow(rowIdx, visibleColCount);
+      // Clear extra selections on plain click
+      setSelection(prev => ({ ...prev, extraSelectedRows: undefined }));
       onRowSelectProp?.(rowIdx);
+    } else if (mode === 'toggle') {
+      // Ctrl+Click: toggle row in/out of extraSelectedRows
+      setSelection(prev => {
+        const extras = new Set(prev.extraSelectedRows ?? []);
+        if (extras.has(rowIdx)) {
+          extras.delete(rowIdx);
+        } else {
+          extras.add(rowIdx);
+        }
+        // Also add any currently-rect-selected rows into extras so they persist
+        if (prev.mode === 'row' && prev.anchor && prev.extent) {
+          const a = getDisplayIdx(prev.anchor.row);
+          const b = getDisplayIdx(prev.extent.row);
+          for (let i = Math.min(a, b); i <= Math.max(a, b); i++) {
+            extras.add(getLogicalRowId(i));
+          }
+        } else if (prev.active) {
+          extras.add(prev.active.row);
+        }
+        const coord = { row: rowIdx, col: 0 };
+        return { active: coord, anchor: coord, extent: coord, mode: 'row', extraSelectedRows: extras };
+      });
+      onRowSelectProp?.(rowIdx);
+      if (result) setInspectorData(result.columns, getRowByLogicalId(rowIdx) ?? null);
     } else if (mode === 'range') {
       setSelection(prev => {
         const anchor = prev.anchor ?? { row: rowIdx, col: 0 };
-        return { active: { row: rowIdx, col: 0 }, anchor, extent: { row: rowIdx, col: visibleColCount - 1 }, mode: 'row' };
+        return { active: { row: rowIdx, col: 0 }, anchor, extent: { row: rowIdx, col: visibleColCount - 1 }, mode: 'row', extraSelectedRows: prev.extraSelectedRows };
       });
       onRowSelectProp?.(rowIdx);
       if (result) setInspectorData(result.columns, getRowByLogicalId(rowIdx) ?? null);
     }
-  }, [selectRow, visibleColCount, onRowSelectProp, result, setInspectorData, getRowByLogicalId]);
+  }, [selectRow, visibleColCount, onRowSelectProp, result, setInspectorData, getRowByLogicalId, setSelection, getDisplayIdx, getLogicalRowId]);
 
   const resetSelection = useCallback(() => { setSelection(EMPTY_SELECTION); setEditingCell(null); }, []);
 

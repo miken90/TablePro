@@ -21,7 +21,7 @@ interface GridRowProps {
   isSelected: boolean;
   changeType?: 'modified' | 'inserted' | 'deleted';
   cellOverrideValues?: Map<string, string | null>;
-  editingCell?: { rowIdx: number; colIdx: number } | null;
+  editingCell?: { rowIdx: number; colIdx: number; trigger?: 'click' | 'keyboard' } | null;
   nullDisplay: string;
   virtualTop: number;
   enumValuesByColumn?: Record<string, string[]>;
@@ -33,6 +33,8 @@ interface GridRowProps {
   activeColIdx: number | null;
   /** [startCol, endCol] range within the selection rect for this row, or null if not in rect. */
   selectionCols: [number, number] | null;
+  /** Whether the grid is in table-browse mode (enables checkbox selection). */
+  isTableMode?: boolean;
   /** Callbacks now receive rowIndex as first arg — GridRow binds its own index. */
   onRowClick: (rowId: number, e: React.MouseEvent) => void;
   onCellMouseDown?: (rowId: number, colIdx: number, e: React.MouseEvent) => void;
@@ -163,6 +165,7 @@ export const GridRow = React.memo(function GridRow({
   isActiveRow,
   activeColIdx,
   selectionCols,
+  isTableMode,
   onRowClick,
   onCellMouseDown,
   onCellMouseEnter,
@@ -180,12 +183,29 @@ export const GridRow = React.memo(function GridRow({
       style={{ top: virtualTop, height: 28, ...(editingCell ? { zIndex: 10 } : undefined) }}
       onClick={(e) => { if ((e.target as HTMLElement).closest('[data-cell]')) return; onRowClick(rowIndex, e); }}
     >
-      {/* Row number */}
+      {/* Row number / checkbox */}
       <div
-        className="w-10 flex-shrink-0 px-1 flex items-center justify-end text-text-muted border-r border-border-subtle select-none cursor-pointer hover:bg-surface-hover"
+        className="group/rowheader w-10 flex-shrink-0 px-1 flex items-center justify-center text-text-muted border-r border-border-subtle select-none cursor-pointer hover:bg-surface-hover"
         onClick={(e) => { e.stopPropagation(); onRowHeaderClick?.(rowIndex, e); }}
       >
-        {rowNumber ?? rowIndex + 1}
+        {isTableMode ? (
+          <>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              readOnly
+              className={`w-3.5 h-3.5 accent-accent-blue cursor-pointer ${
+                isSelected ? '' : 'opacity-0 group-hover/rowheader:opacity-100'
+              } transition-opacity`}
+              tabIndex={-1}
+            />
+            <span className={`text-xs absolute ${isSelected ? 'hidden' : 'group-hover/rowheader:hidden'}`}>
+              {rowNumber ?? rowIndex + 1}
+            </span>
+          </>
+        ) : (
+          <span className="text-xs">{rowNumber ?? rowIndex + 1}</span>
+        )}
       </div>
 
       {/* Data cells */}
@@ -230,6 +250,7 @@ export const GridRow = React.memo(function GridRow({
                 autoFocus
                 sessionId={sessionId}
                 fkRef={fkColumns?.[col.name]}
+                trigger={editingCell?.trigger}
               />
             ) : (
               <CellContent

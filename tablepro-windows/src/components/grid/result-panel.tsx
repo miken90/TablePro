@@ -4,6 +4,7 @@ import { useQueryLogStore } from '../../stores/queryLogStore';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useChangeStore } from '../../stores/changeStore';
 import { useInspectorStore } from '../../stores/inspectorStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
 import type { ColumnInfo, QueryResult } from '../../types/query';
 import { DataGrid } from './data-grid';
@@ -44,6 +45,10 @@ interface ResultPanelProps {
   onRequestSaveRef?: MutableRefObject<(() => void) | null>;
   /** Ref that receives the add-row function. */
   onAddRowRef?: MutableRefObject<(() => void) | null>;
+  /** Ref that receives the delete-selected-rows function. */
+  onDeleteSelectedRef?: MutableRefObject<(() => void) | null>;
+  /** Ref that receives the clear-selection function. */
+  onClearSelectionRef?: MutableRefObject<(() => void) | null>;
   /** Hide internal ChangeToolbar (when ContextualBar owns change actions). */
   hideChangeToolbar?: boolean;
 }
@@ -51,7 +56,9 @@ interface ResultPanelProps {
 export function ResultPanel({
   tabId, tableName, schema, sessionId,
   activeWhereClause, quickSearchColumns = [],
-  onRowSelect: onRowSelectProp, onOpenQueryEditor, onSaveRef, onRequestSaveRef, onAddRowRef, hideChangeToolbar,
+  onRowSelect: onRowSelectProp, onOpenQueryEditor, onSaveRef, onRequestSaveRef, onAddRowRef,
+  onDeleteSelectedRef, onClearSelectionRef,
+  hideChangeToolbar,
 }: ResultPanelProps) {
   const queryResult = useQueryStore((s) => s.result);
   const queryError = useQueryStore((s) => s.error);
@@ -87,7 +94,7 @@ export function ResultPanel({
   const gridScrollRef = useRef<HTMLDivElement>(null);
 
   // --- Hooks ---
-  const tableData = useTableData({ tableName, schema, sessionId, activeWhereClause });
+  const tableData = useTableData({ tabId, tableName, schema, sessionId, activeWhereClause });
   const {
     tableResult, totalCount, approximateCount, isFetching, fetchError,
     page, pageSize, sorting, enumValuesByColumn, fkMap,
@@ -123,6 +130,16 @@ export function ResultPanel({
   const error = isTableMode ? fetchError : (streamError ?? queryError);
   const total = isTableMode ? totalCount : (queryResultFromStream?.rows.length ?? queryResult?.rows.length ?? 0);
   const loading = isTableMode ? isFetching : (isExecuting || streaming);
+  
+  const exportSql = useMemo(() => {
+    if (!isTableMode || !tableName) return queryText;
+    const qualifiedTable = schema ? `"${schema}"."${tableName}"` : `"${tableName}"`;
+    const wherePart = activeWhereClause ? ` WHERE ${activeWhereClause}` : '';
+    const orderBy = sorting && sorting.length > 0
+      ? ' ORDER BY ' + sorting.map(s => `"${s.id}" ${s.desc ? 'DESC' : 'ASC'}`).join(', ')
+      : '';
+    return `SELECT * FROM ${qualifiedTable}${wherePart}${orderBy}`;
+  }, [isTableMode, tableName, schema, activeWhereClause, sorting, queryText]);
 
   const changeTracking = useChangeTracking({
     tableName, schema, sessionId, result,
@@ -172,7 +189,7 @@ export function ResultPanel({
     getEffectiveCellValue, onRowSelectProp,
   });
   const {
-    selectedRows, selection, selectionRect, selectCell, selectRow,
+    selectedRows, selection, selectionRect, selectCell,
     handleRowSelect,
     editingCell, handleCellDoubleClick, handleCellCommit, handleCellCancel,
     contextMenu, handleCellContextMenu, closeContextMenu,
@@ -244,6 +261,25 @@ export function ResultPanel({
     return () => { if (onAddRowRef) onAddRowRef.current = null; };
   }, [onAddRowRef, handleAddRow]);
 
+  // Expose delete-selected to parent via ref
+  useEffect(() => {
+    if (onDeleteSelectedRef) onDeleteSelectedRef.current = deleteContextRows;
+    return () => { if (onDeleteSelectedRef) onDeleteSelectedRef.current = null; };
+  }, [onDeleteSelectedRef, deleteContextRows]);
+
+  // Expose clear-selection to parent via ref
+  useEffect(() => {
+    if (onClearSelectionRef) onClearSelectionRef.current = resetSelection;
+    return () => { if (onClearSelectionRef) onClearSelectionRef.current = null; };
+  }, [onClearSelectionRef, resetSelection]);
+
+  // Sync selected row count to layout store for ContextualBar
+  const setSelectedRowCount = useLayoutStore((s) => s.setSelectedRowCount);
+  useEffect(() => {
+    setSelectedRowCount(selectedRows.size);
+    return () => { setSelectedRowCount(0); };
+  }, [selectedRows, setSelectedRowCount]);
+
   const handleConfirmExecute = useCallback(async () => {
     setConfirmExecuteOpen(false);
     await handleSave();
@@ -292,7 +328,7 @@ export function ResultPanel({
     return () => window.removeEventListener('keydown', handler);
   }, [isTableMode, handleRefreshTable, handleRequestSave]);
 
-  // Keyboard: Ctrl+C copy selection, Ctrl+V paste into selected rows
+  // Keyboard: Ctrl+C copy selection, Ctrl+V paste into selected rows, Delete key to delete selected rows
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !editingCell && selection.mode) {
@@ -303,10 +339,15 @@ export function ResultPanel({
         e.preventDefault();
         pasteIntoSelectedRows();
       }
+      // Delete/Backspace deletes selected rows in table mode
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !editingCell && isTableMode && selectedRows.size > 0 && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        deleteContextRows();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editingCell, selection.mode, selectedRows, isTableMode, copySelection, pasteIntoSelectedRows]);
+  }, [editingCell, selection.mode, selectedRows, isTableMode, copySelection, pasteIntoSelectedRows, deleteContextRows]);
 
   // Composed sort/page handlers that reset selection
   const handleSortChange = useCallback((colName: string) => {
@@ -399,7 +440,7 @@ export function ResultPanel({
                   selection={selection}
                   selectionRect={selectionRect}
                   onCellClick={selectCell}
-                  onRowHeaderClick={(rowId) => selectRow(rowId, displayResult?.columns.length ?? 0)}
+                  onRowHeaderClick={(rowId) => handleRowSelect(rowId, 'toggle')}
                   changedRows={changeMap}
                   cellOverrideValues={cellOverrides}
                   editingCell={editingCell}
@@ -429,6 +470,7 @@ export function ResultPanel({
                   onSelectColumn={selectColumn}
                   onSelectAll={selectAll}
                   scrollRef={gridScrollRef}
+                  isTableMode={isTableMode}
                 />
               ) : (
                 <EmptyState icon={<Database size={24} />} message="Run a query to see results" description="Press Ctrl+Enter to execute the current statement" />
@@ -471,12 +513,13 @@ export function ResultPanel({
           onBulkInsert={isTableMode ? () => { closeContextMenu(); setBulkInsertOpen(true); } : undefined}
           onBulkUpdate={isTableMode ? () => { closeContextMenu(); setBulkUpdateOpen(true); } : undefined}
           onBulkDelete={isTableMode ? () => { closeContextMenu(); setBulkDeleteOpen(true); } : undefined}
+          selectedRowCount={selectedRows.has(contextMenu.rowIndex) ? selectedRows.size : 1}
         />
       )}
-      {showExport && displayResult && activeConnectionId && (
+      {showExport && displayResult && (sessionId || activeConnectionId) && (
         <ExportDialog
-          sessionId={activeConnectionId}
-          sql={queryText}
+          sessionId={(sessionId || activeConnectionId)!}
+          sql={exportSql}
           result={displayResult}
           onClose={() => setShowExport(false)}
         />

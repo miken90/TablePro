@@ -28,7 +28,7 @@ export function useGridClipboard(p: {
   sessionId?: string; page?: number; selection: GridSelection;
   selectionRect: SelectionRect | null; selectedRows: Set<number>;
   setSelection: React.Dispatch<React.SetStateAction<GridSelection>>;
-  setEditingCell: React.Dispatch<React.SetStateAction<{ rowIdx: number; colIdx: number } | null>>;
+  setEditingCell: React.Dispatch<React.SetStateAction<{ rowIdx: number; colIdx: number; trigger?: 'click' | 'keyboard' } | null>>;
   getDisplayIdx: (id: number) => number; getLogicalRowId: (idx: number) => number;
   getRowByLogicalId: (id: number) => (string | null)[] | undefined;
   getEffectiveCellValue: (r: number, c: number, fb: string | null) => string | null;
@@ -39,10 +39,11 @@ export function useGridClipboard(p: {
     getEffectiveCellValue, displayRowCount } = p;
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const recordCellChange = useChangeStore((s) => s.recordCellChange);
+  const changesSnapshot = useChangeStore((s) => s._changes);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
   const handleCellDoubleClick = useCallback((rowIdx: number, colIdx: number) => {
     if (!tableName) { navigator.clipboard.writeText(getRowByLogicalId(rowIdx)?.[colIdx] ?? '').catch(() => {}); return; }
-    setEditingCell({ rowIdx, colIdx });
+    setEditingCell({ rowIdx, colIdx, trigger: 'click' });
   }, [tableName, getRowByLogicalId, setEditingCell]);
   const handleCellCommit = useCallback((rowIdx: number, colIdx: number, newValue: string | null) => {
     if (!result) return;
@@ -70,17 +71,70 @@ export function useGridClipboard(p: {
     if (!sessionId || !tableName || !result || !contextMenu) return;
     const rowIndexes = selectedRows.has(contextMenu.rowIndex)
       ? Array.from(selectedRows).sort((a, b) => a - b) : [contextMenu.rowIndex];
-    const rows = rowIndexes.map((idx) => {
-      const src = getRowByLogicalId(idx) ?? [];
-      return result.columns.map((_, ci) => getEffectiveCellValue(idx, ci, src[ci] ?? null));
-    });
-    const sql = await generateRowSql(sessionId, {
-      table: tableName, schema: schema ?? null, columns: result.columns.map(c => c.name),
-      primaryKeys: result.columns.filter(c => c.isPrimaryKey).map(c => c.name), rows, outputFormat,
-    });
-    if (sql) await navigator.clipboard.writeText(sql);
+
+    const sqlStatements: string[] = [];
+    const pks = result.columns.filter(c => c.isPrimaryKey).map(c => c.name);
+
+    if (outputFormat !== 'UPDATE') {
+      // Batch everything in a single call (Legacy behavior for non-UPDATE)
+      const rows = rowIndexes.map((idx) => {
+        const src = getRowByLogicalId(idx) ?? [];
+        return result.columns.map((_, ci) => getEffectiveCellValue(idx, ci, src[ci] ?? null));
+      });
+      const sql = await generateRowSql(sessionId, {
+        table: tableName,
+        schema: schema ?? null,
+        columns: result.columns.map(c => c.name),
+        primaryKeys: pks,
+        rows,
+        outputFormat,
+      });
+      if (sql) sqlStatements.push(sql);
+    } else {
+      // Group UPDATE rows by unique set of columns to minimize IPC calls
+      const batches = new Map<string, { cols: string[]; rowValuesList: (string | null)[][] }>();
+
+      for (const idx of rowIndexes) {
+        const src = getRowByLogicalId(idx) ?? [];
+        const change = changesSnapshot[idx];
+
+        let colsToPass = result.columns.map(c => c.name);
+        if (change?.type === 'update' && change.cellChanges.length > 0) {
+          const modifiedCols = change.cellChanges.map(cc => cc.columnName);
+          colsToPass = Array.from(new Set([...pks, ...modifiedCols]));
+        }
+
+        const rowValues = colsToPass.map((colName) => {
+          const ci = result.columns.findIndex(c => c.name === colName);
+          return getEffectiveCellValue(idx, ci, src[ci] ?? null);
+        });
+
+        const key = colsToPass.join(',');
+        if (!batches.has(key)) {
+          batches.set(key, { cols: colsToPass, rowValuesList: [] });
+        }
+        batches.get(key)!.rowValuesList.push(rowValues);
+      }
+
+      // Execute one IPC call per unique column set
+      for (const { cols, rowValuesList } of batches.values()) {
+        const sql = await generateRowSql(sessionId, {
+          table: tableName,
+          schema: schema ?? null,
+          columns: cols,
+          primaryKeys: pks,
+          rows: rowValuesList,
+          outputFormat,
+        });
+        if (sql) sqlStatements.push(sql);
+      }
+    }
+
+    if (sqlStatements.length > 0) {
+      await navigator.clipboard.writeText(sqlStatements.join('\n'));
+    }
     closeContextMenu();
-  }, [sessionId, tableName, result, contextMenu, selectedRows, schema, closeContextMenu, getEffectiveCellValue, getRowByLogicalId]);
+  }, [sessionId, tableName, result, contextMenu, selectedRows, schema, closeContextMenu, getEffectiveCellValue, getRowByLogicalId, changesSnapshot]);
 
   const copyContextRowTsv = useCallback(async () => {
     if (!contextMenu || !result) return;
@@ -115,8 +169,15 @@ export function useGridClipboard(p: {
   }, [contextMenu, result, getEffectiveCellValue, closeContextMenu, page, getRowByLogicalId]);
 
   const deleteContextRows = useCallback(() => {
-    if (!contextMenu || !result) return;
-    const rows = selectedRows.has(contextMenu.rowIndex) ? Array.from(selectedRows).sort((a, b) => a - b) : [contextMenu.rowIndex];
+    if (!result) return;
+    let rows: number[];
+    if (contextMenu) {
+      rows = selectedRows.has(contextMenu.rowIndex) ? Array.from(selectedRows).sort((a, b) => a - b) : [contextMenu.rowIndex];
+    } else {
+      // Called from keyboard shortcut — delete all selected rows
+      if (selectedRows.size === 0) return;
+      rows = Array.from(selectedRows).sort((a, b) => a - b);
+    }
     const store = useChangeStore.getState();
     for (const idx of rows) { const r = getRowByLogicalId(idx); if (r) store.recordRowDelete(idx, r); }
     closeContextMenu();
@@ -132,10 +193,9 @@ export function useGridClipboard(p: {
       getRowByLogicalId(contextMenu.rowIndex) ?? []);
     closeContextMenu();
   }, [contextMenu, result, getEffectiveCellValue, recordCellChange, closeContextMenu, getRowByLogicalId]);
-
   const editContextCell = useCallback(() => {
     if (!contextMenu || !tableName) return;
-    setEditingCell({ rowIdx: contextMenu.rowIndex, colIdx: contextMenu.colIndex });
+    setEditingCell({ rowIdx: contextMenu.rowIndex, colIdx: contextMenu.colIndex, trigger: 'click' });
     closeContextMenu();
   }, [contextMenu, tableName, closeContextMenu, setEditingCell]);
 

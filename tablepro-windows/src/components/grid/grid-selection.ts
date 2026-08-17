@@ -10,6 +10,8 @@ export interface GridSelection {
   anchor: CellCoord | null;
   extent: CellCoord | null;
   mode: SelectionMode | null;
+  /** Non-contiguous row IDs accumulated via Ctrl+Click / checkbox toggle. */
+  extraSelectedRows?: Set<number>;
 }
 
 export interface SelectionRect {
@@ -24,6 +26,7 @@ export const EMPTY_SELECTION: GridSelection = {
   anchor: null,
   extent: null,
   mode: null,
+  extraSelectedRows: undefined,
 };
 
 export function getNormalizedRect(
@@ -83,16 +86,21 @@ export function getSelectedRowIds(
   rowCount: number,
   colCount: number,
 ): Set<number> {
+  const ids = new Set<number>();
+
+  // Add extra (Ctrl+Click / checkbox toggle) selections
+  if (sel.extraSelectedRows) {
+    for (const id of sel.extraSelectedRows) ids.add(id);
+  }
+
   const rect = getNormalizedRect(sel, getDisplayIdx, rowCount, colCount);
-  if (!rect) return new Set();
+  if (!rect) return ids;
 
   if (sel.mode === 'column') {
-    const ids = new Set<number>();
     for (let i = 0; i < rowCount; i++) ids.add(getLogicalId(i));
     return ids;
   }
 
-  const ids = new Set<number>();
   for (let i = rect.top; i <= rect.bottom; i++) ids.add(getLogicalId(i));
   return ids;
 }
