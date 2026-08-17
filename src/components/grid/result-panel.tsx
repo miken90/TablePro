@@ -9,6 +9,7 @@ import { useQueryProgress } from '../../hooks/useQueryProgress';
 import { useCommandStore, getEffectiveBinding } from '../../hooks/useCommandRegistry';
 import type { ColumnInfo, QueryResult } from '../../types/query';
 import { DataGrid } from './data-grid';
+import { isTextEntryTarget } from './is-text-entry-target';
 import { Pagination } from './pagination';
 import { ChangeToolbar } from './change-toolbar';
 import { TruncationBanner } from './truncation-banner';
@@ -361,6 +362,11 @@ export function ResultPanel({
   // Keyboard: Ctrl+C copy selection, Ctrl+V paste into selected rows, Delete key to delete selected rows
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // The listener is on `window`, so it also sees keys typed into the
+      // filter box, the WHERE input, the quick search and the SQL editor.
+      // Without this guard Backspace in any of them stopped editing text and
+      // staged a row delete instead, and Ctrl+V never reached the input.
+      if (isTextEntryTarget(e.target)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !editingCell && selection.mode) {
         e.preventDefault();
         copySelection();
