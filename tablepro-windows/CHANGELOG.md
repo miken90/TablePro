@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keypress handler for F5 to refresh the table list when database selector is focused
 - Copy button in the Export Dialog to copy the entire generated export text (CSV/JSON/SQL) to the clipboard directly
 
+### Removed
+
+- Tauri updater plugin and in-app auto-update notification UI. This is a personal fork that does not publish releases through the upstream update feed; the app no longer phones `releases.tablepro.app`.
+
 ### Fixed
 
 - PostgreSQL errors now show actual database messages (e.g. syntax errors, missing relations) instead of generic "db error"

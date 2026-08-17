@@ -100,8 +100,7 @@ pub fn run() {
 
     let connection_manager = ConnectionManager::new(Arc::clone(&driver_registry));
 
-    #[allow(unused_mut)]
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -117,14 +116,6 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_deep_link::init());
-
-    // Only register the updater plugin in release builds — the update server
-    // is not reachable during local dev and the placeholder pubkey can cause
-    // spurious errors / intermittent crashes.
-    #[cfg(not(feature = "devtools"))]
-    {
-        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
-    }
 
     builder
         .manage(Mutex::new(connection_manager))

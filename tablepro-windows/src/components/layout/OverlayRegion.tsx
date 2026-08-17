@@ -1,13 +1,11 @@
 import { lazy, Suspense, useState, useCallback, useEffect } from "react";
 import { QuickSwitcher } from "./quick-switcher";
-import { UpdateNotification } from "../shared/update-notification";
 import { CommandPalette } from "../shared/command-palette";
 import { QueryAnnouncer } from "../shared/query-announcer";
 import { UnsavedChangesDialog } from "../shared/unsaved-changes-dialog";
 import { PanelLoader } from "../shared/PanelLoader";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { useAutoUpdater } from "../../hooks/useAutoUpdater";
 import { ErrorBoundary } from "../shared/error-boundary";
 
 const SettingsView = lazy(() => import("../settings/settings-view").then(m => ({ default: m.SettingsView })));
@@ -34,17 +32,6 @@ export function OverlayRegion({
   const settingsOpen = useLayoutStore((s) => s.settingsOpen);
   const helpOpen = useLayoutStore((s) => s.helpOpen);
   const commandPaletteOpen = useLayoutStore((s) => s.commandPaletteOpen);
-
-  const {
-    availableUpdate,
-    shouldShowNotification,
-    isInstalling,
-    downloadedBytes,
-    totalBytes,
-    error: updateError,
-    installUpdate,
-    dismissUpdate,
-  } = useAutoUpdater();
 
   // Onboarding
   const hasCompletedOnboarding = useSettingsStore((s) => s.settings.hasCompletedOnboarding);
@@ -76,18 +63,6 @@ export function OverlayRegion({
         <Suspense fallback={<PanelLoader />}>
           <SettingsView onClose={() => useLayoutStore.getState().setSettingsOpen(false)} />
         </Suspense>
-      )}
-
-      {availableUpdate && shouldShowNotification && (
-        <UpdateNotification
-          update={availableUpdate}
-          isInstalling={isInstalling}
-          downloadedBytes={downloadedBytes}
-          totalBytes={totalBytes}
-          error={updateError}
-          onUpdateNow={() => void installUpdate()}
-          onLater={dismissUpdate}
-        />
       )}
 
       <Suspense fallback={null}>

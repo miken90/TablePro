@@ -578,15 +578,6 @@
     "userAgent": "User Agent",
     "copyright": "© 2026 TablePro. Bảo lưu mọi quyền."
   },
-  "update": {
-    "available": "Có bản cập nhật: {{version}}",
-    "published": "Ngày phát hành: {{date}}",
-    "downloading": "Đang tải bản cập nhật…",
-    "downloaded": "Đã tải {{bytes}}",
-    "later": "Để sau",
-    "updateNow": "Cập nhật ngay",
-    "installing": "Đang cài đặt…"
-  },
   "safeMode": {
     "confirmQuery": "Xác nhận truy vấn",
     "readOnlyMode": "Chế độ chỉ đọc",

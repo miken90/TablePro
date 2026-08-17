@@ -12,9 +12,6 @@
     "core:app:allow-name",
     "dialog:default",
     "shell:allow-open",
-    "updater:default",
-    "updater:allow-check",
-    "updater:allow-download-and-install",
     "deep-link:default"
   ]
 }

@@ -578,15 +578,6 @@
     "userAgent": "User Agent",
     "copyright": "© 2026 TablePro. All rights reserved."
   },
-  "update": {
-    "available": "Update available: {{version}}",
-    "published": "Published: {{date}}",
-    "downloading": "Downloading update…",
-    "downloaded": "Downloaded {{bytes}}",
-    "later": "Later",
-    "updateNow": "Update Now",
-    "installing": "Installing…"
-  },
   "safeMode": {
     "confirmQuery": "Confirm Query",
     "readOnlyMode": "Read-Only Mode",

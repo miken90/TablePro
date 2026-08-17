@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Searchable Foreign Key dropdown selector in grid cell editor, dynamically querying referenced table metadata and records
 
+### Removed
+
+- Tauri updater plugin and in-app auto-update notification UI
+
 ### Fixed
 
 - SQL Editor: fixed queryText synchronization on editor mount and tab switch, resolving the disabled Run button bug.
