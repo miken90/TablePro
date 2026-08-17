@@ -5,6 +5,8 @@ import type { ConnectionConfig } from "../types/connection";
 import * as commands from "../ipc/commands";
 
 import { useSettingsStore } from "./settingsStore";
+import { useEditorStore } from "./editorStore";
+import type { EditorTab } from "./editorStore";
 
 interface ConnectionState {
   connections: Map<string, SavedConnection>;
@@ -90,6 +92,19 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         sessionIds.set(id, sessionId);
         return { connectionStatuses: statuses, sessionIds, selectedConnectionId: id };
       });
+
+      // Auto-bind active query tab if it's currently unbound or bound to a disconnected connection
+      const activeTabId = useEditorStore.getState().activeTabId;
+      if (activeTabId) {
+        const activeTab = useEditorStore.getState().tabs.find((t: EditorTab) => t.id === activeTabId);
+        if (activeTab && activeTab.type === 'query') {
+          const tabConnId = activeTab.connectionId;
+          const isTabConnConnected = tabConnId ? get().sessionIds.has(tabConnId) : false;
+          if (!tabConnId || !isTabConnConnected) {
+            useEditorStore.getState().setTabConnectionId(activeTabId, id);
+          }
+        }
+      }
     } catch (err) {
       set((s) => {
         const statuses = new Map(s.connectionStatuses);
@@ -144,7 +159,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     try {
       await commands.reconnectSession(sessionId);
       // Success state is set by the connection:reconnected event listener
-    } catch (err) {
+    } catch {
       set((s) => {
         const statuses = new Map(s.connectionStatuses);
         statuses.set(connectionId, "error");

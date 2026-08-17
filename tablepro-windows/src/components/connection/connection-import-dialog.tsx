@@ -139,7 +139,7 @@ export function ConnectionImportDialog({
           existingId: action === "replace" ? item?.existingId : undefined,
         };
       });
-      const result = await confirmImport(
+      await confirmImport(
         filePath,
         passphrase || undefined,
         entries,
@@ -151,7 +151,7 @@ export function ConnectionImportDialog({
     } finally {
       setImporting(false);
     }
-  }, [preview, resolutions, filePath, passphrase, t, onImported, onClose]);
+  }, [preview, resolutions, filePath, passphrase, onImported, onClose]);
 
   const setResolution = useCallback((index: number, action: string) => {
     setResolutions((prev) => {

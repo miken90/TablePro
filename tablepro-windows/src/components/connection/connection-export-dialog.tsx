@@ -78,7 +78,7 @@ export function ConnectionExportDialog({
     } finally {
       setExporting(false);
     }
-  }, [selectedIds, includeCredentials, passphrase, t, onClose]);
+  }, [selectedIds, includeCredentials, passphrase, onClose]);
 
   return (
     <div

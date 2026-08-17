@@ -60,7 +60,47 @@ pub async fn export_to_file(
     options: ExportOptions,
     manager: State<'_, Mutex<ConnectionManager>>,
 ) -> Result<ExportResult, AppError> {
-    tracing::info!(session_id = %session_id, format = %format, "export_to_file: {}", &sql);
+    let file_path = {
+        // dev-only: WSL host path bridge
+        #[cfg(unix)]
+        {
+            if file_path.len() >= 2 {
+                let mut chars = file_path.chars();
+                let drive = chars.next().unwrap();
+                let colon = chars.next().unwrap();
+                if drive.is_ascii_alphabetic() && colon == ':' {
+                    let rest: String = chars.collect();
+                    let normalized_rest = rest.replace('\\', "/");
+                    let translated = if normalized_rest.starts_with('/') {
+                        format!("/mnt/{}{}", drive.to_ascii_lowercase(), normalized_rest)
+                    } else {
+                        format!("/mnt/{}/{}", drive.to_ascii_lowercase(), normalized_rest)
+                    };
+                    tracing::info!("Translated Windows path to WSL path: {file_path} -> {translated}");
+                    translated
+                } else {
+                    file_path
+                }
+            } else {
+                file_path
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            file_path
+        }
+    };
+
+    tracing::info!(session_id = %session_id, format = %format, "export_to_file: {} to {}", &sql, &file_path);
+
+    // Create parent directories if they don't exist
+    let parent_fp = file_path.clone();
+    task::spawn_blocking(move || {
+        if let Some(parent) = std::path::Path::new(&parent_fp).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        Ok::<(), std::io::Error>(())
+    }).await.map_err(map_join_err)??;
 
     let start = Instant::now();
     let driver: Arc<dyn DatabaseDriver> = {
