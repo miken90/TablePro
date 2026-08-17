@@ -6,6 +6,7 @@ import { useChangeStore } from '../../stores/changeStore';
 import { useInspectorStore } from '../../stores/inspectorStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
+import { useCommandStore, getEffectiveBinding } from '../../hooks/useCommandRegistry';
 import type { ColumnInfo, QueryResult } from '../../types/query';
 import { DataGrid } from './data-grid';
 import { Pagination } from './pagination';
@@ -318,15 +319,44 @@ export function ResultPanel({
     }
   }, [sessionId, tableName, schema, fetchTableData, page, pageSize, activeWhereClause, sorting]);
 
-  // Keyboard: F5 refresh, Ctrl+S save
+  // Keyboard: F5 refresh (table mode). Kept local because `app.refreshSchema`
+  // is owned by the editor keymap; see useMainLayoutShortcuts.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'F5' && isTableMode) { e.preventDefault(); handleRefreshTable(); }
-      if ((e.ctrlKey || e.metaKey) && e.key === 's' && !e.shiftKey && isTableMode) { e.preventDefault(); handleRequestSave(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isTableMode, handleRefreshTable, handleRequestSave]);
+  }, [isTableMode, handleRefreshTable]);
+
+  // Save and insert-row need this component's table context, so their handlers
+  // are registered here and dispatched by the global shortcut hook. Registering
+  // rather than binding keys directly keeps the user's custom bindings working
+  // and keeps the command palette in sync.
+  useEffect(() => {
+    const register = useCommandStore.getState().registerCommand;
+    const unregister = useCommandStore.getState().unregisterCommand;
+    const shortcutFor = (id: string) => getEffectiveBinding(id)?.join('+');
+    register({
+      id: 'data.save',
+      label: 'Save Changes',
+      shortcut: shortcutFor('data.save'),
+      category: 'Edit',
+      // Mirror the handler's own preconditions so Ctrl+S is never swallowed
+      // when there is nothing to save.
+      when: () => isTableMode && hasChanges && !!tableName && !!result,
+      action: handleRequestSave,
+    });
+    register({
+      id: 'data.insertRow',
+      label: 'Insert Row',
+      shortcut: shortcutFor('data.insertRow'),
+      category: 'Edit',
+      when: () => isTableMode && !!result,
+      action: handleAddRow,
+    });
+    return () => { unregister('data.save'); unregister('data.insertRow'); };
+  }, [isTableMode, hasChanges, tableName, result, handleRequestSave, handleAddRow]);
 
   // Keyboard: Ctrl+C copy selection, Ctrl+V paste into selected rows, Delete key to delete selected rows
   useEffect(() => {

@@ -94,6 +94,45 @@ export function useMainLayoutCommands() {
         action: () => window.dispatchEvent(new CustomEvent("tablepro:format-sql")),
       },
       {
+        id: "editor.cancel",
+        label: "Cancel Query",
+        shortcut: shortcutFor("editor.cancel"),
+        category: "Query" as const,
+        // `when` keeps Escape inert unless a query is actually running, so it
+        // never competes with the Escape handling in dialogs and popovers.
+        when: () => useQueryStore.getState().isExecuting,
+        action: () => {
+          const sessionId = resolveActiveQuerySessionId();
+          if (sessionId) void useQueryStore.getState().cancel(sessionId);
+        },
+      },
+      {
+        id: "tabs.next",
+        label: "Next Tab",
+        shortcut: shortcutFor("tabs.next"),
+        category: "Edit" as const,
+        when: () => useEditorStore.getState().tabs.length > 1,
+        action: () => {
+          const { tabs, activeTabId, setActiveTab } = useEditorStore.getState();
+          const idx = tabs.findIndex((t) => t.id === activeTabId);
+          const next = tabs[idx < tabs.length - 1 ? idx + 1 : 0];
+          if (next) setActiveTab(next.id);
+        },
+      },
+      {
+        id: "tabs.prev",
+        label: "Previous Tab",
+        shortcut: shortcutFor("tabs.prev"),
+        category: "Edit" as const,
+        when: () => useEditorStore.getState().tabs.length > 1,
+        action: () => {
+          const { tabs, activeTabId, setActiveTab } = useEditorStore.getState();
+          const idx = tabs.findIndex((t) => t.id === activeTabId);
+          const prev = tabs[idx > 0 ? idx - 1 : tabs.length - 1];
+          if (prev) setActiveTab(prev.id);
+        },
+      },
+      {
         id: "tabs.new",
         label: "New Tab",
         shortcut: shortcutFor("tabs.new"),

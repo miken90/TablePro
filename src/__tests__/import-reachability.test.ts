@@ -12,6 +12,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useLayoutStore } from '../stores/layoutStore';
 import { COMMAND_DEFINITIONS, getDefaultBinding } from '../hooks/useCommandRegistry';
+import { isGloballyDispatchable } from '../hooks/useMainLayoutShortcuts';
 
 // Read the wiring sites as text. Rendering them is not possible in this
 // node-environment vitest setup, and the point of these assertions is that the
@@ -45,9 +46,11 @@ describe('data.importSql command', () => {
   });
 
   it('is bound in the live keydown dispatcher, not just declared', () => {
-    // useMainLayoutShortcuts dispatches from its own LAYOUT_ACTIONS map;
-    // a command missing from it has a shortcut that does nothing.
-    expect(source('hooks/useMainLayoutShortcuts.ts')).toContain("'data.importSql'");
+    // The global dispatcher resolves bindings from the registry and fires
+    // whatever handler is registered, so the invariant is now: the command is
+    // globally dispatchable AND something registered a handler for it.
+    expect(isGloballyDispatchable('data.importSql')).toBe(true);
+    expect(source('hooks/useMainLayoutCommands.ts')).toContain('data.importSql');
   });
 
   it('is registered as a palette command with an action', () => {

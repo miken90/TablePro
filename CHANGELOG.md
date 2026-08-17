@@ -12,6 +12,7 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- Keyboard shortcuts that only the unmounted `useKeyboardShortcuts` dispatcher implemented now work: `Escape` cancels a running query, `Ctrl+T`/`Ctrl+W`/`Ctrl+Tab`/`Ctrl+Shift+Tab` manage tabs, `Ctrl+I` inserts a row, and `Ctrl+Shift+E` toggles the sidebar. The dead second dispatcher was deleted and all global shortcuts now route through the command registry, so user rebindings apply everywhere.
 - Table browsing now pages correctly on SQL Server: `fetch_rows` emits `OFFSET … ROWS FETCH NEXT … ROWS ONLY` instead of the `LIMIT`/`OFFSET` that engine rejects, deriving a deterministic ordering from the table's primary key when the grid is unsorted.
 - SQL Server driver no longer panics on non-character columns. Every value was read as a string, which aborted the process (release builds use `panic = "abort"`) as soon as a query returned an `int`, `bit`, date, decimal, GUID, or binary column.
 - Query cancellation now actually stops the running statement on PostgreSQL (out-of-band cancel request) and MySQL/MariaDB (`KILL QUERY` on a second connection, leaving the session intact). Previously Cancel was a no-op on every engine except SQLite.
