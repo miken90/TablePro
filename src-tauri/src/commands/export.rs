@@ -9,8 +9,6 @@ use tokio::task;
 
 use crate::models::AppError;
 use crate::drivers::DatabaseDriver;
-use crate::services::sql_generator::Dialect;
-use crate::services::sql_pagination::{count_subquery, paginated_subquery};
 use crate::services::ConnectionManager;
 
 use super::export_formats::{create_output_file, map_join_err, map_xlsx_err, write_file_chunk};
@@ -51,6 +49,18 @@ struct ExportProgress {
 }
 
 const CHUNK_SIZE: u64 = 10_000;
+
+/// Split rows into write batches, **always yielding at least one batch**.
+///
+/// An empty result set still has to reach the writers: a CSV export of zero
+/// rows is a header row, not a zero-byte file. Breaking out before the first
+/// write produced an empty file that looked like a failed export.
+fn batch_rows(rows: &[Vec<Option<String>>], size: usize) -> Vec<&[Vec<Option<String>>]> {
+    if rows.is_empty() {
+        return vec![&[]];
+    }
+    rows.chunks(size.max(1)).collect()
+}
 
 #[tauri::command]
 pub async fn export_to_file(
@@ -130,34 +140,23 @@ pub async fn export_to_file(
         )));
     }
 
-    let dialect = Dialect::from_db_type(&driver_type);
-
-    // Count total rows (with timeout to avoid blocking on slow queries).
-    // `None` means the dialect cannot count a wrapped query safely; the total
-    // is then whatever we actually read, reported once the export finishes.
-    let total = match count_subquery(&sql, "_export_count", dialect) {
-        None => 0,
-        Some(count_sql) => match tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            driver.execute(&count_sql),
-        ).await {
-            Ok(Ok(result)) => result
-                .rows.first()
-                .and_then(|r| r.first())
-                .and_then(|v| v.as_deref())
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(0),
-            Ok(Err(e)) => {
-                tracing::warn!(session_id = %session_id, "Export count query failed: {e}");
-                0
-            }
-            Err(_) => {
-                tracing::warn!(session_id = %session_id, "Export count query timed out (2s), using indeterminate progress");
-                0
-            }
-        },
-    };
-
+    // The user's query runs exactly once.
+    //
+    // Chunking used to wrap it as `SELECT * FROM (…) LIMIT n OFFSET m`. Unless
+    // the query itself defines a total order, PostgreSQL and MySQL are free to
+    // return rows in a different order for each execution, so consecutive
+    // pages could skip rows and repeat others — the same silent corruption
+    // `sql_pagination` already refuses to risk on SQL Server. A second
+    // execution for the row count made it worse: a query with side effects
+    // (`INSERT … RETURNING`) ran once per chunk plus once more.
+    //
+    // The cost is memory: the whole result set is materialised before it is
+    // written, where chunking held at most CHUNK_SIZE rows. Correct output is
+    // worth more than the ceiling, and a driver-level cursor is what would fix
+    // both — the driver trait has no such API today.
+    let result = driver.execute(&sql).await?;
+    let columns = result.columns.clone();
+    let total = result.rows.len() as u64;
     tracing::info!(session_id = %session_id, "export total rows: {}", total);
 
     let output_file = if format == "xlsx" {
@@ -175,7 +174,6 @@ pub async fn export_to_file(
     let batch_size = options.batch_size.unwrap_or(100).max(1) as usize;
 
     let mut rows_exported: u64 = 0;
-    let mut offset: u64 = 0;
     let mut header_written = false;
     let mut json_first_row = true;
     let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
@@ -191,21 +189,12 @@ pub async fn export_to_file(
     let mut xlsx_row: u32 = 0;
     let mut xlsx_row_limit_hit = false;
 
-    loop {
-        // `None` = this dialect cannot page a wrapped query without risking a
-        // corrupt export (see `sql_pagination`), so run the user's query once
-        // and treat the whole result as a single chunk.
-        let paginated = paginated_subquery(&sql, "_export_data", CHUNK_SIZE, offset, dialect);
-        let single_pass = paginated.is_none();
-        let chunk_sql = paginated.unwrap_or_else(|| sql.clone());
-        let chunk = driver.execute(&chunk_sql).await?;
-        if chunk.rows.is_empty() { break; }
-        let columns = &chunk.columns;
-
+    // Write in batches so the file handle sees bounded writes.
+    for chunk_rows in batch_rows(&result.rows, CHUNK_SIZE as usize) {
         match format.as_str() {
             "csv" => {
                 header_written = write_csv_chunk(
-                    &mut buf, &chunk.rows, columns, &delimiter,
+                    &mut buf, chunk_rows, &columns, &delimiter,
                     include_header, header_written, &mut rows_exported,
                 )?;
             }
@@ -213,7 +202,7 @@ pub async fn export_to_file(
                 let file = output_file.as_ref().cloned()
                     .ok_or_else(|| AppError::IoError("Missing output file".to_string()))?;
                 json_first_row = write_json_chunk(
-                    file, &chunk.rows, columns, array_of_arrays,
+                    file, chunk_rows, &columns, array_of_arrays,
                     pretty, json_first_row, &mut rows_exported,
                 ).await?;
             }
@@ -225,7 +214,7 @@ pub async fn export_to_file(
                     batch_size,
                 };
                 header_written = write_sql_chunk(
-                    &mut buf, &chunk.rows, columns, &opts, header_written, &mut rows_exported,
+                    &mut buf, chunk_rows, &columns, &opts, header_written, &mut rows_exported,
                 )?;
             }
             "xlsx" => {
@@ -235,7 +224,7 @@ pub async fn export_to_file(
                     xlsx_row, xlsx_row_limit_hit, include_header, header_written,
                 };
                 (header_written, xlsx_row, xlsx_row_limit_hit) = write_xlsx_chunk(
-                    ws, &chunk.rows, columns, opts, &mut rows_exported, &state,
+                    ws, chunk_rows, &columns, opts, &mut rows_exported, &state,
                 )?;
             }
             _ => return Err(AppError::ConfigError(format!("Unknown format: {format}"))),
@@ -248,9 +237,8 @@ pub async fn export_to_file(
             buf = Vec::with_capacity(64 * 1024);
         }
 
-        offset += CHUNK_SIZE;
         let _ = app.emit("export:progress", ExportProgress { current: rows_exported, total, format: format.clone() });
-        if single_pass || chunk.rows.len() < CHUNK_SIZE as usize || xlsx_row_limit_hit { break; }
+        if xlsx_row_limit_hit { break; }
     }
 
     // Finalize JSON.
@@ -279,6 +267,41 @@ pub async fn export_to_file(
 mod tests {
     use super::*;
     use super::super::export_formats::{escape_csv_field, escape_sql_value, write_xlsx_cell};
+    use crate::models::ColumnInfo;
+
+    #[test]
+    fn empty_result_still_produces_one_batch() {
+        // The defect: the export loop broke before any writer ran, so a query
+        // with no rows produced a zero-byte file instead of a header.
+        let rows: Vec<Vec<Option<String>>> = vec![];
+        let batches = batch_rows(&rows, 10);
+        assert_eq!(batches.len(), 1);
+        assert!(batches[0].is_empty());
+    }
+
+    #[test]
+    fn rows_are_split_into_bounded_batches() {
+        let rows: Vec<Vec<Option<String>>> = (0..25).map(|i| vec![Some(i.to_string())]).collect();
+        let batches = batch_rows(&rows, 10);
+        assert_eq!(batches.len(), 3);
+        assert_eq!(batches[0].len(), 10);
+        assert_eq!(batches[2].len(), 5);
+        // Every row appears exactly once.
+        assert_eq!(batches.iter().map(|b| b.len()).sum::<usize>(), rows.len());
+    }
+
+    #[test]
+    fn an_empty_batch_writes_the_csv_header_alone() {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut exported = 0u64;
+        let columns = vec![
+            ColumnInfo { name: "id".into(), type_name: "int".into(), nullable: false, is_primary_key: true },
+            ColumnInfo { name: "name".into(), type_name: "text".into(), nullable: true, is_primary_key: false },
+        ];
+        write_csv_chunk(&mut buf, &[], &columns, ",", true, false, &mut exported).unwrap();
+        assert_eq!(String::from_utf8(buf).unwrap(), "id,name\n");
+        assert_eq!(exported, 0);
+    }
 
     #[test]
     fn test_write_xlsx_cell_null_writes_empty_string() {
