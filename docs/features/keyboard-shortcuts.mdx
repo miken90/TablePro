@@ -5,59 +5,76 @@ description: Complete list of keyboard shortcuts for TablePro on Windows
 
 # Keyboard Shortcuts
 
-TablePro is keyboard-driven. Most actions have shortcuts, and the shortcuts below (except tab-switching) are rebindable in **Settings** > **Shortcuts**.
+TablePro is keyboard-driven. Every shortcut below is rebindable in **Settings** > **Shortcuts**.
+
+Shortcuts differ in **scope** — where you must be for them to fire:
+
+| Scope | Meaning |
+|-------|---------|
+| Global | Works anywhere in the app |
+| Editor | Only while the SQL editor has focus |
+| Table browse | Only while browsing a table's data |
 
 ## Quick Reference
 
-| Action | Shortcut |
-|--------|----------|
-| Run query | `Ctrl+Enter` |
-| Quick Switcher | `Ctrl+K` |
-| Toggle History | `Ctrl+H` |
-| Settings | `Ctrl+,` |
-| Save changes | `Ctrl+S` |
-| Command Palette | `Ctrl+Shift+P` |
+| Action | Shortcut | Scope |
+|--------|----------|-------|
+| Run query | `Ctrl+Enter` | Editor |
+| Cancel running query | `Escape` | Global |
+| Quick Switcher | `Ctrl+K` | Global |
+| Toggle History | `Ctrl+H` | Global |
+| Settings | `Ctrl+,` | Global |
+| Command Palette | `Ctrl+Shift+P` | Global |
 
 ## Query
 
-| Action | Shortcut |
-|--------|----------|
-| Run query | `Ctrl+Enter` |
-| Cancel query | `Escape` |
-| Explain query | `Ctrl+Shift+X` |
-| Format SQL | `Ctrl+Shift+F` |
-| Toggle comment | `Ctrl+/` |
+| Action | Shortcut | Scope |
+|--------|----------|-------|
+| Run query | `Ctrl+Enter` | Editor |
+| Run all statements | `Ctrl+Shift+Enter` | Editor |
+| Cancel running query | `Escape` | Global |
+| Explain query | `Ctrl+Shift+X` | Editor |
+| Format SQL | `Ctrl+Shift+F` | Editor |
+| Toggle comment | `Ctrl+/` | Editor |
+| Select next occurrence | `Ctrl+D` | Editor |
+
+<Note>
+`Escape` only cancels while a query is actually running. At any other time it
+falls through to whatever else is on screen, so it still closes dialogs and
+popovers as usual.
+</Note>
 
 ## Edit
 
-| Action | Shortcut |
-|--------|----------|
-| New tab | `Ctrl+T` |
-| Close tab | `Ctrl+W` |
-| Next tab | `Ctrl+Tab` |
-| Previous tab | `Ctrl+Shift+Tab` |
-| Save changes | `Ctrl+S` |
-| Insert row | `Ctrl+I` |
-| Import SQL | `Ctrl+Shift+M` |
+| Action | Shortcut | Scope |
+|--------|----------|-------|
+| New tab | `Ctrl+T` | Global |
+| Close tab | `Ctrl+W` | Global |
+| Next tab | `Ctrl+Tab` | Global |
+| Previous tab | `Ctrl+Shift+Tab` | Global |
+| Save changes | `Ctrl+S` | Table browse (only with unsaved edits) |
+| Insert row | `Ctrl+I` | Table browse |
+| Import SQL | `Ctrl+Shift+M` | Global (needs a connection) |
 
 ## Navigation
 
-| Action | Shortcut |
-|--------|----------|
-| Quick Switcher | `Ctrl+K` |
-| Toggle sidebar | `Ctrl+Shift+E` |
-| Toggle AI Chat | `Ctrl+Shift+L` |
-| Toggle Inspector | `Ctrl+Shift+I` |
-| Toggle History | `Ctrl+H` |
-| Command Palette | `Ctrl+Shift+P` |
+| Action | Shortcut | Scope |
+|--------|----------|-------|
+| Quick Switcher | `Ctrl+K` | Global |
+| Toggle sidebar | `Ctrl+Shift+E` | Global |
+| Toggle AI Chat | `Ctrl+Shift+L` | Global |
+| Toggle Inspector | `Ctrl+Shift+I` | Global |
+| Toggle History | `Ctrl+H` | Global |
+| Command Palette | `Ctrl+Shift+P` | Global |
 
 ## Settings
 
-| Action | Shortcut |
-|--------|----------|
-| Settings | `Ctrl+,` |
-| Refresh schema | `F5` |
-| Keyboard Shortcuts help | `F1` |
+| Action | Shortcut | Scope |
+|--------|----------|-------|
+| Settings | `Ctrl+,` | Global |
+| Refresh schema | `F5` | Editor |
+| Refresh table data | `F5` | Table browse |
+| Keyboard Shortcuts help | `F1` | Global |
 
 ## Data Grid
 
@@ -73,7 +90,7 @@ The Quick Switcher (`Ctrl+K`) searches and jumps to tables, views, databases, sc
 
 ## Customizing Shortcuts
 
-Most shortcuts above are rebindable in **Settings** > **Shortcuts**:
+All shortcuts above are rebindable in **Settings** > **Shortcuts**:
 
 1. Open **Settings** (`Ctrl+,`) and select the **Shortcuts** tab
 2. Click the shortcut next to the action
@@ -82,7 +99,8 @@ Most shortcuts above are rebindable in **Settings** > **Shortcuts**:
 5. Click **Reset All** to restore every shortcut to its default binding
 
 <Note>
-Tab-switching shortcuts (`Ctrl+Tab` / `Ctrl+Shift+Tab`) are not in the rebindable command list.
+Rebinding affects every way a command can be triggered — the keyboard shortcut
+and the entry shown in the Command Palette stay in sync.
 </Note>
 
 ## Next Steps
