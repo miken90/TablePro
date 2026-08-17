@@ -1,147 +1,59 @@
 ---
 title: Import & Export
-description: Export to CSV, JSON, SQL, or XLSX. Import SQL files with transaction safety and progress tracking.
+description: Export query/table results to CSV, JSON, or SQL. Paste tabular data from the clipboard into the grid.
 ---
 
 # Import & Export
 
-Export data in four formats (CSV, JSON, SQL, XLSX), import SQL files with gzip support, and paste tabular data from the clipboard into the grid.
+Export query or table results to CSV, JSON, or SQL, and paste tabular data from the clipboard into the grid.
+
+<Note>
+An `.sql`/`.sql.gz` file importer (`import_preview` / `import_sql_file`) and an XLSX export writer exist in the backend, but neither is wired to any menu, button, or shortcut in the current build. `Ctrl+Shift+M` is reserved for "Import SQL" in the shortcut registry but has no handler attached yet. This page only documents what's actually reachable from the UI.
+</Note>
 
 ## Export Data
 
-1. Run a query or open a table
-2. Click **Export** in the toolbar
-3. Choose a format, select tables, configure options
-4. Click **Export**
+1. Run a query or open a table (this produces a result in the grid)
+2. Click **Export** on the results toolbar
+3. Choose a format (CSV, JSON, or SQL) and configure options
+4. Click **Export**, choose a save location
 
-<Note>
-**MongoDB**: SQL export is not available. Use CSV, JSON, or XLSX.
-</Note>
+Only the in-memory result currently shown is exported.
 
-<Note>
-**Redis**: SQL export is not available. Use CSV, JSON, or XLSX.
-</Note>
+<Tip>
+Use `LIMIT` in your query to control export size for large tables.
+</Tip>
 
 ### Export Formats
 
 <Tabs>
   <Tab title="CSV">
-    Best for spreadsheets and data analysis tools.
-
     | Option | Default |
     |--------|---------|
-    | Header row | Yes |
-    | Delimiter (comma, semicolon, tab, pipe) | Comma |
-    | Quote handling (always, as needed, never) | As needed |
-    | NULL to empty strings | Yes |
-    | Line breaks in values to spaces | No |
-    | Line ending (LF, CRLF, CR) | LF |
-    | Decimal separator (period, comma) | Period |
-    | Formula sanitization | Yes |
+    | Delimiter | `,` |
+    | Include header row | Yes |
 
-    {/* Screenshot: CSV export options: delimiter, quoting, line breaks */}
-    
+    NULL values are written as empty strings.
   </Tab>
   <Tab title="JSON">
-    Best for APIs, web apps, and NoSQL workflows. Exports as an array of objects.
-
     | Option | Default |
     |--------|---------|
-    | Pretty print | Yes |
-    | Include NULL values | Yes |
-    | Preserve all values as strings | No |
-
-    {/* Screenshot: JSON export options */}
-    
+    | Pretty print | No |
+    | Array of arrays (instead of array of objects) | No |
   </Tab>
   <Tab title="SQL">
-    Best for migrations, backups, and seeding databases.
-
-    Global options:
-
     | Option | Default |
     |--------|---------|
-    | Compress with gzip (`.sql.gz`) | No |
-    | Batch size (rows per INSERT) | 500 |
+    | Table name (used in generated `INSERT` statements) | `export` |
+    | Batch size (rows per `INSERT`) | 100 |
+    | Include `CREATE TABLE` | No |
 
-    Per-table options (configurable individually for multi-table exports):
-
-    | Option | Default |
-    |--------|---------|
-    | Include CREATE TABLE | Yes |
-    | Include DROP TABLE IF EXISTS | Yes |
-    | Include INSERT data | Yes |
-
-    {/* Screenshot: SQL export options: structure, data, batch size */}
-    
-  </Tab>
-  <Tab title="XLSX">
-    Best for sharing data with non-technical users and business reports.
-
-    | Option | Default |
-    |--------|---------|
-    | Include headers (bold first row) | Yes |
-    | NULL as empty cells | Yes |
-
-    Each table exports as a separate worksheet. Numbers are stored as numeric cells for proper Excel formatting. Handles 175K+ rows.
-
-    {/* Screenshot: Excel export options */}
-    
+    Generates `INSERT INTO "table" (...) VALUES (...);` statements; string values are quoted and single quotes are escaped by doubling.
   </Tab>
 </Tabs>
 
-### Exporting Query Results
-
-Right-click the results grid and select **Export Results...**, or go to **File** > **Export Results...**. Choose a format, configure options, and click **Export**. Only in-memory results are exported.
-
-<Tip>
-Use LIMIT in your query to control export size for large tables.
-</Tip>
-
-### Exporting Entire Tables
-
-Click a table in the sidebar and click **Export**, or run `SELECT * FROM table_name` and export.
-
-<Tip>
-Export multiple tables at once via the export dialog's tree view. SQL exports support per-table options for structure, DROP, and data.
-</Tip>
+A live preview of the first 5 rows in the chosen format is shown in the export dialog. There's also a **Copy** action to copy the preview text without saving a file.
 
 ## Clipboard Paste (CSV/TSV)
 
 Paste tabular data directly into the data grid. Press `Ctrl+V` after selecting a row. Format is auto-detected: tabs parse as TSV, commas as CSV.
-
-## Import Data
-
-Import `.sql` and `.sql.gz` files. Statements execute directly against your database: backups, migrations, seed data.
-
-<Note>
-**MongoDB**: SQL import is not available.
-</Note>
-
-### Import Workflow
-
-<Steps>
-  <Step title="Open Import Dialog">
-    Click **File** > **Import**, or drag and drop a `.sql` / `.sql.gz` file onto the app.
-  </Step>
-  <Step title="Configure Options">
-    Set encoding, transaction wrapping, and foreign key check options.
-  </Step>
-  <Step title="Preview and Import">
-    Review the SQL preview, statement count, and file size. Click **Import** to execute.
-  </Step>
-</Steps>
-
-### Import Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| Encoding | File encoding: UTF-8, UTF-16, Latin1, or ASCII | UTF-8 |
-| Wrap in transaction | Execute all statements within a single transaction | Yes |
-| Disable foreign key checks | Temporarily disable FK constraints during import | Yes |
-
-## Progress and Errors
-
-During import, a progress bar shows statements processed, current statement, and overall completion.
-
-Import stops on the first error. If wrapped in a transaction, all changes roll back automatically.

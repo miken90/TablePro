@@ -54,7 +54,7 @@ Right-click in the sidebar and select **Create New Table...**. A visual editor o
 - **Foreign Keys tab** - define relationships with referenced tables, ON DELETE/ON UPDATE actions
 - **SQL Preview tab** - live-generated CREATE TABLE DDL with syntax highlighting
 
-Click **Create Table** (or `Ctrl+Return`) to execute. The new table appears in the sidebar immediately.
+Click **Create Table** to execute. The new table appears in the sidebar immediately.
 
 <Note>
 Supported databases: PostgreSQL, MySQL/MariaDB, SQL Server, SQLite. Each generates database-specific DDL syntax. MongoDB and Redis don't support DDL through this flow.
@@ -90,16 +90,6 @@ Before applying, TablePro shows the generated ALTER TABLE SQL for review.
 <Note>
 The visual queue-and-apply editor covers column add/modify/drop only. Indexes and foreign keys are managed by writing SQL directly (see below) — there is no visual add/edit/delete flow for them.
 </Note>
-
-### Reordering Columns
-
-Drag a column row up or down in the Columns tab to change its position. The reorder executes immediately as an `ALTER TABLE ... MODIFY COLUMN ... AFTER` statement.
-
-<Note>
-Column reordering is only available for MySQL and MariaDB. Other databases do not support changing column order without recreating the table.
-</Note>
-
-Drag is disabled when you have unsaved structure changes. Apply or discard pending changes first.
 
 ### Adding Columns via SQL
 
@@ -167,25 +157,9 @@ ALTER TABLE orders DROP CONSTRAINT fk_orders_user;  -- PostgreSQL
 
 ## Refreshing Structure
 
-Right-click the table > **Refresh**, or use **View** > **Refresh**. Changes made in TablePro refresh automatically.
+Click the refresh icon in the sidebar header, or press `F5`. Changes made in TablePro refresh automatically.
 
 ## MongoDB Collections
 
-The structure tab for MongoDB is **read-only**. TablePro infers the schema by sampling documents. Three columns are shown:
-
-- **Name**: Field name (including nested paths with dot notation)
-- **Type**: BSON type (ObjectId, String, Int32, Int64, Double, Boolean, Date, Array, Object, etc.)
-- **Nullable**: Whether the field is present in all sampled documents
-
-### Indexes
-
-MongoDB indexes are shown as `createIndex()` commands that can be copied and run in `mongosh`.
-
-### DDL Tab
-
-Shows index definitions as `db.collection.createIndex()` statements, collection validators as `db.runCommand({collMod: ...})`, and collection options (capped, size, max) if applicable.
-
-<Note>
-MongoDB is schema-less, so structure modification is not available. Edit documents directly in the data grid.
-</Note>
+MongoDB collections open in a dedicated MQL query tab rather than the table structure tab described above -- there is no structure/DDL view for MongoDB. See [MongoDB](/databases/mongodb) for querying details.
 

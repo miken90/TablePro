@@ -11,7 +11,7 @@ Open settings via `Ctrl+,` or the gear icon in the toolbar.
 
 <CardGroup cols={2}>
   <Card title="General" icon="gear">
-    Language, startup behavior
+    Language, page size, date format
   </Card>
   <Card title="Appearance" icon="palette" href="/customization/appearance">
     Themes, colors, and fonts
@@ -42,218 +42,92 @@ Open settings via `Ctrl+,` or the gear icon in the toolbar.
 
 | Option | Description |
 |--------|-------------|
-| **System** | Follow OS system language (default) |
-| **English** | English |
+| **English** | English (default) |
 | **Tiếng Việt** | Vietnamese |
-| **Türkçe** | Turkish |
 
 <Note>
 Changing the language requires restarting TablePro.
 </Note>
 
-### Startup Behavior
+### Page Size
 
-| Option | Description |
-|--------|-------------|
-| **Show Welcome Screen** | Display the welcome screen with recent connections |
-| **Reopen Last Session** | Auto-reconnect to your last database |
+Rows loaded per page for query/table results. Choices: 25, 50, 100, 500, 1,000. Default is 500.
 
-### Query Execution Timeout
+### NULL Display
 
-Set the maximum time a query runs before cancellation:
-
-| Setting | Default | Range | Description |
-|---------|---------|-------|-------------|
-| **Query timeout** | 60 seconds | 0 -- 600 | Maximum seconds to wait. 0 means no limit. |
-
-The timeout is enforced at the database level:
-
-| Database | Mechanism |
-|----------|-----------|
-| PostgreSQL | `SET statement_timeout` (all statements) |
-| MySQL | `SET SESSION max_execution_time` (SELECT queries) |
-| MariaDB | `SET SESSION max_statement_time` (SELECT queries) |
-| SQLite | `sqlite3_busy_timeout` (lock contention) |
-
-<Note>
-The timeout applies when a new connection is established. Changing it requires reconnecting.
-</Note>
-
-<Note>
-TablePro has no auto-update mechanism and does not send usage telemetry.
-</Note>
-
-## Data Grid Settings
-
-### Font
-
-| Setting | Default | Range | Description |
-|---------|---------|-------|-------------|
-| **Font family** | JetBrains Mono | Any installed monospace font | Font for data grid cells |
-| **Font size** | 13 pt | 10-18 pt | Text size in data grid cells |
-
-Affects all data grid cells, including NULL placeholders and cell editing overlays. A live preview is shown in the settings panel.
-
-<Tip>
-The data grid font is independent of the SQL editor font. You can use different fonts and sizes for each.
-</Tip>
-
-### Row Height
-
-| Option | Height | Best For |
-|--------|--------|----------|
-| **Compact** | 20px | Dense data, more rows visible |
-| **Normal** | 24px | Balanced (default) |
-| **Comfortable** | 28px | Better readability |
-| **Spacious** | 32px | Accessibility |
+Free-text field for how NULL values render in the data grid. Default is `NULL`.
 
 ### Date Format
 
 | Format | Example |
 |--------|---------|
-| ISO 8601 | 2024-12-31 23:59:59 |
-| ISO Date | 2024-12-31 |
-| US Long | 12/31/2024 11:59:59 PM |
-| US Short | 12/31/2024 |
-| EU Long | 31/12/2024 23:59:59 |
-| EU Short | 31/12/2024 |
+| ISO 8601 | 2026-03-13 |
+| US | 03/13/2026 |
+| EU | 13/03/2026 |
+| Unix timestamp | -- |
 
-<Tip>
-ISO 8601 is recommended for consistency, especially with international teams.
-</Tip>
-
-### NULL Display
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **NULL Display** | "NULL" | Text shown for NULL values |
-
-Options:
-- `NULL` - Standard database notation
-- `(null)` - Parenthesized
-- `∅` - Empty set symbol
-- Custom text (max 20 characters)
-
-### Page Size
-
-| Range | Minimum | Maximum | Default |
-|-------|---------|---------|---------|
-| Page Size | 10 | 100,000 | 1,000 |
+Default is ISO 8601.
 
 <Note>
-Larger page sizes use more memory but show more data at once.
+TablePro has no auto-update mechanism and does not send usage telemetry.
 </Note>
 
-<Note>
-**Validation ranges:**
-- **Page Size**: 10 -- 100,000 rows (values outside this range are clamped)
-- **NULL Display**: Maximum 20 characters, no newlines or tabs
-</Note>
+## Connection Settings
 
-### Alternate Row Colors
+### Default Timeout
 
-| Option | Description |
-|--------|-------------|
-| **On** | Zebra striping for easier scanning |
-| **Off** | Uniform background color |
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| **Default timeout** | 30 seconds | 0 -- 3600 | Query timeout preference. `0` means unlimited. |
 
-### Row Numbers
+### Safe Mode
 
-| Option | Description |
-|--------|-------------|
-| **On** | Show row number column (`#`) as the first column |
-| **Off** | Hide the row number column |
+Controls confirmation prompts before destructive or write operations:
 
-### Auto-Show Inspector
+| Level | Behavior |
+|-------|----------|
+| 0 -- Off | No checks |
+| 1 -- Silent | Log to console only |
+| 2 -- Alert (default) | Confirm DELETE/DROP/TRUNCATE |
+| 3 -- Alert+ | Confirm all DML + DDL |
+| 4 -- Safe | Confirm and type the table name to proceed |
+| 5 -- Read-Only | Block all writes |
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Auto-show inspector on row select** | Off | Open the right sidebar automatically when selecting a row in a table tab |
+See [Safe Mode](/features/safe-mode) for details.
 
-## Tab Settings
+### Remember Passwords in Windows Credential Manager
 
-### Reuse Clean Table Tab
+Off by default. When enabled, saved connection passwords are additionally mirrored into the Windows Credential Manager (DPAPI encryption is always applied regardless of this setting).
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Reuse clean table tab** | Off | Clicking a new table in the sidebar replaces the current table tab instead of opening a new one |
+## Performance Settings
 
-A tab is "clean" when all of these are true:
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| **Streaming threshold** | 10,000 rows | 1,000 -- 1,000,000 | Row count above which query results stream instead of loading all at once |
+| **Store max rows** | 100,000 rows | 10,000 -- 10,000,000 | Maximum rows kept in memory for a query result |
 
-- It's a table tab (not query or create table)
-- Not pinned
-- No unsaved changes
-- You haven't interacted with it (no sorting, filtering, row selection, etc.)
+## Diagnostics Settings
 
-When off (default), every table click opens a new tab.
-
-<Tip>
-Enable this for single-tab browsing, similar to TablePlus's default behavior.
-</Tip>
-
-### Preview Tabs
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Enable preview tabs** | On | Single-clicking a table opens a temporary tab that gets replaced on next click |
-
-Single-clicking a table opens a preview tab that gets replaced on next click. Double-clicking or interacting with the tab (sorting, filtering, editing) makes it permanent.
-
-Preview tabs show "Preview" in the subtitle and are not persisted across restarts.
+Lists local crash dumps: Rust panic JSON dumps from `%LOCALAPPDATA%\TablePro\crashes\` and Windows Error Reporting native dumps from `%LOCALAPPDATA%\CrashDumps\`. Refresh the list or delete individual entries; attach them manually when filing a bug report.
 
 ## Keyboard Settings
 
-Customize keyboard shortcuts for menu actions. See [Keyboard Shortcuts](/features/keyboard-shortcuts#customizing-shortcuts) for full details.
+Customize keyboard shortcuts for commands. See [Keyboard Shortcuts](/features/keyboard-shortcuts#customizing-shortcuts) for full details.
 
 ### Rebinding Shortcuts
 
-1. Open **Settings** > **Keyboard**
-2. Click the shortcut field next to any action
+1. Open **Settings** > **Shortcuts**
+2. Click the shortcut next to any action
 3. Press the new key combination
-4. Updates immediately
+4. Save (or Save Anyway if it conflicts with another shortcut)
 
 ### Conflict Detection
 
-Assigning a shortcut already in use shows a dialog with **Cancel** or **Reassign** options.
+Assigning a shortcut already in use shows an inline warning naming the conflicting command; saving anyway reassigns that shortcut away from the other command.
 
-### Reset to Defaults
+### Reset
 
-Click **Reset to Defaults** to restore all shortcuts.
-
-## History Settings
-
-### Maximum Entries
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Max Entries** | 10,000 | Maximum queries to keep |
-
-Set to `0` for unlimited.
-
-### Maximum Days
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Max Days** | 90 | Delete queries older than this |
-
-Set to `0` to keep history forever.
-
-### Auto Cleanup
-
-| Option | Description |
-|--------|-------------|
-| **On** | Automatically remove old entries (default) |
-| **Off** | Manual cleanup only |
-
-<Warning>
-Disabling auto cleanup with unlimited entries may cause the history database to grow very large over time.
-</Warning>
-
-### Clear History
-
-1. Open Settings > History
-2. Click **Clear All History**
-3. Confirm the action
+Each shortcut has its own **Reset to default** control. **Reset All** appears when any shortcut has been customized and restores every shortcut to its default binding.
 
 ## Settings Storage
 

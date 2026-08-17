@@ -77,17 +77,9 @@ Place your cursor in any statement and press `Ctrl+Enter` to execute just that o
 
 ### Selecting and Executing
 
-Select text and press `Ctrl+Enter` to run only the selection.
+Select text and press `Ctrl+Enter` to run only the selection. If the selection contains multiple statements, the whole selected text is sent to the database as one batch -- how it's handled (transactional or not, partial failure behavior) depends on the database driver, not on TablePro.
 
-If the selection contains **multiple statements** (separated by semicolons), they run sequentially in a transaction:
-
-- Statements execute in order, one at a time
-- If any statement fails, execution stops and all changes roll back
-- The error message identifies which statement failed (e.g. "Statement 3/5 failed: ...")
-- Results from the last `SELECT` are shown in the data grid
-- Each statement is recorded individually in query history
-
-Good for running SQL dumps, migrations, or batches of related statements:
+`Ctrl+Shift+Enter` runs every statement in the editor the same way, as one combined batch.
 
 ```sql
 DROP TABLE IF EXISTS users;
@@ -158,21 +150,16 @@ Results appear in the data grid below the editor:
 
 ### Status Bar
 
-A persistent status bar at the bottom of the window shows:
+A thin status bar under the SQL editor shows:
 
-**Left side (Connection & Schema Info):**
-- **Connection status** — connected/disconnected indicator
-- **Driver badge** — which database driver is active (e.g. PostgreSQL, MySQL)
-- **Database name** — currently selected database
-- **Table count** — number of tables in the current database
+- **Statement position** — `Stmt N/M` when the editor has more than one statement
+- **Cursor position** — `Ln <line>, Col <col>`
+- **Selection size** — `<count> selected` when text is selected
+- **VIM badge** — shown when Vim mode is on
+- **Dialect label** — abbreviated driver badge (PG, MySQL, MSSQL, SQLite, Redis, ...)
+- **Ctrl+Enter to run** hint
 
-**Center (Query Results):**
-- **Row count** — number of rows returned by the last query or rows affected by INSERT/UPDATE/DELETE
-- **Execution time** — query duration in milliseconds
-
-**Right side (Panel Toggles):**
-- **Inspector button** — click to show/hide the cell inspector panel (or press `Ctrl+Shift+I`)
-- **Filter button** — click to show/hide the filter panel
+The results grid has its own toolbar above it (not the editor status bar) showing row count, rows affected, and query execution time in milliseconds, plus **Refresh** and **Export** buttons.
 
 ### Explain Query
 
@@ -449,9 +436,9 @@ JOIN orders o ON u.id = o.user_id;
 | Copy | `Ctrl+C` |
 | Paste | `Ctrl+V` |
 | Undo | `Ctrl+Z` |
-| Redo | `Ctrl+Shift+Z` |
 | Find | `Ctrl+F` |
-| Find and Replace | `Ctrl+Alt+F` |
+| Select next occurrence | `Ctrl+D` |
+| Run all statements | `Ctrl+Shift+Enter` |
 
 ## Best Practices
 

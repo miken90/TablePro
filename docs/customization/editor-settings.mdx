@@ -1,6 +1,6 @@
 ---
 title: Editor Settings
-description: SQL editor font, size, line numbers, word wrap, indentation, and Vim mode configuration
+description: SQL editor font, size, word wrap, tab width, and Vim mode configuration
 ---
 
 # Editor Settings
@@ -27,32 +27,9 @@ If a selected font isn't installed, TablePro falls back to the browser's generic
 
 | Setting | Range | Default |
 |---------|-------|---------|
-| Font Size | 11-18 pt | 13 pt |
-
-**Recommendations**:
-
-| Size | Best For |
-|------|----------|
-| 11-12 pt | Small screens, seeing more code |
-| 13-14 pt | Standard usage (default) |
-| 15-16 pt | Better readability |
-| 17-18 pt | Large screens, accessibility |
+| Font Size | 10-24 pt | 14 pt |
 
 ## Display Settings
-
-### Line Numbers
-
-| Option | Description |
-|--------|-------------|
-| **On** | Show line numbers (default) |
-| **Off** | Hide for a minimal look |
-
-### Current Line Highlight
-
-| Option | Description |
-|--------|-------------|
-| **On** | Highlight the line with cursor (default) |
-| **Off** | No highlight |
 
 ### Word Wrap
 
@@ -61,41 +38,26 @@ If a selected font isn't installed, TablePro falls back to the browser's generic
 | **Off** | Long lines scroll horizontally (default) |
 | **On** | Long lines wrap to next line |
 
+### Vim Mode
+
+| Option | Description |
+|--------|-------------|
+| **Off** | Standard editing keybindings (default) |
+| **On** | Modal Vim keybindings -- see [Keyboard Shortcuts](/features/keyboard-shortcuts#vim-mode) |
+
 ## Indentation Settings
 
 ### Tab Width
 
 | Setting | Options | Default |
 |---------|---------|---------|
-| Tab Width | 1-16 spaces | 4 |
-
-Common choices:
-
-| Width | Usage |
-|-------|-------|
-| 2 spaces | Compact, JavaScript-style |
-| 4 spaces | Standard SQL formatting (recommended) |
-| 8 spaces | Traditional Unix-style |
-
-### Auto Indent
-
-| Option | Description |
-|--------|-------------|
-| **On** | New lines match previous indentation (default) |
-| **Off** | New lines start at column 1 |
-
-```sql
-SELECT
-    u.id,
-    u.name,
-    |  -- Cursor here, next line auto-indents
-```
+| Tab Width | 2, 4, or 8 spaces | 4 |
 
 ## Editor Behavior
 
 ### Autocomplete
 
-Autocomplete is always on. Dismiss with `Escape`. See [Autocomplete](/features/autocomplete) for details.
+Autocomplete is always on. See [Autocomplete](/features/autocomplete) for details.
 
 All editor settings apply immediately. No restart required.
 
@@ -103,10 +65,12 @@ All editor settings apply immediately. No restart required.
 
 | Action | Shortcut |
 |--------|----------|
-| Execute query | `Ctrl+Enter` |
-| Undo | `Ctrl+Z` |
-| Redo | `Ctrl+Shift+Z` |
+| Run query | `Ctrl+Enter` |
+| Run all queries | `Ctrl+Shift+Enter` |
+| Format SQL | `Ctrl+Shift+F` |
+| Explain query | `Ctrl+Shift+X` |
+| Toggle comment | `Ctrl+/` |
+| Select next occurrence | `Ctrl+D` |
 | Find | `Ctrl+F` |
-| Replace | `Ctrl+Alt+F` |
+| Undo | `Ctrl+Z` |
 | Select All | `Ctrl+A` |
-| Go to Line | `Ctrl+G` |

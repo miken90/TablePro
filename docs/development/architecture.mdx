@@ -86,7 +86,7 @@ pub trait DatabaseDriver: Send + Sync {
 | Redis | `driver-redis` | `redis` (tokio-rustls) |
 
 <Note>
-`cancel_query` is only implemented for SQLite (`interrupt()`); the other 5 drivers return `Unsupported`.
+`cancel_query` is implemented for PostgreSQL (out-of-band `CancelRequest`), MySQL (`KILL QUERY` on a side connection), and SQLite (`interrupt()`). SQL Server, Redis, and MongoDB return `Unsupported` -- each for a documented driver-specific reason (see the `cancel_query` doc comments in each driver crate).
 </Note>
 
 Each driver has a capability sidecar (`driver-capabilities/driver-<name>.capabilities.json`) declaring flags like `supportsSchemas`, `supportsDdl`, `supportsImportExport` — the frontend gates UI on these.
@@ -123,9 +123,7 @@ flowchart TB
 
 Each run mints a monotonic generation; stale streamed chunks from a superseded run are dropped by generation check.
 
-<Warning>
-`queryStore`'s in-flight-cancel tracking is a module-level singleton, not per-tab — starting a query in one editor tab currently cancels an in-flight query in another tab. See [Upstream Parity Notes](/development/upstream-parity-notes) for related invariants worth re-auditing.
-</Warning>
+In-flight cancel handles are keyed per tab, so starting a query in one editor tab does not cancel an in-flight query in another tab.
 
 ## Testing
 

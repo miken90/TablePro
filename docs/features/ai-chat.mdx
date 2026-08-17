@@ -1,47 +1,37 @@
 ---
 title: AI Chat
-description: Built-in AI chat panel with support for Claude, OpenAI, Gemini, OpenRouter, Ollama, and custom endpoints
+description: Built-in AI chat panel with support for OpenAI, OpenRouter, LM Studio, Ollama, and custom OpenAI-compatible endpoints
 ---
 
 # AI Chat
 
-Built-in AI chat panel for writing, explaining, and fixing SQL. Supports Claude, OpenAI, Gemini, OpenRouter, Ollama, and custom OpenAI-compatible endpoints.
+Built-in AI chat panel for writing SQL. Supports OpenAI, OpenRouter, LM Studio, Ollama, and custom OpenAI-compatible endpoints.
 
 ## Opening the Panel
 
-Press `Ctrl+Shift+L`, click the AI toolbar button, or go **View** > **Toggle AI Chat**.
+Press `Ctrl+Shift+L`, click the AI toolbar button, or run **Toggle AI Chat** from the Command Palette (`Ctrl+Shift+P`).
 
 ## Chatting with AI
 
-Type a question and press Enter. The AI receives your database type, schema, and current query, then responds with syntax-highlighted SQL code blocks. Each code block has **Copy** and **Insert to Editor** buttons. Token counts appear below each response.
+Type a question and press Enter (`Shift+Enter` for a newline). When a connection is active, the AI receives your database type and schema (table/column names, primary keys, foreign keys) as context. Responses render as markdown with fenced code blocks in plain monospace text (no syntax highlighting). Each code block has a **Copy** button. Token counts appear below each response when the provider returns usage data.
 
 Conversations auto-save and auto-title from your first message. Browse history, start new conversations, or delete old ones from the panel.
 
-Failed responses show **Retry**; successful ones show **Regenerate**. Responses stream in real-time -- click **Stop** to cancel.
+Every response shows a **Retry** button that removes it and resends the last user message. Responses stream in real-time -- click **Stop** to cancel.
 
 ## Configuring AI Providers
 
-Configure providers in **Settings** (`Ctrl+,`) > **AI**. Ollama auto-detects on launch.
+Configure providers in **Settings** (`Ctrl+,`) > **AI**.
 
 ### Adding a Provider
 
-Click **Add Provider**, choose a type, enter your API key, specify a model (or click **Fetch** to list available models), then **Test** to verify.
+Click **Add Provider**, choose a type, enter your API key, specify a model (or click **Fetch Models** to list available models), then **Test** to verify.
 
 API keys are DPAPI-encrypted at rest, never in plain text.
 
 ### Feature Routing
 
-Route each feature (Chat, Explain, Optimize, Fix Error, Inline Suggestions) to a specific provider, or use the default.
+Route each feature (Chat, Explain Query, Fix Error, Inline Suggestions) to a specific provider and model, or leave it unrouted to use the first enabled provider.
 
-Configure context in **Settings** > **AI** > **Context**: schema (on), current query (on), query results (off), max tables (20). Set a per-connection AI policy (Use Default, Always Allow, Ask Each Time, or Never) for sensitive connections.
-
-## Editor Integration
-
-Right-click SQL in the editor for **Explain with AI** and **Optimize with AI**.
-
-Shortcuts: Toggle AI Chat (`Ctrl+Shift+L`), Explain (`Ctrl+L`), Optimize (`Ctrl+Alt+L`). Customizable in **Settings** > **Keyboard** > **AI**.
-
-### Ask AI to Fix Errors
-
-Query error dialogs include an **Ask AI to Fix** button. It opens the chat panel with the failed query and error message.
+The **Max Schema Tables** slider (default 20) caps how many tables are included in the schema context sent to the AI. An **Inline Suggestions** toggle enables/disables AI-powered autocomplete in the editor.
 
