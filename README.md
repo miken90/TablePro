@@ -1,17 +1,11 @@
 <p align="center">
-  <img src=".github/assets/logo.png" width="128" height="128" alt="TablePro">
+  <img src="docs/logo/logo.png" width="128" height="128" alt="TablePro">
 </p>
 
 <h1 align="center">TablePro</h1>
 
 <p align="center">
-  Database client with Windows as the active implementation target and macOS as upstream reference in this repo.
-</p>
-
-<p align="center">
-  <a href="https://docs.tablepro.app">Documentation</a> ·
-  <a href="https://github.com/datlechin/tablepro/releases">Download</a> ·
-  <a href="https://github.com/datlechin/tablepro/issues">Report Bug</a>
+  A personal, non-profit, Windows-only database client.
 </p>
 
 <p align="center">
@@ -24,45 +18,35 @@
 
 ---
 
-<p align="center">
-  <img src=".github/assets/hero-dark.png" alt="TablePro Screenshot" width="800">
-</p>
-
 ## About
 
-TablePro is a desktop database client with two platform codebases in this repository:
+TablePro is a Windows-only desktop database client (`tablepro-windows/`), built with Tauri v2 + Rust + React/TypeScript. It is a personal fork detached from its upstream macOS origin — no macOS code remains in this repository.
 
-- `TablePro/`: macOS app (upstream/reference in this repo workflow)
-- `tablepro-windows/`: Windows app (active implementation target)
-
-The Windows app is built with Tauri v2 + Rust + React/TypeScript and includes: session-based query execution, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, auto-updater, AI chat + inline AI, connection health monitoring, driver capability substrate, command registry with customizable shortcuts, deep-link support, and 6 database drivers (PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis).
+It includes: session-based query execution, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, AI chat + inline AI, driver capability substrate, command registry with customizable shortcuts, deep-link support, and 6 compiled-in database drivers (PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis). No pricing, licensing, activation, subscription, telemetry, or auto-updater — permanently out of scope.
 
 ## Platform Status
 
-| Platform | Runtime status | Version signal in repo |
+| Platform | Runtime status | Version |
 |---|---|---|
-| macOS | Stable upstream/reference app in this repo workflow | `CHANGELOG.md` latest macOS release notes |
-| Windows | Active pre-release implementation target | `tablepro-windows/package.json` and `src-tauri/tauri.conf.json` currently `0.2.0` |
-| Linux | Planned | No production target in this repo yet |
+| Windows | Active, only supported platform | `tablepro-windows/package.json` / `src-tauri/tauri.conf.json`, currently `0.7.0` |
 
 ## Windows Feature Snapshot (implemented)
 
-- Connection management: save/list/delete, group management, session-based connect/disconnect, per-connection reconnect guard
-- Drivers: PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis (6 total, loaded as DLL plugins)
+- Connection management: save/list/delete, group management, session-based connect/disconnect, user-initiated reconnect
+- Drivers: PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis (6 total, compiled-in Rust crates, no plugin/DLL system)
 - Driver capability substrate: sidecar `.capabilities.json` files per driver, frontend gating via `listDrivers`/`getDriverCapabilities`
-- Query workflows: execute, cancel, paginated table browsing, progress events, payload guardrails (`MAX_RESULT_ROWS = 50,000` truncation)
+- Query workflows: execute, cancel (SQLite only), paginated table browsing, progress events, payload guardrails (`MAX_RESULT_ROWS = 50,000` truncation)
 - MongoDB workflows: find() with JSON filter/sort/limit, collection browser, BSON-to-row flattening, sample-based column discovery
 - Redis workflows: CLI command panel (40+ operations), SCAN-based key browsing, all data types, TLS support, database switching
 - Data workflows: staged cell edits, SQL generation, save changes
 - Import/Export: SQL import preview + execute, CSV/JSON/SQL/XLSX export
-- Security: DPAPI encryption for saved connection secrets, SSH host key verification (TOFU)
+- Security: DPAPI encryption for saved connection secrets by default, optional Windows Credential Manager mirroring, SSH host key verification (TOFU)
 - AI: chat panel (streaming), inline suggestions, provider/model settings, schema-aware context
-- Reliability: health monitor with `connection:lost` / `connection:reconnected` events, per-connection reconnect action
+- Reliability: `connection:lost` / `connection:reconnected` events, user-initiated per-connection reconnect
 - Tab state persistence: backend JSON file (`%APPDATA%/TablePro/tab-state.json`) with one-time localStorage migration
 - Command registry: 21 namespaced commands, customizable keyboard shortcuts with conflict detection and swap
-- Quick switcher: grouped/ranked results (tables, views, collections, databases, schemas, recent queries), fuzzy scoring
-- Deep-links: `tablepro://open/connection/{id}` protocol for saved connections
-- Updates: Tauri updater plugin enabled in release builds
+- Quick switcher: grouped/ranked results (tables, views, databases, schemas, recent queries), fuzzy scoring
+- Deep-links: `tablepro://open/connection/{id}` and `tablepro://import?...` protocol handlers
 
 ## Development Documentation
 
@@ -75,5 +59,3 @@ The Windows app is built with Tauri v2 + Rust + React/TypeScript and includes: s
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE).
-
-Contributions require signing a Contributor License Agreement (CLA). See [CLA.md](CLA.md) for details.

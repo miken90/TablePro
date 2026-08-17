@@ -1,17 +1,11 @@
 <p align="center">
-  <img src=".github/assets/logo.png" width="128" height="128" alt="TablePro">
+  <img src="docs/logo/logo.png" width="128" height="128" alt="TablePro">
 </p>
 
 <h1 align="center">TablePro</h1>
 
 <p align="center">
-  Ứng dụng quản lý cơ sở dữ liệu với Windows là mục tiêu implement chính và macOS là upstream reference trong repo này.
-</p>
-
-<p align="center">
-  <a href="https://docs.tablepro.app">Tài liệu</a> ·
-  <a href="https://github.com/datlechin/tablepro/releases">Tải xuống</a> ·
-  <a href="https://github.com/datlechin/tablepro/issues">Báo lỗi</a>
+  Ứng dụng quản lý cơ sở dữ liệu cá nhân, phi lợi nhuận, chỉ dành cho Windows.
 </p>
 
 <p align="center">
@@ -20,38 +14,33 @@
 
 ---
 
-<p align="center">
-  <img src=".github/assets/hero-dark.png" alt="TablePro Screenshot" width="800">
-</p>
-
 ## Giới thiệu
 
-Repository này có 2 codebase nền tảng:
+TablePro là ứng dụng quản lý cơ sở dữ liệu chỉ dành cho Windows (`tablepro-windows/`), xây dựng bằng Tauri v2 + Rust + React/TypeScript. Đây là fork cá nhân đã tách hẳn khỏi upstream macOS — không còn code macOS nào trong repo này.
 
-- `TablePro/`: ứng dụng macOS (upstream/reference trong workflow hiện tại)
-- `tablepro-windows/`: ứng dụng Windows đang được implement tích cực
-
-Bản Windows dùng Tauri v2 + Rust + React/TypeScript và đã có các workflow chính: query theo session, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, auto-updater, AI chat, inline AI suggestions và connection health monitoring.
+Gồm: query theo session, schema explorer, inline editing + save changes, SQL import/export, SSH tunneling, AI chat + inline AI, driver capability substrate, command registry với shortcut tùy chỉnh, deep-link, và 6 driver cơ sở dữ liệu compiled-in (PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis). Không có pricing, licensing, activation, subscription, telemetry, hay auto-updater — vĩnh viễn ngoài phạm vi.
 
 ## Trạng thái nền tảng
 
-| Nền tảng | Trạng thái trong repo | Tín hiệu version |
+| Nền tảng | Trạng thái | Phiên bản |
 |---|---|---|
-| macOS | Dòng sản phẩm ổn định, dùng làm upstream/reference trong workflow repo này | `CHANGELOG.md` |
-| Windows | Bản pre-release đang được phát triển chính | `tablepro-windows/package.json` và `src-tauri/tauri.conf.json` |
-| Linux | Kế hoạch tương lai | Chưa có target production trong repo |
+| Windows | Đang phát triển, nền tảng duy nhất được hỗ trợ | `tablepro-windows/package.json` / `src-tauri/tauri.conf.json`, hiện tại `0.7.0` |
 
 ## Tóm tắt tính năng Windows đã implement
 
-- Quản lý connection: save/list/delete, group management, connect/disconnect theo session
-- Driver hiện có trên Windows: PostgreSQL, MySQL, SQL Server, SQLite
-- Query workflow: execute, cancel, paginated table browsing, progress events
+- Quản lý connection: save/list/delete, group management, connect/disconnect theo session, reconnect do người dùng khởi tạo
+- Driver: PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis (6 driver, Rust crate compiled-in, không có hệ thống plugin/DLL)
+- Driver capability substrate: file sidecar `.capabilities.json` cho từng driver, gating ở frontend qua `listDrivers`/`getDriverCapabilities`
+- Query workflow: execute, cancel (chỉ SQLite), paginated table browsing, progress events, giới hạn payload (`MAX_RESULT_ROWS = 50,000`)
+- MongoDB: find() với JSON filter/sort/limit, collection browser, BSON-to-row flattening
+- Redis: CLI command panel (40+ lệnh), SCAN key browsing, đầy đủ kiểu dữ liệu, hỗ trợ TLS, chuyển đổi database
 - Data workflow: staged cell edits, SQL generation, save changes
 - Import/Export: preview + import SQL, export CSV/JSON/SQL/XLSX
-- Security: mã hóa DPAPI cho secret đã lưu, SSH host key verification (TOFU)
+- Security: mã hóa DPAPI cho secret đã lưu theo mặc định, tùy chọn đồng bộ Windows Credential Manager, SSH host key verification (TOFU)
 - AI: chat panel streaming, inline suggestions, provider/model settings, schema-aware context
-- Reliability: health monitor với sự kiện `connection:lost` / `connection:reconnected` và reconnect action
-- Updates: Tauri updater plugin cho release builds
+- Reliability: sự kiện `connection:lost` / `connection:reconnected`, reconnect do người dùng khởi tạo theo từng connection
+- Command registry: 21 lệnh, shortcut tùy chỉnh với phát hiện xung đột và hoán đổi
+- Deep-links: `tablepro://open/connection/{id}` và `tablepro://import?...`
 
 ## Tài liệu phát triển
 
@@ -61,21 +50,6 @@ Bản Windows dùng Tauri v2 + Rust + React/TypeScript và đã có các workflo
 - [Code Standards](docs/code-standards.md)
 - [Project Roadmap](docs/project-roadmap.md)
 
-## Nhà tài trợ
-
-Cảm ơn những người đã hỗ trợ TablePro:
-
-- **[Dwarves Foundation](https://dwarves.foundation/?ref=tablepro)**
-- **[Nimbus](https://getnimbus.io?ref=tablepro)**
-- **[Huy TQ](https://github.com/imhuytq)** — tài trợ Apple Developer Program
-- **[Unikorn](https://unikorn.vn?ref=tablepro)**
-
-## Lịch sử Star
-
-[![Star History Chart](https://api.star-history.com/svg?repos=datlechin/TablePro&type=Date)](https://star-history.com/#datlechin/TablePro&Date)
-
 ## Giấy phép
 
 Dự án này được cấp phép theo [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE).
-
-Đóng góp yêu cầu ký Contributor License Agreement (CLA). Xem [CLA.md](CLA.md) để biết thêm chi tiết.
