@@ -143,13 +143,49 @@ export function resolveActiveQuerySessionId(): string | undefined {
 //
 // Invariants:
 //   • Channel.onmessage is wired BEFORE invoke() (Tauri spike rule §1).
-//   • A new run cancels any in-flight stream; the per-run cancel handle
-//     is registered in `activeStreamCancel` so external `cancel()` works.
+//   • A new run cancels the prior in-flight stream OF THE SAME TAB only;
+//     the per-run cancel handle is registered against that tab so external
+//     `cancel()` reaches it and other tabs stay untouched.
 //   • Every run mints a monotonic generation; stale chunks are dropped
 //     in the columnar store.
 
-let streamGeneration = 0;
-let activeStreamCancel: null | (() => void) = null;
+/** In-flight stream owned by a single tab. */
+interface TabStream {
+  generation: number;
+  cancel: () => void;
+}
+
+/** Cancel handles keyed by tab. Keeping these per tab is what stops a run in
+ *  one tab from cancelling another tab's query. */
+const tabStreams = new Map<string, TabStream>();
+
+/** Monotonic generation allocator. Deliberately shared across tabs: the
+ *  columnar result store is a single global stream buffer that drops chunks
+ *  whose generation doesn't match, so per-tab counters would collide and let
+ *  one tab's late chunks land in another tab's result. */
+let nextStreamGeneration = 0;
+
+/** Key identifying which tab owns a stream. Falls back to the session when no
+ *  tab is active (Mongo/Redis panels, command palette runs). */
+function streamKeyFor(sessionId: string): string {
+  const { activeTabId } = useEditorStore.getState();
+  return activeTabId ?? `session:${sessionId}`;
+}
+
+/** Cancel the in-flight stream of one tab, if any. */
+function cancelTabStream(key: string): void {
+  tabStreams.get(key)?.cancel();
+}
+
+/** Test seam: drop all registered handles between cases. */
+export function __resetTabStreams(): void {
+  tabStreams.clear();
+}
+
+/** Test seam: which tabs currently hold an in-flight stream. */
+export function __activeStreamKeys(): string[] {
+  return [...tabStreams.keys()];
+}
 
 /** Materialize column-major data into row-major `(string | null)[][]`
  *  for back-compat with the legacy `QueryResult.rows` shape. */
@@ -187,8 +223,10 @@ async function runQuery(
     console.warn("[queryStore] params ignored by streaming pipeline; use inline SQL");
   }
 
-  // Cancel any prior in-flight stream before starting.
-  activeStreamCancel?.();
+  // Cancel this tab's own prior in-flight stream before starting. Other
+  // tabs' streams are left alone.
+  const streamKey = streamKeyFor(sessionId);
+  cancelTabStream(streamKey);
 
   set({
     isExecuting: true,
@@ -207,8 +245,8 @@ async function runQuery(
   });
 
   // Mint generation + reset columnar store.
-  streamGeneration += 1;
-  const gen = streamGeneration;
+  nextStreamGeneration += 1;
+  const gen = nextStreamGeneration;
   useQueryResultStore.getState().beginStream(gen);
 
   // Wire channel BEFORE invoke (spike rule §1).
@@ -224,7 +262,7 @@ async function runQuery(
       /* swallow: cancel best-effort */
     });
   };
-  activeStreamCancel = cancelHandle;
+  tabStreams.set(streamKey, { generation: gen, cancel: cancelHandle });
 
   channel.onmessage = (chunk) => {
     if (cancelled) return;
@@ -255,8 +293,11 @@ async function runQuery(
     }
   }
 
-  // Clear our cancel slot if it's still ours.
-  if (activeStreamCancel === cancelHandle) activeStreamCancel = null;
+  // Clear this tab's slot only if it's still ours (a newer run in the same
+  // tab may have replaced it).
+  if (tabStreams.get(streamKey)?.cancel === cancelHandle) {
+    tabStreams.delete(streamKey);
+  }
 
   if (cancelled) {
     // User-initiated cancel: leave isExecuting false.
@@ -369,9 +410,10 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   },
 
   cancel: async (sessionId) => {
-    // Kill the local stream listener immediately (drops further chunks
+    // Kill this tab's stream listener immediately (drops further chunks
     // and prevents the post-invoke `result` synthesis from running).
-    activeStreamCancel?.();
+    // Other tabs' streams are untouched.
+    cancelTabStream(streamKeyFor(sessionId));
     // Best-effort backend cancel (may be redundant with the cancel
     // already issued by `activeStreamCancel`, but harmless).
     await commands.cancelQuery(sessionId);

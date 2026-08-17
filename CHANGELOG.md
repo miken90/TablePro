@@ -13,6 +13,7 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 ### Fixed
 
 - Query cancellation now actually stops the running statement on PostgreSQL (out-of-band cancel request) and MySQL/MariaDB (`KILL QUERY` on a second connection, leaving the session intact). Previously Cancel was a no-op on every engine except SQLite.
+- Cancellation state is now owned per editor tab. Running a query in one tab no longer cancels a query still running in another tab, and cancelling a tab cancels only that tab.
 
 ### Changed
 
