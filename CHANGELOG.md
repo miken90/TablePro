@@ -12,6 +12,15 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- Export no longer holds an unbounded result in memory. Up to the **Store max rows** performance setting the result is read in one execution; beyond it the export pages the query, which requires a top-level `ORDER BY` and is refused with an actionable message when the query has none.
+- Backspace, Delete and `Ctrl+V` typed into the filter box, the WHERE input, the quick search or the SQL editor no longer stage row deletes or get swallowed. With rows selected in table mode the grid's global key handler ignored where the key was typed.
+- The command palette's **Refresh Schema** and **Format SQL** entries now do something. Both dispatched a window event that no listener anywhere handled. The same dead event meant the object tree kept showing the pre-import schema after a SQL import completed.
+- **Import SQL** is disabled while nothing is connected instead of silently setting a flag that made the dialog spring open on the next connect.
+- Switching to a tab that has no connection now binds it in a single visible state update, instead of mutating the tab object in place and scheduling the real update on a timer.
+- Connecting a database no longer re-points a tab that names a different connection. A tab whose connection had dropped was silently rebound to whatever was connected next; it now keeps its own connection and running in it says that connection is not connected.
+- Stop no longer guesses. With queries running in several tabs and none of them focused, it cancelled the most recent one; it now cancels nothing and says which tab to switch to. A single running query is still stopped from any tab.
+- Dropping a view emits `DROP VIEW` instead of `DROP TABLE`.
+
 - Grid saves no longer rewrite text data. Quoting is decided by the column's declared type, which the frontend now sends with the save payload, instead of by guessing from the value: a `varchar` postcode `007` stays `007` instead of becoming `7`, the literal strings `true`/`false` stay strings in a text column instead of becoming `1`/`0`, and values like `NaN`, `+5` or `inf` no longer break the save with an engine syntax error. When a column's type is unknown the value is quoted, which every supported engine coerces correctly.
 - "Copy as SQL" refuses to build an `UPDATE` when no primary key column is in the selection. It previously emitted `UPDATE "t" SET … ;` with no `WHERE`, which rewrites every row in the table when pasted, while the grid's own save path already declined the same edit.
 - Browsing a SQL Server table with no primary key works again. The pagination fallback ordered by every column, which SQL Server rejects for `text`, `ntext`, `image`, `xml`, `geography`, `geometry` and `hierarchyid` columns (Msg 306). The ordering key is now the primary key, then a unique index, then an identity column, then `%%physloc%%`.

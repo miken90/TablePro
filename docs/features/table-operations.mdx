@@ -17,7 +17,7 @@ For tables (not views), right-click offers:
 | **Delete All Records** | Deletes all rows (DML, not DDL) |
 | **Drop Table** | Permanently deletes the table and its data |
 
-For views, only **Drop View** is offered (no truncate / delete-all-records, since a view has no rows of its own).
+For views, only **Drop View** is offered (no truncate / delete-all-records, since a view has no rows of its own), and it emits `DROP VIEW` rather than `DROP TABLE`.
 
 All three ask you to type the table's name before the confirm button is enabled; pressing `Enter` does nothing until the typed name matches.
 

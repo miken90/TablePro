@@ -36,14 +36,25 @@ The toolbar button is hidden for engines that do not support import/export (Mong
 4. Click **Export**, choose a save location
 
 The export re-runs the query that produced the grid, on the server, and writes
-what comes back. It runs **once**: the whole result is read into memory and
-then written out. Paging the query in chunks was dropped because no engine here
-guarantees the same row order across executions unless the query itself defines
-one, so consecutive chunks could repeat some rows and skip others.
+what comes back. How it reads depends on size:
+
+- **Up to the "Store max rows" setting** (Settings → Performance, 100,000 by
+  default): the result is read in one execution and written out. Memory is
+  bounded by that setting.
+- **Larger than that**: the export reads the rest in chunks, which is only
+  correct when the query fixes its own row order. No engine here guarantees the
+  same order across executions otherwise, so consecutive chunks would repeat
+  some rows and skip others. A query with a top-level `ORDER BY` is paged; one
+  without is **refused**, with a message asking for an `ORDER BY`.
+
+A query that already ends in `LIMIT`/`OFFSET` (or SQL Server, which has no
+`LIMIT` form) is always read in one execution — a pagination tail cannot be
+appended to it.
 
 <Tip>
-Use `LIMIT` in your query to control export size for large tables — a very
-large result is held in memory before it reaches the file.
+If a large export is refused, add an `ORDER BY` on a column that uniquely
+identifies each row — a primary key is ideal — or narrow the query with
+`WHERE`.
 </Tip>
 
 ### Export Formats
