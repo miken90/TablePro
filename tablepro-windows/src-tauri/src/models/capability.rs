@@ -2,9 +2,10 @@ use serde::{Deserialize, Serialize};
 
 /// Capabilities advertised by a driver via its sidecar JSON file.
 ///
-/// All fields default to `true` so that existing SQL drivers without a
-/// sidecar file behave identically to today.  A future MongoDB driver
-/// would set SQL-specific capabilities to `false`.
+/// The SQL-shape fields default to `true` so that existing SQL drivers
+/// without a sidecar file behave identically to today; a document driver such
+/// as MongoDB sets those to `false`. `supports_query_cancellation` is the one
+/// exception and defaults to `false` — see its field docs.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DriverCapabilities {
@@ -35,6 +36,14 @@ pub struct DriverCapabilities {
     /// Has a relational structure editor (columns, indexes, FKs).
     #[serde(default = "yes")]
     pub supports_structure_view: bool,
+
+    /// Can abort an in-flight query server-side.
+    ///
+    /// Unlike the other flags this defaults to `false`: a driver that does not
+    /// declare it cannot be assumed to cancel, and showing a Cancel control
+    /// that silently does nothing is worse than showing none.
+    #[serde(default)]
+    pub supports_query_cancellation: bool,
 }
 
 fn yes() -> bool {
@@ -51,6 +60,7 @@ impl Default for DriverCapabilities {
             supports_inline_edit: true,
             supports_import_export: true,
             supports_structure_view: true,
+            supports_query_cancellation: false,
         }
     }
 }
@@ -78,6 +88,8 @@ mod tests {
         assert!(caps.supports_inline_edit);
         assert!(caps.supports_import_export);
         assert!(caps.supports_structure_view);
+        // Cancellation is opt-in: a driver must declare it explicitly.
+        assert!(!caps.supports_query_cancellation);
     }
 
     #[test]
@@ -90,6 +102,7 @@ mod tests {
             supports_inline_edit: true,
             supports_import_export: false,
             supports_structure_view: true,
+            supports_query_cancellation: true,
         };
         let json = serde_json::to_string(&caps).unwrap();
         let deserialized: DriverCapabilities = serde_json::from_str(&json).unwrap();
@@ -105,6 +118,45 @@ mod tests {
         assert!(caps.supports_schemas);
         assert!(caps.supports_collections);
         assert!(caps.supports_ddl);
+        assert!(!caps.supports_query_cancellation);
+    }
+
+    #[test]
+    fn every_shipped_sidecar_declares_cancellation() {
+        // Each engine must make an explicit claim so the UI never has to guess
+        // whether its Cancel control does anything.
+        for (engine, raw) in crate::drivers::registry::EMBEDDED_CAPABILITY_SIDECARS {
+            let value: serde_json::Value = serde_json::from_str(raw)
+                .unwrap_or_else(|e| panic!("{engine} sidecar is not valid JSON: {e}"));
+            assert!(
+                value["capabilities"]["supportsQueryCancellation"].is_boolean(),
+                "{engine} sidecar must declare supportsQueryCancellation"
+            );
+        }
+    }
+
+    #[test]
+    fn only_cancellable_engines_advertise_cancellation() {
+        let expected: &[(&str, bool)] = &[
+            ("postgres", true),
+            ("mysql", true),
+            ("sqlite", true),
+            ("mssql", false),
+            ("mongodb", false),
+            ("redis", false),
+        ];
+        for (engine, raw) in crate::drivers::registry::EMBEDDED_CAPABILITY_SIDECARS {
+            let sidecar: DriverCapabilitySidecar = serde_json::from_str(raw).unwrap();
+            let want = expected
+                .iter()
+                .find(|(name, _)| name == engine)
+                .unwrap_or_else(|| panic!("unmapped sidecar {engine}"))
+                .1;
+            assert_eq!(
+                sidecar.capabilities.supports_query_cancellation, want,
+                "{engine} cancellation capability mismatch"
+            );
+        }
     }
 
     #[test]

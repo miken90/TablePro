@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Play, ChevronDown, Square, FileText, FileSpreadsheet, ListOrdered } from "lucide-react";
+import { Play, ChevronDown, Square, FileText, FileSpreadsheet, ListOrdered, Loader2 } from "lucide-react";
 
 interface RunSplitButtonProps {
   onRun: () => void;
@@ -13,6 +13,10 @@ interface RunSplitButtonProps {
   dbType?: string;
   /** Whether a query result exists (enables Export to CSV) */
   hasResult?: boolean;
+  /** Whether the connected engine can abort an in-flight query server-side.
+   *  When false we show a non-interactive running indicator instead of a Stop
+   *  button, because the button would not actually stop anything. */
+  canCancel?: boolean;
 }
 
 const EXPLAIN_SUPPORTED = new Set(["postgres", "postgresql", "mysql"]);
@@ -27,6 +31,7 @@ export function RunSplitButton({
   disabled,
   dbType,
   hasResult = false,
+  canCancel = false,
 }: RunSplitButtonProps) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -65,6 +70,20 @@ export function RunSplitButton({
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [open, closeDropdown]);
+
+  if (isExecuting && !canCancel) {
+    return (
+      <button
+        disabled
+        className="flex items-center gap-1.5 rounded bg-zinc-500 px-3 py-1 text-xs font-medium text-white opacity-70"
+        title="This database engine cannot cancel a running query"
+        aria-label="Query running — cancellation not supported by this engine"
+      >
+        <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+        Running
+      </button>
+    );
+  }
 
   if (isExecuting) {
     return (

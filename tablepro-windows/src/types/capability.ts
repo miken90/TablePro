@@ -7,6 +7,8 @@ export interface DriverCapabilities {
   supportsInlineEdit: boolean;
   supportsImportExport: boolean;
   supportsStructureView: boolean;
+  /** Whether the engine can abort an in-flight query server-side. */
+  supportsQueryCancellation: boolean;
 }
 
 /** Metadata for a loaded driver plugin, returned by list_drivers. */
@@ -17,7 +19,9 @@ export interface DriverInfo {
   capabilities: DriverCapabilities;
 }
 
-/** All-true default for SQL drivers (matches Rust DriverCapabilities::default). */
+/** Default for SQL drivers (matches Rust DriverCapabilities::default).
+ *  Cancellation is opt-in: a driver must declare it, otherwise the Cancel
+ *  affordance stays hidden rather than doing nothing. */
 export const DEFAULT_CAPABILITIES: DriverCapabilities = {
   supportsSqlEditor: true,
   supportsSchemas: true,
@@ -26,4 +30,5 @@ export const DEFAULT_CAPABILITIES: DriverCapabilities = {
   supportsInlineEdit: true,
   supportsImportExport: true,
   supportsStructureView: true,
+  supportsQueryCancellation: false,
 };

@@ -155,7 +155,9 @@ impl DatabaseDriver for SqliteDriver {
         with_conn(self, move |c| ops::fetch_ddl(c, &t)).await
     }
 
-    fn cancel_query(&self) -> Result<(), DriverError> {
+    async fn cancel_query(&self) -> Result<(), DriverError> {
+        // `InterruptHandle::interrupt()` is sync and non-blocking, so no
+        // blocking-thread dispatch is needed here.
         let guard = self
             .interrupt
             .lock()

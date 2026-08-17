@@ -8,6 +8,7 @@
     "supportsDdl": false,
     "supportsInlineEdit": false,
     "supportsImportExport": false,
-    "supportsStructureView": false
+    "supportsStructureView": false,
+    "supportsQueryCancellation": false
   }
 }

@@ -4,9 +4,12 @@
 //! Shares the host's Tokio runtime via `tokio::runtime::Handle` (no nested
 //! runtime — see `plans/reports/spike-postgres-rlib.md`).
 
+mod cancel;
 mod query;
 mod schema_indexes;
 mod schema_tables;
+
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use async_trait::async_trait;
 use mysql_async::prelude::Queryable;
@@ -28,6 +31,13 @@ pub struct MysqlDriver {
     rt: tokio::runtime::Handle,
     pub(crate) config: ConnectionConfig,
     conn: Mutex<Option<Conn>>,
+    /// Server-side id of the live connection, captured at connect time.
+    ///
+    /// Kept outside the `conn` mutex because that mutex is held for the whole
+    /// duration of an in-flight query — a cancel arriving mid-query could
+    /// never read the id from behind it. `0` means "not connected"; MySQL
+    /// connection ids start at 1.
+    connection_id: AtomicU32,
 }
 
 impl MysqlDriver {
@@ -38,6 +48,7 @@ impl MysqlDriver {
             rt: rt_handle,
             config,
             conn: Mutex::new(None),
+            connection_id: AtomicU32::new(0),
         }
     }
 
@@ -80,6 +91,7 @@ impl DatabaseDriver for MysqlDriver {
         let conn = Conn::new(opts)
             .await
             .map_err(|e| DriverError::Connection(e.to_string()))?;
+        self.connection_id.store(conn.id(), Ordering::SeqCst);
         *self.conn.lock().await = Some(conn);
         Ok(())
     }
@@ -90,6 +102,7 @@ impl DatabaseDriver for MysqlDriver {
         if let Ok(mut guard) = self.conn.try_lock() {
             *guard = None;
         }
+        self.connection_id.store(0, Ordering::SeqCst);
     }
 
     async fn ping(&self) -> Result<(), DriverError> {
@@ -137,13 +150,12 @@ impl DatabaseDriver for MysqlDriver {
         with_conn!(self, c => schema_tables::fetch_ddl(c, table).await)
     }
 
-    fn cancel_query(&self) -> Result<(), DriverError> {
-        // mysql_async does not expose a server-side KILL QUERY hook on the
-        // active connection; rely on connection timeouts. Matches old behavior
-        // which returned success without doing anything.
-        Err(DriverError::Unsupported(
-            "Cancel not supported in this version".to_string(),
-        ))
+    async fn cancel_query(&self) -> Result<(), DriverError> {
+        let connection_id = self.connection_id.load(Ordering::SeqCst);
+        if connection_id == 0 {
+            return Err(DriverError::Connection("Not connected".to_string()));
+        }
+        cancel::kill_query(self.build_opts(), connection_id).await
     }
 
     fn supports_schemas(&self) -> bool {

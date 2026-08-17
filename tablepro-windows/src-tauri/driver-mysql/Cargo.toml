@@ -9,6 +9,9 @@ async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 mysql_async = { version = "0.34", default-features = false, features = ["default-rustls"] }
 
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+
 [lib]
 name = "driver_mysql"
 crate-type = ["rlib"]

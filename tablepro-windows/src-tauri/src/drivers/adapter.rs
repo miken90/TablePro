@@ -102,8 +102,8 @@ impl DatabaseDriver for HostDriverAdapter {
             .map_err(driver_err_to_app)
     }
 
-    fn cancel_query(&self) -> Result<(), AppError> {
-        self.inner.cancel_query().map_err(driver_err_to_app)
+    async fn cancel_query(&self) -> Result<(), AppError> {
+        self.inner.cancel_query().await.map_err(driver_err_to_app)
     }
 
     fn supports_schemas(&self) -> bool {

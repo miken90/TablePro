@@ -84,6 +84,16 @@ const CAP_SQLITE: &str = include_str!("../../driver-capabilities/driver-sqlite.c
 const CAP_MONGODB: &str = include_str!("../../driver-capabilities/driver-mongodb.capabilities.json");
 const CAP_REDIS: &str = include_str!("../../driver-capabilities/driver-redis.capabilities.json");
 
+/// Every embedded sidecar paired with its engine id, for whole-set assertions.
+pub const EMBEDDED_CAPABILITY_SIDECARS: &[(&str, &str)] = &[
+    ("postgres", CAP_POSTGRES),
+    ("mysql", CAP_MYSQL),
+    ("mssql", CAP_MSSQL),
+    ("sqlite", CAP_SQLITE),
+    ("mongodb", CAP_MONGODB),
+    ("redis", CAP_REDIS),
+];
+
 fn parse_sidecar(raw: &str, kind: DriverKind) -> DriverCapabilitySidecar {
     serde_json::from_str(raw).unwrap_or_else(|e| {
         tracing::warn!(

@@ -235,9 +235,15 @@ impl DatabaseDriver for RedisDriver {
         ))
     }
 
-    fn cancel_query(&self) -> Result<(), DriverError> {
+    async fn cancel_query(&self) -> Result<(), DriverError> {
+        // Redis executes each command atomically on a single thread; there is
+        // no "in-flight statement" to abort. The only interruptible case is a
+        // blocking command (`CLIENT UNBLOCK`), which this driver never issues —
+        // the command panel and key browser only run SCAN/read commands. So we
+        // keep the honest `Unsupported` and gate the Cancel affordance off via
+        // the capability sidecar.
         Err(DriverError::Unsupported(
-            "Cancel not supported for Redis".to_string(),
+            "Redis commands are atomic and cannot be cancelled".to_string(),
         ))
     }
 

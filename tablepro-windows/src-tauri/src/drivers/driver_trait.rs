@@ -33,7 +33,9 @@ pub trait DatabaseDriver: Send + Sync {
     ) -> Result<Vec<ForeignKeyInfo>, AppError>;
     async fn fetch_databases(&self) -> Result<Vec<String>, AppError>;
     async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, AppError>;
-    fn cancel_query(&self) -> Result<(), AppError>;
+    /// Request cancellation of the in-flight query. Async because engines
+    /// cancel out-of-band (PostgreSQL cancel request, MySQL `KILL QUERY`).
+    async fn cancel_query(&self) -> Result<(), AppError>;
     fn supports_schemas(&self) -> bool;
     fn supports_transactions(&self) -> bool;
     fn database_type_id(&self) -> &str;

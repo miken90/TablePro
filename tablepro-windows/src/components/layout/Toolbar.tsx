@@ -222,6 +222,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
             disabled={!resolveActiveQuerySessionId() || !queryText.trim()}
             dbType={connection?.config?.dbType}
             hasResult={!!queryResult}
+            canCancel={capabilities.supportsQueryCancellation}
           />
         )}
 

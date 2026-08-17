@@ -201,9 +201,15 @@ impl DatabaseDriver for MongoDriver {
         ))
     }
 
-    fn cancel_query(&self) -> Result<(), DriverError> {
+    async fn cancel_query(&self) -> Result<(), DriverError> {
+        // The Rust MongoDB driver has no cancel API. Aborting server-side work
+        // means `killOp` against an opid that must first be discovered by
+        // polling `$currentOp` and matched heuristically to our own find() —
+        // racy, and it needs cluster-admin privileges the browsing user
+        // usually lacks. We keep the honest `Unsupported` and gate the Cancel
+        // affordance off via the capability sidecar.
         Err(DriverError::Unsupported(
-            "Cancel not supported for MongoDB".to_string(),
+            "MongoDB query cancellation is not supported by this driver".to_string(),
         ))
     }
 

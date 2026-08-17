@@ -10,6 +10,14 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ## [Unreleased]
 
+### Fixed
+
+- Query cancellation now actually stops the running statement on PostgreSQL (out-of-band cancel request) and MySQL/MariaDB (`KILL QUERY` on a second connection, leaving the session intact). Previously Cancel was a no-op on every engine except SQLite.
+
+### Changed
+
+- Drivers advertise a new `supportsQueryCancellation` capability. Engines that cannot cancel (SQL Server, MongoDB, Redis) now show a non-interactive "Running" indicator instead of a Stop button that did nothing.
+
 ## [0.7.0] - 2026-08-17
 
 ### Added

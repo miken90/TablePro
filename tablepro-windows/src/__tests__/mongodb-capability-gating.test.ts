@@ -16,6 +16,7 @@ describe("capability gating for MongoDB", () => {
     supportsInlineEdit: false,
     supportsImportExport: false,
     supportsStructureView: false,
+    supportsQueryCancellation: false,
   };
 
   const postgresCaps: DriverCapabilities = DEFAULT_CAPABILITIES;

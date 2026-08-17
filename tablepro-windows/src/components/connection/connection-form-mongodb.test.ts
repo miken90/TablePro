@@ -36,6 +36,7 @@ describe("connection-form-config MongoDB support", () => {
           supportsInlineEdit: true,
           supportsImportExport: true,
           supportsStructureView: true,
+          supportsQueryCancellation: true,
         },
       },
       {
@@ -50,6 +51,7 @@ describe("connection-form-config MongoDB support", () => {
           supportsInlineEdit: false,
           supportsImportExport: false,
           supportsStructureView: false,
+          supportsQueryCancellation: false,
         },
       },
     ];
@@ -71,6 +73,7 @@ describe("connection-form-config MongoDB support", () => {
           supportsInlineEdit: false,
           supportsImportExport: false,
           supportsStructureView: false,
+          supportsQueryCancellation: false,
         },
       },
     ];

@@ -53,7 +53,14 @@ pub trait DatabaseDriver: Send + Sync {
     async fn fetch_ddl(&self, table: &str, schema: Option<&str>) -> Result<String, DriverError>;
 
     /// Request cancellation of any in-flight query on this driver instance.
-    fn cancel_query(&self) -> Result<(), DriverError>;
+    ///
+    /// Async because most engines cancel out-of-band: PostgreSQL opens a
+    /// second socket to send a cancel request, MySQL issues `KILL QUERY` on a
+    /// second connection. Implementations MUST NOT return `Ok(())` unless a
+    /// cancellation was really dispatched; engines that cannot cancel return
+    /// `DriverError::Unsupported` and advertise
+    /// `supportsQueryCancellation: false` in their capability sidecar.
+    async fn cancel_query(&self) -> Result<(), DriverError>;
 
     /// Whether this engine uses named schemas (e.g. PostgreSQL public/private).
     fn supports_schemas(&self) -> bool;

@@ -11,6 +11,9 @@ tokio-postgres = "0.7"
 postgres-native-tls = "0.5"
 native-tls = "0.2"
 
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+
 [lib]
 name = "driver_postgres"
 crate-type = ["rlib"]

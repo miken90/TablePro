@@ -341,7 +341,7 @@ pub async fn cancel_query(
         mgr.get_driver(&session_id)?
     };
     tracing::info!(session_id = %session_id, "cancel_query");
-    driver.cancel_query()
+    driver.cancel_query().await
 }
 
 #[cfg(test)]

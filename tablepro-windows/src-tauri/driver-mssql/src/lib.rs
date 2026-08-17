@@ -190,9 +190,17 @@ impl DatabaseDriver for MssqlDriver {
         with_client!(self, c => ddl::fetch_ddl(c, table, schema.unwrap_or("")).await)
     }
 
-    fn cancel_query(&self) -> Result<(), DriverError> {
+    async fn cancel_query(&self) -> Result<(), DriverError> {
+        // SQL Server cancels a running statement with a TDS attention packet
+        // on the same connection. `tiberius` knows the packet type but exposes
+        // no API to send one, and the connection is busy reading the result
+        // stream anyway. The only server-side lever is `KILL <spid>`, which
+        // tears down the entire session (transaction, temp tables, connection)
+        // rather than aborting the statement — that is a disconnect, not a
+        // cancel, so we keep reporting the honest `Unsupported` and gate the
+        // Cancel affordance off via the capability sidecar.
         Err(DriverError::Unsupported(
-            "Cancel not supported in this version".to_string(),
+            "SQL Server query cancellation is not supported by this driver".to_string(),
         ))
     }
 
