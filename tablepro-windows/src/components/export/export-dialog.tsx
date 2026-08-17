@@ -7,7 +7,7 @@ import { extractErrorMessage } from '../../ipc/error';
 import { ExportProgress } from './export-progress';
 import type { QueryResult } from '../../types/query';
 
-type ExportFormat = 'csv' | 'json' | 'sql';
+type ExportFormat = 'csv' | 'json' | 'sql' | 'xlsx';
 
 interface ExportDialogProps {
   sessionId: string;
@@ -20,13 +20,20 @@ const FORMAT_EXTENSIONS: Record<ExportFormat, string> = {
   csv: 'csv',
   json: 'json',
   sql: 'sql',
+  xlsx: 'xlsx',
 };
 
 const FORMAT_FILTERS: Record<ExportFormat, { name: string; extensions: string[] }[]> = {
   csv: [{ name: 'CSV files', extensions: ['csv'] }],
   json: [{ name: 'JSON files', extensions: ['json'] }],
   sql: [{ name: 'SQL files', extensions: ['sql'] }],
+  xlsx: [{ name: 'Excel workbooks', extensions: ['xlsx'] }],
 };
+
+/** Formats whose bytes the frontend can reproduce for preview and clipboard.
+ *  XLSX is a binary OOXML container built by the Rust writer, so it has
+ *  neither a text preview nor a Copy action. */
+const TEXT_FORMATS: ReadonlySet<ExportFormat> = new Set<ExportFormat>(['csv', 'json', 'sql']);
 
 function PreviewRows({
   result,
@@ -226,6 +233,7 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
               <button className={fmtBtn('csv')} onClick={() => setFormat('csv')}>CSV</button>
               <button className={fmtBtn('json')} onClick={() => setFormat('json')}>JSON</button>
               <button className={fmtBtn('sql')} onClick={() => setFormat('sql')}>SQL</button>
+              <button className={fmtBtn('xlsx')} onClick={() => setFormat('xlsx')}>XLSX</button>
             </div>
           </div>
 
@@ -317,13 +325,20 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
             </div>
           )}
 
-          {/* Preview */}
-          <div>
-            <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">
-              Preview (first 5 rows)
-            </label>
-            <PreviewRows result={result} format={format} options={options} />
-          </div>
+          {/* Preview — text formats only; XLSX is a binary workbook. */}
+          {TEXT_FORMATS.has(format) ? (
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">
+                Preview (first 5 rows)
+              </label>
+              <PreviewRows result={result} format={format} options={options} />
+            </div>
+          ) : (
+            <p className="rounded border border-zinc-200 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+              Excel workbooks are written as a binary file — no text preview. A header row
+              plus one sheet of results is written, up to Excel&apos;s 1,048,575-row limit.
+            </p>
+          )}
 
           {/* Progress */}
           {isExporting && (
@@ -347,6 +362,7 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
             >
               Cancel
             </button>
+            {TEXT_FORMATS.has(format) && (
             <button
               onClick={handleCopy}
               className="flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/50"
@@ -354,6 +370,7 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
               <Copy size={12} />
               {copied ? 'Copied!' : 'Copy'}
             </button>
+            )}
             <button
               onClick={handleExport}
               className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"

@@ -23,6 +23,7 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 ### Added
 
 - SQL file import is reachable from the UI: an **Import SQL** toolbar button, the `Ctrl+Shift+M` shortcut, and a command palette entry. The dialog and its backend already existed but nothing referenced them.
+- XLSX is offered in the export dialog. The workbook writer already existed in the backend but the dialog listed only CSV, JSON, and SQL.
 
 ### Changed
 

@@ -388,4 +388,70 @@ mod tests {
     fn test_xlsx_max_rows_is_excel_limit() {
         assert_eq!(XLSX_MAX_ROWS, 1_048_575_u32);
     }
+
+    /// The XLSX path must emit a real OOXML workbook, not a mislabelled text
+    /// dump — the format is offered in the export dialog on this basis.
+    #[test]
+    fn test_xlsx_export_produces_a_valid_ooxml_workbook() {
+        use super::super::export_writers::{write_xlsx_chunk, XlsxChunkOpts, XlsxChunkState};
+
+        let columns = vec![
+            crate::models::ColumnInfo {
+                name: "id".to_string(),
+                type_name: "INT".to_string(),
+                nullable: false,
+                is_primary_key: true,
+            },
+            crate::models::ColumnInfo {
+                name: "name".to_string(),
+                type_name: "TEXT".to_string(),
+                nullable: true,
+                is_primary_key: false,
+            },
+        ];
+        let rows = vec![
+            vec![Some("1".to_string()), Some("alice".to_string())],
+            vec![Some("2".to_string()), None],
+        ];
+
+        let mut ws = Worksheet::new();
+        let mut rows_exported: u64 = 0;
+        let state = XlsxChunkState {
+            row_limit: XLSX_MAX_ROWS,
+            session_id: "test".to_string(),
+        };
+        let opts = XlsxChunkOpts {
+            xlsx_row: 0,
+            xlsx_row_limit_hit: false,
+            include_header: true,
+            header_written: false,
+        };
+        let (header_written, next_row, limit_hit) =
+            write_xlsx_chunk(&mut ws, &rows, &columns, opts, &mut rows_exported, &state).unwrap();
+        assert!(header_written);
+        assert!(!limit_hit);
+        assert_eq!(next_row, 3, "header row + 2 data rows");
+        assert_eq!(rows_exported, 2);
+
+        let mut workbook = Workbook::new();
+        workbook.push_worksheet(ws);
+        let bytes = workbook.save_to_buffer().expect("workbook save failed");
+
+        // XLSX is a zip container: local file header magic.
+        assert_eq!(
+            &bytes[..4],
+            b"PK\x03\x04",
+            "not a zip container — XLSX output would be corrupt"
+        );
+        // The zip's central directory stores entry names uncompressed, so the
+        // required OOXML parts are findable in the raw bytes.
+        for part in ["xl/workbook.xml", "[Content_Types].xml", "xl/worksheets/"] {
+            assert!(
+                bytes
+                    .windows(part.len())
+                    .any(|w| w == part.as_bytes()),
+                "workbook is missing required OOXML part: {part}"
+            );
+        }
+    }
 }
