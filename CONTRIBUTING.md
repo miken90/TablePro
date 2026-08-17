@@ -1,59 +1,46 @@
 # Contributing
 
-## Scope
+This is a personal, non-profit, Windows-only fork. There is one product in this repo: `tablepro-windows/` (Tauri v2 + Rust + React/TypeScript).
 
-This repository's active implementation target is `tablepro-windows/`.
+## Layout
 
-- **Implement here by default:** `tablepro-windows/`
-- **Reference only:** `TablePro/`, `Plugins/`, `Libs/` (upstream macOS code used for parity research)
+```text
+tablepro-windows/
+├── src/                # React/TypeScript frontend
+├── src-tauri/
+│   ├── src/             # Tauri commands, services, storage
+│   ├── driver-postgres/ # one crate per database engine
+│   ├── driver-mysql/
+│   ├── driver-mssql/
+│   ├── driver-sqlite/
+│   ├── driver-mongodb/
+│   ├── driver-redis/
+│   └── driver-capabilities/  # *.capabilities.json sidecars
+docs/                  # product and engineering docs
+plans/                 # plans and reports
+```
 
-Do not use macOS/Xcode build, test, lint, or release flows unless the change explicitly targets the macOS codebase.
+## Build and Test
 
-## Setup
+All commands run on Windows through PowerShell, from `tablepro-windows/` unless noted.
 
-```bash
-git clone https://github.com/<your-username>/TablePro.git
-cd TablePro
-cd tablepro-windows
+```powershell
 npm ci
-```
-
-## Build and validation
-
-Run from `tablepro-windows/` unless noted.
-
-```bash
-npm run build
-npx vitest run
-npx eslint .
-```
-
-Run Rust validation from `tablepro-windows/src-tauri/`:
-
-```bash
-cargo test --workspace
-cargo clippy --workspace -- -D warnings
-```
-
-For local Tauri development:
-
-```bash
 npm run dev:tauri
+npm run test
+npm run lint
 ```
 
-## Porting workflow
+Rust, from `tablepro-windows/src-tauri/`:
 
-When porting a feature from the upstream macOS app:
-
-1. Read `TablePro/` to understand behavior, UX intent, and edge cases
-2. Map that behavior to the Windows architecture in `tablepro-windows/`
-3. Implement only in Windows paths unless the task explicitly includes macOS edits
-4. Add or update Windows tests
-5. Validate with the commands above
+```powershell
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
 
 ## Commits
 
-Use [Conventional Commits](https://www.conventionalcommits.org/), single line, no body.
+[Conventional Commits](https://www.conventionalcommits.org/), single-line subject.
 
 ```text
 feat: add CSV export for query results
@@ -61,57 +48,10 @@ fix: prevent crash on empty query result
 docs: update keyboard shortcuts page
 ```
 
-## Branch naming
+## CI
 
-Branch off `main`:
-
-- `feat/add-cassandra-support`
-- `fix/query-editor-crash`
-- `docs/update-keyboard-shortcuts`
-
-## Pull requests
-
-One change per PR. Make sure validation passes and link related issues.
-
-Before opening, check:
-
-- [ ] Tests added or updated where behavior changed
-- [ ] `CHANGELOG.md` updated under `[Unreleased]` when needed
-- [ ] Docs updated in `docs/` if behavior or workflow changed
-- [ ] `npx vitest run` passes for changed frontend logic
-- [ ] `npx eslint .` passes for changed frontend logic
-- [ ] `cargo test --workspace` passes for changed Rust logic
-- [ ] `cargo clippy --workspace -- -D warnings` passes when Rust changes warrant it
-
-## Project layout
-
-```text
-tablepro-windows/       # Active Windows app (Tauri v2 + Rust + React/TypeScript)
-TablePro/               # Upstream/reference macOS app source
-Plugins/                # Upstream/reference macOS plugin sources
-Libs/                   # Upstream/reference native/static libraries
-docs/                   # Product and engineering docs
-plans/                  # Plans and reports
-scripts/                # Shared utility scripts
-```
-
-## Adding a database driver
-
-For Windows work, add new drivers under `tablepro-windows/src-tauri/driver-*` and wire them through the Windows plugin host, frontend connection types, and build scripts. Do not follow old macOS `.tableplugin` + Xcode-target instructions unless the task is explicitly about the macOS app.
-
-## Reporting bugs
-
-Open a [GitHub issue](https://github.com/datlechin/TablePro/issues) with:
-
-- whether the issue is in Windows or macOS
-- app version
-- reproduction steps
-- database type and version if relevant
-
-## CLA
-
-You'll need to sign the Contributor License Agreement on your first PR. The CLA bot will walk you through it.
+The only CI pipeline is [`tablepro-windows/.github/workflows/windows-build.yml`](tablepro-windows/.github/workflows/windows-build.yml), running the same gates above.
 
 ## License
 
-Contributions are licensed under [AGPLv3](LICENSE).
+Licensed under [AGPLv3](LICENSE).
