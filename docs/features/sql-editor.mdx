@@ -145,8 +145,8 @@ Keywords are suggested based on context:
 | Action | Shortcut | Description |
 |--------|----------|-------------|
 | Execute query | `Ctrl+Enter` | Runs query at cursor, or all selected statements |
-| Explain query | `Alt+Ctrl+E` | Show the execution plan for the query at cursor |
-| Format query | `Alt+Ctrl+F` | Format the current query for readability |
+| Explain query | `Ctrl+Shift+X` | Show the execution plan for the query at cursor |
+| Format query | `Ctrl+Shift+F` | Format the current query for readability |
 
 ### Query Results
 
@@ -172,7 +172,7 @@ A persistent status bar at the bottom of the window shows:
 
 **Right side (Panel Toggles):**
 - **Inspector button** — click to show/hide the cell inspector panel (or press `Ctrl+Shift+I`)
-- **Filter button** — click to show/hide the filter panel (or press `Ctrl+Shift+L`)
+- **Filter button** — click to show/hide the filter panel
 
 ### Explain Query
 
@@ -181,7 +181,7 @@ View the execution plan for your query to spot missing indexes or inefficient jo
 To explain a query:
 
 - Click the **Explain** button in the editor toolbar, or
-- Press `Alt+Ctrl+E`, or
+- Press `Ctrl+Shift+X`, or
 - Use the menu: **Query** > **Explain Query**
 
 TablePro automatically uses the correct syntax for your database:
@@ -206,7 +206,7 @@ Built-in SQL formatter that restructures queries for readability. Dialect-aware:
 
 To format the current query:
 
-- Press `Alt+Ctrl+F`, or
+- Press `Ctrl+Shift+F`, or
 - Click the **Format** button in the editor toolbar, or
 - Use the menu: **Query** > **Format Query**
 
@@ -239,7 +239,7 @@ The formatter detects your connected database and applies dialect-specific rules
 select u.id,u.name,u.email,count(o.id) as order_count from users u left join orders o on u.id=o.user_id where u.created_at>'2024-01-01' and u.status='active' group by u.id,u.name,u.email having count(o.id)>5 order by order_count desc limit 100;
 ```
 
-**After** (`Alt+Ctrl+F`):
+**After** (`Ctrl+Shift+F`):
 
 ```sql
 SELECT
@@ -354,8 +354,8 @@ Customize the editor in **Settings** > **Editor**. Changes apply instantly witho
 
 | Setting | Options | Default |
 |---------|---------|---------|
-| **Font Family** | System Mono, SF Mono, Menlo, Monaco, Courier New | System Mono |
-| **Font Size** | 11-18 pt | 13 pt |
+| **Font Family** | Consolas, JetBrains Mono, Fira Code, Monaco, monospace | JetBrains Mono |
+| **Font Size** | — | 14 pt |
 
 ### Display Settings
 
@@ -382,13 +382,7 @@ Customize the editor in **Settings** > **Editor**. Changes apply instantly witho
 
 ### AI Assistance
 
-The SQL editor integrates with TablePro's AI chat for writing and debugging queries:
-
-- **Explain with AI** (`Ctrl+L`) — get a detailed explanation of your query
-- **Optimize with AI** (`Ctrl+Alt+L`) — get performance improvement suggestions
-- **Ask AI to Fix** — when a query fails, click "Ask AI to Fix" in the error dialog
-
-See [AI Chat](/features/ai-chat) for full details on configuring AI providers and features.
+See [AI Chat](/features/ai-chat) for writing and debugging queries with AI.
 
 ### Using Comments
 
@@ -443,39 +437,13 @@ FROM users u
 JOIN orders o ON u.id = o.user_id;
 ```
 
-## Opening SQL Files
-
-TablePro opens `.sql` files directly from Finder.
-
-### Opening from Finder
-
-Two ways to open `.sql` files:
-
-- **Double-click** a `.sql` file in Finder (if TablePro is set as the default app)
-- **Right-click** a `.sql` file > **Open With** > **TablePro**
-
-### Connection Behavior
-
-| State | Behavior |
-|-------|----------|
-| **Connected** to a database | The file opens immediately in a new editor tab |
-| **Not connected** | The file is queued and opens automatically after you connect to a database |
-
-### Multiple Files
-
-Opening multiple `.sql` files creates a separate tab for each file.
-
-<Note>
-The file contents are loaded into the editor tab. Changes you make in the editor do not modify the original `.sql` file on disk.
-</Note>
-
 ## Keyboard Shortcuts
 
 | Action | Shortcut |
 |--------|----------|
 | Execute query | `Ctrl+Enter` |
-| Explain query | `Alt+Ctrl+E` |
-| Format query | `Alt+Ctrl+F` |
+| Explain query | `Ctrl+Shift+X` |
+| Format query | `Ctrl+Shift+F` |
 | Select all | `Ctrl+A` |
 | Cut | `Ctrl+X` |
 | Copy | `Ctrl+C` |

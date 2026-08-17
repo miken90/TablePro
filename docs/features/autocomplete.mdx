@@ -1,6 +1,6 @@
 ---
 title: Autocomplete
-description: Schema-aware SQL autocomplete with alias resolution, 50ms debounce, and support for 500KB+ files
+description: Schema-aware SQL autocomplete with alias resolution
 ---
 
 # SQL Autocomplete
@@ -20,7 +20,7 @@ Suggestions are filtered to what makes sense at the cursor.
 
 ## Triggering Autocomplete
 
-Autocomplete appears automatically as you type (after 1-2 characters, after `.` for column access, or after keywords like SELECT/FROM/JOIN). Press `Escape` to dismiss or continue typing to filter suggestions.
+Autocomplete appears automatically after typing an identifier character or a `.` (for column access on an alias/table). Trigger it explicitly with `Ctrl+Space`. Press `Escape` to dismiss or continue typing to filter suggestions.
 
 ## Completion Types
 
@@ -90,7 +90,7 @@ WHERE date_column > |  -- Suggests: NOW(), CURRENT_DATE, etc.
 |----------|-----------|
 | Aggregate | COUNT, SUM, AVG, MAX, MIN |
 | String | CONCAT, SUBSTRING, UPPER, LOWER, TRIM |
-| Date | NOW, CURRENT_DATE, DATE_FORMAT, DATEADD |
+| Date | NOW, CURRENT_DATE, DATE_FORMAT, DATE_ADD |
 | Math | ROUND, ABS, CEIL, FLOOR |
 | Conditional | COALESCE, NULLIF, CASE, IF |
 
@@ -113,8 +113,4 @@ Use arrow keys to navigate, `Enter` or `Tab` to accept, `Escape` to dismiss. Con
 
 ## Schema Caching
 
-On connection, TablePro fetches and caches all table and column information. If you make schema changes, right-click the connection and select **Refresh**, or disconnect and reconnect. Schema changes made in TablePro (via Structure tab) are auto-reflected.
-
-## Performance
-
-Autocomplete works on files of any size, including multi-megabyte dumps. For files >500 KB, it analyzes only a ~10 KB window around the cursor. For large schemas (100+ tables), initial loading may take a moment, but remains responsive after caching. Use aliases to narrow suggestions faster and let the cache work.
+On connection, TablePro fetches and caches table and column information. If you make schema changes — including via TablePro's own Structure tab — right-click the connection and select **Refresh**, or disconnect and reconnect, to pick them up.

@@ -1,41 +1,35 @@
 ---
 title: Command Palette
-description: Search and execute any application action with fuzzy search and keyboard shortcuts
+description: Search and execute any registered command with keyboard shortcuts
 ---
 
 # Command Palette
 
-The Command Palette is a fast way to discover and execute any TablePro action without clicking menus. Open it with **Ctrl+Shift+P** and start typing.
+The Command Palette is a fast way to discover and execute any TablePro command without clicking menus. Open it with **Ctrl+Shift+P** and start typing.
 
 ## Overview
 
 The Command Palette provides:
 
-- **Fuzzy search** across all available actions
+- **Substring search** — matches if your text appears anywhere in the command's name or ID
 - **Keyboard-driven** discovery without mouse
-- **Recent commands** at the top for quick access
+- **Recent commands** (last 5) at the top when the search field is empty
 - **Keyboard shortcuts** displayed next to commands
-- **Organized by category** (Navigation, Query, Edit, View, Settings)
+- **Organized by category**: Query, Edit, Navigation, Settings
 
 ## Opening the Command Palette
 
 Press **Ctrl+Shift+P** to open the command palette.
 
-The palette appears as a modal overlay with a search field focused and ready for typing.
-
 ## Searching Commands
 
-Start typing to filter commands. The search is fuzzy, so:
+Start typing to filter commands by substring match against the command name:
 
 - Type `run` to find "Run Query"
-- Type `conn` to find "New Connection"
 - Type `close` to find "Close Tab"
-
-Results appear below the search field, grouped by category.
+- Type `save` to find "Save Changes"
 
 ## Executing Commands
-
-To execute a command:
 
 1. Type to search and find the command
 2. Press **Enter** or click the command name
@@ -52,41 +46,28 @@ Alternatively, use arrow keys to navigate and **Enter** to confirm.
 | Execute | `Enter` |
 | Dismiss | `Escape` |
 
-## Command Categories
+## Commands
 
-Commands are organized for easy discovery:
+The palette lists all 21 registered commands, grouped by category:
 
-| Category | Examples |
+| Category | Commands |
 |----------|----------|
-| **Navigation** | Open Settings, Toggle Sidebar, Toggle History, Quick Switcher |
-| **Query** | Run Query, Run All, Cancel Query, Format SQL |
-| **Edit** | New Tab, Close Tab, Save Changes, Undo, Redo |
-| **View** | Toggle Filter, Toggle Inspector, Focus Mode |
-| **Settings** | Appearance, Keyboard Shortcuts, Connection Settings |
+| **Query** | Run Query, Cancel Query, Explain Query, Format SQL, Toggle Comment |
+| **Edit** | New Tab, Close Tab, Next Tab, Previous Tab, Save Changes, Insert Row, Import SQL |
+| **Navigation** | Quick Switcher, Toggle Sidebar, Toggle AI Chat, Toggle Inspector, Toggle History, Command Palette |
+| **Settings** | Settings, Refresh Schema, Keyboard Shortcuts |
 
 ## Recent Commands
 
-When you open the Command Palette without typing, recent commands appear at the top. This makes frequently-used actions instant to access.
-
-The palette remembers up to 5 recent commands.
+When you open the Command Palette without typing, the last 5 executed commands appear at the top.
 
 ## Tips
 
 <Tip>
-Don't type the full command name. Fuzzy search works on partial matches. For example, type `fmt` to find "Format SQL".
-</Tip>
-
-<Tip>
-The command palette shows keyboard shortcuts next to each command. This is a great way to learn shortcuts for your most-used actions.
-</Tip>
-
-<Tip>
-If you can't remember the exact command, type a related word. For example, type `table` to find commands related to tables.
+The command palette shows keyboard shortcuts next to each command — a good way to learn shortcuts for your most-used actions.
 </Tip>
 
 ## Keyboard Shortcuts
-
-The most common shortcuts are:
 
 | Action | Shortcut |
 |--------|----------|

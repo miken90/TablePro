@@ -57,7 +57,7 @@ Right-click in the sidebar and select **Create New Table...**. A visual editor o
 Click **Create Table** (or `Ctrl+Return`) to execute. The new table appears in the sidebar immediately.
 
 <Note>
-Supported databases: MySQL, MariaDB, PostgreSQL, SQLite, SQL Server, ClickHouse, and DuckDB. Each generates database-specific DDL syntax.
+Supported databases: PostgreSQL, MySQL/MariaDB, SQL Server, SQLite. Each generates database-specific DDL syntax. MongoDB and Redis don't support DDL through this flow.
 </Note>
 
 ## Modifying Structure
@@ -83,25 +83,13 @@ Click a column, edit properties in the detail panel, then **Apply** to preview t
 
 Select the column, click **-** or press Delete, confirm, then apply.
 
-### Context Menu
-
-Right-click any row in the Columns, Indexes, or Foreign Keys tabs:
-
-| Action | Description |
-|--------|-------------|
-| **Copy Name** | Copy the item name to clipboard |
-| **Copy Definition** | Copy the SQL definition (e.g., column definition, index creation clause) |
-| **Open [table]** | (Foreign Keys tab only) Navigate to the referenced table |
-| **Duplicate** | Copy and paste the selected items |
-| **Delete** | Mark items for deletion (apply to execute) |
-
-Multi-select rows first to copy or delete multiple items at once.
-
 ### Schema Change Preview
 
 Before applying, TablePro shows the generated ALTER TABLE SQL for review.
 
-`Ctrl+Z` to undo, `Ctrl+Shift+Z` to redo structure changes before applying.
+<Note>
+The visual queue-and-apply editor covers column add/modify/drop only. Indexes and foreign keys are managed by writing SQL directly (see below) — there is no visual add/edit/delete flow for them.
+</Note>
 
 ### Reordering Columns
 

@@ -56,18 +56,18 @@ Batch deletion of multiple rows is tracked as a single undo action. Undoing a ba
 
 ### Committing Changes
 
-Click **Commit** or press `Ctrl+S`. TablePro generates parameterized SQL, executes it, clears the queue, and refreshes the grid.
+Click **Commit** or press `Ctrl+S`. TablePro generates SQL with values inlined as escaped literals (not parameterized placeholders), executes one statement per changed row, clears the queue, and refreshes the grid.
 
-Generated SQL:
+Generated SQL shape:
 
 | Change Type | SQL Generated |
 |-------------|--------------|
-| Cell edit | `UPDATE ... SET column = ? WHERE pk = ?` |
-| Row insertion | `INSERT INTO ... (columns) VALUES (?)` |
-| Row deletion | `DELETE FROM ... WHERE pk = ?` |
+| Cell edit | `UPDATE ... SET col='value' WHERE pk=1;` |
+| Row insertion | `INSERT INTO ... (columns) VALUES ('value', ...);` |
+| Row deletion | `DELETE FROM ... WHERE pk=1` (one statement per row) |
 
 <Note>
-UPDATE statements require a primary key on the table. If no primary key is defined, TablePro shows an error when you try to commit updates. DELETE statements can work without a primary key by matching all column values.
+If a table has no primary key, both UPDATE and DELETE statements fall back to matching on all column values instead of erroring.
 </Note>
 
 ### Discarding Changes
@@ -76,7 +76,7 @@ Click **Discard** to revert all pending changes. Modified cells return to their 
 
 ### Previewing Data SQL
 
-Click the **Preview SQL** button (eye icon) or press `Ctrl+Shift+P` to see the exact SQL before committing. Use **Copy All** to copy to clipboard.
+Click the **Preview SQL** button (eye icon) to see the exact SQL before committing. Use **Copy All** to copy to clipboard.
 
 <Tip>
 The preview inlines parameter values so you can verify exactly what will run. Destructive operations are highlighted with a warning banner.
@@ -97,22 +97,19 @@ Stacks are per-tab. Committing or discarding clears both stacks.
 
 ## Schema Changes
 
-Table structure changes (columns, indexes, foreign keys) use the same queue-based approach.
+Column changes in the Structure tab use the same queue-based approach.
 
 ### Tracked Schema Operations
 
 | Operation | What Is Tracked |
 |-----------|----------------|
-| **Add column** | New column definition (name, type, nullable, default, etc.) |
+| **Add column** | New column definition (name, type, nullable, default) |
 | **Modify column** | Old and new column definitions |
 | **Delete column** | Column marked for removal |
-| **Add index** | New index definition (name, columns, type, uniqueness) |
-| **Modify index** | Old and new index definitions |
-| **Delete index** | Index marked for removal |
-| **Add foreign key** | New FK definition (columns, references, actions) |
-| **Modify foreign key** | Old and new FK definitions |
-| **Delete foreign key** | FK marked for removal |
-| **Modify primary key** | Old and new primary key columns |
+
+<Note>
+Indexes, foreign keys, and primary keys are not tracked through this queue — only column add/modify/drop generate ALTER TABLE statements this way.
+</Note>
 
 ### Visual Indicators
 
@@ -145,42 +142,29 @@ Copy individual SQL statements from the preview sheet using the copy button next
 
 ## SQL Generation
 
-Data changes use parameterized statements. Schema changes produce database-specific ALTER TABLE statements:
+Data changes use identifier quoting and value literals appropriate to the connection's dialect — no bind parameters:
 
 <Tabs>
   <Tab title="MySQL/MariaDB">
     ```sql
-    UPDATE `users` SET `name` = ? WHERE `id` = ? LIMIT 1
-    INSERT INTO `users` (`name`, `email`) VALUES (?, ?)
-    DELETE FROM `users` WHERE `id` = ? OR `id` = ?
-
-    ALTER TABLE `users` ADD COLUMN `phone` VARCHAR(20) NOT NULL
-    ALTER TABLE `users` MODIFY COLUMN `name` VARCHAR(200) NOT NULL
+    UPDATE `users` SET `name`='Alice' WHERE `id`=1;
+    INSERT INTO `users` (`name`, `email`) VALUES ('Alice', 'a@example.com');
+    DELETE FROM `users` WHERE `id`=1
     ```
   </Tab>
-  <Tab title="PostgreSQL">
+  <Tab title="PostgreSQL / SQLite">
     ```sql
-    UPDATE "users" SET "name" = $1 WHERE "id" = $2
-    INSERT INTO "users" ("name", "email") VALUES ($1, $2)
-    DELETE FROM "users" WHERE "id" = $1 OR "id" = $2
-
-    ALTER TABLE "users" ADD COLUMN "phone" VARCHAR(20) NOT NULL
-    ALTER TABLE "users" ALTER COLUMN "name" TYPE VARCHAR(200)
+    UPDATE "users" SET "name"='Alice' WHERE "id"=1;
+    INSERT INTO "users" ("name", "email") VALUES ('Alice', 'a@example.com');
+    DELETE FROM "users" WHERE "id"=1
     ```
   </Tab>
-  <Tab title="SQLite">
+  <Tab title="SQL Server">
     ```sql
-    UPDATE "users" SET "name" = ? WHERE "id" = ?
-    INSERT INTO "users" ("name", "email") VALUES (?, ?)
-    DELETE FROM "users" WHERE "id" = ?
-
-    ALTER TABLE "users" ADD COLUMN "phone" TEXT
-    CREATE INDEX "idx_email" ON "users" ("email")
+    UPDATE [users] SET [name]='Alice' WHERE [id]=1;
+    INSERT INTO [users] ([name], [email]) VALUES ('Alice', 'a@example.com');
+    DELETE FROM [users] WHERE [id]=1
     ```
-
-    <Warning>
-    SQLite has limited ALTER TABLE support. Use the SQL editor for modifications that require table recreation.
-    </Warning>
   </Tab>
 </Tabs>
 

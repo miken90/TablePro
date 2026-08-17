@@ -5,108 +5,25 @@ description: Drop, truncate, duplicate tables, create views, and switch database
 
 # Table Operations
 
-Right-click tables in the sidebar to drop, truncate, or duplicate them. Create and manage views. Switch between databases on the same connection.
+Right-click a table or view in the sidebar for table-level operations.
 
-## Drop Table
+## Table Context Menu
 
-Permanently deletes a table and all its data.
+For tables (not views), right-click offers:
 
-1. Right-click the table (or select multiple tables)
-2. Select **Delete**
-3. Configure options in the confirmation dialog
-4. Click **OK** to execute
+| Action | Effect |
+|--------|--------|
+| **Truncate Table** | Removes all rows, keeps table structure |
+| **Delete All Records** | Deletes all rows (DML, not DDL) |
+| **Drop Table** | Permanently deletes the table and its data |
+
+For views, only **Drop View** is offered (no truncate / delete-all-records, since a view has no rows of its own).
 
 <Warning>
-Dropping a table is irreversible. Always backup important data before dropping tables.
+Dropping a table is irreversible.
 </Warning>
 
-## Truncate Table
+## Database Switcher
 
-Removes all rows while keeping the table structure.
-
-1. Right-click the table (or select multiple tables)
-2. Select **Truncate**
-3. Configure options in the confirmation dialog
-4. Click **OK** to execute
-
-<Note>
-Truncate is faster than `DELETE FROM table` because it skips per-row delete logs. It also resets auto-increment counters.
-</Note>
-
-## Batch Operations
-
-Hold `Ctrl` and click to select multiple tables, then right-click and choose **Delete** or **Truncate**. The same options apply to all selected tables.
-
-## View Management
-
-Views appear in the sidebar with an eye icon and purple color.
-
-### Create View
-
-1. Right-click in the sidebar > **Create New View...** (or **File** > **New View...**)
-2. A SQL editor tab opens with a CREATE VIEW template adapted to your database type
-3. Modify the view name and SELECT query
-4. Execute to create
-
-### Edit View Definition
-
-Modify an existing view's SQL definition:
-
-1. Right-click the view in the sidebar
-2. Select **Edit View Definition**
-3. The current view definition opens in a new SQL editor tab
-4. Modify the query and execute to update the view
-
-<Note>
-For MySQL/MariaDB, use `ALTER VIEW` to modify a view. For PostgreSQL, use `CREATE OR REPLACE VIEW`. SQLite does not support ALTER VIEW. Drop and recreate the view instead.
-</Note>
-
-### Drop View
-
-Right-click the view > **Drop View** > confirm. Dropping a view only removes the definition; underlying table data stays intact.
-
-### Context Menu Differences
-
-| Action | Tables | Views |
-|--------|--------|-------|
-| Show Structure | Yes | Yes |
-| Export | Yes | Yes |
-| Import | Yes | No |
-| Truncate | Yes | No |
-| Edit Definition | No | Yes |
-| Delete / Drop | Yes | Yes |
-
-## Database Operations
-
-Create a new database (MySQL/MariaDB): click the database name in the toolbar or press `Ctrl+K`, click **Create**, enter a name, character set, and collation.
-
-### Database Switcher
-
-Click the database name in the toolbar to browse databases on the current connection. Search by name, view recent databases, or double-click to switch.
-
-## MongoDB Collections
-
-### Create Collection
-
-Use the MQL editor. For collections with specific options (capped, validator):
-
-```javascript
-db.createCollection("myCollection", {
-  capped: true,
-  size: 1048576,
-  max: 1000
-})
-```
-
-### Drop Collection
-
-Right-click a collection in the sidebar and select **Drop Table**. This executes `db.collection.drop()` and removes all documents and indexes.
-
-### Show All Collections
-
-Select **Show All Tables** from the sidebar to list all collections in the current database.
-
-<Note>
-Truncate is not available for MongoDB. To remove all documents while keeping the collection, use `db.collection.deleteMany({})` in the MQL editor.
-</Note>
+Click the database name in the toolbar to browse and switch databases on the current connection.
 

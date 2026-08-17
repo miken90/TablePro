@@ -81,14 +81,6 @@ If ENUM/SET metadata is unavailable (e.g., from a complex query), the cell falls
 
 JSON/JSONB cells open a dedicated editor popover with real-time validation. Invalid JSON triggers a confirmation before saving. Values are minified on save.
 
-### Hex Editor (BLOB/Binary)
-
-BLOB, BINARY, and VARBINARY cells open a hex editor popover. Edit as space-separated hex bytes (e.g., `48 65 6C 6C 6F`). Live validation flags invalid input in red. The Cell Inspector sidebar also provides hex editing.
-
-<Note>
-BLOBs larger than 10 KB are read-only. Use an external hex editor for large binary data.
-</Note>
-
 ### Multi-Row Editing
 
 Select multiple rows with `Ctrl+click` (non-contiguous) or `Shift+click` (range) on row numbers. Press `Delete` to remove selected rows.
@@ -97,7 +89,7 @@ Select multiple rows with `Ctrl+click` (non-contiguous) or `Shift+click` (range)
 
 Changes are queued, not applied immediately. Manage pending changes with:
 
-- **Preview SQL**: Click the **Preview SQL** button (eye icon) or press `Ctrl+Shift+P` to review pending SQL statements before committing
+- **Preview SQL**: Click the **Preview SQL** button (eye icon) to review pending SQL statements before committing
 - **Commit**: Click the **Commit** button (or press `Ctrl+S`) to apply all pending changes
 - **Discard**: Click the **Discard** button to revert all pending changes
 - **Undo/Redo**: Press `Ctrl+Z` to undo or `Ctrl+Shift+Z` to redo individual edits before committing
@@ -125,7 +117,7 @@ Review all modifications before committing them to the database. See [Change Tra
 
 ## Cell Inspector
 
-The Cell Inspector is a right sidebar panel showing detailed information about the selected row or current table. Toggle with `Ctrl+Shift+B` or via **View** > **Toggle Cell Inspector**.
+The Cell Inspector is a right sidebar panel showing detailed information about the selected row or current table. Toggle with `Ctrl+Shift+I`.
 
 ### Row Details Mode
 
@@ -147,28 +139,22 @@ Use arrow keys to move between cells. Press `Enter` to edit, `Escape` to cancel.
 
 Click a cell to select it. Drag to select a range, or Shift+click to select a range. Click row numbers to select entire rows, or Ctrl+click for multiple non-contiguous rows.
 
-Select cells and press `Ctrl+C` for TSV, `Ctrl+Shift+C` for CSV, or `Ctrl+Alt+J` for JSON.
+Select cells and press `Ctrl+C` to copy — a single selected cell copies its raw value; a range copies as tab-separated (TSV) with a header row. CSV, JSON, and SQL copy formats are available from the right-click context menu (no keyboard shortcut).
 
 ## Pagination
 
-Large result sets are paginated. Configure page size in **Settings** > **Data Grid** (Small: 100, Medium: 500, Large: 1,000, Custom: 10–100,000). Smaller pages load faster.
+Large result sets are paginated. Configure page size in **Settings** > **General**: 25, 50, 100, 500, or 1000 rows. Smaller pages load faster.
 
 ## NULL Values and Display
 
-NULL values show as styled "NULL" text (customizable in **Settings** > **Data Grid**). Configure date format, row height, and alternate row colors in the same settings panel.
+NULL values show as customizable text (default `"NULL"`) — set in **Settings** > **General**, alongside date format.
 
 ## MongoDB Collections
 
 ### Schema and Display
 
-MongoDB has no fixed schema. TablePro infers columns by sampling up to 500 documents. Missing fields show as NULL. The `_id` column is read-only; delete and re-insert to change it.
+MongoDB has no fixed schema. TablePro infers columns by sampling up to 100 documents. Missing fields show as NULL.
 
 BSON types display as: `ObjectId("...")`, ISO 8601 dates, `BinData(subtype, "base64...")`, decimal strings, `DBRef("collection", id)`.
 
-### MQL Statement Preview
-
-Changes preview as MongoDB shell commands:
-- Inserts: `db.collection.insertMany([...])`
-- Updates: `db.collection.updateOne({filter}, {$set: {...}})`
-- Deletes: `db.collection.deleteMany({_id: {$in: [...]}})`
 

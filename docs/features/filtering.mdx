@@ -24,7 +24,7 @@ The Quick Filter Bar appears above the data grid and lets you filter instantly u
 
 ### Opening the Quick Filter Bar
 
-The filter bar is always visible above the grid. Click in the search field or press `Ctrl+F` to focus it.
+The filter bar is always visible above the grid. Click in the search field to focus it.
 
 ### Quick Filter Syntax
 
@@ -73,7 +73,6 @@ The quick filter bar is perfect for one-off lookups. For frequently-used filters
 Toggle the filter panel:
 
 - Click the **Filter** button in the toolbar
-- Or press `Ctrl+F`
 
 The panel appears above the data grid. The quick search field is automatically focused when the panel opens.
 
@@ -232,7 +231,7 @@ Save your current filter configuration as a named preset for quick reuse.
 | Delete | Select **Delete Preset** > click the preset name |
 | Overwrite | Save a new preset with the same name |
 
-Presets are stored via UserDefaults and persist across sessions.
+Presets are stored in `%APPDATA%\TablePro\filter-presets.json` and persist across sessions.
 
 <Note>
 Presets save the filter definitions (column, operator, value) but not whether they were applied. After loading a preset, click **Apply All** to activate the filters.
@@ -332,7 +331,6 @@ Controls the filter panel behavior when opening a table:
 
 | Action | Shortcut |
 |--------|----------|
-| Toggle filter panel / Quick search | `Ctrl+F` |
 | Apply filter (in value field) | `Enter` |
 
 ## Next Steps

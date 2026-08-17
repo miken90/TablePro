@@ -26,7 +26,7 @@ Table tabs are editable by default. Query tabs are read-only unless the query is
 
 Clicking the same table switches to its existing tab. Clicking a different table opens a new tab.
 
-Enable **Reuse clean table tab** in **Settings** > **Tabs** for TablePlus-style behavior: clicking a different table replaces the current table tab if it has no unsaved changes, no user interaction, and is not pinned.
+Enable **Reuse clean table tab** in **Settings** > **General** for TablePlus-style behavior: clicking a different table replaces the current table tab if it has no unsaved changes, no user interaction, and is not pinned.
 
 ### Preview Tabs
 
@@ -40,7 +40,7 @@ A preview tab becomes permanent when you:
 Preview tabs are not saved across restarts.
 
 <Tip>
-Disable preview tabs in **Settings** > **Tabs** if you prefer every click to open a permanent tab.
+Disable preview tabs in **Settings** > **General** if you prefer every click to open a permanent tab.
 </Tip>
 
 ## Managing Tabs
@@ -67,9 +67,8 @@ Closing a tab with unsaved changes discards those changes. TablePro warns you be
 
 ### Switching Tabs
 
-- `Ctrl+1` through `Ctrl+9` to jump by position
-- `Ctrl+Shift+[` / `Ctrl+Alt+Left` for previous tab
-- `Ctrl+Shift+]` / `Ctrl+Alt+Right` for next tab
+- `Ctrl+Tab` for next tab
+- `Ctrl+Shift+Tab` for previous tab
 
 Each tab preserves its full state when you switch away: SQL content, cursor position, results, scroll position, selected rows, sort/filter state, and pending changes.
 
@@ -121,7 +120,7 @@ Tab state auto-saves 500ms after any change. On reconnect, TablePro restores you
 
 ### Table Tabs (Server-Side)
 
-Table tabs use SQL `LIMIT` and `OFFSET`. Only the current page loads from the database. Page navigation triggers a new query. Configure page size in **Settings** > **Data Grid**.
+Table tabs use SQL `LIMIT` and `OFFSET`. Only the current page loads from the database. Page navigation triggers a new query. Configure page size in **Settings** > **General**.
 
 <Tip>
 Server-side pagination is memory efficient. Only the visible page is kept in memory, even for tables with millions of rows.
@@ -131,7 +130,7 @@ Server-side pagination is memory efficient. Only the visible page is kept in mem
 
 Query tabs execute the full query and receive all results. For large result sets, TablePro paginates client-side without re-querying. Sorting is done locally on cached results.
 
-Configure page size in **Settings** > **Data Grid**: Small (100), Medium (500), Large (1,000), or Custom (10-100,000).
+Configure page size in **Settings** > **General**: 25, 50, 100, 500, or 1000 rows.
 
 ## Tab Context Menu
 

@@ -1,25 +1,25 @@
 ---
 title: Import & Export
-description: Export to CSV, JSON, SQL, MQL, or XLSX. Import SQL files with transaction safety and progress tracking.
+description: Export to CSV, JSON, SQL, or XLSX. Import SQL files with transaction safety and progress tracking.
 ---
 
 # Import & Export
 
-Export data in five formats (CSV, JSON, SQL, MQL, XLSX), import SQL files with gzip support, and paste tabular data from the clipboard into the grid.
+Export data in four formats (CSV, JSON, SQL, XLSX), import SQL files with gzip support, and paste tabular data from the clipboard into the grid.
 
 ## Export Data
 
 1. Run a query or open a table
-2. Click **Export** in the toolbar (`Ctrl+Shift+E`)
+2. Click **Export** in the toolbar
 3. Choose a format, select tables, configure options
 4. Click **Export**
 
 <Note>
-**MongoDB**: SQL export is not available. Use CSV, JSON, MQL, or XLSX. MQL generates `db.collection.insertMany([...])` scripts for `mongosh`.
+**MongoDB**: SQL export is not available. Use CSV, JSON, or XLSX.
 </Note>
 
 <Note>
-**Redis**: SQL and MQL exports are not available. Use CSV, JSON, or XLSX.
+**Redis**: SQL export is not available. Use CSV, JSON, or XLSX.
 </Note>
 
 ### Export Formats
@@ -75,26 +75,7 @@ Export data in five formats (CSV, JSON, SQL, MQL, XLSX), import SQL files with g
     {/* Screenshot: SQL export options: structure, data, batch size */}
     
   </Tab>
-  <Tab title="MQL">
-    MongoDB only. Generates `insertMany()` scripts that run directly in `mongosh`.
-
-    | Option | Default |
-    |--------|---------|
-    | Batch size (documents per `insertMany`) | 500 |
-
-    Output is a `.js` file:
-    ```javascript
-    db.users.insertMany([
-      {"_id": {"$oid": "507f1f77bcf86cd799439011"}, "name": "Alice", "age": 30},
-      {"_id": {"$oid": "507f1f77bcf86cd799439012"}, "name": "Bob", "age": 25}
-    ]);
-    ```
-  </Tab>
   <Tab title="XLSX">
-    <Note>
-    XLSX export requires a **Pro license**.
-    </Note>
-
     Best for sharing data with non-technical users and business reports.
 
     | Option | Default |
@@ -134,14 +115,14 @@ Paste tabular data directly into the data grid. Press `Ctrl+V` after selecting a
 Import `.sql` and `.sql.gz` files. Statements execute directly against your database: backups, migrations, seed data.
 
 <Note>
-**MongoDB**: SQL import is not available. Use `mongoimport` or the MQL shell.
+**MongoDB**: SQL import is not available.
 </Note>
 
 ### Import Workflow
 
 <Steps>
   <Step title="Open Import Dialog">
-    Click **File** > **Import** (`Ctrl+Shift+I`), or drag and drop a `.sql` / `.sql.gz` file onto the app.
+    Click **File** > **Import**, or drag and drop a `.sql` / `.sql.gz` file onto the app.
   </Step>
   <Step title="Configure Options">
     Set encoding, transaction wrapping, and foreign key check options.
