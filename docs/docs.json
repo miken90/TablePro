@@ -51,7 +51,6 @@
               "features/change-tracking",
               "features/tabs",
               "features/import-export",
-              "features/sql-favorites",
               "features/query-history",
               "features/ai-chat",
               "features/keyboard-shortcuts",
@@ -89,23 +88,8 @@
       "anchors": [
         {
           "anchor": "GitHub",
-          "href": "https://github.com/TableProApp/TablePro",
+          "href": "https://github.com/miken90/TablePro",
           "icon": "github"
-        },
-        {
-          "anchor": "Releases",
-          "href": "https://github.com/TableProApp/TablePro/releases",
-          "icon": "download"
-        },
-        {
-          "anchor": "Community",
-          "href": "https://www.facebook.com/groups/tablepro",
-          "icon": "facebook"
-        },
-        {
-          "anchor": "Telegram",
-          "href": "https://t.me/tablepro_app",
-          "icon": "telegram"
         }
       ]
     }
@@ -115,16 +99,10 @@
     "dark": "/logo/logo.png"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:datlechin@gmail.com"
-      }
-    ],
     "primary": {
       "type": "button",
-      "label": "Download",
-      "href": "https://github.com/TableProApp/TablePro/releases"
+      "label": "GitHub",
+      "href": "https://github.com/miken90/TablePro"
     }
   },
   "contextual": {
@@ -140,14 +118,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/TableProApp/TablePro",
-      "facebook": "https://www.facebook.com/groups/tablepro",
-      "telegram": "https://t.me/tablepro_app"
-    }
-  },
-  "integrations": {
-    "ga4": {
-      "measurementId": "G-GQYNPKSK83"
+      "github": "https://github.com/miken90/TablePro"
     }
   }
 }
