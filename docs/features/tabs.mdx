@@ -152,6 +152,10 @@ Right-click a tab > **Duplicate Tab**. The copy opens immediately after the orig
 
 Each tab maintains its own pending changes. You can have edits in multiple tabs simultaneously without interference. Switching tabs saves and restores each tab's change state.
 
+## Per-Tab Data Caching
+
+When switching between multiple active table tabs, TablePro keeps the query results, pagination page, sorting state, and column metadata cached in memory. This prevents automatic re-fetching of table data from the database server on every tab switch, saving network bandwidth and database resources. Manual refreshes (pressing **F5** or clicking the refresh button) will bypass the cache and fetch fresh data from the server.
+
 ## Tab Persistence
 
 ### Last Query Memory

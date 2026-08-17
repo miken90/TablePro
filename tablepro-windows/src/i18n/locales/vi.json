@@ -506,7 +506,9 @@
     "openTable": "Mở bảng",
     "copyTableName": "Sao chép tên bảng",
     "copySelect": "Sao chép SELECT *",
-    "viewStructure": "Xem cấu trúc"
+    "viewStructure": "Xem cấu trúc",
+    "refreshTables": "Tải lại danh sách bảng",
+    "refreshDatabases": "Tải lại danh sách cơ sở dữ liệu"
   },
   "history": {
     "title": "Lịch sử truy vấn",

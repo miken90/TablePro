@@ -20,6 +20,9 @@ interface SidebarTableNodeProps {
   onViewStructure?: (tableName: string, schema?: string | null) => void;
   onOpenTable?: (tableName: string, schema?: string | null) => void;
   onOpenPreviewTable?: (tableName: string, schema?: string | null) => void;
+  onTruncateTable?: (tableName: string, schema?: string | null) => void;
+  onDeleteAllRecords?: (tableName: string, schema?: string | null) => void;
+  onDropTable?: (tableName: string, schema?: string | null) => void;
 }
 
 export function SidebarTableNode({
@@ -31,6 +34,9 @@ export function SidebarTableNode({
   onViewStructure,
   onOpenTable,
   onOpenPreviewTable,
+  onTruncateTable,
+  onDeleteAllRecords,
+  onDropTable,
 }: SidebarTableNodeProps) {
   const { t } = useTranslation();
   const { fetchColumns, columnsByTable } = useSchemaStore();
@@ -83,6 +89,23 @@ export function SidebarTableNode({
 
   const handleOpenTable = () => {
     onOpenTable?.(table.name, table.schema);
+    setContextMenu(null);
+  };
+
+  const isView = table.tableType?.toLowerCase() === 'view';
+
+  const handleTruncate = () => {
+    onTruncateTable?.(table.name, table.schema);
+    setContextMenu(null);
+  };
+
+  const handleDeleteAll = () => {
+    onDeleteAllRecords?.(table.name, table.schema);
+    setContextMenu(null);
+  };
+
+  const handleDropTable = () => {
+    onDropTable?.(table.name, table.schema);
     setContextMenu(null);
   };
 
@@ -203,6 +226,29 @@ export function SidebarTableNode({
             className="menu-item-button w-full px-3 py-1.5 text-left text-xs"
           >
             {t("sidebar.viewStructure")}
+          </button>
+          <div className="my-0.5 border-t border-border" />
+          {!isView && (
+            <button
+              onClick={handleTruncate}
+              className="menu-item-button w-full px-3 py-1.5 text-left text-xs text-text-primary"
+            >
+              Truncate Table
+            </button>
+          )}
+          {!isView && (
+            <button
+              onClick={handleDeleteAll}
+              className="menu-item-button w-full px-3 py-1.5 text-left text-xs text-text-primary"
+            >
+              Delete All Records
+            </button>
+          )}
+          <button
+            onClick={handleDropTable}
+            className="menu-item-button w-full px-3 py-1.5 text-left text-xs text-accent-red"
+          >
+            {isView ? 'Drop View' : 'Drop Table'}
           </button>
         </div>
       )}

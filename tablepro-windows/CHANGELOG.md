@@ -7,11 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Multi-row selection with Ctrl+Click (non-contiguous) and checkbox column in table browse mode
+- Delete selected rows via toolbar button, context menu (shows count), or Delete/Backspace key
+- Select-all checkbox in grid header with indeterminate state
+- Selection strip in contextual bar showing count and delete/deselect actions
+- Refresh schema button in sidebar to reload tables/views
+- Table context menu: Truncate Table, Delete All Records, Drop Table/View with confirmation dialog
+- Drop Table confirmation requires typing table name for safety
+- Right-click context menu on database selector with options to refresh table list or refresh database list
+- Keypress handler for F5 to refresh the table list when database selector is focused
+- Copy button in the Export Dialog to copy the entire generated export text (CSV/JSON/SQL) to the clipboard directly
+
 ### Fixed
 
+- PostgreSQL errors now show actual database messages (e.g. syntax errors, missing relations) instead of generic "db error"
 - Boolean cell editor dropdown (select box) option squishing and text overlapping
 - JSON cell editor textarea width clipping/clamping inside flex cell by adding absolute positioning coordinates
 - Search icon overlap with placeholder/text in foreign key cell editor search input by correcting non-standard padding class
+- Translate Windows-style export file paths (e.g., C:\...) to WSL-style mount paths (e.g., /mnt/c/...) under Unix environments to prevent file creation errors
+- Auto-create parent directories during export if they do not exist
 
 ## [0.5.0] - 2026-04-09
 
