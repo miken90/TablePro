@@ -186,7 +186,9 @@ describe('Escape cancels a running query', () => {
   it('is wired to the query store cancel path', () => {
     const cmds = source('hooks/useMainLayoutCommands.ts');
     expect(cmds).toContain('id: "editor.cancel"');
-    expect(cmds).toContain('useQueryStore.getState().cancel(sessionId)');
+    // No session argument: the store resolves the run's own session, so the
+    // shortcut cannot address a cancel to the active tab's connection.
+    expect(cmds).toContain('useQueryStore.getState().cancel()');
     expect(cmds).toContain('useQueryStore.getState().isExecuting');
   });
 });

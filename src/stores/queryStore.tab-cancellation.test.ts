@@ -138,7 +138,7 @@ describe("queryStore per-tab cancellation", () => {
     const runB = useQueryStore.getState().execute("session-B", "SELECT pg_sleep(60)");
 
     useEditorStore.setState({ activeTabId: "tab-A" });
-    await useQueryStore.getState().cancel("session-A");
+    await useQueryStore.getState().cancel();
 
     expect(stub.cancelled).toEqual(["session-A"]);
     expect(__activeStreamKeys()).toContain("tab-B");

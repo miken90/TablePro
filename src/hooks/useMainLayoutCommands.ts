@@ -101,9 +101,10 @@ export function useMainLayoutCommands() {
         // `when` keeps Escape inert unless a query is actually running, so it
         // never competes with the Escape handling in dialogs and popovers.
         when: () => useQueryStore.getState().isExecuting,
+        // The store owns the target: it cancels the run that is actually in
+        // flight, on the session that started it.
         action: () => {
-          const sessionId = resolveActiveQuerySessionId();
-          if (sessionId) void useQueryStore.getState().cancel(sessionId);
+          void useQueryStore.getState().cancel();
         },
       },
       {

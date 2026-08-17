@@ -14,6 +14,13 @@ import {
   type QueryChunk,
 } from "./queryResultStore";
 import { useSettingsStore } from "./settingsStore";
+import {
+  cancelTabStream,
+  mintStreamGeneration,
+  registerTabStream,
+  releaseTabStream,
+  resolveCancelTarget,
+} from "./tab-stream-registry";
 
 // --- Safe mode helpers ---
 
@@ -93,7 +100,9 @@ interface QueryState {
   execute: (sessionId: string, sql: string, params?: string[], safeModeLevel?: number) => Promise<void>;
   confirmSafeCheck: () => Promise<void>;
   cancelSafeCheck: () => void;
-  cancel: (sessionId: string) => Promise<void>;
+  /** Abort the run the UI is showing as in flight. Targets the tab that
+   *  started it and the session it started on — never the active tab's. */
+  cancel: () => Promise<void>;
   clearResult: () => void;
   runExplain: (sessionId: string, sql: string) => Promise<void>;
 }
@@ -146,46 +155,21 @@ export function resolveActiveQuerySessionId(): string | undefined {
 //   • A new run cancels the prior in-flight stream OF THE SAME TAB only;
 //     the per-run cancel handle is registered against that tab so external
 //     `cancel()` reaches it and other tabs stay untouched.
+//   • The owning tab key and the session id are captured when the run starts
+//     and travel with the handle, so a later tab switch cannot redirect a
+//     cancel to a different tab or a different database session.
 //   • Every run mints a monotonic generation; stale chunks are dropped
 //     in the columnar store.
 
-/** In-flight stream owned by a single tab. */
-interface TabStream {
-  generation: number;
-  cancel: () => void;
-}
-
-/** Cancel handles keyed by tab. Keeping these per tab is what stops a run in
- *  one tab from cancelling another tab's query. */
-const tabStreams = new Map<string, TabStream>();
-
-/** Monotonic generation allocator. Deliberately shared across tabs: the
- *  columnar result store is a single global stream buffer that drops chunks
- *  whose generation doesn't match, so per-tab counters would collide and let
- *  one tab's late chunks land in another tab's result. */
-let nextStreamGeneration = 0;
-
-/** Key identifying which tab owns a stream. Falls back to the session when no
- *  tab is active (Mongo/Redis panels, command palette runs). */
+/** Key identifying which tab owns a stream. Read once, at run start. Falls
+ *  back to the session when no tab is active (Mongo/Redis panels, command
+ *  palette runs). */
 function streamKeyFor(sessionId: string): string {
   const { activeTabId } = useEditorStore.getState();
   return activeTabId ?? `session:${sessionId}`;
 }
 
-/** Cancel the in-flight stream of one tab, if any. */
-function cancelTabStream(key: string): void {
-  tabStreams.get(key)?.cancel();
-}
-
-/** Test seam: drop all registered handles between cases. */
-export function __resetTabStreams(): void {
-  tabStreams.clear();
-}
-
-/** Test seam: which tabs currently hold an in-flight stream. */
-export function __activeStreamKeys(): string[] {
-  return [...tabStreams.keys()];
-}
+export { __resetTabStreams, __activeStreamKeys } from "./tab-stream-registry";
 
 /** Materialize column-major data into row-major `(string | null)[][]`
  *  for back-compat with the legacy `QueryResult.rows` shape. */
@@ -245,8 +229,7 @@ async function runQuery(
   });
 
   // Mint generation + reset columnar store.
-  nextStreamGeneration += 1;
-  const gen = nextStreamGeneration;
+  const gen = mintStreamGeneration();
   useQueryResultStore.getState().beginStream(gen);
 
   // Wire channel BEFORE invoke (spike rule §1).
@@ -258,11 +241,18 @@ async function runQuery(
   const cancelHandle = () => {
     if (cancelled) return;
     cancelled = true;
-    void invoke("cancel_query", { sessionId }).catch(() => {
-      /* swallow: cancel best-effort */
+    // Always cancels the session this run started on, never the session of
+    // whatever tab happens to be active when the user presses Stop.
+    void invoke("cancel_query", { sessionId }).catch((err) => {
+      // Best-effort by design: drivers with no cancel channel (SQL Server,
+      // MongoDB, Redis) answer `Unsupported`. The local listener is detached
+      // either way, so report and continue instead of failing the cancel.
+      console.warn(
+        `[queryStore] backend cancel for ${sessionId} failed: ${extractErrorMessage(err)}`,
+      );
     });
   };
-  tabStreams.set(streamKey, { generation: gen, cancel: cancelHandle });
+  registerTabStream({ generation: gen, ownerKey: streamKey, sessionId, cancel: cancelHandle });
 
   channel.onmessage = (chunk) => {
     if (cancelled) return;
@@ -295,9 +285,7 @@ async function runQuery(
 
   // Clear this tab's slot only if it's still ours (a newer run in the same
   // tab may have replaced it).
-  if (tabStreams.get(streamKey)?.cancel === cancelHandle) {
-    tabStreams.delete(streamKey);
-  }
+  releaseTabStream(streamKey, cancelHandle);
 
   if (cancelled) {
     // User-initiated cancel: leave isExecuting false.
@@ -409,14 +397,20 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     set({ pendingSafeCheck: null });
   },
 
-  cancel: async (sessionId) => {
-    // Kill this tab's stream listener immediately (drops further chunks
-    // and prevents the post-invoke `result` synthesis from running).
-    // Other tabs' streams are untouched.
-    cancelTabStream(streamKeyFor(sessionId));
-    // Best-effort backend cancel (may be redundant with the cancel
-    // already issued by `activeStreamCancel`, but harmless).
-    await commands.cancelQuery(sessionId);
+  cancel: async () => {
+    // Resolve the run to abort from the registry, not from the active tab's
+    // connection: the handle carries the tab that started it and the session
+    // it runs on. The active tab's own run wins; otherwise the newest run —
+    // the one whose state `isExecuting` is showing — is the target.
+    const { activeTabId } = useEditorStore.getState();
+    const target = resolveCancelTarget(activeTabId);
+    if (!target) return;
+
+    // One round-trip only. `cancel()` detaches the listener and issues the
+    // backend cancel for the originating session, guarded so it fires once.
+    // A second out-of-band `cancel_query` would risk landing on the
+    // connection after the next statement had already started.
+    target.cancel();
     set({ isExecuting: false });
   },
 

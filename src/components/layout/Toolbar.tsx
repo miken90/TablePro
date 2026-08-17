@@ -104,10 +104,10 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
     if (stmt.trim()) void execute(sessionId, stmt, undefined, safeModeLevel);
   };
 
+  // No session lookup here: the store cancels the run that is in flight, on
+  // the session that started it, which may not be the active tab's session.
   const handleStop = () => {
-    const sessionId = resolveActiveQuerySessionId();
-    if (!sessionId) return;
-    void cancel(sessionId);
+    void cancel();
   };
 
   const handleRunAll = () => {
