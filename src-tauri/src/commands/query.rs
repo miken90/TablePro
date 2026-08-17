@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::drivers::DatabaseDriver;
 use crate::models::{AppError, QueryResult};
+use crate::services::browse_ordering::{identity_column_query, resolve_browse_ordering};
 use crate::services::sql_generator::Dialect;
 use crate::services::sql_pagination::paginate_owned_query;
 use crate::services::sql_quoting::quote_identifier;
@@ -304,9 +305,14 @@ pub async fn fetch_rows(
 
 /// Build an ordering that makes paginated browsing of `table` stable.
 ///
-/// Prefers the primary key. Falling back to every column keeps pagination
-/// stable in content terms: rows can only tie when they are identical in every
-/// column, and swapping two identical rows between pages is unobservable.
+/// Resolution order is primary key → unique index → identity column →
+/// `%%physloc%%`; see [`browse_ordering`](crate::services::browse_ordering) for
+/// why ordering by every column is not usable on SQL Server.
+///
+/// The metadata is fetched per page and deliberately not cached: an ordering
+/// key that goes stale after a DDL change would silently corrupt paging, and
+/// the lookups only run for SQL Server tables that have no primary key. The
+/// index and identity queries are skipped as soon as a better key is found.
 async fn deterministic_ordering(
     driver: &Arc<dyn DatabaseDriver>,
     table: &str,
@@ -314,28 +320,51 @@ async fn deterministic_ordering(
     driver_type: &str,
 ) -> Result<String, AppError> {
     let columns = driver.fetch_columns(table, schema).await?;
-    if columns.is_empty() {
-        return Err(AppError::DatabaseError(format!(
-            "No columns found for '{table}'; cannot order rows for pagination"
-        )));
-    }
+    let has_primary_key = columns.iter().any(|c| c.is_primary_key);
 
-    let primary_keys: Vec<&crate::models::ColumnInfo> =
-        columns.iter().filter(|c| c.is_primary_key).collect();
-    let ordering_columns = if primary_keys.is_empty() {
-        columns.iter().collect::<Vec<_>>()
+    let indexes = if has_primary_key {
+        Vec::new()
     } else {
-        primary_keys
+        // A failed index lookup must not block browsing — fall through to the
+        // remaining options instead.
+        driver.fetch_indexes(table, schema).await.unwrap_or_default()
     };
 
-    Ok(ordering_columns
-        .iter()
-        .map(|c| quote_identifier(&c.name, driver_type))
-        .collect::<Vec<_>>()
-        .join(", "))
+    let needs_identity = !has_primary_key
+        && !indexes.iter().any(|i| i.is_unique && !i.columns.is_empty());
+    let identity_column = match needs_identity
+        .then(|| identity_column_query(table, schema, driver_type))
+        .flatten()
+    {
+        Some(sql) => driver
+            .execute(&sql)
+            .await
+            .ok()
+            .and_then(|r| r.rows.first().and_then(|row| row.first().cloned()).flatten()),
+        None => None,
+    };
+
+    let ordering = resolve_browse_ordering(
+        table,
+        &columns,
+        &indexes,
+        identity_column.as_deref(),
+        driver_type,
+    )?;
+    tracing::info!(
+        table = %table,
+        source = ?ordering.source,
+        "resolved browse ordering: {}",
+        ordering.clause
+    );
+    Ok(ordering.clause)
 }
 
-/// Return total row count for a table.
+/// Return total row count for a table, or `None` when it cannot be determined.
+///
+/// `None` reaches the frontend as `null`, which the grid renders as an unknown
+/// total. Collapsing an unreadable count to `0` made the UI claim an empty
+/// table while it was rendering a full page of rows.
 #[tauri::command]
 pub async fn fetch_count(
     session_id: String,
@@ -343,7 +372,7 @@ pub async fn fetch_count(
     schema: Option<String>,
     where_clause: Option<String>,
     manager: State<'_, Mutex<ConnectionManager>>,
-) -> Result<i64, AppError> {
+) -> Result<Option<i64>, AppError> {
     let (driver, driver_type) = {
         let mgr = manager.lock().await;
         let driver = mgr.get_driver(&session_id)?;
@@ -374,8 +403,13 @@ pub async fn fetch_count(
         .first()
         .and_then(|r| r.first())
         .and_then(|v| v.as_deref())
-        .and_then(|s| s.parse::<i64>().ok())
-        .unwrap_or(0);
+        .and_then(|s| s.parse::<i64>().ok());
+    if count.is_none() {
+        tracing::warn!(
+            session_id = %session_id,
+            "fetch_count for {table} returned no readable count; reporting unknown"
+        );
+    }
     Ok(count)
 }
 
