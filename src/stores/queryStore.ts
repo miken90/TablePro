@@ -14,6 +14,7 @@ import {
   type QueryChunk,
 } from "./queryResultStore";
 import { useSettingsStore } from "./settingsStore";
+import type { CancelTarget } from "./tab-stream-registry";
 import {
   cancelTabStream,
   mintStreamGeneration,
@@ -21,6 +22,9 @@ import {
   releaseTabStream,
   resolveCancelTarget,
 } from "./tab-stream-registry";
+
+/** Result of a Stop press: what the store actually did. */
+export type CancelOutcome = "cancelled" | CancelTarget["kind"];
 
 // --- Safe mode helpers ---
 
@@ -101,8 +105,9 @@ interface QueryState {
   confirmSafeCheck: () => Promise<void>;
   cancelSafeCheck: () => void;
   /** Abort the run the UI is showing as in flight. Targets the tab that
-   *  started it and the session it started on — never the active tab's. */
-  cancel: () => Promise<void>;
+   *  started it and the session it started on — never the active tab's.
+   *  Returns what it did so the caller can explain an ambiguous Stop. */
+  cancel: () => Promise<CancelOutcome>;
   clearResult: () => void;
   runExplain: (sessionId: string, sql: string) => Promise<void>;
 }
@@ -400,18 +405,19 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   cancel: async () => {
     // Resolve the run to abort from the registry, not from the active tab's
     // connection: the handle carries the tab that started it and the session
-    // it runs on. The active tab's own run wins; otherwise the newest run —
-    // the one whose state `isExecuting` is showing — is the target.
+    // it runs on. The active tab's own run wins; a single run elsewhere is
+    // unambiguous; several runs with none focused cancel nothing.
     const { activeTabId } = useEditorStore.getState();
     const target = resolveCancelTarget(activeTabId);
-    if (!target) return;
+    if (target.kind !== "run") return target.kind;
 
     // One round-trip only. `cancel()` detaches the listener and issues the
     // backend cancel for the originating session, guarded so it fires once.
     // A second out-of-band `cancel_query` would risk landing on the
     // connection after the next statement had already started.
-    target.cancel();
+    target.stream.cancel();
     set({ isExecuting: false });
+    return "cancelled";
   },
 
   clearResult: () => set({ result: null, error: null, durationMs: null, explainResult: null }),

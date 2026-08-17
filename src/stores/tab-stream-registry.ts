@@ -63,25 +63,36 @@ export function cancelStreamsForTabs(ownerKeys: string[]): void {
   }
 }
 
+/** What a Stop press resolves to. */
+export type CancelTarget =
+  /** Nothing is running anywhere. */
+  | { kind: "idle" }
+  /** Exactly one run can be meant; cancel it. */
+  | { kind: "run"; stream: TabStream }
+  /** Several runs are in flight and none belongs to the focused tab, so which
+   *  one the user meant is unknowable. */
+  | { kind: "ambiguous"; runningTabs: string[] };
+
 /**
  * Pick the run a user-initiated Stop should abort.
  *
- * The active tab's own run wins. When the active tab has nothing in flight,
- * fall back to the most recently started run — that is the run whose state the
- * global query store is displaying, and therefore the one the Stop button the
- * user just pressed refers to.
+ * The active tab's own run wins. Otherwise, a single run in flight is
+ * unambiguous — that is the one whose state the toolbar is showing — and is
+ * cancelled. With two or more runs and none in the focused tab there is no
+ * honest answer: this used to cancel the newest, so a user with queries in
+ * three tabs could stop one they were not looking at. It now cancels nothing
+ * and the caller tells the user to switch to the tab they mean.
  */
-export function resolveCancelTarget(activeTabId: string | null): TabStream | undefined {
+export function resolveCancelTarget(activeTabId: string | null): CancelTarget {
   if (activeTabId) {
     const owned = tabStreams.get(activeTabId);
-    if (owned) return owned;
+    if (owned) return { kind: "run", stream: owned };
   }
 
-  let newest: TabStream | undefined;
-  for (const stream of tabStreams.values()) {
-    if (!newest || stream.generation > newest.generation) newest = stream;
-  }
-  return newest;
+  const running = [...tabStreams.values()];
+  if (running.length === 0) return { kind: "idle" };
+  if (running.length === 1) return { kind: "run", stream: running[0] };
+  return { kind: "ambiguous", runningTabs: running.map((s) => s.ownerKey) };
 }
 
 /** Test seam: drop all registered handles between cases. */

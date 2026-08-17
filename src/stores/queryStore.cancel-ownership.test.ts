@@ -179,6 +179,57 @@ describe("cancel targets the run's owner, not the active tab", () => {
     expect(stub.cancelled).toEqual([]);
   });
 
+  it("refuses to guess when several tabs are running and none is focused", async () => {
+    const stub = installHangingInvoke();
+
+    useEditorStore.setState({
+      tabs: [tab("tab-A", "conn-A"), tab("tab-B", "conn-B"), tab("tab-C", "conn-C")],
+      activeTabId: "tab-A",
+    });
+    const runA = useQueryStore.getState().execute("session-A", "SELECT pg_sleep(60)");
+    useEditorStore.setState({ activeTabId: "tab-B" });
+    const runB = useQueryStore.getState().execute("session-B", "SELECT pg_sleep(60)");
+
+    // The user is looking at a third, idle tab.
+    useEditorStore.setState({ activeTabId: "tab-C" });
+    const outcome = await useQueryStore.getState().cancel();
+
+    // Previously this cancelled the newest run - a query the user was not
+    // looking at. Nothing is cancelled and the caller is told why.
+    expect(outcome).toBe("ambiguous");
+    expect(stub.cancelled).toEqual([]);
+    expect(__activeStreamKeys()).toEqual(["tab-A", "tab-B"]);
+
+    stub.releaseAll();
+    await Promise.all([runA, runB]);
+  });
+
+  it("still stops a single background run from an idle tab", async () => {
+    const stub = installHangingInvoke();
+
+    useEditorStore.setState({
+      tabs: [tab("tab-A", "conn-A"), tab("tab-B", "conn-B")],
+      activeTabId: "tab-A",
+    });
+    const runA = useQueryStore.getState().execute("session-A", "SELECT pg_sleep(60)");
+
+    useEditorStore.setState({ activeTabId: "tab-B" });
+    // One run in flight is unambiguous, whichever tab is focused.
+    expect(await useQueryStore.getState().cancel()).toBe("cancelled");
+    expect(stub.cancelled).toEqual(["session-A"]);
+
+    stub.releaseAll();
+    await runA;
+  });
+
+  it("reports an idle workspace instead of cancelling something", async () => {
+    const stub = installHangingInvoke();
+    useEditorStore.setState({ tabs: [tab("tab-A", "conn-A")], activeTabId: "tab-A" });
+
+    expect(await useQueryStore.getState().cancel()).toBe("idle");
+    expect(stub.cancelled).toEqual([]);
+  });
+
   it("survives a backend cancel that rejects as unsupported", async () => {
     const cancelled: string[] = [];
     const releases: Array<() => void> = [];
@@ -199,7 +250,7 @@ describe("cancel targets the run's owner, not the active tab", () => {
     const runA = useQueryStore.getState().execute("session-A", "SELECT pg_sleep(60)");
 
     // The rejection used to escape to the window and skip the state reset.
-    await expect(useQueryStore.getState().cancel()).resolves.toBeUndefined();
+    await expect(useQueryStore.getState().cancel()).resolves.toBe("cancelled");
     expect(cancelled).toEqual(["session-A"]);
     expect(useQueryStore.getState().isExecuting).toBe(false);
 
