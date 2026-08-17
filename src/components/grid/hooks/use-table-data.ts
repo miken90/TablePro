@@ -23,10 +23,11 @@ function buildOrderByClause(sorting: SortingState): string | null {
  * The count query is issued separately from the row fetch, so it can fail or
  * time out while rows load fine. Returning `0` in that case makes the UI claim
  * an empty table while it is rendering rows, so an undeterminable count is
- * reported as unknown instead.
+ * reported as unknown instead. The backend now says so explicitly by
+ * answering `null`; a rejection means the same thing.
  */
 export async function resolveTotalCount(
-  fetchCount: () => Promise<number>,
+  fetchCount: () => Promise<number | null>,
 ): Promise<number | null> {
   try {
     const fetched = await fetchCount();

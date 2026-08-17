@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::models::AppError;
+
 use super::sql_generator_ops::{
     build_delete_statement, build_insert_statement, build_update_statement, qualified_table,
 };
+use super::sql_value_kind::{classify_column_type, ValueKind};
 use crate::services::sql_quoting::quote_identifier;
 
 /// Target SQL dialect for ChangeTracker statement generation.
@@ -93,8 +96,29 @@ pub struct SavePayload {
     pub table: String,
     pub schema: Option<String>,
     pub columns: Vec<String>,
+    /// Declared type of each column, positionally aligned with `columns`.
+    ///
+    /// Optional on the wire: an older frontend, or a driver that reports no
+    /// type name (SQL Server's ad-hoc result sets), simply sends nothing and
+    /// every value is then quoted as text — the safe direction.
+    #[serde(default)]
+    pub column_types: Vec<Option<String>>,
     pub primary_keys: Vec<String>,
     pub changes: Vec<RowChange>,
+}
+
+impl SavePayload {
+    /// How values of `column_name` must be written, from its declared type.
+    /// Unknown column or missing metadata → [`ValueKind::Text`].
+    pub(crate) fn value_kind_of(&self, column_name: &str) -> ValueKind {
+        let declared = self
+            .columns
+            .iter()
+            .position(|c| c == column_name)
+            .and_then(|idx| self.column_types.get(idx))
+            .and_then(|t| t.as_deref());
+        classify_column_type(declared)
+    }
 }
 
 pub fn generate_statements(payload: &SavePayload, dialect: Dialect) -> Vec<String> {
@@ -104,7 +128,7 @@ pub fn generate_statements(payload: &SavePayload, dialect: Dialect) -> Vec<Strin
         .changes
         .iter()
         .filter_map(|row_change| match row_change.change_type {
-            ChangeType::Insert => build_insert_statement(&table, row_change, dialect),
+            ChangeType::Insert => build_insert_statement(&table, payload, row_change, dialect),
             ChangeType::Update => build_update_statement(&table, payload, row_change, dialect),
             ChangeType::Delete => build_delete_statement(&table, payload, row_change, dialect),
         })
@@ -167,6 +191,13 @@ pub fn generate_insert_sql(
         .join("\n")
 }
 
+/// Build `UPDATE` statements for "copy as SQL".
+///
+/// Refuses when the rows cannot be addressed by a primary key. The grid's save
+/// path already declines to update a row it cannot target
+/// ([`build_update_statement`](super::sql_generator_ops::build_update_statement)
+/// returns `None`); emitting a WHERE-less `UPDATE` here would hand the user a
+/// statement that rewrites every row in the table the moment it is pasted.
 pub fn generate_update_sql(
     table: &str,
     schema: Option<&str>,
@@ -174,9 +205,18 @@ pub fn generate_update_sql(
     rows: &[Vec<Value>],
     primary_keys: &[String],
     driver_type: &str,
-) -> String {
+) -> Result<String, AppError> {
     if rows.is_empty() || columns.is_empty() {
-        return String::new();
+        return Ok(String::new());
+    }
+
+    let addressable = primary_keys
+        .iter()
+        .any(|pk| columns.iter().any(|col| col == pk));
+    if !addressable {
+        return Err(AppError::DatabaseError(format!(
+            "Cannot generate UPDATE for '{table}': no primary key column is present in the selection, so every row in the table would be rewritten"
+        )));
     }
 
     let quoted_table = quote_qualified_table(table, schema, driver_type);
@@ -188,7 +228,8 @@ pub fn generate_update_sql(
         .collect::<std::collections::HashMap<_, _>>();
 
     let dialect = Dialect::from_db_type(driver_type);
-    rows.iter()
+    Ok(rows
+        .iter()
         .filter_map(|row| {
             let set_clause = columns
                 .iter()
@@ -224,26 +265,34 @@ pub fn generate_update_sql(
                 .collect::<Vec<_>>()
                 .join(" AND ");
 
+            // Unreachable while `addressable` holds, but a row that still
+            // yields no predicate is skipped rather than widened to the whole
+            // table.
             if where_clause.is_empty() {
-                Some(format!("UPDATE {quoted_table} SET {set_clause};"))
-            } else {
-                Some(format!("UPDATE {quoted_table} SET {set_clause} WHERE {where_clause};"))
+                return None;
             }
+            Some(format!("UPDATE {quoted_table} SET {set_clause} WHERE {where_clause};"))
         })
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::services::sql_generator_ops::{escape_value, qualified_table as qt, quote_ident};
+    use crate::services::sql_value_kind::ValueKind;
 
     fn make_payload() -> SavePayload {
         SavePayload {
             table: "users".to_string(),
             schema: Some("public".to_string()),
             columns: vec!["id".to_string(), "name".to_string(), "age".to_string()],
+            column_types: vec![
+                Some("integer".to_string()),
+                Some("varchar(50)".to_string()),
+                Some("integer".to_string()),
+            ],
             primary_keys: vec!["id".to_string()],
             changes: vec![],
         }
@@ -319,17 +368,26 @@ mod tests {
 
     #[test]
     fn test_escape_null() {
-        assert_eq!(escape_value(&None, Dialect::Postgres), "NULL");
+        assert_eq!(escape_value(&None, ValueKind::Text, Dialect::Postgres), "NULL");
     }
 
     #[test]
     fn test_escape_numeric() {
-        assert_eq!(escape_value(&Some("3.14".to_string()), Dialect::Postgres), "3.14");
+        // Unquoted only because the column is numeric.
+        assert_eq!(
+            escape_value(&Some("3.14".to_string()), ValueKind::Numeric, Dialect::Postgres),
+            "3.14"
+        );
+        // The same value in a text column keeps its quotes.
+        assert_eq!(
+            escape_value(&Some("3.14".to_string()), ValueKind::Text, Dialect::Postgres),
+            "'3.14'"
+        );
     }
 
     #[test]
     fn test_escape_string_with_quote() {
-        assert_eq!(escape_value(&Some("it's".to_string()), Dialect::Postgres), "'it''s'");
+        assert_eq!(escape_value(&Some("it's".to_string()), ValueKind::Text, Dialect::Postgres), "'it''s'");
     }
 
     #[test]
@@ -423,6 +481,11 @@ mod tests {
                 "item_id".to_string(),
                 "qty".to_string(),
             ],
+            column_types: vec![
+                Some("bigint".to_string()),
+                Some("bigint".to_string()),
+                Some("int".to_string()),
+            ],
             primary_keys: vec!["order_id".to_string(), "item_id".to_string()],
             changes: vec![RowChange {
                 change_type: ChangeType::Delete,
@@ -514,22 +577,37 @@ mod tests {
 
     #[test]
     fn test_escape_negative_number() {
-        assert_eq!(escape_value(&Some("-1".to_string()), Dialect::Postgres), "-1");
+        assert_eq!(
+            escape_value(&Some("-1".to_string()), ValueKind::Numeric, Dialect::Postgres),
+            "-1"
+        );
     }
 
     #[test]
     fn test_escape_scientific_notation() {
-        assert_eq!(escape_value(&Some("1e10".to_string()), Dialect::Postgres), "1e10");
+        assert_eq!(
+            escape_value(&Some("1e10".to_string()), ValueKind::Numeric, Dialect::Postgres),
+            "1e10"
+        );
     }
 
     #[test]
     fn test_escape_non_numeric_string() {
-        assert_eq!(escape_value(&Some("123abc".to_string()), Dialect::Postgres), "'123abc'");
+        // Not a numeric literal even though the column claims to be numeric:
+        // quote it and let the engine coerce or reject it.
+        assert_eq!(
+            escape_value(&Some("123abc".to_string()), ValueKind::Numeric, Dialect::Postgres),
+            "'123abc'"
+        );
+        assert_eq!(
+            escape_value(&Some("123abc".to_string()), ValueKind::Text, Dialect::Postgres),
+            "'123abc'"
+        );
     }
 
     #[test]
     fn test_escape_empty_string() {
-        assert_eq!(escape_value(&Some(String::new()), Dialect::Postgres), "''");
+        assert_eq!(escape_value(&Some(String::new()), ValueKind::Text, Dialect::Postgres), "''");
     }
 
     #[test]
@@ -572,7 +650,8 @@ mod tests {
             &[vec![Value::from(7), Value::from("Neo")]],
             &["id".to_string()],
             "postgres",
-        );
+        )
+        .unwrap();
         assert_eq!(
             sql,
             "UPDATE \"public\".\"users\" SET \"name\"='Neo' WHERE \"id\"=7;"
@@ -648,26 +727,172 @@ mod tests {
 
     #[test]
     fn test_escape_value_bool_string_dialect_aware() {
-        // "true"/"false" string in cell → dialect-specific literal
+        // A boolean *column* renders the dialect's boolean literal.
         assert_eq!(
-            escape_value(&Some("true".to_string()), Dialect::Postgres),
+            escape_value(&Some("true".to_string()), ValueKind::Boolean, Dialect::Postgres),
             "TRUE"
         );
         assert_eq!(
-            escape_value(&Some("FALSE".to_string()), Dialect::Postgres),
+            escape_value(&Some("FALSE".to_string()), ValueKind::Boolean, Dialect::Postgres),
             "FALSE"
         );
         assert_eq!(
-            escape_value(&Some("true".to_string()), Dialect::MySql),
+            escape_value(&Some("true".to_string()), ValueKind::Boolean, Dialect::MySql),
             "1"
         );
         assert_eq!(
-            escape_value(&Some("false".to_string()), Dialect::Mssql),
+            escape_value(&Some("false".to_string()), ValueKind::Boolean, Dialect::Mssql),
             "0"
         );
         assert_eq!(
-            escape_value(&Some("True".to_string()), Dialect::Sqlite),
+            escape_value(&Some("True".to_string()), ValueKind::Boolean, Dialect::Sqlite),
             "TRUE"
+        );
+        // PostgreSQL renders `boolean` as t/f in the grid; it must round-trip.
+        assert_eq!(
+            escape_value(&Some("t".to_string()), ValueKind::Boolean, Dialect::Postgres),
+            "TRUE"
+        );
+        // The literal word in a text column stays a string.
+        assert_eq!(
+            escape_value(&Some("true".to_string()), ValueKind::Text, Dialect::MySql),
+            "'true'"
+        );
+    }
+
+    // ── Column-type-driven quoting (defect: value-shape guessing) ──────────
+
+    /// Build a payload whose single column has the given declared type.
+    fn typed_insert(column: &str, declared_type: Option<&str>, value: &str) -> Vec<String> {
+        let payload = SavePayload {
+            table: "t".to_string(),
+            schema: None,
+            columns: vec![column.to_string()],
+            column_types: vec![declared_type.map(str::to_string)],
+            primary_keys: vec![],
+            changes: vec![RowChange {
+                change_type: ChangeType::Insert,
+                original_row: vec![],
+                cell_changes: vec![CellChange {
+                    column_name: column.to_string(),
+                    old_value: None,
+                    new_value: Some(value.to_string()),
+                }],
+            }],
+        };
+        generate_statements(&payload, Dialect::Postgres)
+    }
+
+    #[test]
+    fn text_column_keeps_a_leading_zero_postcode() {
+        // The defect: "007" parsed as f64 and was stored as 7.
+        assert_eq!(
+            typed_insert("postcode", Some("varchar(10)"), "007")[0],
+            r#"INSERT INTO "t" ("postcode") VALUES ('007')"#
+        );
+    }
+
+    #[test]
+    fn text_column_keeps_values_that_merely_look_numeric() {
+        for value in ["+5", "NaN", "inf", "infinity", "1e10", "-0"] {
+            let stmt = typed_insert("code", Some("text"), value).remove(0);
+            assert!(
+                stmt.contains(&format!("('{value}')")),
+                "{value} must stay quoted: {stmt}"
+            );
+        }
+    }
+
+    #[test]
+    fn text_column_keeps_the_literal_words_true_and_false() {
+        assert_eq!(
+            typed_insert("label", Some("varchar(10)"), "true")[0],
+            r#"INSERT INTO "t" ("label") VALUES ('true')"#
+        );
+        assert_eq!(
+            typed_insert("label", Some("varchar(10)"), "false")[0],
+            r#"INSERT INTO "t" ("label") VALUES ('false')"#
+        );
+    }
+
+    #[test]
+    fn numeric_column_still_emits_bare_numbers() {
+        assert_eq!(
+            typed_insert("qty", Some("integer"), "42")[0],
+            r#"INSERT INTO "t" ("qty") VALUES (42)"#
+        );
+        assert_eq!(
+            typed_insert("ratio", Some("numeric(10,2)"), "-3.50")[0],
+            r#"INSERT INTO "t" ("ratio") VALUES (-3.50)"#
+        );
+    }
+
+    #[test]
+    fn numeric_column_quotes_a_value_that_is_not_a_numeric_literal() {
+        // `NaN` is not a bare literal on any of these engines; quoted, the
+        // engine can coerce it (`'NaN'::numeric`) or reject it clearly.
+        assert_eq!(
+            typed_insert("ratio", Some("double precision"), "NaN")[0],
+            r#"INSERT INTO "t" ("ratio") VALUES ('NaN')"#
+        );
+    }
+
+    #[test]
+    fn missing_type_metadata_falls_back_to_quoting() {
+        // Older payloads carry no types at all — quoting is the safe direction.
+        assert_eq!(
+            typed_insert("anything", None, "007")[0],
+            r#"INSERT INTO "t" ("anything") VALUES ('007')"#
+        );
+        assert_eq!(
+            typed_insert("anything", None, "42")[0],
+            r#"INSERT INTO "t" ("anything") VALUES ('42')"#
+        );
+    }
+
+    #[test]
+    fn null_stays_null_whatever_the_column_type() {
+        for declared in [Some("integer"), Some("varchar(4)"), Some("boolean"), None] {
+            let payload = SavePayload {
+                table: "t".to_string(),
+                schema: None,
+                columns: vec!["c".to_string()],
+                column_types: vec![declared.map(str::to_string)],
+                primary_keys: vec![],
+                changes: vec![RowChange {
+                    change_type: ChangeType::Insert,
+                    original_row: vec![],
+                    cell_changes: vec![CellChange {
+                        column_name: "c".to_string(),
+                        old_value: None,
+                        new_value: None,
+                    }],
+                }],
+            };
+            assert_eq!(
+                generate_statements(&payload, Dialect::Postgres)[0],
+                r#"INSERT INTO "t" ("c") VALUES (NULL)"#
+            );
+        }
+    }
+
+    #[test]
+    fn where_clause_quotes_a_text_primary_key() {
+        let payload = SavePayload {
+            table: "t".to_string(),
+            schema: None,
+            columns: vec!["code".to_string(), "note".to_string()],
+            column_types: vec![Some("varchar(8)".to_string()), Some("text".to_string())],
+            primary_keys: vec!["code".to_string()],
+            changes: vec![RowChange {
+                change_type: ChangeType::Delete,
+                original_row: vec![Some("007".to_string()), Some("x".to_string())],
+                cell_changes: vec![],
+            }],
+        };
+        assert_eq!(
+            generate_statements(&payload, Dialect::Postgres)[0],
+            r#"DELETE FROM "t" WHERE "code"='007'"#
         );
     }
 
@@ -697,6 +922,10 @@ mod tests {
     #[test]
     fn test_generate_statements_mssql_identifier_quoting_and_bool() {
         let mut p = make_payload();
+        // `active` is a bit column, so "true" renders as this dialect's
+        // boolean literal rather than as the string it would be in a varchar.
+        p.columns.push("active".to_string());
+        p.column_types.push(Some("bit".to_string()));
         p.changes = vec![RowChange {
             change_type: ChangeType::Insert,
             original_row: vec![],
@@ -770,7 +999,8 @@ mod tests {
             &[vec![Value::from(1), Value::from("Bob"), Value::from(25)]],
             &["id".to_string()],
             "postgres",
-        );
+        )
+        .unwrap();
         // "id" is primary key, so it should not be in SET clause, but should be in WHERE clause
         assert_eq!(
             sql,
@@ -787,8 +1017,36 @@ mod tests {
             &[vec![Value::from(1)]],
             &["id".to_string()],
             "postgres",
-        );
+        )
+        .unwrap();
         // No non-primary key columns, so it should generate an empty string
         assert_eq!(sql, "");
+    }
+
+    #[test]
+    fn copy_as_update_refuses_when_no_primary_key_is_available() {
+        // The defect: this returned `UPDATE "users" SET "name"='Bob';` — a
+        // full-table rewrite waiting on the clipboard.
+        let err = generate_update_sql(
+            "users",
+            None,
+            &["name".to_string()],
+            &[vec![Value::from("Bob")]],
+            &[],
+            "postgres",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("no primary key column"));
+
+        // Primary key declared but not part of the copied selection: same.
+        assert!(generate_update_sql(
+            "users",
+            None,
+            &["name".to_string()],
+            &[vec![Value::from("Bob")]],
+            &["id".to_string()],
+            "postgres",
+        )
+        .is_err());
     }
 }

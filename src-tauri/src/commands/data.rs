@@ -132,7 +132,7 @@ pub async fn generate_row_sql(
             &payload.rows,
             &payload.primary_keys,
             &driver_type,
-        ),
+        )?,
         other => {
             return Err(AppError::ConfigError(format!(
                 "Unsupported output_format: {other}"

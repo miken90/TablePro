@@ -56,12 +56,13 @@ export const fetchRowsFiltered = (
 ): Promise<QueryResult> =>
   invoke("fetch_rows", { sessionId, table, schema, whereClause, orderBy, offset, limit });
 
-export const fetchCount = (sessionId: string, table: string): Promise<number> =>
+/** `null` when the count cannot be determined — unknown, never zero. */
+export const fetchCount = (sessionId: string, table: string): Promise<number | null> =>
   invoke("fetch_count", { sessionId, table });
 
 export const fetchCountFiltered = (
   sessionId: string, table: string, schema: string | null, whereClause: string | null,
-): Promise<number> =>
+): Promise<number | null> =>
   invoke("fetch_count", { sessionId, table, schema, whereClause });
 
 export const cancelQuery = (sessionId: string): Promise<void> =>
@@ -232,6 +233,9 @@ export interface SavePayload {
   table: string;
   schema: string | null;
   columns: string[];
+  /** Declared column types, aligned with `columns`. The backend decides
+   *  quoting from these; without them every value is quoted as text. */
+  columnTypes: (string | null)[];
   primaryKeys: string[];
   changes: RowChangePayload[];
 }

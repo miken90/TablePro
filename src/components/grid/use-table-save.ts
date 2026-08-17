@@ -40,6 +40,9 @@ export function useTableSave({
     if (changesEntries.length === 0) return;
 
     const columns = result.columns.map(c => c.name);
+    // The backend quotes by declared type, not by guessing at the value —
+    // without this a varchar "007" would be written as the number 7.
+    const columnTypes = result.columns.map(c => c.typeName || null);
     const detectedPks = result.columns.filter(c => c.isPrimaryKey).map(c => c.name);
     // Fallback to all columns when backend doesn't populate isPrimaryKey
     const primaryKeys = detectedPks.length > 0 ? detectedPks : columns;
@@ -64,6 +67,7 @@ export function useTableSave({
       table: tableName,
       schema: schema ?? null,
       columns,
+      columnTypes,
       primaryKeys,
       changes: rowChanges,
     };
