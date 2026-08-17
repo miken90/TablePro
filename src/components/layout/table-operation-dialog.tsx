@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
 
-export type TableOperationType = "truncate" | "delete-all" | "drop";
+export type TableOperationType = "truncate" | "delete-all" | "drop" | "drop-view";
 
 interface TableOperationDialogProps {
   open: boolean;
@@ -29,6 +29,11 @@ const OPERATION_CONFIG = {
     title: "Drop Table",
     description: "This will permanently delete the table and all its data. This action cannot be undone.",
     buttonLabel: "Drop Table",
+  },
+  "drop-view": {
+    title: "Drop View",
+    description: "This will permanently delete the view definition. This action cannot be undone.",
+    buttonLabel: "Drop View",
   },
 } as const;
 

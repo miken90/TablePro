@@ -124,6 +124,30 @@ describe("sidebar no longer owns execution or quoting", () => {
   });
 });
 
+describe("views are not tables", () => {
+  const node = source("sidebar-table-node.tsx");
+  const sidebar = source("Sidebar.tsx");
+  const dialog = source("table-operation-dialog.tsx");
+
+  it("does not offer row operations on a view", () => {
+    // Truncate and Delete All Records are gated behind `!isView`.
+    expect(node).toContain("const isView =");
+    expect(node.match(/\{!isView && \(/g) ?? []).toHaveLength(2);
+  });
+
+  it("tells the sidebar which object kind is being dropped", () => {
+    // The defect: a view was dropped with DROP TABLE, which every engine here
+    // rejects.
+    expect(node).toContain("onDropTable?.(table.name, table.schema, isView)");
+    expect(sidebar).toContain("operation: isView ? 'drop-view' : 'drop'");
+  });
+
+  it("has its own confirmation copy for a view", () => {
+    expect(dialog).toContain('"drop-view"');
+    expect(dialog).toContain("Drop View");
+  });
+});
+
 describe("destructive confirmation dialog", () => {
   const dialog = source("table-operation-dialog.tsx");
 

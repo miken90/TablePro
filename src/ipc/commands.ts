@@ -297,7 +297,7 @@ export const applyAlter = (
 ): Promise<void> =>
   invoke('apply_alter', { sessionId, payload });
 
-export type TableOperationKind = 'truncate' | 'delete-all' | 'drop';
+export type TableOperationKind = 'truncate' | 'delete-all' | 'drop' | 'drop-view';
 
 export interface TableOperationPayload {
   operation: TableOperationKind;

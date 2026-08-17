@@ -22,7 +22,8 @@ interface SidebarTableNodeProps {
   onOpenPreviewTable?: (tableName: string, schema?: string | null) => void;
   onTruncateTable?: (tableName: string, schema?: string | null) => void;
   onDeleteAllRecords?: (tableName: string, schema?: string | null) => void;
-  onDropTable?: (tableName: string, schema?: string | null) => void;
+  /** `isView` decides whether the statement is DROP TABLE or DROP VIEW. */
+  onDropTable?: (tableName: string, schema: string | null | undefined, isView: boolean) => void;
 }
 
 export function SidebarTableNode({
@@ -105,7 +106,7 @@ export function SidebarTableNode({
   };
 
   const handleDropTable = () => {
-    onDropTable?.(table.name, table.schema);
+    onDropTable?.(table.name, table.schema, isView);
     setContextMenu(null);
   };
 

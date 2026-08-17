@@ -166,6 +166,8 @@ pub fn generate_table_operation(
         "truncate" => Ok(format!("TRUNCATE TABLE {qualified}")),
         "delete-all" => Ok(format!("DELETE FROM {qualified}")),
         "drop" => Ok(format!("DROP TABLE {qualified}")),
+        // A view is not a table: DROP TABLE on one errors on every engine here.
+        "drop-view" => Ok(format!("DROP VIEW {qualified}")),
         other => Err(AppError::DatabaseError(format!(
             "Unsupported table operation '{other}'"
         ))),
@@ -290,6 +292,18 @@ mod tests {
         assert_eq!(
             generate_table_operation("drop", "we\"ird", None, "postgres").unwrap(),
             "DROP TABLE \"we\"\"ird\""
+        );
+    }
+
+    #[test]
+    fn table_operation_drops_a_view_with_drop_view() {
+        assert_eq!(
+            generate_table_operation("drop-view", "v_orders", Some("public"), "postgres").unwrap(),
+            "DROP VIEW \"public\".\"v_orders\""
+        );
+        assert_eq!(
+            generate_table_operation("drop-view", "v_orders", None, "mariadb").unwrap(),
+            "DROP VIEW `v_orders`"
         );
     }
 

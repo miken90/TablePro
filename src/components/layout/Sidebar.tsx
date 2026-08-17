@@ -462,7 +462,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                   onOpenPreviewTable={onOpenPreviewTable}
                   onTruncateTable={(name, schema) => setTableOpDialog({ operation: 'truncate', tableName: name, schema })}
                   onDeleteAllRecords={(name, schema) => setTableOpDialog({ operation: 'delete-all', tableName: name, schema })}
-                  onDropTable={(name, schema) => setTableOpDialog({ operation: 'drop', tableName: name, schema })}
+                  onDropTable={(name, schema, isView) => setTableOpDialog({ operation: isView ? 'drop-view' : 'drop', tableName: name, schema })}
                 />
               ))}
             </SidebarObjectGroup>
@@ -481,7 +481,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                     onOpenPreviewTable={onOpenPreviewTable}
                     onTruncateTable={(name, schema) => setTableOpDialog({ operation: 'truncate', tableName: name, schema })}
                     onDeleteAllRecords={(name, schema) => setTableOpDialog({ operation: 'delete-all', tableName: name, schema })}
-                    onDropTable={(name, schema) => setTableOpDialog({ operation: 'drop', tableName: name, schema })}
+                    onDropTable={(name, schema, isView) => setTableOpDialog({ operation: isView ? 'drop-view' : 'drop', tableName: name, schema })}
                   />
                 ))}
               </SidebarObjectGroup>
