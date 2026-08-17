@@ -1,13 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-# Swift files
-*.swift text diff=swift
-# Xcode project files
-*.pbxproj binary merge=union
-*.storyboard binary
-*.xib binary
-*.xcassets binary
-*.xcdatamodeld binary
 # Assets
 *.png binary
 *.jpg binary
@@ -36,17 +28,9 @@
 *.md text eol=lf
 # Shell scripts - force LF
 *.sh text eol=lf
-# Swift source - force LF
-*.swift text eol=lf
 # Configuration files
 *.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
-*.plist text eol=lf
-
-# Vendored C headers (database driver bridges, tree-sitter grammars)
-Plugins/*/C*/include/** linguist-vendored
-TablePro/Core/SSH/CLibSSH2/** linguist-vendored
-LocalPackages/CodeEditLanguages/Sources/TreeSitterGrammars/** linguist-vendored
 
 .github/workflows/*.lock.yml linguist-generated=true merge=ours
