@@ -95,7 +95,7 @@ pub async fn execute_query_streaming(
         Ok(r) => r,
         Err(e) => {
             let _ = channel.send(QueryChunk::Err {
-                message: e.to_string(),
+                message: e.inner_message(),
                 generation,
             });
             return Ok(());

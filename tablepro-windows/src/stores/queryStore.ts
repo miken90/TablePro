@@ -3,7 +3,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import type { QueryResult } from "../types/query";
 import type { ExplainResult } from "../ipc/commands";
 import * as commands from "../ipc/commands";
-import { classifyError } from "../ipc/error";
+import { classifyError, extractErrorMessage } from "../ipc/error";
 import { useConnectionStore } from "./connectionStore";
 import { useEditorStore } from "./editorStore";
 import { useQueryLogStore } from "./queryLogStore";
@@ -246,7 +246,7 @@ async function runQuery(
     });
   } catch (err) {
     if (!cancelled && !streamErr) {
-      streamErr = String(err);
+      streamErr = extractErrorMessage(err);
       useQueryResultStore.getState().appendChunk({
         kind: "err",
         message: streamErr,

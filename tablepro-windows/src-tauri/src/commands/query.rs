@@ -211,7 +211,7 @@ pub async fn execute_query(
         }
         Err(error) => {
             // Safety net: detect connection-level errors and emit connection:lost
-            let error_lower = error.to_string().to_lowercase();
+            let error_lower = error.inner_message().to_lowercase();
             if error_lower.contains("connection")
                 || error_lower.contains("broken pipe")
                 || error_lower.contains("connection reset")
@@ -221,7 +221,7 @@ pub async fn execute_query(
                     "connection:lost",
                     serde_json::json!({
                         "sessionId": &session_id,
-                        "message": error.to_string(),
+                        "message": error.inner_message(),
                     }),
                 );
             }
@@ -232,7 +232,7 @@ pub async fn execute_query(
                     session_id,
                     query_id,
                     elapsed_ms,
-                    error: error.to_string(),
+                    error: error.inner_message(),
                 },
             );
             Err(error)

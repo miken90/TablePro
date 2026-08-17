@@ -18,6 +18,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 import { useQueryResultStore, type QueryChunk } from "../stores/queryResultStore";
+import { extractErrorMessage } from "./error";
 import { useSettingsStore } from "../stores/settingsStore";
 
 export interface StreamingQueryHandle {
@@ -75,7 +76,7 @@ export function useStreamingQuery(): StreamingQueryHandle {
       if (cancelled) return;
       useQueryResultStore.getState().appendChunk({
         kind: "err",
-        message: String(err),
+        message: extractErrorMessage(err),
         generation: gen,
       });
     }
