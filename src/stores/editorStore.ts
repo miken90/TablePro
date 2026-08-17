@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { useConnectionStore } from "./connectionStore";
+import { cancelStreamsForTabs } from "./tab-stream-registry";
 import * as commands from "../ipc/commands";
 import {
   loadTabState,
@@ -60,6 +61,17 @@ let tabCounter = 1;
 
 function generateTabId(): string {
   return `tab-${Date.now()}-${tabCounter++}`;
+}
+
+/** Abort the queries owned by tabs that are being closed. Without this the
+ *  backend keeps running the statement and its chunks keep landing in the
+ *  shared result store, rendering under whichever tab is now active. The
+ *  backend cancel is included deliberately: nobody can ever see the result of
+ *  a closed tab's query, so letting it run only burns server resources. */
+function releaseClosedTabStreams(before: EditorTab[], after: EditorTab[]): void {
+  const kept = new Set(after.map((t) => t.id));
+  const closed = before.filter((t) => !kept.has(t.id)).map((t) => t.id);
+  if (closed.length > 0) cancelStreamsForTabs(closed);
 }
 
 function syncSelectedConnectionByTabId(tabs: EditorTab[], tabId: string | null): void {
@@ -384,6 +396,7 @@ export const useEditorStore = create<EditorState>()(
             const idx = s.tabs.findIndex((t) => t.id === id);
             activeTabId = tabs[Math.min(idx, tabs.length - 1)]?.id ?? null;
           }
+          releaseClosedTabStreams(s.tabs, tabs);
           syncSelectedConnectionByTabId(tabs, activeTabId);
           return { tabs, activeTabId };
         });
@@ -392,6 +405,7 @@ export const useEditorStore = create<EditorState>()(
       closeOtherTabs: (id) => {
         set((s) => {
           const kept = s.tabs.filter((t) => t.id === id || (t.isPinned ?? false));
+          releaseClosedTabStreams(s.tabs, kept);
           syncSelectedConnectionByTabId(kept, id);
           return { tabs: kept, activeTabId: id };
         });
@@ -401,6 +415,7 @@ export const useEditorStore = create<EditorState>()(
         set((s) => {
           const pinned = s.tabs.filter((t) => t.isPinned ?? false);
           const activeTabId = pinned[0]?.id ?? null;
+          releaseClosedTabStreams(s.tabs, pinned);
           syncSelectedConnectionByTabId(pinned, activeTabId);
           return { tabs: pinned, activeTabId };
         });
@@ -411,6 +426,7 @@ export const useEditorStore = create<EditorState>()(
           const idx = s.tabs.findIndex((t) => t.id === id);
           if (idx === -1) return s;
           const kept = s.tabs.filter((t, i) => i <= idx || (t.isPinned ?? false));
+          releaseClosedTabStreams(s.tabs, kept);
           const activeTabId =
             s.activeTabId && kept.some((t) => t.id === s.activeTabId)
               ? s.activeTabId
