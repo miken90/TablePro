@@ -12,6 +12,10 @@
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
 </p>
 
+<p align="center">
+  <a href="README.md">English</a>
+</p>
+
 ---
 
 ## Giới thiệu
@@ -31,15 +35,17 @@ Gồm: query theo session, schema explorer, inline editing + save changes, SQL i
 - Quản lý connection: save/list/delete, group management, connect/disconnect theo session, reconnect do người dùng khởi tạo
 - Driver: PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis (6 driver, Rust crate compiled-in, không có hệ thống plugin/DLL)
 - Driver capability substrate: file sidecar `.capabilities.json` cho từng driver, gating ở frontend qua `listDrivers`/`getDriverCapabilities`
-- Query workflow: execute, cancel (chỉ SQLite), paginated table browsing, progress events, giới hạn payload (`MAX_RESULT_ROWS = 50,000`)
-- MongoDB: find() với JSON filter/sort/limit, collection browser, BSON-to-row flattening
-- Redis: CLI command panel (40+ lệnh), SCAN key browsing, đầy đủ kiểu dữ liệu, hỗ trợ TLS, chuyển đổi database
+- Query workflow: execute, cancel (PostgreSQL, MySQL/MariaDB, SQLite — MSSQL/MongoDB/Redis tắt hẳn cancel qua `supportsQueryCancellation` trong file capability sidecar của driver), paginated table browsing, progress events, giới hạn payload (`MAX_RESULT_ROWS = 50,000`)
+- MongoDB: find() với JSON filter/sort/limit, collection browser, BSON-to-row flattening, sample-based column discovery
+- Redis: CLI command panel (36 lệnh — key/hash/list/set/sorted-set/stream/server), SCAN key browsing, đầy đủ kiểu dữ liệu, hỗ trợ TLS, chuyển đổi database
 - Data workflow: staged cell edits, SQL generation, save changes
 - Import/Export: preview + import SQL, export CSV/JSON/SQL/XLSX
 - Security: mã hóa DPAPI cho secret đã lưu theo mặc định, tùy chọn đồng bộ Windows Credential Manager, SSH host key verification (TOFU)
 - AI: chat panel streaming, inline suggestions, provider/model settings, schema-aware context
 - Reliability: sự kiện `connection:lost` / `connection:reconnected`, reconnect do người dùng khởi tạo theo từng connection
+- Tab state persistence: file JSON ở backend (`%APPDATA%/TablePro/tab-state.json`), migrate một lần từ localStorage
 - Command registry: 21 lệnh, shortcut tùy chỉnh với phát hiện xung đột và hoán đổi
+- Quick switcher: kết quả gộp nhóm/xếp hạng (bảng, view, database, schema, query gần đây), fuzzy scoring
 - Deep-links: `tablepro://open/connection/{id}` và `tablepro://import?...`
 
 ## Tài liệu phát triển

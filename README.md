@@ -35,9 +35,9 @@ It includes: session-based query execution, schema explorer, inline editing + sa
 - Connection management: save/list/delete, group management, session-based connect/disconnect, user-initiated reconnect
 - Drivers: PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB, Redis (6 total, compiled-in Rust crates, no plugin/DLL system)
 - Driver capability substrate: sidecar `.capabilities.json` files per driver, frontend gating via `listDrivers`/`getDriverCapabilities`
-- Query workflows: execute, cancel (SQLite only), paginated table browsing, progress events, payload guardrails (`MAX_RESULT_ROWS = 50,000` truncation)
+- Query workflows: execute, cancel (PostgreSQL, MySQL/MariaDB, SQLite — MSSQL/MongoDB/Redis honestly gated off via `supportsQueryCancellation` in the driver capability sidecars), paginated table browsing, progress events, payload guardrails (`MAX_RESULT_ROWS = 50,000` truncation)
 - MongoDB workflows: find() with JSON filter/sort/limit, collection browser, BSON-to-row flattening, sample-based column discovery
-- Redis workflows: CLI command panel (40+ operations), SCAN-based key browsing, all data types, TLS support, database switching
+- Redis workflows: CLI command panel (36 commands across key/hash/list/set/sorted-set/stream/server ops), SCAN-based key browsing, all data types, TLS support, database switching
 - Data workflows: staged cell edits, SQL generation, save changes
 - Import/Export: SQL import preview + execute, CSV/JSON/SQL/XLSX export
 - Security: DPAPI encryption for saved connection secrets by default, optional Windows Credential Manager mirroring, SSH host key verification (TOFU)
