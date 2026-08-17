@@ -16,6 +16,7 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 - Cancellation state is now owned per editor tab. Running a query in one tab no longer cancels a query still running in another tab, and cancelling a tab cancels only that tab.
 - PostgreSQL: declarative partition children are no longer listed in the sidebar next to their parent table, which previously showed the same rows twice and buried ordinary tables.
 - Table browser: when the row-count query fails or times out while the rows load fine, the count is now reported as unknown instead of collapsing to 0, and it no longer discards the approximate estimate. Pagination degrades honestly — next-page still works, jump-to-last is disabled.
+- Export: chunk pagination is dialect-aware instead of always emitting `LIMIT`/`OFFSET`, which is invalid on SQL Server. SQL Server exports now run in a single pass rather than producing a syntax error. The export command also refuses engines that declare `supportsImportExport: false` (MongoDB, Redis) with a clear message instead of a server-side SQL failure.
 
 ### Changed
 

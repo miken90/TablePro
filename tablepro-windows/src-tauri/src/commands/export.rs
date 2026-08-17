@@ -9,6 +9,8 @@ use tokio::task;
 
 use crate::models::AppError;
 use crate::drivers::DatabaseDriver;
+use crate::services::sql_generator::Dialect;
+use crate::services::sql_pagination::{count_subquery, paginated_subquery};
 use crate::services::ConnectionManager;
 
 use super::export_formats::{create_output_file, map_join_err, map_xlsx_err, write_file_chunk};
@@ -103,16 +105,39 @@ pub async fn export_to_file(
     }).await.map_err(map_join_err)??;
 
     let start = Instant::now();
-    let driver: Arc<dyn DatabaseDriver> = {
+    let (driver, supports_export): (Arc<dyn DatabaseDriver>, bool) = {
         let mgr = manager.lock().await;
-        mgr.get_driver(&session_id)?
+        let driver = mgr.get_driver(&session_id)?;
+        let db_type = mgr
+            .get_config(&session_id)
+            .map(|c| c.db_type.clone())
+            .unwrap_or_else(|_| driver.database_type_id().to_string());
+        let supports_export = mgr
+            .driver_registry()
+            .get_capabilities(&db_type)
+            .supports_import_export;
+        (driver, supports_export)
     };
     let driver_type = driver.database_type_id().to_string();
 
+    // Engines that declare `supportsImportExport: false` (MongoDB, Redis) are
+    // hidden in the UI, but the command is reachable directly. Refuse here
+    // with a clear message instead of letting a document/key-value engine
+    // choke on `SELECT * FROM (…)`.
+    if !supports_export {
+        return Err(AppError::ConfigError(format!(
+            "Export is not supported for {driver_type} connections"
+        )));
+    }
+
+    let dialect = Dialect::from_db_type(&driver_type);
+
     // Count total rows (with timeout to avoid blocking on slow queries).
-    let total = {
-        let count_sql = format!("SELECT COUNT(*) FROM ({sql}) AS _export_count");
-        match tokio::time::timeout(
+    // `None` means the dialect cannot count a wrapped query safely; the total
+    // is then whatever we actually read, reported once the export finishes.
+    let total = match count_subquery(&sql, "_export_count", dialect) {
+        None => 0,
+        Some(count_sql) => match tokio::time::timeout(
             std::time::Duration::from_secs(2),
             driver.execute(&count_sql),
         ).await {
@@ -130,7 +155,7 @@ pub async fn export_to_file(
                 tracing::warn!(session_id = %session_id, "Export count query timed out (2s), using indeterminate progress");
                 0
             }
-        }
+        },
     };
 
     tracing::info!(session_id = %session_id, "export total rows: {}", total);
@@ -167,7 +192,12 @@ pub async fn export_to_file(
     let mut xlsx_row_limit_hit = false;
 
     loop {
-        let chunk_sql = format!("SELECT * FROM ({sql}) AS _export_data LIMIT {CHUNK_SIZE} OFFSET {offset}");
+        // `None` = this dialect cannot page a wrapped query without risking a
+        // corrupt export (see `sql_pagination`), so run the user's query once
+        // and treat the whole result as a single chunk.
+        let paginated = paginated_subquery(&sql, "_export_data", CHUNK_SIZE, offset, dialect);
+        let single_pass = paginated.is_none();
+        let chunk_sql = paginated.unwrap_or_else(|| sql.clone());
         let chunk = driver.execute(&chunk_sql).await?;
         if chunk.rows.is_empty() { break; }
         let columns = &chunk.columns;
@@ -220,7 +250,7 @@ pub async fn export_to_file(
 
         offset += CHUNK_SIZE;
         let _ = app.emit("export:progress", ExportProgress { current: rows_exported, total, format: format.clone() });
-        if chunk.rows.len() < CHUNK_SIZE as usize || xlsx_row_limit_hit { break; }
+        if single_pass || chunk.rows.len() < CHUNK_SIZE as usize || xlsx_row_limit_hit { break; }
     }
 
     // Finalize JSON.

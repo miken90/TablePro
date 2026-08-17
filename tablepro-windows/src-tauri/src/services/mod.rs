@@ -14,6 +14,7 @@ pub mod ddl_generator;
 pub mod schema_alter;
 pub mod sql_generator;
 pub(crate) mod sql_generator_ops;
+pub mod sql_pagination;
 pub mod sql_quoting;
 pub mod ssh_config;
 pub mod ssh_config_parser;
