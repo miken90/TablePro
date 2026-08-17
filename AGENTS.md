@@ -1,383 +1,155 @@
 # AGENTS.md
 
-This file provides guidance when working with code in this repository.
+Guidance for any coding agent working in this repository.
 
-## Role & Responsibilities
+## What this repo is
 
-Analyze user requirements, delegate tasks to appropriate sub-agents, and ensure cohesive delivery of features that meet specifications and architectural standards.
+TablePro — a personal, non-profit, Windows-only desktop database client. Built
+with Tauri v2 (Rust backend) + React/TypeScript (frontend). Permanently
+detached fork of upstream `datlechin/TablePro` (macOS Swift/AppKit): no
+`upstream` remote, no inherited tags, no macOS/Swift/Xcode code in this repo.
+Windows is the only supported platform. No pricing, licensing, activation,
+subscription, or telemetry — deliberately removed, out of scope.
 
-## Workflows
+The repo root **is** the app (flattened from a former `tablepro-windows/`
+subdirectory): `src/`, `src-tauri/`, `package.json`, `index.html`,
+`vite.config.ts`, `scripts/`, `docs/`, `plans/`.
 
-- Primary workflow: `$HOME/AGENTS.md`
-- Development rules: `$HOME/AGENTS.md`
-- Orchestration protocols: `$HOME/AGENTS.md`
-- Documentation management: `$HOME/AGENTS.md`
+## Docs are not trustworthy by default
 
-**IMPORTANT:** Analyze the skills catalog and activate relevant skills during the process.
-**IMPORTANT:** Follow development rules in `$HOME/AGENTS.md` strictly.
-**IMPORTANT:** Sacrifice grammar for concision in reports. List unresolved questions at end.
+Prior verification passes found 50-90% fabrication rates on several pages
+under `docs/`. **Verify any claim against source before repeating or acting on
+it** — do not trust a doc's description of a feature, setting, shortcut, or
+command without checking the code. `docs/development/upstream-parity-notes.md`
+tracks known behavioral defects found this way; read it before assuming a
+capability works as described elsewhere.
 
-## Project Overview
+## Layout
 
-TablePro Windows — a Windows database client built with Tauri v2 + Rust + TypeScript/React. Ported from the macOS version (SwiftUI + AppKit).
+```
+.
+├── src/                       # React/TypeScript frontend
+│   ├── components/
+│   ├── stores/                 # Zustand state
+│   ├── ipc/                    # Tauri command wrappers
+│   └── hooks/
+├── src-tauri/
+│   ├── src/
+│   │   ├── commands/            # #[tauri::command] handlers
+│   │   ├── drivers/             # registry.rs, driver_trait.rs
+│   │   ├── services/            # connection_manager, credential_store/manager,
+│   │   │                        # sql_generator, ssh_config, ai_provider, ...
+│   │   ├── storage/              # connection_store, history_store, settings_store,
+│   │   │                        # tab_state_store, filter_store, ai_chat_store
+│   │   └── models/
+│   ├── driver-common/            # shared driver types
+│   ├── driver-postgres/  driver-mysql/  driver-mssql/
+│   ├── driver-sqlite/    driver-mongodb/  driver-redis/
+│   └── driver-capabilities/      # *.capabilities.json sidecars
+├── scripts/                     # PowerShell build/dev/release scripts
+├── docs/                        # Mintlify docs (docs.json, features/, databases/,
+│                                # customization/, development/, images/, journals/)
+└── plans/                       # plan/report files, `YYMMDD[-HHMM]-slug/`
+```
 
-- **Windows source (ACTIVE)**: the repository root — Tauri v2 + Rust backend (`src-tauri/`) + React/TypeScript frontend (`src/`)
-- **macOS source (READ-ONLY reference)**: `TablePro/`, `Plugins/`, `Libs/` — Swift codebase. **Do NOT modify, build, or run.** Use only to understand feature behavior, protocols, and logic when porting.
-- **Plans**: `plans/` — implementation plans, reports, phase files
+## Driver model
 
-## WSL + Windows Environment
+6 databases, each a separate Rust crate (`rlib`, statically linked into the
+app binary) implementing a shared `DatabaseDriver` trait
+(`src-tauri/src/drivers/driver_trait.rs`), instantiated via
+`src-tauri/src/drivers/registry.rs`: PostgreSQL, MySQL/MariaDB, SQL Server,
+SQLite, MongoDB, Redis. **There is no DLL/plugin loader** — that system was
+removed. Each driver has a capability sidecar
+(`driver-capabilities/driver-<name>.capabilities.json`) the frontend uses to
+gate UI per engine.
 
-**CRITICAL:** This project runs inside WSL (Windows Subsystem for Linux). **ALL build/run/test commands target Windows** and MUST use `powershell.exe`:
+## Environment: WSL + Windows
+
+This session runs in WSL; the app itself only builds/runs/tests on Windows.
+Use native bash for git, gh, and file operations. Run all build/test/lint/
+package commands from a Windows-drive working directory (`/mnt/d/...`, never
+`/home/...` — that produces a UNC path error) via `powershell.exe` or
+`powershell -ExecutionPolicy Bypass -File <script>`, one native command per
+invocation, piping output through `tr -d '\r'` to strip CRLF.
+
+## Commands (`package.json` scripts, verified against `.github/workflows/windows-build.yml`)
 
 ```bash
-# Build, run, test — always via powershell.exe
-powershell.exe -Command "npm install"
-powershell.exe -Command "npm run dev:tauri"
-powershell.exe -Command "npm run tauri build"
-powershell.exe -Command "cargo test --manifest-path src-tauri/Cargo.toml"
-powershell.exe -Command "cargo clippy --manifest-path src-tauri/Cargo.toml"
-powershell.exe -Command "npx vitest run"
+npm ci                 # install
+npm run dev             # vite dev server
+npm run build            # tsc && vite build
+npm run test              # vitest run
+npm run lint               # eslint .
+npm run dev:tauri            # scripts/dev.ps1 (Vite + `cargo run` independently —
+                              #   `npm run dev:tauri:cli` is the `tauri dev --no-watch` fallback)
+npm run build:debug            # scripts/build-debug.ps1
+npm run build:release           # scripts/build-release.ps1
+npm run build:portable            # scripts/build-release.ps1 -Target portable
+npm run build:installer             # scripts/build-release.ps1 -Target installer
+npx tauri build                       # full Tauri package build
+powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Version X.Y.Z
 ```
 
-> **Note:** `npm run dev:tauri` runs `scripts/dev.ps1` which launches Vite and `cargo run` independently (bypassing the Tauri CLI `dev` command, which silently kills the app on Windows after a few minutes). Close the app window to stop; the script auto-cleans up Vite. Use `npm run dev:tauri:cli` for the legacy `tauri dev --no-watch` fallback. When you need to pick up Rust changes, close and re-run.
-
-- **Use native bash** only for: git, gh, file operations, reading macOS reference code
-- **Path translation**: `wslpath -w` (WSL→Windows), `wslpath -u` (Windows→WSL)
-- **NEVER run** `xcodebuild`, `swiftlint`, `swiftformat`, or any macOS toolchain command — they don't apply here
-
-## macOS Reference Codebase
-
-The Swift codebase under `TablePro/` and `Plugins/` is **reference-only** for understanding:
-
-- Feature behavior and user flows
-- Protocol/interface contracts (`DatabaseDriver`, `PluginDatabaseDriver`)
-- Data models (`QueryResult`, `ColumnInfo`, `TableInfo`, etc.)
-- Business logic patterns (change tracking, SQL generation, autocomplete)
-- Storage schemas (connection config, query history, tab state)
-
-**Rules for reference code:**
-- Read Swift files to understand WHAT a feature does, then implement in Rust/TypeScript
-- Never copy Swift syntax — translate to idiomatic Rust or TypeScript
-- The macOS architecture docs in `docs/development/` describe patterns to port
-
-## Architecture (Windows)
-
-### Plugin System
-
-Driver plugins are `.dll` files loaded via Rust `libloading` with C ABI vtable (`PluginVTable`):
-
-- **plugin-sdk** crate — shared FFI types (`FfiStr`, `FfiResult`, `FfiQueryResult`, `PluginVTable`)
-- **PluginManager** (`src-tauri/src/plugin/manager.rs`) — DLL discovery, loading, API version validation
-- **PluginDriverAdapter** (`src-tauri/src/plugin/adapter.rs`) — FFI → Rust `DatabaseDriver` trait
-- Each driver: separate `cdylib` crate (`driver-postgres/`, `driver-mysql/`, `driver-mssql/`)
-
-### Editor
-
-CodeMirror 6 with `@codemirror/lang-sql`, `@replit/codemirror-vim`, custom autocomplete source.
-
-### Change Tracking Flow
-
-1. User edits cell → Zustand `changeStore` records change
-2. User clicks Save → Rust `sql_generator` produces INSERT/UPDATE/DELETE
-3. Undo/redo via Zustand store stack
-4. IPC `data:save_changes` wraps in transaction on Rust side
-
-### Storage
-
-| What                 | Implementation                              |
-| -------------------- | ------------------------------------------- |
-| Connection passwords | DPAPI (`CryptProtectData`)                  |
-| User preferences     | JSON in `%APPDATA%/TablePro/settings.json`  |
-| Query history        | SQLite FTS5 via `rusqlite`                  |
-| Tab state            | JSON in `%APPDATA%/TablePro/tabs/`          |
-| Filter presets       | JSON in `%APPDATA%/TablePro/`               |
-
-### Logging
-
-Rust: `tracing` crate with structured logging. Never `println!()` in production code.
-
-## Crash Triage Memory (MANDATORY READ)
-
-Before debugging recurring crashes, read `memory.md` at repo root first.
-
-Priority order for this project:
-1. Determine if crash is dev-only vs release exe vs installer
-2. Check `%APPDATA%/TablePro/renderer-errors.log`
-3. Check `src-tauri/target/debug/stdout.log` and `stderr.log`
-4. If logs are silent, inspect Windows Event Log + `%LOCALAPPDATA%/CrashDumps`
-5. Only then deep-dive plugin/IPC internals
-
-## [MANDATORY] Context Gathering Protocol
-
-**EVERY agent MUST follow this protocol BEFORE writing code or making decisions.** Skip only if the task is purely conversational (no code changes).
-
-### Step 1 — Read project docs (if relevant)
-Read relevant docs in `docs/development/` for your task (architecture, code standards). Don't read all docs for a simple change.
-
-### Step 2 — Bootstrap and use ccc semantic search
-```bash
-ccc status 2>/dev/null || (ccc init && ccc index)
-```
-Agent MUST auto-bootstrap `ccc` if not initialized. Use `ccc search <query>` to find relevant code by meaning **BEFORE** grep/glob.
+Rust, from `src-tauri/`:
 
 ```bash
-ccc search plugin loading DLL discovery
-ccc search --lang rust database connection pooling
-ccc search --lang typescript --path 'src/stores/*' change tracking
+cargo clippy --workspace -- -D warnings
+cargo test --workspace
 ```
 
-### Step 3 — Read full files only when needed
-After Steps 1-2 give direction, read specific files for full context.
-
-> **Why this order?** Docs = conventions/architecture (prevents wrong patterns). Semantic search = find code without knowing names. Full reads = confirm details.
-
-### When to use ccc (prefer over grep/glob):
-- Searching for code by meaning or description rather than exact text
-- Exploring unfamiliar parts of the codebase
-- Looking for implementations without knowing exact names
-- Finding similar code patterns or related functionality
-
-### When NOT to use (use grep/glob instead):
-- Exact string literals, error messages, or known identifiers
-- Listing all files of a type (use glob)
-- Known function name you can spell exactly
-
-## Code Style
-
-### Rust
-
-- Follow `cargo clippy` warnings — treat as errors
-- `rustfmt` for formatting
-- Explicit error types, no `unwrap()` in production code
-- `#[repr(C)]` for all FFI boundary types
-
-### TypeScript
-
-- ESLint + Prettier
-- Strict TypeScript (`strict: true`)
-- Functional React components with hooks
-- Zustand for state management
-
-## Mandatory Rules
-
-These are **non-negotiable** — never skip them:
-
-1. **CHANGELOG.md**: Update under `[Unreleased]` section for new features and notable changes. Don't add "Fixed" for fixing unreleased features.
-
-2. **Documentation**: Update docs in `docs/` (Mintlify-based) when adding/changing features.
-
-3. **Test-first correctness**: When tests fail, fix the **source code** — never adjust tests to match incorrect output.
-
-4. **Lint after changes**: `cargo clippy` (Rust) + `npx eslint .` (TypeScript). Run via `powershell.exe`.
-
-5. **Commit messages**: [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/). Single line only, no description body.
-
-## Python Scripts (Skills)
-
-When running Python scripts from skills, use the venv Python interpreter:
-- **Windows (default in this repo workflow):** `~/.claude/skills/.venv/Scripts/python.exe scripts/xxx.py`
-- **Linux/macOS:** `skills/.venv/bin/python3 scripts/xxx.py`
-
-**IMPORTANT:** When scripts fail, try to fix them directly.
-
-## [IMPORTANT] Consider Modularization
-
-- If a code file exceeds 200 lines, consider modularizing it
-- Check existing modules before creating new
-- Use kebab-case naming with descriptive names
-- After modularization, continue with main task
-- Exception: Markdown, plain text, bash scripts, config files
-
-## Documentation Management
-
-Keep docs in `./docs` folder (Mintlify-based):
-```
-./docs
-├── features/           # Feature documentation
-├── databases/          # Per-database guides
-├── customization/      # Settings, appearance, editor
-├── development/        # Architecture, building, code style
-├── api/                # License API
-├── vi/                 # Vietnamese translations
-└── zh/                 # Chinese translations
-```
-
-### Plans
-
-Save plans in `plans/` directory with timestamp and descriptive name.
-
-**Example:** `plans/260312-1226-windows-port-implementation/`
-
-```
-plans/
-├── YYMMDD-HHMM-feature-name/
-│   ├── research/
-│   ├── reports/
-│   ├── plan.md
-│   ├── phase-01-setup.md
-│   ├── phase-02-implement.md
-│   └── phase-03-test.md
-├── reports/
-│   └── {type}-{date}-{slug}.md
-└── ...
-```
-
-## Agent Execution Strategy
-
-- **Plans must include edge cases.** Identify edge cases, thread safety concerns, and boundary conditions as explicit checklist items.
-- **Implementation includes self-review.** Check: thread safety, all code paths, error handling, flag/state reset logic.
-- **Tests are part of implementation, not a separate step.**
-- **Always use team agents** for implementation work.
-- **Always parallelize** independent tasks.
-- **Main context = orchestrator only.** Read files, launch agents, summarize results, update tracking.
-- **Agent prompts must be self-contained.** Include file paths, the specific problem, and clear instructions.
-- **Use worktree isolation** for agents making code changes.
-- **Implementation standards**: Clean architecture, correct platform approach, proper design patterns, no backward compatibility hacks.
-
-## Performance Pitfalls
-
-- **Never send >1MB JSON payloads** over Tauri IPC in a single invoke — stream in chunks.
-- **Virtualize all large lists** (DataGrid, sidebar tree) — never render full DOM for >1K items.
-- **Coalesce IPC progress events** — don't spam frontend at >30fps.
-- **No `unwrap()` on user data** — always handle errors gracefully.
-
-## Writing Style (Docs & Marketing Copy)
-
-Write like a developer, not a marketing AI. Be specific over generic.
-
-**Banned words**: seamless, robust, comprehensive, intuitive, effortless, powerful (as filler), streamlined, leverage, elevate, harness, supercharge, unlock, unleash, dive into, game-changer, empower, delve.
-
----
-
-## Rule: development-rules
-
-# Development Rules
-
-**IMPORTANT:** Follow **YAGNI** - **KISS** - **DRY** principles always.
-
-## General
-- **File Naming**: kebab-case with descriptive names (self-documenting for LLM tools)
-- **File Size**: Keep code files under 200 lines
-- Use `gh` for Github, `psql` for Postgres debugging
-- **[IMPORTANT]** Follow codebase structure and code standards during implementation
-- **[IMPORTANT]** Implement real code, not simulations or mocks
-- **[IMPORTANT]** All compile/build/test commands run via `powershell.exe`
-
-## Code Quality
-- Ensure no syntax errors and code compiles
-- Prioritize functionality and readability
-- Use try-catch error handling & cover security standards
-
-## Pre-commit/Push Rules
-- Run linting before commit (Rust: `cargo clippy`, TS: `npx eslint .`) — via `powershell.exe`
-- Run tests before push (DO NOT ignore failed tests)
-- **DO NOT** commit secrets (dotenv, API keys, credentials)
-- Use conventional commit format, no AI references
-
-## Code Implementation
-- Write clean, readable, maintainable code
-- Follow established architectural patterns
-- Handle edge cases and error scenarios
-- **DO NOT** create new enhanced files, update existing files directly
-
----
-
-## Rule: documentation-management
-
-# Project Documentation Management
-
-### Roadmap & Changelog Maintenance
-- **CHANGELOG.md**: Track releases and unreleased changes
-- **Documentation** (`./docs`): Mintlify-based feature docs
-
-### Update Protocol
-1. **Before Updates**: Read current state
-2. **During Updates**: Maintain version consistency and formatting
-3. **After Updates**: Verify links, dates, cross-references
-4. **Quality Check**: Ensure updates align with actual progress
-
----
-
-## Rule: orchestration-protocol
-
-# Orchestration Protocol
-
-## Delegation Context (MANDATORY)
-
-When spawning subagents, **ALWAYS** include:
-1. **Work Context Path**: Git root of primary files
-2. **Reports Path**: `{work_context}/plans/reports/`
-3. **Plans Path**: `{work_context}/plans/`
-
-#### Sequential Chaining
-- **Planning → Implementation → Testing → Review**: Feature development
-- **Research → Design → Code → Documentation**: New components
-- Each agent completes fully before next begins
-
-#### Parallel Execution
-- Independent components can run in parallel
-- Ensure no file conflicts or shared resource contention
-- Plan integration points before parallel execution
-
----
-
-## Rule: primary-workflow
-
-# Primary Workflow
-
-**IMPORTANT:** Activate relevant skills as needed. Ensure token efficiency.
-
-#### 1. Code Implementation
-- Delegate to `planner` agent first for implementation plan
-- Use `researcher` agents in parallel for technical research
-- **[IMPORTANT]** After modifying code, run compile check via `powershell.exe`
-- **[IMPORTANT]** Read macOS Swift code as reference, implement in Rust/TypeScript
-
-#### 2. Testing
-- Delegate to `tester` agent on the **final code**
-- **DO NOT** ignore failing tests
-- **DO NOT** use fake data, mocks, tricks to pass builds
-- Fix failing tests and re-test until all pass
-
-#### 3. Code Quality
-- Delegate to `code-reviewer` agent after tests pass
-
-#### 4. Integration
-- Follow the plan from `planner` agent
-- Delegate to `docs-manager` agent to update docs
-
-#### 5. Debugging
-- Delegate to `debugger` agent for issue analysis
-- Fix based on report, then re-test
-
----
-
-## Rule: team-coordination-rules
-
-# Team Coordination Rules
-
-> Only apply when operating as a teammate within an Agent Team.
-
-## File Ownership (CRITICAL)
-- Each teammate MUST own distinct files — no overlapping edits
-- Define ownership via glob patterns in task descriptions
-- Tester owns test files only
-
-## Git Safety
-- Prefer git worktrees for parallel work
-- Never force-push from a teammate session
-- Commit frequently with descriptive messages
-
-## Report Output
-- Save reports to `plans/reports/`
-- Naming: `{type}-{date}-{slug}.md`
-- Use conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
-
-## Task Claiming
-- Claim lowest-ID unblocked task first
-- Set task to `in_progress` before starting work
-- If all tasks blocked, notify lead
-
-## CI/CD
-
-GitHub Actions for Windows builds: cargo build → npm build → tauri build → MSI/NSIS packaging → code signing.
+CI (`.github/workflows/windows-build.yml`, runs on `windows-latest`) does, in
+order: `npm ci` → `cargo clippy --workspace -- -D warnings` → `cargo test
+--workspace` → `npx vitest run` → `npx eslint .` → `npm run build` → code
+signing (if secrets present) → `npx tauri build` → upload MSI + NSIS
+artifacts. This is the actual gate set — match it rather than inventing
+additional checks.
+
+## Storage
+
+| What | Where |
+|---|---|
+| Connection passwords | DPAPI-encrypted (`services/credential_store.rs`); optional additional mirror into Windows Credential Manager (`services/credential_manager.rs`), opt-in via `rememberCredentialsInOsKeychain` |
+| App settings | `%APPDATA%/TablePro/settings.json` |
+| Query history | `%APPDATA%/TablePro/history.sqlite3`, FTS5 search via `rusqlite` |
+| Tab state | `%APPDATA%/TablePro/tab-state.json` |
+| Filter presets | `%APPDATA%/TablePro/filter-presets.json` |
+| Saved connections | `%APPDATA%/TablePro/connections.json`, `groups.json` |
+
+Rust logging: `tracing` crate, structured. Never `println!()` in production
+code paths.
+
+## Crash triage
+
+Read `memory.md` at the repo root before debugging a recurring crash — it
+holds accumulated findings on this app's dev-runner vs release-exe vs
+installer crash modes and where to look first (`%APPDATA%/TablePro/renderer-errors.log`,
+`src-tauri/target/debug/std{out,err}.log`, Windows Event Log,
+`%LOCALAPPDATA%/CrashDumps`).
+
+## Rules
+
+- **File naming**: kebab-case, descriptive (self-documenting for search tools).
+- **File size**: consider splitting a file once it exceeds ~200 lines; check
+  existing modules for the right seam before adding a new one.
+- **No `unwrap()` on user/external data** — handle errors explicitly.
+- Rust: fix `cargo clippy` warnings, run `rustfmt`.
+- TypeScript: strict mode, functional components + hooks, Zustand for state.
+- **Test-first correctness**: when a test fails, fix the source, never adjust
+  the test to match broken output.
+- **CHANGELOG.md**: update `[Unreleased]` for user-facing changes. Skip for
+  docs-only or internal-only changes.
+- **Docs**: update `docs/` (Mintlify) when behavior, commands, settings, or
+  architecture actually change — verify the new text against source first.
+- **Commits**: [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/),
+  single-line subject, no AI/Claude references.
+- Don't send >1MB JSON payloads over a single Tauri `invoke` — stream in
+  chunks (see `execute_query_streaming` for the pattern). Virtualize large
+  lists (data grid, sidebar tree) rather than rendering full DOM for >1K
+  items.
+
+## Writing style (docs & any user-facing copy)
+
+Write like a developer, not marketing copy. Be specific over generic. Avoid:
+seamless, robust, comprehensive, intuitive, effortless, powerful (as filler),
+streamlined, leverage, elevate, harness, supercharge, unlock, unleash, dive
+into, game-changer, empower, delve.
