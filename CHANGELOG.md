@@ -12,11 +12,25 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Added
 
+- Backend logs now exist in release builds. The subscriber wrote to stderr, and a release build has no console, so every log line the app produced was discarded in exactly the build people run. Logs go to `%LOCALAPPDATA%\TablePro\logs\`, rotated daily with 7 days kept; debug builds still print to the console as well.
+
+- Query and session measurements are recorded to `%LOCALAPPDATA%\TablePro\logs\metrics.jsonl` — row and column counts, estimated payload size, backend execution time versus wall clock to first paint, and whether a result was truncated. One JSON object per line, rotated at 8 MiB. The file stays on this machine: nothing is uploaded and no network call is involved. Fields are documented in `docs/development/local-metrics.md`.
+
+- Settings → Diagnostics has an **Open Log Folder** button that reveals the log and metrics files in Explorer.
+
 - An **About TablePro** entry in the command palette (**Shift+F1**) showing the build version and host platform. The dialog existed but nothing opened it.
 
 - The connection form says what the selected **SSL Mode** actually does — whether the connection is encrypted, and whether the server certificate is checked — because the modes do not behave the same on every engine. `require` encrypts without verifying anything, and SQL Server encrypts in every mode.
 
 ### Fixed
+
+- A large result no longer risks taking the app down. The streaming query path had no row cap anywhere in Rust, so a wide `SELECT *` was materialized about three times in the backend and shipped across IPC in full, even though the frontend store dropped everything past its own limit; with `panic = "abort"` an allocation failure ends the process. The result is now truncated to the **Store max rows** setting before any copy is made, and the truncation banner reports the real total the query produced.
+
+- The row count under a query result is the number of rows there are. It came from a 500-row copy of the result that was built, counted, and then discarded — the grid rendered from a different, uncapped copy. The grid is virtualized, so that copy never bounded anything; it is gone, and the counters and banner read the actual result. Individual cell values are shortened when they reach the DOM, so a multi-megabyte value in one cell no longer becomes a multi-megabyte text node.
+
+- The SQL editor no longer wakes up ten times a second to read the whole document. The status bar polled the editor on a 100 ms interval for the life of the app, allocating a copy of the document on every tick whether or not anything had changed; it now updates from CodeMirror's own change events.
+
+- `renderer-errors.log` is bounded (1 MiB, one backup) instead of growing forever, and no longer records every window minimise and tab switch — lifecycle events made up most of the file and said nothing about any crash.
 
 - A query that returned rows could render an empty grid, with the Results badge and the status bar reporting `0 rows` while the footer counted the rows the backend actually sent. The result the grid reads was assembled the moment the streaming command replied, but a rows chunk larger than roughly 8 KB is delivered by a second IPC round-trip that lands after that reply — and the channel holds the run's completion marker back with it — so the assembled result held the column headers and nothing else. A run now finishes when its stream does. The reported duration is the one the backend measured instead of a wall-clock guess taken while the rows were still in flight.
 

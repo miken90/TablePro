@@ -21,7 +21,7 @@ Windows-only, personal, non-profit fork. Upstream macOS code was permanently rem
 | P2 - Quick Wins | 2026-03-18 | Auto-updater integration, URL import, tags, copy-as-SQL, filter presets, create table/alter flows | Complete |
 | UI/UX Redesign | 2026-03-19 | Layout refresh, status bar, semantic tokens, sidebar grouping, tab colors | Complete |
 | Audit & Harden v2 | 2026-03-28 | SSH TOFU, graceful shutdown path, export timeout, schema timeout, lint/CI improvements | Complete |
-| v0.3.0 development stream | 2026-04-01 | AI chat + inline suggestions + provider routing + schema context + health monitor + reconnect flow | Complete |
+| v0.3.0 development stream | 2026-04-01 | AI chat + inline suggestions + provider routing + schema context + user-initiated reconnect flow | Complete |
 | Connection resilience + guardrails | 2026-04-03 | Per-connection reconnect guard, payload truncation (MAX_RESULT_ROWS=50K), tab state backend persistence | Complete |
 | Driver capability substrate | 2026-04-03 | Sidecar .capabilities.json (7 flags), plugin manager loading, frontend gating, DriverCapabilities types | Complete |
 | MongoDB vertical slice | 2026-04-03 | driver-mongodb crate, BSON flattening, find() queries, collection browser, MongoDB connection form | Complete |
@@ -78,7 +78,7 @@ Scope is fixed to the 6 existing drivers (PostgreSQL, MySQL/MariaDB, MSSQL, SQLi
 | 2026-03-16 | Use `russh` for SSH tunnel stack | Pure Rust, async-native integration |
 | 2026-03-18 | Encrypt saved credentials with DPAPI | Native Windows-at-rest secret protection |
 | 2026-03-18 | Keep session-based backend command model | Stable runtime identity independent of saved IDs |
-| 2026-04-01 | Ship AI + health monitor in current stream | Features are implemented and no longer roadmap-only |
+| 2026-04-01 | Ship AI + reconnect flow in current stream | Features are implemented and no longer roadmap-only. No background health monitor was built: recovery is user-initiated, see the Reliability row above |
 | 2026-04-02 | Keep roadmap baseline tied to manifest version `0.4.0` | Updated from 0.2.0 after v0.3.x and v0.4.0 release cycle |
 | 2026-04-03 | Capability sidecar over ABI extension | Avoids ABI version bump; sidecar is additive and backward-compatible |
 | 2026-04-03 | Per-connection reconnect guard (no auto-reconnect) | Prevents reconnect loops; user-initiated recovery is safer |

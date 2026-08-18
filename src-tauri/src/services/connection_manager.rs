@@ -119,7 +119,8 @@ impl ConnectionManager {
             .ok_or(AppError::NotConnected)
     }
 
-    /// Update the status of a session (used by health monitor).
+    /// Update the status of a session. Callers drive this from connection
+    /// lifecycle events; there is no background health monitor.
     pub fn set_status(&mut self, id: &str, status: ConnectionStatus) {
         if let Some(conn) = self.connections.get_mut(id) {
             conn.status = status;
