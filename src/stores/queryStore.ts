@@ -14,6 +14,7 @@ import {
   type QueryChunk,
 } from "./queryResultStore";
 import { useSettingsStore } from "./settingsStore";
+import { recordFirstPaint, recordQuery, type QueryStatus } from "../metrics/local-metrics";
 import type { CancelTarget } from "./tab-stream-registry";
 import {
   cancelTabStream,
@@ -226,6 +227,9 @@ async function runQuery(
   });
 
   const startMs = Date.now();
+  // High-resolution origin for the metrics record; `startMs` stays wall-clock
+  // because the query log timestamps entries with it.
+  const startedAt = performance.now();
   const logId = useQueryLogStore.getState().add({
     sql,
     source: "editor",
@@ -242,6 +246,7 @@ async function runQuery(
   let cancelled = false;
   let doneMs = 0;
   let streamErr: string | null = null;
+  let chunkCount = 0;
 
   // The command's reply and the channel's chunks travel on two different IPC
   // paths. A chunk larger than Tauri's direct-eval limit is handed over by a
@@ -278,6 +283,7 @@ async function runQuery(
   channel.onmessage = (chunk) => {
     if (cancelled) return;
     if (chunk.generation !== gen) return;
+    if (chunk.kind === "rows") chunkCount++;
     if (chunk.kind === "done") doneMs = chunk.ms;
     if (chunk.kind === "err") streamErr = chunk.message;
     useQueryResultStore.getState().appendChunk(chunk);
@@ -322,6 +328,14 @@ async function runQuery(
       durationMs: Date.now() - startMs,
       error: "cancelled",
     });
+    emitQueryMetrics("cancelled", {
+      gen,
+      chunkCount,
+      startedAt,
+      backendMs: null,
+      materializeMs: null,
+      rows: [],
+    });
     return;
   }
 
@@ -337,6 +351,15 @@ async function runQuery(
       error: errorMsg,
     });
     commands.historyRecord(sql, null, elapsedMs, 0, "error").catch(() => {});
+    emitQueryMetrics("error", {
+      gen,
+      chunkCount,
+      startedAt,
+      backendMs: doneMs || null,
+      materializeMs: null,
+      rows: [],
+      error: errorMsg,
+    });
     return;
   }
 
@@ -346,10 +369,13 @@ async function runQuery(
   // migrate those readers to read columnar directly to drop the mirror.
   const resultStore = useQueryResultStore.getState();
   const columnar = resultStore.columnar;
+  const materializeStart = performance.now();
+  const materializedRows = columnar ? materializeStringRows(columnar) : [];
+  const materializeMs = columnar ? performance.now() - materializeStart : null;
   const result: QueryResult = columnar
     ? {
         columns: columnar.columns,
-        rows: materializeStringRows(columnar),
+        rows: materializedRows,
         affectedRows: columnar.affected_rows ?? 0,
         executionTimeMs: elapsedMs,
         truncated: resultStore.truncated || undefined,
@@ -371,6 +397,57 @@ async function runQuery(
   commands
     .historyRecord(sql, null, elapsedMs, displayRowCount, "success")
     .catch(() => {});
+
+  emitQueryMetrics("ok", {
+    gen,
+    chunkCount,
+    startedAt,
+    backendMs: doneMs || null,
+    materializeMs,
+    rows: materializedRows,
+  });
+  recordFirstPaint(gen, startedAt);
+}
+
+/** Assemble a metrics record from whatever the run produced. */
+function emitQueryMetrics(
+  status: QueryStatus,
+  args: {
+    gen: number;
+    chunkCount: number;
+    startedAt: number;
+    backendMs: number | null;
+    materializeMs: number | null;
+    rows: (string | null)[][];
+    error?: string;
+  },
+): void {
+  const resultStore = useQueryResultStore.getState();
+  const columnar = resultStore.columnar;
+  const connectionId = resolveActiveQueryConnectionId();
+  const connectionState = useConnectionStore.getState();
+  const engine = connectionId
+    ? (connectionState.connections.get(connectionId)?.config?.dbType ?? null)
+    : null;
+
+  recordQuery({
+    gen: args.gen,
+    status,
+    engine,
+    rows: columnar?.row_count ?? 0,
+    cols: columnar?.columns.length ?? 0,
+    chunks: args.chunkCount,
+    sampleSource: args.rows,
+    backendMs: args.backendMs,
+    totalMs: performance.now() - args.startedAt,
+    materializeMs: args.materializeMs,
+    truncated: resultStore.truncated,
+    truncatedBy: resultStore.truncatedBy,
+    totalRows: resultStore.totalRowsServer,
+    tabs: useEditorStore.getState().tabs.length,
+    connections: connectionState.connections.size,
+    error: args.error,
+  });
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({

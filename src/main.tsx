@@ -2,6 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
+import { recordSessionStart } from "./metrics/local-metrics";
+
+declare const __APP_VERSION__: string;
 
 // Disable devtools access in production builds
 if (import.meta.env.PROD) {
@@ -52,3 +55,5 @@ createRoot(rootEl).render(
     <App />
   </StrictMode>,
 );
+
+recordSessionStart(__APP_VERSION__);

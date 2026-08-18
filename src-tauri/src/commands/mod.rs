@@ -12,6 +12,7 @@ pub(crate) mod export_writers;
 pub mod filter;
 pub mod history;
 pub mod import;
+pub mod metrics;
 pub mod query;
 pub mod query_streaming;
 pub mod routine_ops;
@@ -40,6 +41,7 @@ pub use schema::{
     fetch_foreign_keys, fetch_indexes, fetch_routines, fetch_schemas, fetch_tables,
     switch_database,
 };
+pub use metrics::{metrics_append, open_logs_folder};
 pub use settings::{get_settings, log_renderer_error, set_settings};
 pub use storage::{
     delete_connection, delete_group, list_connections, list_groups, save_connection, save_group,

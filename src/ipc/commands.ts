@@ -208,6 +208,13 @@ export const listCrashDumps = (): Promise<CrashDumpEntry[]> =>
 export const deleteCrashDump = (path: string): Promise<void> =>
   invoke("delete_crash_dump", { path });
 
+// Local metrics + log folder (see `docs/development/local-metrics.md`).
+export const metricsAppend = (line: string): Promise<void> =>
+  invoke("metrics_append", { line });
+
+/** Reveals the log folder in Explorer and returns its path. */
+export const openLogsFolder = (): Promise<string> => invoke("open_logs_folder");
+
 // Connection group commands
 export const listGroups = (): Promise<ConnectionGroup[]> =>
   invoke("list_groups");

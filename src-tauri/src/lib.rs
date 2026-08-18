@@ -29,6 +29,7 @@ use commands::schema::{
     fetch_foreign_keys, fetch_indexes, fetch_routines, fetch_schemas, fetch_tables,
     switch_database,
 };
+use commands::metrics::{metrics_append, open_logs_folder};
 use commands::settings::{get_settings, log_renderer_error, set_settings};
 use commands::spike_channel::spike_stream;
 use commands::query_streaming::execute_query_streaming;
@@ -234,6 +235,8 @@ pub fn run() {
             get_settings,
             set_settings,
             log_renderer_error,
+            metrics_append,
+            open_logs_folder,
             // tab state
             get_tab_state,
             set_tab_state,

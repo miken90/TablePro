@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Trash2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Trash2, RefreshCw, AlertTriangle, FolderOpen } from "lucide-react";
 import * as commands from "../../ipc/commands";
 import type { CrashDumpEntry } from "../../ipc/commands";
 import { SettingSection } from "./settings-form";
@@ -11,11 +11,15 @@ function fmtSize(bytes: number): string {
 }
 
 /**
- * Phase 3 Item 4 — Crash dump viewer.
+ * Crash dump viewer and log folder access.
  *
  * Lists Rust panic JSON dumps (under `%LOCALAPPDATA%\TablePro\crashes\`) and
  * WER native dumps (under `%LOCALAPPDATA%\CrashDumps\`). Users can delete
  * individual entries; backend refuses paths outside the known directories.
+ *
+ * The log folder button reveals `%LOCALAPPDATA%\TablePro\logs\`, which holds
+ * the rotating backend log and `metrics.jsonl`. Nothing is uploaded — the
+ * button exists so those files can be attached to a report by hand.
  */
 export function SettingsDiagnostics() {
   const [dumps, setDumps] = useState<CrashDumpEntry[]>([]);
@@ -48,9 +52,34 @@ export function SettingsDiagnostics() {
     }
   };
 
+  const handleOpenLogs = async () => {
+    try {
+      await commands.openLogsFolder();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   return (
     <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
       <SettingSection title="Diagnostics" />
+
+      <div className="flex items-center justify-between gap-2 py-3">
+        <p className="text-xs text-zinc-600 dark:text-zinc-400">
+          Backend logs and query metrics are written to{" "}
+          <code className="rounded bg-zinc-100 px-1 py-0.5 text-[10px] dark:bg-zinc-800">
+            %LOCALAPPDATA%\TablePro\logs\
+          </code>
+          . They stay on this machine.
+        </p>
+        <button
+          onClick={() => void handleOpenLogs()}
+          className="inline-flex flex-shrink-0 items-center gap-1 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+        >
+          <FolderOpen size={12} />
+          Open Log Folder
+        </button>
+      </div>
 
       <div className="flex flex-col gap-2 py-3">
         <div className="flex items-center justify-between">
