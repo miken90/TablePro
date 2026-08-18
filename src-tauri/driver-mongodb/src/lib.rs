@@ -114,6 +114,9 @@ macro_rules! with_client {
 #[async_trait]
 impl DatabaseDriver for MongoDriver {
     async fn connect(&self) -> Result<(), DriverError> {
+        // TLS-enabled URIs go through rustls; without an installed crypto
+        // provider the handshake panics instead of returning an error.
+        driver_common::ensure_crypto_provider();
         let uri = self.build_uri();
         let client = Client::with_uri_str(&uri)
             .await

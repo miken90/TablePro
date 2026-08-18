@@ -6,12 +6,14 @@
 
 pub mod driver;
 pub mod error;
+pub mod tls;
 pub mod types;
 
 mod columnar;
 
 pub use columnar::{ColumnData, ColumnarResult};
 pub use driver::DatabaseDriver;
+pub use tls::ensure_crypto_provider;
 pub use error::DriverError;
 pub use types::{
     ColumnInfo, ConnectionConfig, ForeignKeyInfo, IndexInfo, QueryParameter, QueryResult,

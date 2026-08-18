@@ -93,6 +93,9 @@ macro_rules! with_client {
 #[async_trait]
 impl DatabaseDriver for RedisDriver {
     async fn connect(&self) -> Result<(), DriverError> {
+        // `rediss://` URLs go through rustls; without an installed crypto
+        // provider the handshake panics instead of returning an error.
+        driver_common::ensure_crypto_provider();
         let url = self.build_url();
         let client = Client::open(url.as_str())
             .map_err(|e| DriverError::Connection(format!("Redis client error: {e}")))?;

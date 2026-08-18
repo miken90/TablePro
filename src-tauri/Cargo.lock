@@ -1525,6 +1525,7 @@ name = "driver-common"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "rustls 0.23.37",
  "serde",
  "serde_json",
  "tokio",
