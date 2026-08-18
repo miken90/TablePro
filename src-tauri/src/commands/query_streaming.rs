@@ -42,16 +42,22 @@ const DEFAULT_CHUNK_SIZE: usize = 1000;
 ///
 /// All variants carry `generation` so the frontend store can drop stale
 /// chunks when a newer query has superseded this one.
+/// `rename_all` on an enum renames its *variants*, not the fields inside a
+/// struct variant, so every multi-word field needs its own variant-level
+/// `rename_all` to reach the frontend as camelCase. Without it `total_estimate`
+/// arrived under its snake_case name and the consumer read `undefined`.
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum QueryChunk {
     /// First message — column metadata + the driver-reported row count.
+    #[serde(rename_all = "camelCase")]
     Meta {
         columns: Vec<ColumnInfo>,
         total_estimate: usize,
         generation: u64,
     },
     /// One columnar batch of rows.
+    #[serde(rename_all = "camelCase")]
     Rows {
         idx: usize,
         chunk: ColumnarResult,
@@ -62,6 +68,7 @@ pub enum QueryChunk {
     /// `rows_total` is what was actually delivered on this channel;
     /// `total_rows` is what the driver produced before the row cap. They
     /// differ only when `truncated` is true.
+    #[serde(rename_all = "camelCase")]
     Done {
         rows_total: usize,
         ms: u128,
@@ -481,6 +488,35 @@ mod tests {
             truncated: false,
             total_row_count: None,
         }
+    }
+
+    /// The frontend reads these chunks by camelCase field name. `rename_all`
+    /// on the enum only renames variants, so this asserts the wire names
+    /// themselves rather than trusting the attribute.
+    #[test]
+    fn chunk_fields_serialize_as_camel_case() {
+        let meta = QueryChunk::Meta {
+            columns: vec![],
+            total_estimate: 7,
+            generation: 1,
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(json.contains("\"kind\":\"meta\""), "{json}");
+        assert!(json.contains("\"totalEstimate\":7"), "{json}");
+        assert!(!json.contains("total_estimate"), "{json}");
+
+        let done = QueryChunk::Done {
+            rows_total: 3,
+            ms: 4,
+            generation: 1,
+            truncated: true,
+            total_rows: 9,
+        };
+        let json = serde_json::to_string(&done).unwrap();
+        assert!(json.contains("\"rowsTotal\":3"), "{json}");
+        assert!(json.contains("\"totalRows\":9"), "{json}");
+        assert!(json.contains("\"truncated\":true"), "{json}");
+        assert!(!json.contains("total_rows"), "{json}");
     }
 
     #[test]
