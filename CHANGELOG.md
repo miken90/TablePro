@@ -24,6 +24,8 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- The truncation banner and the "N of M rows" counter never had a total to show. Serde's `rename_all` on an enum renames its variants, not the fields inside a struct variant, so the streaming chunks carried `total_estimate` while the frontend read `totalEstimate` — the banner would have crashed the result panel the first time it rendered.
+
 - A large result no longer risks taking the app down. The streaming query path had no row cap anywhere in Rust, so a wide `SELECT *` was materialized about three times in the backend and shipped across IPC in full, even though the frontend store dropped everything past its own limit; with `panic = "abort"` an allocation failure ends the process. The result is now truncated to the **Store max rows** setting before any copy is made, and the truncation banner reports the real total the query produced.
 
 - The row count under a query result is the number of rows there are. It came from a 500-row copy of the result that was built, counted, and then discarded — the grid rendered from a different, uncapped copy. The grid is virtualized, so that copy never bounded anything; it is gone, and the counters and banner read the actual result. Individual cell values are shortened when they reach the DOM, so a multi-megabyte value in one cell no longer becomes a multi-megabyte text node.
