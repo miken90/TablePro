@@ -27,7 +27,7 @@ node_modules/
 src-tauri/target/
 dist/
 build/
-plans/
+/plans/
 history/
 .beads/
 .team/
@@ -41,3 +41,14 @@ repomix*
 # CocoIndex Code (ccc)
 /.cocoindex_code/
 .claude/
+
+# Harness core maintenance binary
+scripts/bin/harness
+scripts/bin/harness.exe
+
+# Harness local backups (machine-local, not shared)
+.harness-backup/
+
+# Harness plan documents are local working notes; only the indexes are shared.
+docs/plans/**/*.md
+!docs/plans/**/README.md

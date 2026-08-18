@@ -38,3 +38,13 @@ questions at the end.
    `src-tauri/`; skip for docs-only changes.
 3. Do not restate or "fix" a doc's claim without checking it against source —
    see AGENTS.md's "Docs are not trustworthy by default".
+
+<!-- HARNESS:BEGIN -->
+## Harness
+
+Claude Code does not auto-load `AGENTS.md`. Import that single canonical
+project instruction source. Keep this bare `@` line outside backticks so the
+import remains active.
+
+@AGENTS.md
+<!-- HARNESS:END -->
