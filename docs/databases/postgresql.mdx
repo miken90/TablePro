@@ -31,6 +31,16 @@ TablePro connects to PostgreSQL via a compiled-in Rust driver (`tokio-postgres`)
 Paste a `postgresql://user:pass@host/db` URL into **Import from URL** on the connection form to auto-fill the fields. See [Connection URL Reference](/databases/connection-urls).
 </Tip>
 
+### SSL modes
+
+| Mode | What TablePro does |
+|---|---|
+| `disable` | No TLS — the connection is not encrypted. |
+| `prefer`, `require` | Encrypts, but does not check the server certificate: no protection against a man-in-the-middle. |
+| `verify-ca`, `verify-full` | Checks the certificate and host name against the Windows certificate store. |
+
+The connection form shows the same sentence under the selector for whichever mode is chosen. There is no client cert/key field — mutual TLS is not supported.
+
 ## Example Configurations
 
 **Local**: host `localhost:5432`, user `postgres`, password auth
@@ -91,7 +101,7 @@ Supports `jsonb` (formatted JSON), `array`, `uuid`, `inet` (IP), `timestamp with
 
 **Permission denied**: Grant access with `GRANT ALL ON DATABASE/SCHEMA/TABLES TO username;`
 
-**SSL/TLS**: Cloud providers (AWS RDS, Heroku, Supabase) typically require SSL. Use **Required** or **Verify CA**. For unencrypted alternatives, use [SSH tunneling](/databases/ssh-tunneling).
+**SSL/TLS**: Cloud providers (AWS RDS, Heroku, Supabase) typically require SSL. `require` encrypts but does not check the server certificate — it gives no protection against a man-in-the-middle; `verify-ca` and `verify-full` check the certificate against the Windows certificate store. See [SSL modes](#ssl-modes). For unencrypted alternatives, use [SSH tunneling](/databases/ssh-tunneling).
 
 ## Advanced Configuration
 

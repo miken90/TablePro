@@ -82,7 +82,18 @@ SELECT * FROM category_tree;
 
 ### SSL/TLS
 
-Set **SSL Mode** on the connection form (`disable`, `prefer`, `require`, `verify-ca`, `verify-full`). Cloud providers (AWS RDS, Google Cloud SQL, Azure) typically require SSL. There is no client cert/key field — mutual TLS is not supported. For unencrypted alternatives, use [SSH tunneling](/databases/ssh-tunneling).
+Set **SSL Mode** on the connection form. The modes are not equally strict:
+
+| Mode | What TablePro does |
+|---|---|
+| `disable`, `prefer` | No TLS — the connection is not encrypted. |
+| `require` | Encrypts, but does not check the server certificate: no protection against a man-in-the-middle. |
+| `verify-ca` | Checks the certificate chain, not the host name. |
+| `verify-full` | Checks the certificate chain and the host name. |
+
+`verify-ca` and `verify-full` validate against a built-in list of public certificate authorities — not the Windows certificate store — so a private or self-signed certificate is rejected in those modes. Cloud providers (AWS RDS, Google Cloud SQL, Azure) work with them; a self-hosted server with its own certificate needs `require`.
+
+There is no client cert/key field — mutual TLS is not supported. For unencrypted alternatives, use [SSH tunneling](/databases/ssh-tunneling).
 
 ## Performance Tips
 

@@ -20,6 +20,17 @@ Click **New Connection**, select **SQL Server**, enter host/port/credentials/dat
 | **Username** | `sa` | SQL Server Authentication only (no Windows Auth) |
 | **Database** | - | |
 
+### SSL modes
+
+SQL Server connections are always encrypted — the driver requests encryption regardless of the selected mode — so **SSL Mode** only controls whether the server certificate is checked:
+
+| Mode | What TablePro does |
+|---|---|
+| `disable`, `prefer`, `require`, `verify-ca` | Encrypts, but trusts the certificate without checking it: no protection against a man-in-the-middle. |
+| `verify-full` | Checks the certificate against the Windows certificate store. |
+
+A server using a self-signed certificate — the default for a local or containerised SQL Server — connects in every mode except `verify-full`.
+
 ## Example Configurations
 
 **Local**: host `localhost:1433`, user `sa`, database `master`

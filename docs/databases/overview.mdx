@@ -109,7 +109,9 @@ SQLite databases don't require authentication.
 
 #### SSL/TLS Section
 
-For PostgreSQL, MySQL/MariaDB, and SQL Server connections, configure SSL/TLS encryption via **SSL Mode**. MongoDB and Redis have their own TLS toggle (`tlsEnabled` for Redis; `mongodb+srv://` for MongoDB DNS-based TLS).
+For PostgreSQL, MySQL/MariaDB, and SQL Server connections, configure SSL/TLS encryption via **SSL Mode**. The form shows what the selected mode does, because the modes differ per engine: `require` encrypts without checking the server certificate on every engine, only the `verify-*` modes validate it, and SQL Server encrypts in every mode. See [PostgreSQL](/databases/postgresql#ssl-modes), [MySQL](/databases/mysql#ssltls) and [SQL Server](/databases/mssql#ssl-modes) for the per-engine tables.
+
+MongoDB and Redis have their own TLS toggle (`tlsEnabled` for Redis; `mongodb+srv://` for MongoDB DNS-based TLS).
 
 <Note>
 SSL/TLS is not available for SQLite connections (file-based, no network involved).
