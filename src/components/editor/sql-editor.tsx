@@ -9,6 +9,7 @@ import {
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useCommandStore, getEffectiveBinding } from "../../hooks/useCommandRegistry";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useEditorStatusStore } from "../../stores/editorStatusStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useQueryProgress } from "../../hooks/useQueryProgress";
 import { useEditorViewRef } from "../../contexts/editor-view-context";
@@ -154,6 +155,11 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
   const buildExtensions = useCallback(
     (tabId: string, runtime: EditorRuntime) => {
       const updateListener = runtime.EditorView.updateListener.of((update) => {
+        // Cursor/selection moves feed the status bar but do not touch the
+        // tab content, so the document is only stringified when it changed.
+        if (update.docChanged || update.selectionSet) {
+          useEditorStatusStore.getState().syncFrom(update.state, update.docChanged);
+        }
         if (!update.docChanged) return;
         const content = update.state.doc.toString();
         updateTabContent(tabId, content);
@@ -287,6 +293,9 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
       viewRef.current = view;
       contextViewRef.current = view;
+      // `updateListener` only fires on later transactions, so seed the status
+      // bar with the state the editor opened on.
+      useEditorStatusStore.getState().syncFrom(view.state, true);
       if (tabId) {
         stateMapRef.current.set(tabId, initialState);
       }
@@ -308,6 +317,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
       view.destroy();
       viewRef.current = null;
       contextViewRef.current = null;
+      useEditorStatusStore.getState().reset();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -334,6 +344,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
       docContent = content;
     }
     setQueryText(docContent);
+    useEditorStatusStore.getState().syncFrom(view.state, true);
 
     // Re-apply current settings to restored state (settings may have changed
     // while another tab was active; compartment reconfigure is idempotent)
