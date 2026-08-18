@@ -1,8 +1,7 @@
 import { useMemo } from "react";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
 import { User, Bot, RefreshCw } from "lucide-react";
 import { AiCodeBlock } from "./ai-code-block";
+import { renderSanitizedMarkdown } from "./ai-markdown-sanitizer";
 import type { ChatMessage } from "../../stores/aiChatStore";
 
 interface AiChatMessageProps {
@@ -86,7 +85,7 @@ export function AiChatMessage({ message, isLast, isStreaming, onInsertToEditor, 
                 key={i}
                 className="ai-markdown prose prose-xs dark:prose-invert max-w-none text-xs text-text-primary [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0 [&_code]:rounded [&_code]:bg-surface-base [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[11px]"
                 dangerouslySetInnerHTML={{
-                  __html: DOMPurify.sanitize(marked.parse(part.content, { async: false }) as string),
+                  __html: renderSanitizedMarkdown(part.content),
                 }}
               />
             ),
