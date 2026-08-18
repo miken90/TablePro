@@ -8,6 +8,7 @@ import { NullBadge } from './cell-formatters/null-badge';
 import { JsonCell } from './cell-formatters/json-cell';
 import { UuidCell } from './cell-formatters/uuid-cell';
 import { DateCell } from './cell-formatters/date-cell';
+import { truncateForRender } from '../DataGrid/columnar-render';
 
 interface GridRowProps {
   rowIndex: number;
@@ -110,19 +111,26 @@ function CellContent({
     return <NullBadge />;
   }
 
-  const cellType = detectCellType(cellValue, col.typeName);
+  // A single cell can hold a multi-megabyte value (BLOB, large JSON). The
+  // grid renders every row of a result, so the value is sliced before it
+  // reaches the DOM. Type detection runs on the slice too: a truncated JSON
+  // document is no longer valid JSON and falls back to plain text, which is
+  // the right thing to show for a value this size. Editing, copy and export
+  // all read the untruncated value from the result.
+  const rendered = truncateForRender(safeString(cellValue));
+  const cellType = detectCellType(rendered, col.typeName);
 
   const formatted = (() => {
     switch (cellType) {
       case 'json':
-        return <JsonCell value={cellValue} />;
+        return <JsonCell value={rendered} />;
       case 'uuid':
-        return <UuidCell value={cellValue} />;
+        return <UuidCell value={rendered} />;
       case 'date':
-        return <DateCell value={cellValue} />;
+        return <DateCell value={rendered} />;
       default:
         return (
-          <span className="truncate text-text-primary flex-1 font-mono text-xs">{typeof cellValue === 'object' ? JSON.stringify(cellValue) : cellValue}</span>
+          <span className="truncate text-text-primary flex-1 font-mono text-xs">{rendered}</span>
         );
     }
   })();

@@ -1,51 +1,26 @@
 /**
- * Columnar render helpers (Task 6 — gridex RAM optimization phase 2).
+ * Columnar render helpers.
  *
- * Materializes the column-major `ColumnarResultWire` produced by the
- * streaming `queryResultStore` into row-major arrays for rendering, with a
- * hard 500-row DOM cap independent of virtualization scroll position.
+ * The data grid is virtualized (`grid/data-grid.tsx` uses
+ * `@tanstack/react-virtual`), so the number of rows in a result never
+ * decided the number of DOM nodes. What a huge result *can* do is put a
+ * multi-megabyte string into a single text node, so cells are sliced at
+ * render time instead — see `truncateForRender`, applied in `GridRow`.
  *
- * Generation gating pattern (consume in async render-prep effects):
- *
- *   const generation = useQueryResultStore(s => s.generation);
- *   useEffect(() => {
- *     let cancelled = false;
- *     const myGen = generation;
- *     void someAsyncRenderPrep().then(() => {
- *       if (cancelled) return;
- *       if (myGen !== useQueryResultStore.getState().generation) return;
- *       // commit work
- *     });
- *     return () => { cancelled = true; };
- *   }, [generation]);
+ * The remaining helpers size the single-column EXPLAIN output, which is
+ * laid out by content width rather than the fixed default.
  */
 
-import type {
-  ColumnDataWire,
-  ColumnarResultWire,
-} from "../../stores/queryResultStore";
-
-export const RENDER_ROW_CAP = 500;
-export const CELL_TRUNCATE_LIMIT = 80;
 export const EXPLAIN_COL_MAX_PX = 4000;
 
-export function readCell(col: ColumnDataWire, idx: number): unknown {
-  if (col.kind === "Null") return null;
-  return (col.values as unknown[])[idx] ?? null;
-}
-
-export function materializeRows(
-  cr: ColumnarResultWire | null,
-  max: number = RENDER_ROW_CAP,
-): unknown[][] {
-  if (!cr) return [];
-  const limit = Math.min(cr.row_count, max);
-  const out: unknown[][] = new Array(limit);
-  for (let r = 0; r < limit; r++) {
-    out[r] = cr.data.map((col) => readCell(col, r));
-  }
-  return out;
-}
+/**
+ * Characters of a cell value the grid will put in the DOM. Wide enough that
+ * no realistic column (max auto-fit width is 600px ≈ 85 monospace chars)
+ * shows a shortened value, small enough that a BLOB or a large JSON document
+ * cannot create a multi-megabyte text node per visible row. The full value
+ * stays in the result and is what the cell editor, copy, and export read.
+ */
+export const CELL_RENDER_LIMIT = 1000;
 
 export function isExplainResult(
   columns: { name: string }[] | undefined | null,
@@ -53,12 +28,13 @@ export function isExplainResult(
   return !!columns && columns.length === 1 && columns[0].name === "QUERY PLAN";
 }
 
-export function truncateCell(value: unknown, isExplain = false): string {
-  if (value === null || value === undefined) return "";
-  const s = typeof value === "string" ? value : JSON.stringify(value);
-  if (isExplain) return s;
-  if (s.length <= CELL_TRUNCATE_LIMIT) return s;
-  return s.slice(0, CELL_TRUNCATE_LIMIT - 3) + "…";
+/** Slice a cell value down to what is worth rendering. */
+export function truncateForRender(
+  value: string,
+  limit: number = CELL_RENDER_LIMIT,
+): string {
+  if (value.length <= limit) return value;
+  return value.slice(0, limit) + "…";
 }
 
 export function explainColumnWidth(rows: unknown[][]): number {
