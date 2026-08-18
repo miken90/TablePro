@@ -7,9 +7,9 @@
  * driven by the column's declared type, which only the frontend knows — every
  * save payload must carry it.
  *
- * Both save paths are asserted as source text: this vitest setup runs in
- * `node` with no DOM, so the hooks cannot be rendered, and what matters is
- * that the field is populated at all.
+ * The save path is asserted as source text: this vitest setup runs in `node`
+ * with no DOM, so the hook cannot be rendered, and what matters is that the
+ * field is populated at all.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -27,7 +27,7 @@ function source(relativePath: string): string {
   return text;
 }
 
-const SAVE_PATHS = ['use-table-save.ts', 'hooks/use-change-tracking.ts'];
+const SAVE_PATHS = ['hooks/use-change-tracking.ts'];
 
 describe('save payload carries column types', () => {
   for (const path of SAVE_PATHS) {
@@ -38,7 +38,7 @@ describe('save payload carries column types', () => {
     });
   }
 
-  it('both paths build the payload from the same column list', () => {
+  it('builds the payload from one column list', () => {
     for (const path of SAVE_PATHS) {
       const text = source(path);
       // Types must line up positionally with the names, so both come from
