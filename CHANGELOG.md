@@ -10,6 +10,10 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ## [Unreleased]
 
+### Added
+
+- The connection form says what the selected **SSL Mode** actually does — whether the connection is encrypted, and whether the server certificate is checked — because the modes do not behave the same on every engine. `require` encrypts without verifying anything, and SQL Server encrypts in every mode.
+
 ### Fixed
 
 - Encrypted MySQL, Redis and MongoDB connections no longer crash the app. rustls refuses to pick a cryptography backend when several are compiled in, and this build has two, so the first TLS handshake panicked ("Could not automatically determine the process-level CryptoProvider"); release builds abort on panic. The drivers now install one explicitly before connecting.
