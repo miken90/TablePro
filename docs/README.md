@@ -14,11 +14,12 @@ docs/
 ├── quickstart.mdx
 ├── installation.mdx
 ├── changelog.mdx
+├── project-changelog.md
 ├── features/
 ├── databases/
 ├── customization/
 ├── development/
-├── vi/
+├── journals/
 ├── project-overview-pdr.md
 ├── project-roadmap.md
 ├── codebase-summary.md
@@ -37,7 +38,6 @@ Optional validation:
 
 ```bash
 mint broken-links
-node $HOME/.claude/scripts/validate-docs.cjs docs/
 ```
 
 ## Documentation rules for this repository
