@@ -590,12 +590,7 @@
   "about": {
     "version": "Version {{version}} (Windows)",
     "description": "Database client for PostgreSQL, MySQL, and SQL Server.",
-    "website": "Website",
-    "documentation": "Documentation",
-    "github": "GitHub",
-    "platform": "Platform",
-    "userAgent": "User Agent",
-    "copyright": "© 2026 TablePro. All rights reserved."
+    "platform": "Platform"
   },
   "safeMode": {
     "confirmQuery": "Confirm Query",

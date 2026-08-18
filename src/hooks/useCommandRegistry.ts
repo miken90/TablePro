@@ -55,6 +55,7 @@ export const COMMAND_DEFINITIONS: CommandDefinition[] = [
   { id: "app.settings",         label: "Settings",             defaultBinding: ["Ctrl", ","],           category: "Settings" },
   { id: "app.refreshSchema",    label: "Refresh Schema",       defaultBinding: ["F5"],                  category: "Settings" },
   { id: "app.help",             label: "Keyboard Shortcuts",   defaultBinding: ["F1"],                  category: "Settings" },
+  { id: "app.about",            label: "About TablePro",       defaultBinding: ["Shift", "F1"],         category: "Settings" },
 ];
 
 /**

@@ -178,6 +178,13 @@ export function buildMainLayoutCommands(t: Translate): Command[] {
       action: () => useLayoutStore.getState().setHelpOpen(true),
     },
     {
+      id: "app.about",
+      label: "About TablePro",
+      shortcut: shortcutFor("app.about"),
+      category: "Settings" as const,
+      action: () => useLayoutStore.getState().setAboutOpen(true),
+    },
+    {
       id: "app.refreshSchema",
       label: "Refresh Schema",
       shortcut: shortcutFor("app.refreshSchema"),

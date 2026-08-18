@@ -11,6 +11,7 @@ import { ErrorBoundary } from "../shared/error-boundary";
 const SettingsView = lazy(() => import("../settings/settings-view").then(m => ({ default: m.SettingsView })));
 const ShortcutsHelp = lazy(() => import("../shared/ShortcutsHelp").then(m => ({ default: m.ShortcutsHelp })));
 const OnboardingDialog = lazy(() => import("../onboarding/onboarding-dialog").then(m => ({ default: m.OnboardingDialog })));
+const AboutDialog = lazy(() => import("../shared/about-dialog").then(m => ({ default: m.AboutDialog })));
 
 interface OverlayRegionProps {
   unsavedDialog: { targetTabId: string } | null;
@@ -32,6 +33,7 @@ export function OverlayRegion({
   const settingsOpen = useLayoutStore((s) => s.settingsOpen);
   const helpOpen = useLayoutStore((s) => s.helpOpen);
   const commandPaletteOpen = useLayoutStore((s) => s.commandPaletteOpen);
+  const aboutOpen = useLayoutStore((s) => s.aboutOpen);
 
   // Onboarding
   const hasCompletedOnboarding = useSettingsStore((s) => s.settings.hasCompletedOnboarding);
@@ -71,6 +73,15 @@ export function OverlayRegion({
           onClose={() => useLayoutStore.getState().setHelpOpen(false)}
         />
       </Suspense>
+
+      {aboutOpen && (
+        <Suspense fallback={null}>
+          <AboutDialog
+            open={aboutOpen}
+            onClose={() => useLayoutStore.getState().setAboutOpen(false)}
+          />
+        </Suspense>
+      )}
 
       <CommandPalette
         open={commandPaletteOpen}

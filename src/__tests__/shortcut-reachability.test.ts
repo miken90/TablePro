@@ -107,7 +107,7 @@ describe('every registry command is reachable', () => {
   it('accounts for every command exactly once', () => {
     const editorOwned = COMMAND_DEFINITIONS.filter((d) => !isGloballyDispatchable(d.id));
     expect(editorOwned.map((d) => d.id).sort()).toEqual([...EDITOR_OWNED].sort());
-    expect(COMMAND_DEFINITIONS).toHaveLength(21);
+    expect(COMMAND_DEFINITIONS).toHaveLength(22);
   });
 });
 
