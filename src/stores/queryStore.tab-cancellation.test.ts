@@ -56,7 +56,7 @@ function metaChunk(generation: number): QueryChunk {
 }
 
 function doneChunk(generation: number): QueryChunk {
-  return { kind: "done", rowsTotal: 0, ms: 1, generation };
+  return { kind: "done", rowsTotal: 0, ms: 1, generation, truncated: false, totalRows: 0 };
 }
 
 interface StreamArgs {

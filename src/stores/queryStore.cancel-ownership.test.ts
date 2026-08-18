@@ -70,7 +70,7 @@ function installHangingInvoke() {
     // terminal chunk to the channel, so a released stream ends with `done`.
     await new Promise<void>((resolve) =>
       releases.push(() => {
-        channel.onmessage?.({ kind: "done", rowsTotal: 0, ms: 1, generation });
+        channel.onmessage?.({ kind: "done", rowsTotal: 0, ms: 1, generation, truncated: false, totalRows: 0 });
         resolve();
       }),
     );

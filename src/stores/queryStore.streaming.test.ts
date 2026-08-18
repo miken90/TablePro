@@ -80,7 +80,7 @@ function rowsChunk(generation: number): QueryChunk {
 }
 
 function doneChunk(generation: number, ms = 12): QueryChunk {
-  return { kind: "done", rowsTotal: 2, ms, generation };
+  return { kind: "done", rowsTotal: 2, ms, generation, truncated: false, totalRows: 2 };
 }
 
 function errChunk(generation: number, message = "boom"): QueryChunk {

@@ -137,11 +137,24 @@ impl Default for AppSettings {
     }
 }
 
+/// Accepted range for `streaming_threshold`.
+pub const STREAMING_THRESHOLD_MIN: usize = 1_000;
+pub const STREAMING_THRESHOLD_MAX: usize = 1_000_000;
+/// Accepted range for `store_max_rows`. Also the range the streaming query
+/// command clamps to before using the setting as a hard row cap, so a
+/// hand-edited `settings.json` cannot ask the backend for an unbounded result.
+pub const STORE_MAX_ROWS_MIN: usize = 10_000;
+pub const STORE_MAX_ROWS_MAX: usize = 10_000_000;
+
 impl AppSettings {
     /// Clamp performance-related fields to safe ranges.
     pub fn clamp_perf(&mut self) {
-        self.streaming_threshold = self.streaming_threshold.clamp(1_000, 1_000_000);
-        self.store_max_rows = self.store_max_rows.clamp(10_000, 10_000_000);
+        self.streaming_threshold = self
+            .streaming_threshold
+            .clamp(STREAMING_THRESHOLD_MIN, STREAMING_THRESHOLD_MAX);
+        self.store_max_rows = self
+            .store_max_rows
+            .clamp(STORE_MAX_ROWS_MIN, STORE_MAX_ROWS_MAX);
     }
 }
 

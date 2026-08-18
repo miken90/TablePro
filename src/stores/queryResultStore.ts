@@ -6,9 +6,11 @@
  *
  * Backend (`commands/query_streaming.rs`) emits a typed `QueryChunk` stream
  * over a Tauri `Channel<QueryChunk>`. This store accumulates the chunks into
- * a single `ColumnarResultWire`, capped at the user-configured
- * `storeMaxRows`. Once the cap is reached, additional row chunks are
- * dropped and `truncated=true` is set so the UI can show a banner.
+ * a single `ColumnarResultWire`. The backend applies the same
+ * `storeMaxRows` cap before it copies the result, so in practice truncation
+ * is decided there and reported on the terminal `done` chunk; the store keeps
+ * its own cap as a second line of defence. Either way `truncated=true` is set
+ * (with `truncatedBy` naming the cap) so the UI can show a banner.
  *
  * Rendering (Task 6) reads the `columnar` field directly. The store is
  * additive — it does **not** populate the legacy row-major `queryStore`.
@@ -62,7 +64,15 @@ export type QueryChunk =
       chunk: ColumnarResultWire;
       generation: number;
     }
-  | { kind: "done"; rowsTotal: number; ms: number; generation: number }
+  | {
+      kind: "done";
+      rowsTotal: number;
+      ms: number;
+      generation: number;
+      /** Backend applied its row cap; `totalRows` is the pre-cap count. */
+      truncated: boolean;
+      totalRows: number;
+    }
   | { kind: "err"; message: string; generation: number };
 
 // ── Column slice / append helpers ───────────────────────────────────────────
@@ -127,8 +137,10 @@ interface QueryResultState {
   columnar: ColumnarResultWire | null;
   /** Driver-reported total row count (from `meta.totalEstimate`). */
   totalRowsServer: number;
-  /** True once the store hit `storeMaxRows`. */
+  /** True once either cap fired — the backend's or this store's. */
   truncated: boolean;
+  /** Which cap dropped rows, or null when nothing was dropped. */
+  truncatedBy: "backend" | "store" | null;
   /** True between `beginStream` and terminal `done`/`err` chunk. */
   streaming: boolean;
   /** Set when an `err` chunk arrives. */
@@ -150,6 +162,7 @@ const INITIAL: Omit<
   columnar: null,
   totalRowsServer: 0,
   truncated: false,
+  truncatedBy: null,
   streaming: false,
   streamError: null,
   durationMs: null,
@@ -164,6 +177,7 @@ export const useQueryResultStore = create<QueryResultState>((set, get) => ({
       columnar: null,
       totalRowsServer: 0,
       truncated: false,
+      truncatedBy: null,
       streaming: true,
       streamError: null,
       durationMs: null,
@@ -211,7 +225,7 @@ export const useQueryResultStore = create<QueryResultState>((set, get) => ({
         const current = base.row_count;
         const headroom = Math.max(0, cap - current);
         if (headroom === 0) {
-          set({ truncated: true });
+          set({ truncated: true, truncatedBy: state.truncatedBy ?? "store" });
           return;
         }
 
@@ -241,12 +255,22 @@ export const useQueryResultStore = create<QueryResultState>((set, get) => ({
         set({
           columnar: merged,
           truncated: willTruncate,
+          truncatedBy: willTruncate ? (state.truncatedBy ?? "store") : state.truncatedBy,
         });
         return;
       }
 
       case "done": {
-        set({ streaming: false, durationMs: chunk.ms });
+        // The backend caps the result before it copies it, so a truncation it
+        // reports is authoritative — the store's own cap never sees the
+        // dropped rows.
+        set({
+          streaming: false,
+          durationMs: chunk.ms,
+          truncated: state.truncated || chunk.truncated,
+          totalRowsServer: chunk.totalRows,
+          truncatedBy: state.truncatedBy ?? (chunk.truncated ? "backend" : null),
+        });
         return;
       }
 

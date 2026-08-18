@@ -130,10 +130,61 @@ describe("queryResultStore", () => {
     const s = useQueryResultStore.getState();
     s.beginStream(1);
     s.appendChunk(metaChunk(1));
-    s.appendChunk({ kind: "done", rowsTotal: 0, ms: 42, generation: 1 });
+    s.appendChunk({ kind: "done", rowsTotal: 0, ms: 42, generation: 1, truncated: false, totalRows: 0 });
     const st = useQueryResultStore.getState();
     expect(st.streaming).toBe(false);
     expect(st.durationMs).toBe(42);
+  });
+
+  it("done reporting backend truncation sets truncated + the real total", () => {
+    const s = useQueryResultStore.getState();
+    s.beginStream(1);
+    s.appendChunk(metaChunk(1, 200_000));
+    s.appendChunk(rowsChunk(10, 1));
+    s.appendChunk({
+      kind: "done",
+      rowsTotal: 10,
+      ms: 5,
+      generation: 1,
+      truncated: true,
+      totalRows: 200_000,
+    });
+    const st = useQueryResultStore.getState();
+    expect(st.truncated).toBe(true);
+    expect(st.truncatedBy).toBe("backend");
+    expect(st.totalRowsServer).toBe(200_000);
+  });
+
+  // Control: an untruncated run must leave both flags clear, so a `done`
+  // handler that always sets `truncated` fails here.
+  it("done without truncation leaves truncated flags clear", () => {
+    const s = useQueryResultStore.getState();
+    s.beginStream(1);
+    s.appendChunk(metaChunk(1, 10));
+    s.appendChunk(rowsChunk(10, 1));
+    s.appendChunk({
+      kind: "done",
+      rowsTotal: 10,
+      ms: 5,
+      generation: 1,
+      truncated: false,
+      totalRows: 10,
+    });
+    const st = useQueryResultStore.getState();
+    expect(st.truncated).toBe(false);
+    expect(st.truncatedBy).toBeNull();
+  });
+
+  it("store-side cap attributes truncation to the store", () => {
+    resetStores(20);
+    const s = useQueryResultStore.getState();
+    s.beginStream(1);
+    s.appendChunk(metaChunk(1, 50));
+    s.appendChunk(rowsChunk(50, 1));
+    const st = useQueryResultStore.getState();
+    expect(st.truncated).toBe(true);
+    expect(st.truncatedBy).toBe("store");
+    expect(st.columnar!.row_count).toBe(20);
   });
 
   it("err sets streamError and streaming=false", () => {
@@ -153,7 +204,7 @@ describe("queryResultStore", () => {
     // Stale meta from gen=4 — must not overwrite columns.
     s.appendChunk(metaChunk(4, 9999));
     s.appendChunk(rowsChunk(20, 4));
-    s.appendChunk({ kind: "done", rowsTotal: 0, ms: 99, generation: 4 });
+    s.appendChunk({ kind: "done", rowsTotal: 0, ms: 99, generation: 4, truncated: false, totalRows: 0 });
     s.appendChunk({ kind: "err", message: "stale", generation: 4 });
     const after = useQueryResultStore.getState();
     expect(after.totalRowsServer).toBe(before.totalRowsServer);

@@ -32,6 +32,7 @@ use tokio::sync::Mutex;
 
 use crate::models::{AppError, ColumnInfo, QueryResult};
 use crate::services::ConnectionManager;
+use crate::storage::settings_store::{STORE_MAX_ROWS_MAX, STORE_MAX_ROWS_MIN};
 use crate::storage::SettingsStore;
 
 /// Row-count per `Rows` chunk above the threshold (validated by spike §1).
@@ -57,10 +58,16 @@ pub enum QueryChunk {
         generation: u64,
     },
     /// Final success marker.
+    ///
+    /// `rows_total` is what was actually delivered on this channel;
+    /// `total_rows` is what the driver produced before the row cap. They
+    /// differ only when `truncated` is true.
     Done {
         rows_total: usize,
         ms: u128,
         generation: u64,
+        truncated: bool,
+        total_rows: usize,
     },
     /// Final error marker (terminates stream).
     Err { message: String, generation: u64 },
@@ -92,7 +99,7 @@ pub async fn execute_query_streaming(
     );
 
     // 2. Run the query (mirror `commands::query::execute_query` lookup pattern).
-    let result = match run_query(&manager, &session_id, &sql).await {
+    let mut result = match run_query(&manager, &session_id, &sql).await {
         Ok(r) => r,
         Err(e) => {
             channel
@@ -105,17 +112,38 @@ pub async fn execute_query_streaming(
         }
     };
 
-    // 3. Send Meta first.
+    // 3. Cap the result before anything copies it.
+    //
+    // The frontend store keeps at most `store_max_rows` rows and drops the
+    // rest, so every row past that point is materialised three times in Rust
+    // (row-major result, columnar copy, per-chunk slices), serialised across
+    // IPC and deserialised by the WebView only to be thrown away. With
+    // `panic = "abort"` an allocation failure on that path kills the process.
+    let max_rows = effective_row_cap(&settings).await;
+    let total_rows = apply_row_cap(&mut result, max_rows);
+    let truncated = result.truncated;
+    if truncated {
+        tracing::warn!(
+            session = %session_id,
+            gen = generation,
+            total_rows,
+            max = max_rows,
+            "query.streaming.truncated"
+        );
+    }
+
+    // 4. Send Meta first. `total_estimate` carries the pre-cap count so the
+    // truncation banner can report the real size of the result.
     let total = result.rows.len();
     if let Err(e) = channel.send(QueryChunk::Meta {
         columns: result.columns.clone(),
-        total_estimate: total,
+        total_estimate: total_rows,
         generation,
     }) {
         return Err(format!("channel closed during Meta: {e}"));
     }
 
-    // 4. Convert host QueryResult → driver_common ColumnarResult, then chunk.
+    // 5. Convert host QueryResult → driver_common ColumnarResult, then chunk.
     let columnar = host_qr_to_columnar(result);
     let chunk_size = if total > effective_threshold {
         DEFAULT_CHUNK_SIZE
@@ -152,6 +180,8 @@ pub async fn execute_query_streaming(
     tracing::info!(
         gen = generation,
         rows_total = total,
+        total_rows,
+        truncated,
         chunks = chunk_count,
         ms = elapsed_ms,
         "query.streaming.done"
@@ -161,12 +191,43 @@ pub async fn execute_query_streaming(
             rows_total: total,
             ms: elapsed_ms,
             generation,
+            truncated,
+            total_rows,
         })
         .map_err(|e| format!("channel closed during Done: {e}"))?;
     Ok(())
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Resolve the hard row cap for one streaming run.
+///
+/// Source: the user's `store_max_rows` setting — the same number the frontend
+/// store uses to decide what it will keep. Using the legacy
+/// `query::MAX_RESULT_ROWS` (50_000) instead would silently deliver less than
+/// the 100_000 rows the user configured. The value is clamped to the range
+/// `set_settings` already enforces so a hand-edited settings file cannot
+/// remove the bound.
+async fn effective_row_cap(settings: &Mutex<SettingsStore>) -> usize {
+    settings
+        .lock()
+        .await
+        .get()
+        .store_max_rows
+        .clamp(STORE_MAX_ROWS_MIN, STORE_MAX_ROWS_MAX)
+}
+
+/// Truncate `result` to at most `max_rows` rows, recording the pre-cap count.
+/// Returns the number of rows the driver actually produced.
+fn apply_row_cap(result: &mut QueryResult, max_rows: usize) -> usize {
+    let total_rows = result.rows.len();
+    if total_rows > max_rows {
+        result.rows.truncate(max_rows);
+        result.truncated = true;
+        result.total_row_count = Some(total_rows);
+    }
+    total_rows
+}
 
 async fn run_query(
     manager: &Mutex<ConnectionManager>,
@@ -404,6 +465,52 @@ mod tests {
             ColumnData::Ints(orig) => assert_eq!(&joined, orig),
             _ => unreachable!(),
         }
+    }
+
+    fn host_result(rows: usize) -> QueryResult {
+        QueryResult {
+            columns: vec![ColumnInfo {
+                name: "id".into(),
+                type_name: "int8".into(),
+                nullable: false,
+                is_primary_key: true,
+            }],
+            rows: (0..rows).map(|i| vec![Some(i.to_string())]).collect(),
+            affected_rows: 0,
+            execution_time_ms: 0.0,
+            truncated: false,
+            total_row_count: None,
+        }
+    }
+
+    #[test]
+    fn row_cap_truncates_and_records_true_total() {
+        let mut r = host_result(1_500);
+        let total = apply_row_cap(&mut r, 1_000);
+        assert_eq!(total, 1_500);
+        assert_eq!(r.rows.len(), 1_000);
+        assert!(r.truncated);
+        assert_eq!(r.total_row_count, Some(1_500));
+    }
+
+    /// Control: a result inside the cap must come through untouched, so a
+    /// cap that fires unconditionally fails this test.
+    #[test]
+    fn row_cap_leaves_small_results_alone() {
+        let mut r = host_result(999);
+        let total = apply_row_cap(&mut r, 1_000);
+        assert_eq!(total, 999);
+        assert_eq!(r.rows.len(), 999);
+        assert!(!r.truncated);
+        assert_eq!(r.total_row_count, None);
+    }
+
+    #[test]
+    fn row_cap_at_exact_boundary_does_not_truncate() {
+        let mut r = host_result(1_000);
+        apply_row_cap(&mut r, 1_000);
+        assert_eq!(r.rows.len(), 1_000);
+        assert!(!r.truncated);
     }
 
     /// Synthetic 1M-row chunker memory/throughput probe.
