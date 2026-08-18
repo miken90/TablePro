@@ -3,6 +3,37 @@
 Repository product behavior, architecture, decisions, plans, code, tests, and
 runtime signals are the system of record.
 
+## This Repository's Actual Conventions
+
+TablePro is Windows-only. Every build, test, lint, and package step runs
+through PowerShell — from WSL, cross into a Windows-drive working directory
+(`/mnt/d/...`, never `/home/...`) and invoke `powershell.exe`, one native
+command per invocation, piping through `tr -d '\r'` to strip CRLF. See
+`docs/decisions/0002-windows-only-powershell-execution.md`.
+
+Gate set, verified against `.github/workflows/windows-build.yml` (runs on
+`windows-latest`, triggers on push/PR to `main`), in the order CI actually
+runs them:
+
+```bash
+npm ci
+cargo clippy --workspace -- -D warnings   # from src-tauri/
+cargo test --workspace                     # from src-tauri/
+npx vitest run
+npx eslint .
+npm run build
+# code signing if secrets present, then:
+npx tauri build
+```
+
+Match this gate set rather than inventing additional checks. Skip it entirely
+for docs-only changes.
+
+Commits: [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/),
+single-line subject, no AI/Claude references. `CHANGELOG.md`'s `[Unreleased]`
+section gets updated for user-facing changes, skipped for docs-only or
+internal-only ones.
+
 ## Repository Map
 
 - `AGENTS.md`: entry map and authority boundary.
