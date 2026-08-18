@@ -1,11 +1,13 @@
-use std::fs::OpenOptions;
-use std::io::Write;
-
 use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::models::AppError;
+use crate::services::bounded_log;
 use crate::storage::{AppSettings, SettingsStore};
+
+/// Cap for `renderer-errors.log`. One backup generation is kept, so the log
+/// costs at most 2 MiB on disk.
+const RENDERER_LOG_MAX_BYTES: u64 = 1024 * 1024;
 
 /// Return the current application settings.
 #[tauri::command]
@@ -27,14 +29,15 @@ pub async fn set_settings(
     store.save()
 }
 
-/// Append a renderer-side error to a log file under the app data directory.
+/// Append a renderer-side error to a size-bounded log under the app data
+/// directory. Rotates at [`RENDERER_LOG_MAX_BYTES`]; the file used to grow
+/// without limit.
 #[tauri::command]
 pub async fn log_renderer_error(message: String) -> Result<(), AppError> {
-    let base = dirs::data_dir()
+    let path = dirs::data_dir()
         .ok_or_else(|| AppError::IoError("Cannot resolve data directory".into()))?
-        .join("TablePro");
-    std::fs::create_dir_all(&base)?;
-    let path = base.join("renderer-errors.log");
-    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-    writeln!(file, "{message}").map_err(|e| AppError::IoError(e.to_string()))
+        .join("TablePro")
+        .join("renderer-errors.log");
+    bounded_log::append_line(&path, &message, RENDERER_LOG_MAX_BYTES)
+        .map_err(|e| AppError::IoError(e.to_string()))
 }

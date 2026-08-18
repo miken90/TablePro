@@ -27,17 +27,10 @@ function logRendererError(kind: string, detail: string) {
 
 logRendererError("startup", "main.tsx loaded");
 
-window.addEventListener("beforeunload", () => {
-  logRendererError("lifecycle", "beforeunload fired");
-});
-
-window.addEventListener("pagehide", () => {
-  logRendererError("lifecycle", "pagehide fired");
-});
-
-document.addEventListener("visibilitychange", () => {
-  logRendererError("lifecycle", `visibilitychange: ${document.visibilityState}`);
-});
+// Window lifecycle events (beforeunload / pagehide / visibilitychange) used
+// to be logged here. Every tab switch and every minimise wrote a line, which
+// is how the error log ended up ~90% noise; they say nothing about a crash
+// that the startup line and the two handlers below do not.
 
 window.addEventListener("error", (event) => {
   const detail = `${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`;

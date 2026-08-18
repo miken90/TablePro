@@ -26,6 +26,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 dirs = "5"
 driver-common = { path = "driver-common" }
 driver-postgres = { path = "driver-postgres" }

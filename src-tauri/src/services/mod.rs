@@ -1,4 +1,6 @@
 pub mod ai_provider;
+pub mod app_logging;
+pub mod bounded_log;
 pub mod ai_schema_context;
 pub mod connection_export;
 pub mod connection_export_crypto;

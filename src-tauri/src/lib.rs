@@ -73,13 +73,12 @@ pub fn run() {
     // %LOCALAPPDATA%\TablePro\crashes\panic-<ts>.json before the process dies.
     crate::services::crash_handler::install_panic_hook();
 
-    // Initialise structured logging — respects RUST_LOG env var.
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+    // Initialise structured logging — respects RUST_LOG env var. The guard
+    // owns the file appender's writer thread and must live as long as the
+    // process, or buffered lines are dropped on the way out.
+    if let Some(guard) = crate::services::app_logging::init() {
+        Box::leak(Box::new(guard));
+    }
 
     tracing::info!("TablePro starting");
 
