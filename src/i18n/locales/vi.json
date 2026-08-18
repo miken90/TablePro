@@ -126,7 +126,15 @@
       "passphrase": "Cụm mật khẩu",
       "optional": "(tùy chọn)",
       "sshKeyLabel": "Khóa SSH",
-      "allFiles": "Tất cả tệp"
+      "allFiles": "Tất cả tệp",
+      "sslMode": "Chế độ SSL",
+      "sslHelp": {
+        "plaintext": "Không mã hóa.",
+        "encryptedUnverified": "Có mã hóa, nhưng chứng chỉ máy chủ không được kiểm tra — không chống được tấn công xen giữa.",
+        "verifiedSystem": "Có mã hóa, và chứng chỉ máy chủ được kiểm tra theo kho chứng chỉ tin cậy của hệ thống.",
+        "verifiedBundled": "Có mã hóa, và chứng chỉ máy chủ được kiểm tra theo danh sách nhà cung cấp chứng chỉ công cộng tích hợp sẵn — chứng chỉ riêng hoặc tự ký sẽ bị từ chối.",
+        "verifiedBundledChainOnly": "Có mã hóa, và chuỗi chứng chỉ được kiểm tra theo danh sách nhà cung cấp chứng chỉ công cộng tích hợp sẵn, nhưng tên máy chủ thì không."
+      }
     },
     "export": {
       "title": "Xuất kết nối",

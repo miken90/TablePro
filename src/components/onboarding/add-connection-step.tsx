@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { sslModeHelpKey } from "../connection/ssl-mode-help";
 import { OnboardingStep } from "./onboarding-step";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { ConnectionConfig, SavedConnection } from "../../types/connection";
@@ -226,10 +227,13 @@ export function AddConnectionStep({ onNext, onBack, onSkip }: AddConnectionStepP
             <Field label="Password">
               <input type="password" value={config.password} onChange={(e) => updateConfig({ password: e.target.value })} className={inputCls} />
             </Field>
-            <Field label="SSL Mode">
+            <Field label={t("connection.form.sslMode")}>
               <select value={config.sslMode} onChange={(e) => updateConfig({ sslMode: e.target.value })} className={inputCls}>
                 {SSL_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
+              <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                {t(sslModeHelpKey(config.dbType, config.sslMode))}
+              </p>
             </Field>
             <SshSection config={config} updateConfig={updateConfig} />
           </>

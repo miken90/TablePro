@@ -126,7 +126,15 @@
       "passphrase": "Passphrase",
       "optional": "(optional)",
       "sshKeyLabel": "SSH Key",
-      "allFiles": "All Files"
+      "allFiles": "All Files",
+      "sslMode": "SSL Mode",
+      "sslHelp": {
+        "plaintext": "Not encrypted.",
+        "encryptedUnverified": "Encrypted, but the server certificate is not checked — no protection against a man-in-the-middle.",
+        "verifiedSystem": "Encrypted, and the server certificate is checked against the system trust store.",
+        "verifiedBundled": "Encrypted, and the server certificate is checked against a built-in list of public certificate authorities — a private or self-signed certificate is rejected.",
+        "verifiedBundledChainOnly": "Encrypted, and the certificate chain is checked against a built-in list of public certificate authorities, but the host name is not."
+      }
     },
     "export": {
       "title": "Export Connections",

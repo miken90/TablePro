@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { ConnectionConfig, SavedConnection } from "../../types/connection";
@@ -15,6 +16,7 @@ import {
   secondaryBtn,
 } from "./connection-form-config";
 import { Field, SshSection } from "./connection-form-sections";
+import { sslModeHelpKey } from "./ssl-mode-help";
 import { ConnectionColorPicker } from "./connection-color-picker";
 import { ConnectionTagPicker } from "./connection-tag-picker";
 import { parseConnectionUrl } from "../../utils/connection-url-parser";
@@ -25,6 +27,7 @@ interface ConnectionFormProps {
 }
 
 export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
+  const { t } = useTranslation();
   const { saveConnection, connect, groups } = useConnectionStore();
   const [name, setName] = useState(initial?.name ?? "");
   const [groupId, setGroupId] = useState<string>(initial?.groupId ?? "");
@@ -336,10 +339,13 @@ export function ConnectionForm({ initial, onClose }: ConnectionFormProps) {
             />
           </Field>
 
-          <Field label="SSL Mode">
+          <Field label={t("connection.form.sslMode")}>
             <select value={config.sslMode} onChange={(e) => updateConfig({ sslMode: e.target.value })} className={inputCls}>
               {SSL_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
+            <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+              {t(sslModeHelpKey(config.dbType, config.sslMode))}
+            </p>
           </Field>
 
           {/* SSH Tunnel section */}
