@@ -1,11 +1,11 @@
 ---
 title: Connection URL Reference
-description: Every supported database URL scheme, format, and query parameter for imports and direct connections
+description: Supported database URL schemes and format for Import from URL
 ---
 
 # Connection URL Reference
 
-TablePro parses standard database connection URLs for importing connections, opening them directly from a browser or terminal, and configuring SSH tunnels. This page covers every supported scheme, format, and query parameter.
+TablePro parses a connection URL when you click **Import from URL** on the New Connection form. This covers every supported scheme and what gets filled in.
 
 ## URL Schemes
 
@@ -13,33 +13,22 @@ TablePro parses standard database connection URLs for importing connections, ope
 |--------|----------|
 | `postgresql://` | PostgreSQL |
 | `postgres://` | PostgreSQL (alias) |
-| `mysql://` | MySQL |
-| `mariadb://` | MariaDB |
-| `sqlite://` | SQLite |
-| `mongodb://` | MongoDB |
-| `mongodb+srv://` | MongoDB (SRV) |
-| `redis://` | Redis |
-| `rediss://` | Redis with TLS |
-| `redshift://` | Amazon Redshift |
+| `mysql://` | MySQL / MariaDB |
 | `mssql://` | Microsoft SQL Server |
 | `sqlserver://` | Microsoft SQL Server (alias) |
-| `oracle://` | Oracle Database |
-| `jdbc:oracle:thin:@//` | Oracle Database (JDBC thin) |
-| `cassandra://` | Cassandra |
-| `scylladb://` | ScyllaDB |
+| `mongodb://` | MongoDB |
+| `mongodb+srv://` | MongoDB (DNS SRV, turns on **Use SRV**) |
+| `redis://` | Redis |
+| `rediss://` | Redis (turns on **TLS / SSL**) |
 
-Append `+ssh` to any scheme (except SQLite) to use an SSH tunnel:
+Any other scheme — including `mariadb://`, `sqlite://`, and any database this fork doesn't ship — is rejected with "Unsupported protocol". SQLite has no URL form; it's a file path picked from the connection form.
 
-```
-postgresql+ssh://
-mysql+ssh://
-mariadb+ssh://
-```
+There is no `+ssh` scheme and no query-parameter parsing (`sslmode`, `table`, `schema`, `authSource`, etc. are not read). The parser only fills host, port, username, password, and database.
 
-## Standard Format
+## Format
 
 ```
-scheme://[username[:password]@]host[:port][/database][?param=value&...]
+scheme://[username[:password]@]host[:port][/database]
 ```
 
 **Examples:**
@@ -47,154 +36,37 @@ scheme://[username[:password]@]host[:port][/database][?param=value&...]
 ```
 postgresql://alice:secret@db.example.com:5432/myapp
 mysql://root@localhost/shop
-mongodb://user:pass@mongo.host:27017/analytics?authSource=admin
+mongodb://user:pass@mongo.host:27017/analytics
+mongodb+srv://user:pass@cluster.mongodb.net/analytics
 redis://:password@cache.host:6379/1
-sqlite:///Users/alice/data/local.db
+rediss://:password@cache.host:6380
 ```
 
 <Tip>
-Passwords containing special characters (`@`, `#`, `%`, `:`) must be percent-encoded. For example, `p@ss#word` becomes `p%40ss%23word`.
+Username and password are percent-decoded from the URL, so a literal `@` in the password must be written as `%40`.
 </Tip>
 
-## SSH Tunnel Format
+## What Gets Filled In
 
-SSH tunnel URLs encode both SSH and database credentials in a single string:
+| Field | Source |
+|-------|--------|
+| **Type** | Mapped from the scheme (see table above) |
+| **Host** | URL hostname, `localhost` if empty |
+| **Port** | URL port, else the scheme's default (postgres 5432, mysql 3306, mssql 1433, mongodb 27017, redis 6379) |
+| **Database** | URL path, without the leading `/` |
+| **Username / Password** | From the URL's userinfo section |
+| **Use SRV** (MongoDB) | On if the scheme is `mongodb+srv://` |
+| **TLS / SSL** (Redis) | On if the scheme is `rediss://` |
 
-```
-scheme+ssh://[ssh_user@]ssh_host[:ssh_port]/[db_user[:db_pass]@]db_host[:db_port][/database][?params]
-```
+SSH tunnel fields, SSL Mode, and startup commands are never set by URL import — configure them in the form after importing.
 
-**Examples:**
+## Deep Links
 
-```
-postgresql+ssh://deploy@bastion.host:22/dbuser:dbpass@internal-pg:5432/mydb
-mysql+ssh://ec2-user@jump.host/root:secret@10.0.0.5/shop
-mariadb+ssh://admin@ssh.host/maria_user@db.internal/store?usePrivateKey=true
-```
-
-If `db_host` is omitted, it defaults to `127.0.0.1`.
-
-## Query Parameters
-
-### Connection Identity
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `name` | Override the connection name shown in the sidebar | `?name=Production+DB` |
-
-### SSL / TLS
-
-| Parameter | Values | Description |
-|-----------|--------|-------------|
-| `sslmode` | `disable`, `prefer`, `require`, `verify-ca`, `verify-full` | SSL mode (standard PostgreSQL names) |
-| `tlsmode` | `0`--`4` | SSL mode as integer: 0=disable, 1=prefer, 2=require, 3=verify-ca, 4=verify-full |
-
-**Example:**
+TablePro registers the `tablepro://` scheme (not a database scheme) for two routes:
 
 ```
-postgresql://user:pass@host/db?sslmode=require
-postgresql://user:pass@host/db?tlsmode=2
+tablepro://open/connection/{connection-id}
+tablepro://import?name=...&host=...&port=...&type=...&username=...&database=...
 ```
 
-### Navigation
-
-These parameters open a specific table, view, or schema immediately after connecting.
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `table` | Open the named table | `?table=users` |
-| `view` | Open the named view | `?view=active_orders` |
-| `schema` | Switch to this schema before opening (PostgreSQL/Redshift only) | `?schema=reporting` |
-
-**Example:**
-
-```
-postgresql://user:pass@host/mydb?schema=reporting&table=monthly_sales
-```
-
-### Filtering
-
-Apply a filter to the opened table automatically.
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `column` | Column name to filter on | `?column=status` |
-| `operation` | Filter operator (e.g. `=`, `!=`, `LIKE`) | `?operation=LIKE` |
-| `value` | Filter value | `?value=active` |
-| `condition` | Raw SQL WHERE condition (overrides column/operation/value) | `?condition=status%3D'active'+AND+role%3D'admin'` |
-
-`raw` and `query` are accepted as aliases for `condition`.
-
-**Example:**
-
-```
-postgresql://user:pass@host/mydb?table=orders&column=status&operation==&value=pending
-postgresql://user:pass@host/mydb?table=orders&condition=total%3E1000
-```
-
-### Appearance
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `statusColor` | Assign a color to the connection (hex, matched to nearest palette color) | `?statusColor=FF3B30` |
-| `env` | Assign an existing tag by name | `?env=production` |
-
-**Example:**
-
-```
-postgresql://user:pass@host/db?statusColor=FF3B30&env=production
-```
-
-### MongoDB
-
-| Parameter | Description |
-|-----------|-------------|
-| `authSource` | Authentication database (defaults to `admin`) |
-
-**Example:**
-
-```
-mongodb://user:pass@host:27017/mydb?authSource=admin
-```
-
-### Redis
-
-The path component sets the database index (0--15). The `rediss://` scheme automatically enables TLS.
-
-```
-redis://:password@host:6379/2       # database index 2
-rediss://:password@host:6380        # TLS, default index 0
-```
-
-### Cassandra / ScyllaDB
-
-The path component sets the default keyspace. Both `cassandra://` and `scylladb://` schemes use the same format.
-
-```text
-cassandra://user:pass@host:9042/my_keyspace
-scylladb://user:pass@host:9042/my_keyspace
-cassandra://host:9042                        # no auth, no default keyspace
-```
-
-### SSH Tunnel
-
-| Parameter | Description |
-|-----------|-------------|
-| `usePrivateKey` | `true` to use key-based SSH authentication instead of password |
-
-**Example:**
-
-```
-postgresql+ssh://ubuntu@bastion/dbuser@10.0.0.5/mydb?usePrivateKey=true
-```
-
-## Opening URLs from Browser or Terminal
-
-Launch and connect from browser/terminal:
-```bash
-open "postgresql://user:pass@localhost:5432/mydb"
-open "mysql://root@localhost/shop?table=products"
-open "postgresql+ssh://ubuntu@bastion/user:pass@10.0.0.5/mydb?usePrivateKey=true"
-```
-
-Uses saved connection if matched, otherwise temporary session. To save, use **Import from URL** in New Connection form.
+`open/connection/{id}` opens (and connects) a saved connection by its ID. `import` creates a new saved connection from the given fields — there's no `password` param, so the password is left blank and must be filled in manually afterward.

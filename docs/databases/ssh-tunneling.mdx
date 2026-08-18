@@ -88,9 +88,9 @@ TablePro supports two SSH authentication methods:
 
 ### Host Key Verification
 
-TablePro verifies SSH host keys to protect against man-in-the-middle attacks. On first connection to a server, you'll see the server's fingerprint and can choose to trust it. The key is then stored locally.
+TablePro uses trust-on-first-use (TOFU) host-key verification. On first connection to a server, the fingerprint is stored automatically at `%APPDATA%\TablePro\known_hosts.json` — there is no prompt to review or approve it.
 
-If a previously trusted server's host key changes, TablePro shows a warning. This could mean the server was reinstalled, or it could indicate a security issue. You can choose to accept the new key or abort the connection.
+If a previously trusted server's host key changes, the connection is rejected outright (logged as an error). This could mean the server was reinstalled, or it could indicate a security issue. There is no accept/abort dialog — remove the stale entry from `known_hosts.json` to trust the new key.
 
 ### Using SSH Config
 
@@ -292,15 +292,11 @@ If the SSH tunnel connects but the database connection fails:
 
 ### Tunnel Drops Periodically
 
-TablePro uses keep-alive settings to maintain tunnels:
-
-- `ServerAliveInterval=60`: send keep-alive every 60 seconds
-- `ServerAliveCountMax=3`: disconnect after 3 missed responses
-
-If tunnels still drop:
+TablePro does not send its own keep-alive packets on the tunnel. If it drops:
 1. Check network stability
 2. Verify server's `ClientAliveInterval` setting
 3. Check for idle timeout settings on firewalls
+4. Reconnect manually — see [Reconnecting](/databases/overview#reconnecting)
 
 ## Security Best Practices
 

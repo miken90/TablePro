@@ -23,7 +23,7 @@ TablePro connects to 6 database engines. Create connections, organize them with 
     File-based databases, no server required
   </Card>
   <Card title="MongoDB" icon="leaf">
-    MongoDB with MQL query support. Default port: 27017
+    MongoDB with a JSON find() query. Default port: 27017
   </Card>
   <Card title="Redis" icon="database">
     Redis key-value browsing. Default port: 6379
@@ -75,10 +75,9 @@ Connection URLs with special characters in the password (like `@`, `#`, or `%`) 
 | **Color** | Color-code your connection for quick identification |
 | **Tag** | Organize connections with a custom tag |
 | **Group** | Assign connection to a group (folder) for organization |
-| **Read-Only** | Toggle to prevent all write operations on this connection |
 
 <Tip>
-Use colors to distinguish environments: red for production, green for development. Enable **Read-Only** mode for production databases to prevent accidental writes.
+Use colors to distinguish environments: red for production, green for development.
 </Tip>
 
 #### Connection Section
@@ -177,7 +176,7 @@ SET search_path TO myschema, public;
 SET statement_timeout = '30s';
 ```
 
-Startup commands execute in order, top to bottom. If a command fails, the connection still proceeds, but the failed command is skipped.
+Sent to the driver as a single statement batch on connect. If it fails, a warning is logged and the connection still proceeds — nothing retries or rolls back.
 
 <Note>
 Startup commands run on every connection, including reconnects. They are database-specific: use MySQL syntax for MySQL connections, PostgreSQL syntax for PostgreSQL, and so on.

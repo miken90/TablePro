@@ -1,6 +1,6 @@
 ---
 title: MongoDB
-description: Connect to MongoDB with MQL shell queries, collection browsing, and BSON type display
+description: Connect to MongoDB with a JSON find command, collection browsing, and BSON type display
 ---
 
 # MongoDB Connections
@@ -23,22 +23,22 @@ TablePro connects to MongoDB via a compiled-in Rust driver (`mongodb`). Collecti
 | Field | Default | Notes |
 |-------|---------|-------|
 | **Host** | `localhost` | |
-| **Port** | `27017` | |
-| **Database** | - | Database name to connect to |
+| **Port** | `27017` | Disabled when **Use SRV** is on (resolved via DNS) |
+| **Database** | - | Also used as the auth database — there is no separate auth-database field |
 | **Username** | - | Leave empty for local dev without auth |
 | **Password** | - | |
-| **Auth Database** | `admin` | Database to authenticate against |
+| **Use SRV** | off | Connect with `mongodb+srv://` instead of `mongodb://` |
 
 ## Example Configurations
 
 **Local**: host `localhost:27017`, no auth, database `myapp`
-**Docker**: host `localhost:27017` (or mapped port), password from `MONGO_INITDB_ROOT_PASSWORD` env, auth DB `admin`
-**MongoDB Atlas**: Enable SSL/TLS in connection form
+**Docker**: host `localhost:27017` (or mapped port), password from `MONGO_INITDB_ROOT_PASSWORD` env
+**MongoDB Atlas**: Turn on **Use SRV**
 **Remote**: Use [SSH tunneling](/databases/ssh-tunneling) for secure access
 
 ## SSL/TLS
 
-Configure in **SSL/TLS** section. MongoDB Atlas requires SSL/TLS - use **Required** or **Verify CA**. For unencrypted alternatives, use [SSH tunneling](/databases/ssh-tunneling).
+There is no SSL Mode selector for MongoDB. TLS is negotiated via the `mongodb+srv://` scheme (**Use SRV** toggle) or by pasting a connection string with TLS params into **Import from URL**. For unencrypted alternatives, use [SSH tunneling](/databases/ssh-tunneling).
 
 ## Features
 
@@ -47,46 +47,28 @@ Configure in **SSL/TLS** section. MongoDB Atlas requires SSL/TLS - use **Require
 **Document Viewing**: Top-level fields as columns, nested objects as formatted JSON, arrays as JSON arrays, ObjectIds as strings, BSON types formatted appropriately. Schema inferred by sampling.
 
 <Note>
-MongoDB does not support DDL (Create Table / structure editing) — collections are managed via MQL queries.
+MongoDB does not support DDL (Create Table / structure editing) or inline grid editing — the driver is read-only find().
 </Note>
 
-**MongoDB Shell Queries** (MQL syntax):
+**Query command** (JSON, not MQL shell syntax): the query box sends a JSON object with `collection`, optional `filter`, optional `sort`, and optional `limit` (default 1000). It runs a single `find()` — no aggregation pipeline, no `countDocuments`/`distinct`, and no write operations (`insertOne`, `updateOne`, `deleteOne`, etc. are not implemented).
 
-```javascript
-// Find documents with filtering
-db.users.find({ age: { $gte: 18 }, active: true })
-
-// Find with projection and sorting
-db.orders.find(
-  { status: "completed" },
-  { customerId: 1, total: 1, date: 1 }
-).sort({ date: -1 }).limit(20)
-
-// Aggregation pipeline
-db.sales.aggregate([
-  { $match: { date: { $gte: ISODate("2025-01-01") } } },
-  { $group: { _id: "$product", totalSales: { $sum: "$amount" } } },
-  { $sort: { totalSales: -1 } },
-  { $limit: 10 }
-])
-
-// Count documents
-db.users.countDocuments({ role: "admin" })
-
-// Distinct values
-db.products.distinct("category")
+```json
+{
+  "collection": "users",
+  "filter": { "age": { "$gte": 18 }, "active": true },
+  "sort": { "date": -1 },
+  "limit": 20
+}
 ```
-
-**CRUD**: Insert with `insertOne()`/`insertMany()`, update with `updateOne()`/`updateMany()`, delete with `deleteOne()`/`deleteMany()`.
 
 ## Troubleshooting
 
 **Connection refused**: Check the MongoDB service is running, verify host/port in `mongod.conf`, check `bindIp` setting.
 
-**Auth failed**: Verify username/password/auth database. Check user roles with `db.getUsers();` Create user with `db.createUser({user:"appuser", pwd:"password", roles:[{role:"readWrite", db:"myapp"}]})`
+**Auth failed**: Verify username/password and that the **Database** field matches an account with access there (it doubles as the auth database). Check user roles with `db.getUsers();` Create user with `db.createUser({user:"appuser", pwd:"password", roles:[{role:"readWrite", db:"myapp"}]})`
 
 **Timeout**: Verify host/port, check network and firewall, whitelist IP in MongoDB Atlas.
 
-**Limitations**: Transactions need replica set/sharded cluster, schema inferred by sampling, capped collections restricted, GridFS not browsable, change streams unsupported.
+**Limitations**: Read-only (`find()` only — no writes, no aggregation pipeline), schema inferred by sampling, GridFS not browsable, change streams unsupported.
 
-**Performance**: Use filters, `limit()`, pagination, indexes. Analyze with `explain("executionStats")`.
+**Performance**: Use `filter`, `limit`, and indexes in the query command.

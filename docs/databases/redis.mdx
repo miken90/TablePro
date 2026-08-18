@@ -28,7 +28,7 @@ TablePro supports Redis 6.0 and later. Keys are grouped by colon-separated names
 | **Database** | `0` | 0-15 |
 
 <Tip>
-Paste a `redis://:password@host:6379/0` or `rediss://` (TLS) URL into **Import from URL** on the connection form. See [Connection URL Reference](/databases/connection-urls#redis).
+Paste a `redis://:password@host:6379/0` or `rediss://` (TLS) URL into **Import from URL** on the connection form. See [Connection URL Reference](/databases/connection-urls).
 </Tip>
 
 ## Example Configurations
@@ -40,7 +40,7 @@ Paste a `redis://:password@host:6379/0` or `rediss://` (TLS) URL into **Import f
 
 ## SSL/TLS
 
-Configure in **SSL/TLS** section. Managed services require SSL/TLS. Use `rediss://` URL scheme for TLS connections. For alternatives, use [SSH tunneling](/databases/ssh-tunneling).
+Toggle **TLS / SSL** on the connection form (optional CA certificate path). Pasting a `rediss://` URL into **Import from URL** turns the toggle on automatically. For alternatives, use [SSH tunneling](/databases/ssh-tunneling).
 
 ## Features
 
@@ -88,7 +88,7 @@ INFO
 DBSIZE
 ```
 
-**Supported Commands**: String (GET, SET, INCR, DECR), Hash (HGET, HSET, HGETALL), List (LPUSH, RPUSH, LRANGE), Set (SADD, SMEMBERS), Sorted Set (ZADD, ZRANGE), Key (DEL, EXPIRE, SCAN), Server (PING, INFO). All commands sent to server.
+**Supported Commands**: fixed whitelist, unsupported commands return an error — not a full passthrough. Key (GET, SET, DEL, EXISTS, TYPE, TTL, PTTL, EXPIRE, PERSIST, RENAME, KEYS, SCAN, SELECT), Hash (HGET, HSET, HGETALL, HDEL), List (LPUSH, RPUSH, LRANGE, LLEN), Set (SADD, SREM, SMEMBERS, SCARD), Sorted Set (ZADD, ZREM, ZRANGE, ZCARD), Stream (XRANGE, XLEN), Server (PING, INFO, DBSIZE, CONFIG, FLUSHDB). No INCR/DECR.
 
 ## Troubleshooting
 
@@ -98,6 +98,6 @@ DBSIZE
 
 **Timeout**: Verify host/port, check network and firewall, whitelist IP for cloud-hosted Redis.
 
-**Limitations**: Cluster mode unsupported, Pub/Sub and Streams limited in grid (work in CLI), large keys paginated.
+**Limitations**: Cluster mode unsupported, Pub/Sub unsupported (no SUBSCRIBE/PUBLISH), Streams read-only (XRANGE/XLEN, no XADD), large keys paginated.
 
 **Performance**: Use namespace browsing for filtering, use `SCAN` instead of `KEYS` in CLI, check memory with `INFO memory`.

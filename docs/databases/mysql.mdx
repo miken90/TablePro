@@ -82,7 +82,7 @@ SELECT * FROM category_tree;
 
 ### SSL/TLS
 
-Configure in **SSL/TLS** section. Cloud providers (AWS RDS, Google Cloud SQL, Azure) typically require SSL. Use **Verify CA** with the provider's certificate. Optionally provide client cert/key for mutual TLS. For unencrypted alternatives, use [SSH tunneling](/databases/ssh-tunneling).
+Set **SSL Mode** on the connection form (`disable`, `prefer`, `require`, `verify-ca`, `verify-full`). Cloud providers (AWS RDS, Google Cloud SQL, Azure) typically require SSL. There is no client cert/key field — mutual TLS is not supported. For unencrypted alternatives, use [SSH tunneling](/databases/ssh-tunneling).
 
 ## Performance Tips
 
