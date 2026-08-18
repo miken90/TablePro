@@ -60,14 +60,35 @@ impl MysqlDriver {
             .pass(Some(self.config.password.clone()))
             .db_name(Some(self.config.database.clone()));
 
-        match self.config.ssl_mode.as_str() {
-            "require" | "verify-ca" | "verify-full" => {
-                builder = builder.ssl_opts(SslOpts::default());
-            }
-            _ => {}
+        if let Some(ssl) = Self::ssl_opts_for(&self.config.ssl_mode) {
+            builder = builder.ssl_opts(ssl);
         }
 
         builder
+    }
+
+    /// Map an `ssl_mode` to `mysql_async` TLS options, following MySQL's own
+    /// definitions of the modes:
+    ///
+    /// - `require` — encrypt the connection, do not validate the server
+    ///   certificate. Self-hosted servers normally present a private or
+    ///   auto-generated certificate; `mysql_async` validates against the
+    ///   compiled-in Mozilla root bundle only, so validating here would make
+    ///   the mode unusable rather than safer.
+    /// - `verify-ca` — validate the certificate chain, ignore the hostname.
+    /// - `verify-full` — validate chain and hostname.
+    /// - anything else — no TLS.
+    fn ssl_opts_for(ssl_mode: &str) -> Option<SslOpts> {
+        match ssl_mode {
+            "require" => Some(
+                SslOpts::default()
+                    .with_danger_accept_invalid_certs(true)
+                    .with_danger_skip_domain_validation(true),
+            ),
+            "verify-ca" => Some(SslOpts::default().with_danger_skip_domain_validation(true)),
+            "verify-full" => Some(SslOpts::default()),
+            _ => None,
+        }
     }
 }
 
@@ -87,6 +108,9 @@ macro_rules! with_conn {
 #[async_trait]
 impl DatabaseDriver for MysqlDriver {
     async fn connect(&self) -> Result<(), DriverError> {
+        // mysql_async speaks TLS through rustls; without an installed crypto
+        // provider the handshake panics instead of returning an error.
+        driver_common::ensure_crypto_provider();
         let opts = self.build_opts();
         let conn = Conn::new(opts)
             .await
@@ -168,5 +192,38 @@ impl DatabaseDriver for MysqlDriver {
 
     fn database_type_id(&self) -> &str {
         "mysql"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ssl_mode_disable_uses_no_tls() {
+        assert!(MysqlDriver::ssl_opts_for("disable").is_none());
+        assert!(MysqlDriver::ssl_opts_for("prefer").is_none());
+        assert!(MysqlDriver::ssl_opts_for("").is_none());
+    }
+
+    #[test]
+    fn ssl_mode_require_encrypts_without_validating() {
+        let opts = MysqlDriver::ssl_opts_for("require").expect("require must use TLS");
+        assert!(opts.accept_invalid_certs());
+        assert!(opts.skip_domain_validation());
+    }
+
+    #[test]
+    fn ssl_mode_verify_ca_validates_the_chain_but_not_the_hostname() {
+        let opts = MysqlDriver::ssl_opts_for("verify-ca").expect("verify-ca must use TLS");
+        assert!(!opts.accept_invalid_certs());
+        assert!(opts.skip_domain_validation());
+    }
+
+    #[test]
+    fn ssl_mode_verify_full_validates_everything() {
+        let opts = MysqlDriver::ssl_opts_for("verify-full").expect("verify-full must use TLS");
+        assert!(!opts.accept_invalid_certs());
+        assert!(!opts.skip_domain_validation());
     }
 }
