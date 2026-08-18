@@ -12,6 +12,10 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- Encrypted MySQL, Redis and MongoDB connections no longer crash the app. rustls refuses to pick a cryptography backend when several are compiled in, and this build has two, so the first TLS handshake panicked ("Could not automatically determine the process-level CryptoProvider"); release builds abort on panic. The drivers now install one explicitly before connecting.
+- MySQL `ssl_mode` now means what MySQL says it means. Every encrypted mode validated the certificate against a fixed root bundle that ignores the OS certificate store, so a self-hosted server with its own certificate — including the one MySQL 8 generates on first start — could not connect at all. `require` now encrypts without validating, `verify-ca` validates the chain, `verify-full` validates chain and hostname.
+- The AI chat pane no longer renders forms, buttons or inputs from model output, and drops inline `style`. Sanitization allowed them by default, which let assistant markdown draw a working sign-in form or position content over the app's own UI.
+
 - Export no longer holds an unbounded result in memory. Up to the **Store max rows** performance setting the result is read in one execution; beyond it the export pages the query, which requires a top-level `ORDER BY` and is refused with an actionable message when the query has none.
 - Backspace, Delete and `Ctrl+V` typed into the filter box, the WHERE input, the quick search or the SQL editor no longer stage row deletes or get swallowed. With rows selected in table mode the grid's global key handler ignored where the key was typed.
 - The command palette's **Refresh Schema** and **Format SQL** entries now do something. Both dispatched a window event that no listener anywhere handled. The same dead event meant the object tree kept showing the pre-import schema after a SQL import completed.
