@@ -67,6 +67,29 @@ async fn default_ssl_mode_completes_a_tls_handshake() {
     );
 }
 
+/// tiberius defaults to `EncryptionLevel::Required` and the driver never
+/// lowers it, so even `ssl_mode = "disable"` opens an encrypted session. The
+/// connection dialog says so; this keeps the claim honest.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires a live SQL Server"]
+async fn ssl_mode_disable_still_encrypts() {
+    let driver = MssqlDriver::new(tokio::runtime::Handle::current(), config("disable"));
+    driver.connect().await.expect("connect failed");
+
+    let result = driver
+        .execute("SELECT encrypt_option FROM sys.dm_exec_connections WHERE session_id = @@SPID")
+        .await
+        .expect("dm_exec_connections query failed");
+    let encrypt = result
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.clone())
+        .unwrap_or_default();
+    println!("ssl_mode=disable -> encrypt_option={encrypt}");
+    assert_eq!(encrypt.to_uppercase(), "TRUE");
+}
+
 /// `verify-full` is the only mode that does not call `trust_cert()`, so a
 /// self-signed server certificate must be rejected. If this ever passes,
 /// certificate verification was disabled.
