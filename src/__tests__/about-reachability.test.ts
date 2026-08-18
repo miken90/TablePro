@@ -2,27 +2,17 @@
  * The About box has an entry point.
  *
  * It shipped as a complete component that nothing rendered and no command
- * opened. These tests cover the whole chain: the shortcut dispatches the
- * command, the command opens the store flag, and the overlay region renders
- * the dialog off that same flag.
+ * opened. These tests cover the wiring: the shortcut dispatches the command,
+ * the command opens the store flag, and the overlay region renders the dialog
+ * off that same flag. What the dialog itself renders is covered by
+ * `about-dialog-render.test.ts`, which needs a DOM.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { COMMAND_DEFINITIONS } from '../hooks/useCommandRegistry';
 import { createShortcutHandler } from '../hooks/useMainLayoutShortcuts';
 import { useCommandStore } from '../hooks/useCommandRegistry';
 import { useLayoutStore } from '../stores/layoutStore';
-import { AboutDialog } from '../components/shared/about-dialog';
-import pkg from '../../package.json';
-
-// `__APP_VERSION__` is injected by Vite's `define` at build time; the test
-// runner does not apply it, so stand in the same value the build would.
-declare global {
-  var __APP_VERSION__: string;
-}
-globalThis.__APP_VERSION__ = pkg.version;
 
 const OVERLAY_SOURCE = import.meta.glob('../components/layout/OverlayRegion.tsx', {
   query: '?raw',
@@ -68,33 +58,6 @@ describe('app.about command', () => {
     expect(useLayoutStore.getState().aboutOpen).toBe(true);
 
     useCommandStore.getState().unregisterCommand('app.about');
-  });
-});
-
-describe('AboutDialog rendering', () => {
-  it('renders the build version, not a hardcoded one', () => {
-    const html = renderToStaticMarkup(
-      createElement(AboutDialog, { open: true, onClose: () => {} }),
-    );
-    expect(html).toContain('TablePro');
-    expect(html).toContain(__APP_VERSION__);
-    expect(html).not.toContain('0.1.0');
-  });
-
-  it('renders nothing while closed', () => {
-    const html = renderToStaticMarkup(
-      createElement(AboutDialog, { open: false, onClose: () => {} }),
-    );
-    expect(html).toBe('');
-  });
-
-  it('links nowhere — the dialog makes no external claims', () => {
-    const html = renderToStaticMarkup(
-      createElement(AboutDialog, { open: true, onClose: () => {} }),
-    );
-    expect(html).not.toContain('<a ');
-    // The only http in the markup is the SVG namespace on the close icon.
-    expect(html).not.toMatch(/href=["']https?:/);
   });
 });
 
