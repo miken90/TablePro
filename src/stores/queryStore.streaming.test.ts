@@ -175,6 +175,35 @@ describe("queryStore.execute (streaming)", () => {
     expect(useQueryStore.getState().error).toBeNull();
   });
 
+  it("waits for the terminal chunk when it lands after the command resolves", async () => {
+    // Reproduces the real IPC ordering for a rows chunk above Tauri's
+    // direct-eval size limit: `meta` arrives on the fast path, the command
+    // resolves, and only then does the channel release `rows` and the `done`
+    // it was holding behind them. Finalizing on the resolved command
+    // published `0 rows` for a query that returned 2.
+    __setInvokeImpl(async (cmd: string, args?: unknown) => {
+      if (cmd !== "execute_query_streaming") return null;
+      const channel = (args as { channel: Channel<QueryChunk> }).channel;
+      const gen = (args as { generation: number }).generation;
+      channel.onmessage?.(metaChunk(gen));
+      setTimeout(() => {
+        channel.onmessage?.(rowsChunk(gen));
+        channel.onmessage?.(doneChunk(gen, 7));
+      }, 5);
+      return null;
+    });
+
+    await useQueryStore.getState().execute("session-1", "SELECT * FROM t");
+
+    const result = useQueryStore.getState().result;
+    expect(result?.rows).toHaveLength(2);
+    expect(result?.columns).toEqual(COLS);
+    // The backend-reported duration, not a wall-clock guess made while the
+    // `done` chunk was still in flight.
+    expect(result?.executionTimeMs).toBe(7);
+    expect(useQueryStore.getState().isExecuting).toBe(false);
+  });
+
   it("surfaces err chunk into legacy error field", async () => {
     __setInvokeImpl(async (cmd: string, args?: unknown) => {
       if (cmd === "execute_query_streaming") {
@@ -221,8 +250,10 @@ describe("queryStore.execute (streaming)", () => {
         staleChannel = channel;
         // Emit a meta chunk so the store has columns.
         channel.onmessage?.(metaChunk(gen));
-        // Resolve the invoke so the runner moves on without a `done`.
-        return null;
+        // A run that never delivers a terminal chunk ends with a rejected
+        // command: `execute_query_streaming` only answers `Ok` once it has
+        // handed `Done` or `Err` to the channel.
+        throw new Error("channel closed at chunk 0");
       }
       // Second invocation: full happy path.
       channel.onmessage?.(metaChunk(gen));

@@ -243,9 +243,25 @@ async function runQuery(
   let doneMs = 0;
   let streamErr: string | null = null;
 
+  // The command's reply and the channel's chunks travel on two different IPC
+  // paths. A chunk larger than Tauri's direct-eval limit is handed over by a
+  // second round-trip, so `invoke` can resolve while the rows are still in
+  // flight — and the channel releases messages in index order, so `done` is
+  // held back with them. Finalizing on the resolved invoke therefore read a
+  // store holding nothing but the column metadata and published a zero-row
+  // result for a query that returned rows. The terminal chunk is the only
+  // point at which every row this run will deliver is in the store.
+  let markStreamTerminated: () => void = () => {};
+  const streamTerminated = new Promise<void>((resolve) => {
+    markStreamTerminated = resolve;
+  });
+
   const cancelHandle = () => {
     if (cancelled) return;
     cancelled = true;
+    // Nothing more will be consumed from this run, so stop waiting for its
+    // terminal chunk.
+    markStreamTerminated();
     // Always cancels the session this run started on, never the session of
     // whatever tab happens to be active when the user presses Stop.
     void invoke("cancel_query", { sessionId }).catch((err) => {
@@ -265,6 +281,7 @@ async function runQuery(
     if (chunk.kind === "done") doneMs = chunk.ms;
     if (chunk.kind === "err") streamErr = chunk.message;
     useQueryResultStore.getState().appendChunk(chunk);
+    if (chunk.kind === "done" || chunk.kind === "err") markStreamTerminated();
   };
 
   const threshold = useSettingsStore.getState().settings.streamingThreshold;
@@ -286,7 +303,12 @@ async function runQuery(
         generation: gen,
       });
     }
+    markStreamTerminated();
   }
+
+  // A resolved command means the backend sent a terminal chunk; it may not
+  // have reached the channel yet.
+  await streamTerminated;
 
   // Clear this tab's slot only if it's still ours (a newer run in the same
   // tab may have replaced it).

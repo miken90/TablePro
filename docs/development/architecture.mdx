@@ -123,6 +123,8 @@ flowchart TB
 
 Each run mints a monotonic generation; stale streamed chunks from a superseded run are dropped by generation check.
 
+A run is finished by its stream, not by the command's reply. `execute_query_streaming` answers `Ok` only after it has handed a terminal `Done` or `Err` chunk to the channel, and the caller waits for that chunk before publishing the result: chunks above Tauri's direct-eval size limit are delivered by a second IPC round-trip that can land after the reply, and the channel releases messages in index order, so the completion marker arrives with them.
+
 In-flight cancel handles are keyed per tab, so starting a query in one editor tab does not cancel an in-flight query in another tab.
 
 ## Testing

@@ -63,7 +63,14 @@ function installHangingInvoke() {
     if (cmd !== "execute_query_streaming") return null;
     const { channel, generation } = args as StreamArgs;
     channel.onmessage?.({ kind: "meta", columns: COLS, totalEstimate: 1, generation });
-    await new Promise<void>((resolve) => releases.push(resolve));
+    // `execute_query_streaming` only answers `Ok` once it has handed a
+    // terminal chunk to the channel, so a released stream ends with `done`.
+    await new Promise<void>((resolve) =>
+      releases.push(() => {
+        channel.onmessage?.({ kind: "done", rowsTotal: 0, ms: 1, generation });
+        resolve();
+      }),
+    );
     return null;
   });
 

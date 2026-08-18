@@ -17,8 +17,9 @@
 //! Cancellation: there is no `Drop` hook on the TS-side `Channel`. The
 //! frontend signals cancellation via the existing `cancel_query` command,
 //! which propagates to the driver. Once the driver result is materialised,
-//! losing the receiver simply causes `channel.send()` to error and we abort
-//! quietly.
+//! losing the receiver causes `channel.send()` to error; the command then
+//! fails rather than returning `Ok`, because the caller waits for a terminal
+//! `Done`/`Err` chunk and a broken channel can no longer deliver one.
 
 use std::time::Instant;
 
@@ -94,10 +95,12 @@ pub async fn execute_query_streaming(
     let result = match run_query(&manager, &session_id, &sql).await {
         Ok(r) => r,
         Err(e) => {
-            let _ = channel.send(QueryChunk::Err {
-                message: e.inner_message(),
-                generation,
-            });
+            channel
+                .send(QueryChunk::Err {
+                    message: e.inner_message(),
+                    generation,
+                })
+                .map_err(|send_err| format!("channel closed during Err: {send_err}"))?;
             return Ok(());
         }
     };
@@ -131,9 +134,12 @@ pub async fn execute_query_streaming(
             chunk,
             generation,
         }) {
-            // Channel closed (TS dropped) — abort silently.
+            // Channel closed (TS dropped). Report it: the caller waits for a
+            // terminal chunk that can no longer be delivered on this channel,
+            // and a rejected command is the only remaining way to tell it the
+            // stream is over.
             tracing::debug!("streaming channel closed at chunk {idx}: {e}");
-            return Ok(());
+            return Err(format!("channel closed at chunk {idx}: {e}"));
         }
         tracing::debug!(idx, rows = chunk_rows, "query.streaming.chunk");
         // Self-throttle: yield every 4 chunks (spike §1: sync send + no backpressure).
@@ -150,11 +156,13 @@ pub async fn execute_query_streaming(
         ms = elapsed_ms,
         "query.streaming.done"
     );
-    let _ = channel.send(QueryChunk::Done {
-        rows_total: total,
-        ms: elapsed_ms,
-        generation,
-    });
+    channel
+        .send(QueryChunk::Done {
+            rows_total: total,
+            ms: elapsed_ms,
+            generation,
+        })
+        .map_err(|e| format!("channel closed during Done: {e}"))?;
     Ok(())
 }
 
