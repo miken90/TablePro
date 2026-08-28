@@ -179,7 +179,10 @@ TablePro automatically uses the correct syntax for your database:
 | PostgreSQL | `EXPLAIN <query>` |
 | SQLite | `EXPLAIN QUERY PLAN <query>` |
 
-The execution plan shows index usage, join strategies, and estimated row counts in the data grid.
+The plan opens as an **Explain** tab in the results strip, beside Results and
+Messages, and is selected automatically when it arrives. It shows index usage,
+join strategies and estimated row counts. Switching to another tab dismisses
+the plan.
 
 <Tip>
 Run Explain before executing expensive queries to verify they use the expected indexes and join strategies.

@@ -76,18 +76,16 @@ Click **Discard** to revert all pending changes. Modified cells return to their 
 
 ### Previewing Data SQL
 
-Click the **Preview SQL** button (eye icon) to see the exact SQL before committing. Use **Copy All** to copy to clipboard.
+Click **Preview SQL** in the pending-changes strip to see the statements before committing, and **Copy** to put them on the clipboard.
 
-<Tip>
-The preview inlines parameter values so you can verify exactly what will run. Destructive operations are highlighted with a warning banner.
-</Tip>
+The statements come from the backend's `preview_statements` command, which shares its generation path with the save itself — the preview shows the identifiers quoted for your engine, the values quoted by their declared column type, and the transaction wrapper only when the save will actually open one. The execute confirmation shows the same plan, and its Execute button stays disabled until the plan has loaded.
 
 ## Undo & Redo
 
 | Action | Shortcut |
 |--------|----------|
 | Undo | `Ctrl+Z` |
-| Redo | `Ctrl+Shift+Z` |
+| Redo | `Ctrl+Y` or `Ctrl+Shift+Z` |
 
 <Tip>
 Context-aware: `Ctrl+Z` undoes text edits when the SQL editor is focused, data changes when the grid is focused.
