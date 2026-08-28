@@ -1,28 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle, Loader2, Upload } from 'lucide-react';
-import { onImportProgress, type ImportProgress } from '../../ipc/events';
 
 interface ImportProgressProps {
   isImporting: boolean;
+  current: number;
+  total: number;
   onComplete?: () => void;
 }
 
-export function ImportProgress({ isImporting, onComplete }: ImportProgressProps) {
-  const [current, setCurrent] = useState(0);
-  const [total, setTotal] = useState(0);
+/**
+ * Presentational — the Tauri `import_progress` listener lives in
+ * import-dialog.tsx's `handleImport`, attached before the invoke so a
+ * fast backend error can never race a listener this component would
+ * otherwise attach after mount [RT-13].
+ */
+export function ImportProgress({ isImporting, current, total, onComplete }: ImportProgressProps) {
   const [elapsed, setElapsed] = useState(0);
   const [done, setDone] = useState(false);
   const startRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const unlistenRef = useRef<(() => void) | null>(null);
+  const completeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect -- reset state on import start */
   useEffect(() => {
     if (!isImporting) return;
 
     setDone(false);
-    setCurrent(0);
-    setTotal(0);
     setElapsed(0);
     startRef.current = Date.now();
 
@@ -32,30 +35,22 @@ export function ImportProgress({ isImporting, onComplete }: ImportProgressProps)
       }
     }, 1000);
 
-    let cancelled = false;
-
-    onImportProgress((progress: ImportProgress) => {
-      if (cancelled) return;
-      const { current: c, total: t } = progress;
-      setCurrent(c);
-      setTotal(t);
-      if (t > 0 && c >= t) {
-        setDone(true);
-        if (timerRef.current) clearInterval(timerRef.current);
-        setTimeout(() => {
-          if (!cancelled) onComplete?.();
-        }, 1800);
-      }
-    }).then((fn) => {
-      unlistenRef.current = fn;
-    });
-
     return () => {
-      cancelled = true;
       if (timerRef.current) clearInterval(timerRef.current);
-      unlistenRef.current?.();
+      if (completeTimeoutRef.current) clearTimeout(completeTimeoutRef.current);
     };
-  }, [isImporting, onComplete]);
+  }, [isImporting]);
+
+  useEffect(() => {
+    if (!isImporting || done) return;
+    if (total > 0 && current >= total) {
+      setDone(true);
+      if (timerRef.current) clearInterval(timerRef.current);
+      completeTimeoutRef.current = setTimeout(() => {
+        onComplete?.();
+      }, 1800);
+    }
+  }, [current, total, isImporting, done, onComplete]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
