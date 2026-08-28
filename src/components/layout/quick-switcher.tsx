@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Search, X, Database, Table2, Layers, Clock, Terminal } from "lucide-react";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useHistoryStore, type HistoryEntry } from "../../stores/history";
+import { Field } from "../ui";
 
 interface QuickSwitcherProps {
   open: boolean;
@@ -325,8 +326,8 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search input */}
-        <div className="flex items-center gap-2 border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-700">
-          <Search size={14} className="shrink-0 text-zinc-400" />
+        <Field className="m-2">
+          <Search size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
@@ -334,17 +335,18 @@ export function QuickSwitcher({ open, onClose, onSelectTable }: QuickSwitcherPro
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            className="flex-1 bg-transparent text-sm text-zinc-800 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+            className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-secondary"
           />
           {query && (
             <button
               onClick={() => setQuery("")}
-              className="rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              className="rounded p-0.5 text-text-muted hover:text-text-primary"
+              aria-label="Clear search"
             >
               <X size={12} />
             </button>
           )}
-        </div>
+        </Field>
 
         {/* Results list */}
         <div ref={listRef} className="max-h-[360px] overflow-y-auto py-1">

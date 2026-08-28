@@ -194,7 +194,7 @@ function DropdownItem({
       <span className="flex-shrink-0 text-text-muted">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
       {shortcut && (
-        <span className="text-[10px] text-text-muted">{shortcut}</span>
+        <span className="text-[10px] text-text-secondary">{shortcut}</span>
       )}
     </button>
   );

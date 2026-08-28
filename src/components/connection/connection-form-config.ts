@@ -58,7 +58,7 @@ export const DEFAULT_CONNECTION_CONFIG: ConnectionConfig = {
 };
 
 export const inputCls =
-  "rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 outline-none focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200";
+  "rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200";
 export const primaryBtn =
   "rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-40";
 export const secondaryBtn =

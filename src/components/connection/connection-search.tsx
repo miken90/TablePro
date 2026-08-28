@@ -3,6 +3,7 @@ import { Search, X } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { ConnectionTagFilter } from "./connection-tag-filter";
 import type { SavedConnection } from "../../types/connection";
+import { Field } from "../ui";
 
 interface ConnectionSearchProps {
   value: string;
@@ -27,26 +28,26 @@ export function ConnectionSearch({ value, onChange, connections }: ConnectionSea
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative">
-        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+      <Field>
+        <Search size={14} className="text-text-muted" aria-hidden="true" />
         <input
           ref={inputRef}
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Search connections…"
-          className="w-full rounded-md border border-zinc-200 bg-white py-1.5 pl-8 pr-8 text-xs text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-blue-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder:text-zinc-500"
+          className="min-w-0 flex-1 bg-transparent text-ui-sm text-text-primary placeholder:text-text-secondary"
         />
         {value && (
           <button
             onClick={() => onChange("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            className="rounded p-0.5 text-text-secondary hover:text-text-primary"
             aria-label="Clear search"
           >
             <X size={12} />
           </button>
         )}
-      </div>
+      </Field>
       {connections && (
         <ConnectionTagFilter
           connections={connections}

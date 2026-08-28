@@ -136,7 +136,7 @@ export function WelcomeView() {
           <img src={logoIcon} alt="TablePro" className="h-12 w-12" />
           <h1 className="text-lg font-semibold text-text-primary">TablePro</h1>
           <p className="text-sm text-text-secondary">Connect to a database to get started</p>
-          <p className="text-xs text-text-muted">v{__APP_VERSION__}</p>
+          <p className="text-xs text-text-secondary">v{__APP_VERSION__}</p>
         </div>
 
         {hasConnections && (

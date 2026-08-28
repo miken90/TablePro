@@ -98,7 +98,7 @@ export function TableOperationDialog({
         </div>
 
         <div className="mb-4">
-          <label className="mb-1 block text-xs text-text-muted">
+          <label className="mb-1 block text-xs text-text-secondary">
             Type <strong>{tableName}</strong> to confirm:
           </label>
           <input
@@ -107,7 +107,7 @@ export function TableOperationDialog({
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             placeholder={tableName}
-            className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent-blue"
+            className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary focus:border-accent-blue"
           />
         </div>
 

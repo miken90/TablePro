@@ -61,7 +61,7 @@ export function StatusBar() {
           : "bg-text-muted";
 
   return (
-    <div className="flex h-6 items-center border-t border-border-subtle bg-surface px-3 text-[10px] text-text-muted">
+    <div className="flex h-6 items-center border-t border-border-subtle bg-surface px-3 text-[10px] text-text-secondary">
       {/* Left: connection + driver + db info */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5">

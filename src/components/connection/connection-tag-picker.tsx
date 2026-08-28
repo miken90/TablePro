@@ -152,7 +152,7 @@ export function ConnectionTagPicker({ value, onChange, onTagDeleted }: Connectio
           setCustomMode(false);
           onChange(next);
         }}
-        className="rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 outline-none focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+        className="rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
       >
         <option value="">None</option>
         {PRESET_TAGS.map((tag) => (
@@ -177,7 +177,7 @@ export function ConnectionTagPicker({ value, onChange, onTagDeleted }: Connectio
           value={isPreset || isCustom ? "" : normalized}
           onChange={(e) => onChange(e.target.value || undefined)}
           placeholder="Enter custom tag"
-          className="rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 outline-none focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+          className="rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
         />
       )}
 
@@ -201,7 +201,7 @@ export function ConnectionTagPicker({ value, onChange, onTagDeleted }: Connectio
               if (e.key === "Escape") { setShowCreate(false); setNewTagName(""); }
             }}
             placeholder={t("connection.tag.namePlaceholder")}
-            className="rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 outline-none focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+            className="rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
           />
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-zinc-500">{t("connection.tag.colors")}:</span>

@@ -167,13 +167,13 @@ export function SidebarTableNode({
             {table.name}
           </span>
           {table.rowCountEstimate != null && (
-            <span className="ml-auto text-[10px] text-text-muted">{table.rowCountEstimate.toLocaleString()}</span>
+            <span className="ml-auto text-[10px] text-text-secondary">{table.rowCountEstimate.toLocaleString()}</span>
           )}
         </div>
         {expanded && (
           <div className="pl-6">
             {columns.length === 0 ? (
-              <div className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-text-muted">
+              <div className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-text-secondary">
                 <span>Loading…</span>
               </div>
             ) : (
@@ -188,7 +188,7 @@ export function SidebarTableNode({
                     getColumnIcon(col.typeName)
                   )}
                   <span className="truncate text-text-primary">{col.name}</span>
-                  <span className="ml-auto shrink-0 text-[9px] text-text-muted">{col.typeName}</span>
+                  <span className="ml-auto shrink-0 text-[9px] text-text-secondary">{col.typeName}</span>
                 </div>
               ))
             )}

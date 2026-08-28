@@ -22,7 +22,7 @@ export function SidebarObjectGroup({
     <div>
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-text-secondary hover:bg-surface-muted"
+        className="group flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
         aria-expanded={expanded}
       >
         {expanded ? (
@@ -32,7 +32,7 @@ export function SidebarObjectGroup({
         )}
         <Icon size={12} className="shrink-0 text-text-muted" />
         <span className="font-medium">{label}</span>
-        <span className="text-text-muted">({count})</span>
+        <span className="text-text-secondary group-hover:text-text-primary">({count})</span>
       </button>
       {expanded && children}
     </div>

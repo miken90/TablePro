@@ -18,6 +18,7 @@ import { ProcedureExecuteDialog } from "../procedures/procedure-execute-dialog";
 import { ProcedureSourcePanel } from "../procedures/procedure-source-panel";
 import { TableOperationDialog, type TableOperationType } from "./table-operation-dialog";
 import type { RoutineInfo } from "../../types/schema";
+import { Field } from "../ui";
 import * as commands from "../../ipc/commands";
 import { extractErrorMessage } from "../../ipc/error";
 
@@ -267,7 +268,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
       {/* Recent Connections — only when no active session and multiple connections exist */}
       {!sessionId && recentConnections.length > 0 && (
         <div className="border-b border-border">
-          <p className="px-2 pt-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+          <p className="px-2 pt-2 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
             Recent
           </p>
           {recentConnections.map((conn) => (
@@ -276,7 +277,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
               onClick={() => void handleQuickConnect(conn.id)}
               disabled={connectingId === conn.id}
               aria-label={`Connect to ${conn.name}`}
-              className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left hover:bg-surface-muted disabled:opacity-60 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent-blue"
+              className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left hover:bg-surface-muted disabled:opacity-60"
             >
               <ConnectionStatusIndicator status={getStatus(conn.id)} />
               <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
@@ -306,7 +307,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                     onClick={() => void handleQuickConnect(conn.id)}
                     disabled={connectingId === conn.id}
                     aria-label={`Connect to ${conn.name}`}
-                    className="flex w-full items-center gap-1.5 py-1.5 pl-6 pr-2 text-left hover:bg-surface-muted disabled:opacity-60 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent-blue"
+                    className="flex w-full items-center gap-1.5 py-1.5 pl-6 pr-2 text-left hover:bg-surface-muted disabled:opacity-60"
                   >
                     <ConnectionStatusIndicator status={getStatus(conn.id)} />
                     <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
@@ -330,7 +331,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
                   onClick={() => void handleQuickConnect(conn.id)}
                   disabled={connectingId === conn.id}
                   aria-label={`Connect to ${conn.name}`}
-                  className="flex w-full items-center gap-1.5 py-1.5 pl-6 pr-2 text-left hover:bg-surface-muted disabled:opacity-60 focus:outline-none focus-visible:ring-1 focus-visible:ring-accent-blue"
+                  className="flex w-full items-center gap-1.5 py-1.5 pl-6 pr-2 text-left hover:bg-surface-muted disabled:opacity-60"
                 >
                   <ConnectionStatusIndicator status={getStatus(conn.id)} />
                   <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
@@ -345,7 +346,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
 
       {/* Search */}
       <div className="border-b border-border p-2">
-        <div className="flex items-center gap-1.5 rounded border border-border bg-surface-elevated px-2 py-1">
+        <Field>
           <Search size={12} className="text-text-muted" aria-hidden="true" />
           <input
             type="text"
@@ -353,9 +354,9 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
             onChange={(e) => setFilter(e.target.value)}
             placeholder={isKeyValueDb ? "Filter keys\u2026" : isDocumentDb ? "Filter collections\u2026" : "Filter tables\u2026"}
             aria-label={isKeyValueDb ? "Filter keys" : isDocumentDb ? "Filter collections" : "Filter tables"}
-            className="flex-1 bg-transparent text-xs text-text-primary outline-none placeholder:text-text-muted"
+            className="flex-1 bg-transparent text-xs text-text-primary placeholder:text-text-secondary"
           />
-        </div>
+        </Field>
         <div className="mt-2 flex gap-1.5">
           {capabilities.supportsDdl && (
             <button
@@ -433,13 +434,13 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
       {/* Tree */}
       <div className="flex-1 overflow-y-auto" role="tree" aria-label={isKeyValueDb ? "Keys" : isDocumentDb ? "Collections" : "Tables"}>
         {isLoading && (
-          <div className="p-3 text-xs text-text-muted" aria-live="polite">Loading…</div>
+          <div className="p-3 text-xs text-text-secondary" aria-live="polite">Loading…</div>
         )}
         {!isLoading && !selectedConnectionId && (
-          <div className="p-3 text-xs text-text-muted">No connection selected</div>
+          <div className="p-3 text-xs text-text-secondary">No connection selected</div>
         )}
         {!isLoading && selectedConnectionId && !selectedDatabase && databases.length === 0 && (
-          <div className="p-3 text-xs text-text-muted">Connect to load schema</div>
+          <div className="p-3 text-xs text-text-secondary">Connect to load schema</div>
         )}
         {(filteredTables.length > 0 || routineCatalog?.supported) && (
           <>
@@ -513,7 +514,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
           </>
         )}
         {!isLoading && sessionId && routineCatalog && !routineCatalog.supported && (
-          <div className="px-3 py-2 text-xs text-text-muted">
+          <div className="px-3 py-2 text-xs text-text-secondary">
             {routineCatalog.reason ?? "Functions and procedures are not supported for this database."}
           </div>
         )}

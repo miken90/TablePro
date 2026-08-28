@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import type { ColumnInfo } from '../../types/query';
+import { Field } from '../ui';
 
 interface QuickSearchBarProps {
   columns: ColumnInfo[];
@@ -78,15 +79,15 @@ export function QuickSearchBar({ columns, value, onSearch, onClear }: QuickSearc
   }, []);
 
   return (
-    <div className="ml-2 flex items-center gap-1 rounded border border-border-subtle bg-surface-elevated px-2 py-1">
-      <Search size={12} className="text-text-muted" />
+    <Field className="ml-2">
+      <Search size={12} className="text-text-muted" aria-hidden="true" />
       <input
         type="text"
         value={term}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder="Quick search"
-        className="h-5 w-56 bg-transparent text-xs outline-none text-text-primary placeholder:text-text-muted"
+        className="h-5 w-56 bg-transparent text-xs text-text-primary placeholder:text-text-secondary"
       />
       {term && (
         <button
@@ -97,6 +98,6 @@ export function QuickSearchBar({ columns, value, onSearch, onClear }: QuickSearc
           <X size={11} />
         </button>
       )}
-    </div>
+    </Field>
   );
 }

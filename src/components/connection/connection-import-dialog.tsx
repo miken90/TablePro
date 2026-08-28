@@ -181,7 +181,7 @@ export function ConnectionImportDialog({
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-text-muted hover:bg-surface-muted"
+            className="rounded p-1 text-text-muted hover:bg-surface-muted hover:text-text-primary"
           >
             <X size={14} />
           </button>
@@ -201,7 +201,7 @@ export function ConnectionImportDialog({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && passphrase) void handlePassphraseSubmit();
               }}
-              className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted"
+              className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-secondary"
               placeholder={t("connection.export.passphrase")}
             />
             {passphraseError && (
@@ -210,7 +210,7 @@ export function ConnectionImportDialog({
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={onClose}
-                className="rounded px-3 py-1.5 text-xs text-text-muted hover:bg-surface-muted"
+                className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
               >
                 {t("common.cancel")}
               </button>
@@ -228,7 +228,7 @@ export function ConnectionImportDialog({
         {/* Loading step */}
         {step === "file" && loading && (
           <div className="px-4 py-8 text-center">
-            <p className="text-xs text-text-muted">{t("common.loading")}</p>
+            <p className="text-xs text-text-secondary">{t("common.loading")}</p>
           </div>
         )}
 
@@ -236,12 +236,12 @@ export function ConnectionImportDialog({
         {step === "preview" && preview && (
           <>
             <div className="max-h-[360px] overflow-y-auto px-4 py-3">
-              <p className="mb-2 text-xs text-text-muted">
+              <p className="mb-2 text-xs text-text-secondary">
                 {preview.items.length} connection(s) from v{preview.appVersion}
               </p>
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-border text-left text-text-muted">
+                  <tr className="border-b border-border text-left text-text-secondary">
                     <th className="pb-1 pr-2">Name</th>
                     <th className="pb-1 pr-2">Host</th>
                     <th className="pb-1 pr-2">Type</th>
@@ -267,7 +267,7 @@ export function ConnectionImportDialog({
             <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
               <button
                 onClick={onClose}
-                className="rounded px-3 py-1.5 text-xs text-text-muted hover:bg-surface-muted"
+                className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
               >
                 {t("common.cancel")}
               </button>
@@ -303,10 +303,10 @@ function PreviewRow({
       <td className="max-w-[120px] truncate py-1.5 pr-2 text-text-primary">
         {item.name}
       </td>
-      <td className="max-w-[100px] truncate py-1.5 pr-2 text-text-muted">
+      <td className="max-w-[100px] truncate py-1.5 pr-2 text-text-secondary">
         {item.host}
       </td>
-      <td className="py-1.5 pr-2 text-text-muted">{item.dbType}</td>
+      <td className="py-1.5 pr-2 text-text-secondary">{item.dbType}</td>
       <td className="py-1.5 pr-2">
         <StatusBadge status={item.status} warnings={item.warnings} t={t} />
       </td>

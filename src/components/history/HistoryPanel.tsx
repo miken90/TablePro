@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistoryStore } from "../../stores/history";
 import { Search, Trash2, X, Clock, Database, Clipboard, Check } from "lucide-react";
+import { Field } from "../ui";
 
 interface HistoryPanelProps {
   onSelectQuery: (query: string) => void;
@@ -118,26 +119,26 @@ export function HistoryPanel({ onSelectQuery, onClose }: HistoryPanelProps) {
 
       {/* Search */}
       <div className="border-b border-border p-2">
-        <div className="flex items-center gap-1.5 rounded-md border border-border-subtle bg-surface-muted px-2 py-1">
-          <Search size={12} className="text-text-muted" />
+        <Field>
+          <Search size={12} className="text-text-muted" aria-hidden="true" />
           <input
             type="text"
             value={searchText}
             onChange={(e) => handleSearch(e.target.value)}
             placeholder={t("history.searchPlaceholder")}
             aria-label={t("history.searchLabel")}
-            className="flex-1 bg-transparent text-xs text-text-primary outline-none placeholder:text-text-muted"
+            className="flex-1 bg-transparent text-xs text-text-primary placeholder:text-text-secondary"
           />
-        </div>
+        </Field>
       </div>
 
       {/* List */}
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
-          <div className="p-4 text-center text-xs text-text-muted">{t("common.loading")}</div>
+          <div className="p-4 text-center text-xs text-text-secondary">{t("common.loading")}</div>
         )}
         {!isLoading && entries.length === 0 && (
-          <div className="p-4 text-center text-xs text-text-muted">
+          <div className="p-4 text-center text-xs text-text-secondary">
             {t("history.noHistory")}
           </div>
         )}
@@ -175,7 +176,7 @@ export function HistoryPanel({ onSelectQuery, onClose }: HistoryPanelProps) {
                 </button>
               </div>
             </div>
-            <div className="mt-1 flex items-center gap-2 text-[10px] text-text-muted">
+            <div className="mt-1 flex items-center gap-2 text-[10px] text-text-secondary">
               {entry.database && (
                 <span className="flex items-center gap-0.5">
                   <Database size={9} />

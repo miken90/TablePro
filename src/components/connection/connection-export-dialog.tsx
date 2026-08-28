@@ -96,7 +96,7 @@ export function ConnectionExportDialog({
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-text-muted hover:bg-surface-muted"
+            className="rounded p-1 text-text-muted hover:bg-surface-muted hover:text-text-primary"
           >
             <X size={14} />
           </button>
@@ -121,7 +121,7 @@ export function ConnectionExportDialog({
             {connections.map((conn) => (
               <label
                 key={conn.id}
-                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-muted"
+                className="group flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-muted"
               >
                 <input
                   type="checkbox"
@@ -132,7 +132,7 @@ export function ConnectionExportDialog({
                 <span className="truncate text-xs text-text-primary">
                   {conn.name}
                 </span>
-                <span className="ml-auto truncate text-xs text-text-muted">
+                <span className="ml-auto truncate text-xs text-text-secondary group-hover:text-text-primary">
                   {conn.config.host}:{conn.config.port}
                 </span>
               </label>
@@ -156,7 +156,7 @@ export function ConnectionExportDialog({
           </label>
           {includeCredentials && (
             <div className="mt-2 space-y-2 pl-6">
-              <p className="text-xs text-text-muted">
+              <p className="text-xs text-text-secondary">
                 {t("connection.export.credentialWarning")}
               </p>
               <input
@@ -164,14 +164,14 @@ export function ConnectionExportDialog({
                 placeholder={t("connection.export.passphrase")}
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
-                className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted"
+                className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-secondary"
               />
               <input
                 type="password"
                 placeholder={t("connection.export.confirmPassphrase")}
                 value={confirmPassphrase}
                 onChange={(e) => setConfirmPassphrase(e.target.value)}
-                className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted"
+                className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-secondary"
               />
               {passphrase.length > 0 && passphrase.length < 8 && (
                 <p className="text-xs text-amber-400">
@@ -192,7 +192,7 @@ export function ConnectionExportDialog({
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
           <button
             onClick={onClose}
-            className="rounded px-3 py-1.5 text-xs text-text-muted hover:bg-surface-muted"
+            className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
           >
             {t("common.cancel")}
           </button>

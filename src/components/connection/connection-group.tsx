@@ -23,7 +23,7 @@ export function ConnectionGroup({
     <div>
       <button
         onClick={() => setCollapsed((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-2 py-1 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800/60 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
+        className="flex w-full items-center gap-1.5 px-2 py-1 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
         aria-expanded={!collapsed}
       >
         <ChevronRight

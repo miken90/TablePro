@@ -71,7 +71,7 @@ export function ConnectionGroupSection({
     <div className="rounded border border-border">
       {/* Group header */}
       <div
-        className="flex cursor-pointer select-none items-center gap-2 rounded-t px-2 py-1.5 hover:bg-surface-muted"
+        className="group flex cursor-pointer select-none items-center gap-2 rounded-t px-2 py-1.5 hover:bg-surface-muted"
         style={{ borderLeft: `3px solid ${group.color}` }}
       >
         <button onClick={toggleCollapsed} className="text-text-muted hover:text-text-primary">
@@ -91,7 +91,7 @@ export function ConnectionGroupSection({
               if (e.key === "Enter") void handleRename();
               if (e.key === "Escape") { setNameInput(group.name); setRenaming(false); }
             }}
-            className="flex-1 rounded border border-accent-blue bg-transparent px-1 text-xs text-text-primary outline-none"
+            className="flex-1 rounded border border-accent-blue bg-transparent px-1 text-xs text-text-primary"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
@@ -100,7 +100,7 @@ export function ConnectionGroupSection({
           </span>
         )}
 
-        <span className="text-xs text-text-muted">{connections.length}</span>
+        <span className="text-xs text-text-secondary group-hover:text-text-primary">{connections.length}</span>
 
         {/* Context menu trigger */}
         <div className="relative" ref={menuRef}>
@@ -153,7 +153,7 @@ export function ConnectionGroupSection({
       {!collapsed && (
         <div className="flex flex-col gap-1 p-1.5">
           {connections.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-text-muted">No connections in this group</p>
+            <p className="px-2 py-1 text-xs text-text-secondary">No connections in this group</p>
           ) : (
             connections.map((conn) => (
               <ConnectionCard
