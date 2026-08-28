@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef, type MutableRefObject } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { useQueryStore } from '../../stores/queryStore';
 import { useQueryLogStore } from '../../stores/queryLogStore';
 import { useConnectionStore } from '../../stores/connectionStore';
@@ -27,9 +27,12 @@ import { BulkInsertDialog } from './bulk-insert-dialog';
 import { BulkUpdateDialog } from './bulk-update-dialog';
 import { BulkDeleteDialog } from './bulk-delete-dialog';
 import { generatePreviewSql } from './sql-preview-popover';
+import { PanelLoader } from '../shared/PanelLoader';
 import { useTableData } from './hooks/use-table-data';
 import { useChangeTracking } from './hooks/use-change-tracking';
 import { useGridActions } from './hooks/use-grid-actions';
+
+const ExplainPanel = lazy(() => import('../editor/explain-panel').then(m => ({ default: m.ExplainPanel })));
 
 interface ResultPanelProps {
   tabId?: string;
@@ -66,6 +69,8 @@ export function ResultPanel({
   const isExecuting = useQueryStore((s) => s.isExecuting);
   const activeConnectionId = useQueryStore((s) => s.activeConnectionId);
   const queryText = useQueryStore((s) => s.queryText);
+  const explainResult = useQueryStore((s) => s.explainResult);
+  const explainSelectedAt = useQueryStore((s) => s.explainSelectedAt);
   const logEntries = useQueryLogStore((s) => s.entries);
 
   // Streaming columnar store (T5/T6/T8) — primary source for the live
@@ -217,6 +222,24 @@ export function ResultPanel({
       setActiveTab('messages');
     }
   }, [error, isTableMode]);
+
+  // A fresh EXPLAIN plan selects its tab once. Consuming the store marker
+  // (rather than a local ref) is what stops a later remount re-selecting it.
+  useEffect(() => {
+    if (explainSelectedAt == null || isTableMode) return;
+    useQueryStore.setState({ explainSelectedAt: null });
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- store-sourced marker, consumed so it fires once per plan */
+    setActiveTab('explain');
+  }, [explainSelectedAt, isTableMode]);
+
+  // Leaving the Explain tab dismisses the plan: the tab exists only while
+  // there is one, so the panel owns the dismissal the old band's X did.
+  const handleTabChange = useCallback((tab: ActiveTab) => {
+    setActiveTab((prev) => {
+      if (prev === 'explain' && tab !== 'explain') useQueryStore.setState({ explainResult: null });
+      return tab;
+    });
+  }, []);
 
   const currentFkColumns = tableName ? fkMap[tableName] : undefined;
 
@@ -408,10 +431,11 @@ export function ResultPanel({
       )}
       <ResultToolbar
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         result={displayResult}
         error={error}
         isTableMode={isTableMode}
+        hasExplain={!!explainResult}
         total={total}
         filteredTotal={filteredTotal}
         approximateCount={isTableMode ? approximateCount : null}
@@ -500,6 +524,11 @@ export function ResultPanel({
               />
             )}
           </>
+        )}
+        {!loading && activeTab === 'explain' && explainResult && (
+          <Suspense fallback={<PanelLoader />}>
+            <ExplainPanel result={explainResult} />
+          </Suspense>
         )}
         {!loading && activeTab === 'messages' && <ResultStatusBar logEntries={logEntries} />}
       </div>

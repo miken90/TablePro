@@ -6,7 +6,8 @@ import { ExplainNodeRow } from "./explain-node";
 
 interface ExplainPanelProps {
   result: ExplainResult;
-  onClose: () => void;
+  /** Optional: the results-strip tab owns dismissal, so it passes nothing. */
+  onClose?: () => void;
 }
 
 type ViewMode = "tree" | "raw";
@@ -62,13 +63,15 @@ export function ExplainPanel({ result, onClose }: ExplainPanelProps) {
             {expandAll ? t("explain.collapseAll") : t("explain.expandAll")}
           </button>
         )}
-        <button
-          onClick={onClose}
-          className="rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-text-primary"
-          aria-label="Close explain panel"
-        >
-          <X size={14} aria-hidden="true" />
-        </button>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-text-primary"
+            aria-label="Close explain panel"
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {/* Content */}

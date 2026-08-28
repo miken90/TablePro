@@ -6,7 +6,7 @@ import { useConnectionStore } from '../../stores/connectionStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
 import { QuickSearchBar } from '../filter/quick-search-bar';
 
-export type ActiveTab = 'results' | 'messages';
+export type ActiveTab = 'results' | 'explain' | 'messages';
 
 interface ResultToolbarProps {
   activeTab: ActiveTab;
@@ -14,6 +14,8 @@ interface ResultToolbarProps {
   result: QueryResult | null;
   error: string | null;
   isTableMode: boolean;
+  /** True while an EXPLAIN plan is available; gates the Explain tab. */
+  hasExplain?: boolean;
   /** Exact row count, or `null` when it could not be determined. */
   total: number | null;
   filteredTotal?: number | null;
@@ -33,6 +35,7 @@ export function ResultToolbar({
   result,
   error,
   isTableMode,
+  hasExplain = false,
   total,
   filteredTotal,
   approximateCount,
@@ -51,8 +54,15 @@ export function ResultToolbar({
   );
   const queryProgress = useQueryProgress(sessionId ?? null);
 
+  const showExplain = !isTableMode && hasExplain;
+
   // Defensive: force to 'results' tab in table-browse mode
   if (isTableMode && activeTab === 'messages') {
+    onTabChange('results');
+  }
+  // The Explain tab owns dismissal: once the plan is cleared the tab is gone,
+  // so a selection pointing at it has to fall back rather than render nothing.
+  if (activeTab === 'explain' && !showExplain) {
     onTabChange('results');
   }
 
@@ -82,6 +92,16 @@ export function ResultToolbar({
           </span>
         )}
       </button>
+      {showExplain && (
+        <button
+          role="tab"
+          aria-selected={activeTab === 'explain'}
+          className={tabCls('explain')}
+          onClick={() => onTabChange('explain')}
+        >
+          {t("explain.button")}
+        </button>
+      )}
       {!isTableMode && (
         <button
           role="tab"
@@ -90,7 +110,7 @@ export function ResultToolbar({
           onClick={() => onTabChange('messages')}
         >
           {t("common.messages")}
-          {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-red-500 inline-block" aria-label={t("common.error")} />}
+          {error && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-accent-red inline-block" aria-label={t("common.error")} />}
         </button>
       )}
 

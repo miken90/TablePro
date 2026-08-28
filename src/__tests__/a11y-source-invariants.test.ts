@@ -67,7 +67,7 @@ describe('B2 — text-muted is content-free', () => {
     { file: '../components/connection/ConnectionGroupSection.tsx', line: 77, reason: 'icon-only expand/collapse chevron button' },
     { file: '../components/connection/ConnectionGroupSection.tsx', line: 109, reason: 'icon-only menu-trigger button' },
     { file: '../components/editor/EditorTabBar.tsx', line: 243, reason: 'icon-only new-tab button' },
-    { file: '../components/editor/explain-panel.tsx', line: 67, reason: 'icon-only close button' },
+    { file: '../components/editor/explain-panel.tsx', line: 69, reason: 'icon-only close button' },
     { file: '../components/filter/quick-search-bar.tsx', line: 95, reason: 'icon-only clear button' },
     { file: '../components/grid/grid-header.tsx', line: 99, reason: 'decorative chevron, visible only on hover' },
     { file: '../components/history/HistoryPanel.tsx', line: 87, reason: 'decorative Clock icon' },

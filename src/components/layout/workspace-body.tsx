@@ -10,7 +10,6 @@ import { FilterPanel } from "../filter/filter-panel";
 import { PanelLoader } from "../shared/PanelLoader";
 import { EmptyState } from "../shared/EmptyState";
 import { useEditorStore } from "../../stores/editorStore";
-import { useQueryStore } from "../../stores/queryStore";
 import { useLayoutStore, EDITOR_MIN_PERCENT } from "../../stores/layoutStore";
 import { activateQueryTab } from "../../stores/active-tab-sync";
 import { useResizable } from "../../hooks/useResizable";
@@ -19,7 +18,6 @@ import { resolveWorkspaceView, type WorkspaceEngine } from "./workspace-view-res
 
 const MongodbQueryPanel = lazy(() => import("../mongodb/mongodb-query-panel").then(m => ({ default: m.MongodbQueryPanel })));
 const RedisCommandPanel = lazy(() => import("../redis/redis-command-panel").then(m => ({ default: m.RedisCommandPanel })));
-const ExplainPanel = lazy(() => import("../editor/explain-panel").then(m => ({ default: m.ExplainPanel })));
 
 export interface WorkspaceBodyProps {
   engine: WorkspaceEngine;
@@ -52,7 +50,6 @@ export function WorkspaceBody({
   const editorHeightPercent = useLayoutStore((s) => s.editorHeightPercent);
   const filterVisible = useLayoutStore((s) => s.filterVisible);
   const filterColumns = useLayoutStore((s) => s.filterColumns);
-  const explainResult = useQueryStore((s) => s.explainResult);
   const { filterTabId, activeWhereClause } = useFilterContext(activeTab);
 
   const { onMouseDown: handleEditorResize } = useResizable({
@@ -170,20 +167,8 @@ export function WorkspaceBody({
                 <span className="h-1 w-1 rounded-full bg-current" />
               </div>
             </div>
-            <div className="flex-1 overflow-hidden flex flex-col">
-              {explainResult && (
-                <div className="max-h-[40%] overflow-hidden">
-                  <Suspense fallback={<PanelLoader />}>
-                    <ExplainPanel
-                      result={explainResult}
-                      onClose={() => useQueryStore.setState({ explainResult: null })}
-                    />
-                  </Suspense>
-                </div>
-              )}
-              <div className="flex-1 overflow-hidden">
-                <ResultPanel sessionId={engine.sessionId} onRowSelect={onRowSelect} />
-              </div>
+            <div className="flex-1 overflow-hidden">
+              <ResultPanel sessionId={engine.sessionId} onRowSelect={onRowSelect} />
             </div>
           </div>
         </>

@@ -96,6 +96,13 @@ interface QueryState {
   pendingSafeCheck: PendingSafeCheck | null;
   /** EXPLAIN query result */
   explainResult: ExplainResult | null;
+  /**
+   * Set when a fresh plan arrives, cleared by whichever result panel selects
+   * the Explain tab for it. The marker lives here rather than in a per-mount
+   * ref so switching tabs — which remounts the panel — cannot yank an
+   * unrelated tab back to Explain for a plan that was already shown.
+   */
+  explainSelectedAt: number | null;
   /** Whether an EXPLAIN query is in flight */
   isExplaining: boolean;
 
@@ -459,6 +466,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   durationMs: null,
   pendingSafeCheck: null,
   explainResult: null,
+  explainSelectedAt: null,
   isExplaining: false,
 
   setQueryText: (text) => set({ queryText: text }),
@@ -519,13 +527,13 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     return "cancelled";
   },
 
-  clearResult: () => set({ result: null, error: null, durationMs: null, explainResult: null }),
+  clearResult: () => set({ result: null, error: null, durationMs: null, explainResult: null, explainSelectedAt: null }),
 
   runExplain: async (sessionId, sql) => {
-    set({ isExplaining: true, explainResult: null, error: null });
+    set({ isExplaining: true, explainResult: null, explainSelectedAt: null, error: null });
     try {
       const result = await commands.explainQuery(sessionId, sql);
-      set({ explainResult: result, isExplaining: false });
+      set({ explainResult: result, explainSelectedAt: Date.now(), isExplaining: false });
     } catch (err) {
       const classified = classifyError(err);
       set({ isExplaining: false, error: classified.message });
