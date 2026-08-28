@@ -98,4 +98,24 @@ describe('Palette rendering', () => {
     expect(container.textContent).toContain('Ctrl+Alt+Y');
     expect(container.textContent).not.toContain('Ctrl+H');
   });
+
+  it('Backspace on an empty command-mode input drops the chip', async () => {
+    await renderOpen('commands');
+    const input = container.querySelector('input') as HTMLInputElement;
+    expect(input.placeholder).toBe('Type a command…');
+
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
+    });
+
+    expect(input.placeholder).not.toBe('Type a command…');
+  });
+
+  it('footer shows the navigate/select/close legend and a result count', async () => {
+    await renderOpen('objects');
+    const footerText = container.textContent ?? '';
+    expect(footerText).toMatch(/navigate/);
+    expect(footerText).toMatch(/close/);
+    expect(footerText).toMatch(/\d+ results?/);
+  });
 });
