@@ -9,13 +9,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useChangeStore } from '../stores/changeStore';
-import { useLayoutStore } from '../stores/layoutStore';
 import { syncActiveTabContext, openTableTab, openStructureTab, activateQueryTab, installActiveTabSync, registerCloseTabHandler, requestCloseTab } from '../stores/active-tab-sync';
 
 function resetStores() {
   useEditorStore.setState({ tabs: [], activeTabId: null });
   useChangeStore.setState({ _byTable: {}, _activeTableKey: null });
-  useLayoutStore.setState({ inspectorVisible: true, queryInspectorVisible: true, queryInspectorPreferenceSet: false });
   useConnectionStore.setState({
     connections: new Map(),
     groups: new Map(),
@@ -62,14 +60,6 @@ describe('syncActiveTabContext', () => {
     expect(useChangeStore.getState()._activeTableKey).toBe('conn-1:public:users');
     syncActiveTabContext(null);
     expect(useChangeStore.getState()._activeTableKey).toBeNull();
-  });
-
-  it('hides the inspector for a table tab and restores the query preference otherwise', () => {
-    openTableTab('users', 'public');
-    expect(useLayoutStore.getState().inspectorVisible).toBe(false);
-    useLayoutStore.setState({ queryInspectorVisible: true, queryInspectorPreferenceSet: true });
-    syncActiveTabContext(useEditorStore.getState().addTab('Q'));
-    expect(useLayoutStore.getState().inspectorVisible).toBe(true);
   });
 
   it('activateQueryTab reuses the latest query tab or creates one, and syncs', () => {

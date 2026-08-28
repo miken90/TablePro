@@ -21,6 +21,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useQueryStore } from '../stores/queryStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useSchemaStore } from '../stores/schemaStore';
+import { useDockStore, DOCK_DEFAULT_WIDTHS } from '../stores/dock-store';
 import { __resetTabStreams, registerTabStream } from '../stores/tab-stream-registry';
 import type { ConnectionConfig, SavedConnection } from '../types/connection';
 
@@ -54,6 +55,7 @@ const STORES = [
   useQueryStore,
   useConnectionStore,
   useSchemaStore,
+  useDockStore,
 ];
 
 /** Commands owned by a component that closes over its own state, so they
@@ -117,14 +119,16 @@ beforeEach(() => {
   cancelledSessions.length = 0;
   useLayoutStore.setState({
     sidebarCollapsed: false,
-    historyVisible: false,
-    aiChatVisible: false,
-    inspectorVisible: false,
     settingsOpen: false,
     helpOpen: false,
     importOpen: false,
     commandPaletteOpen: false,
     quickSwitcherOpen: false,
+  });
+  useDockStore.setState({
+    dockOpen: false,
+    dockPane: "inspector",
+    dockWidths: { ...DOCK_DEFAULT_WIDTHS },
   });
   arrangeConnectedWorkspace();
 });

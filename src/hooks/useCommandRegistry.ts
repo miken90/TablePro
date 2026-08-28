@@ -138,11 +138,20 @@ export const useShortcutStore = create<ShortcutStore>()(
 
 /**
  * Get the effective binding for a command: user override if set, else default.
+ *
+ * Reads a non-reactive snapshot — a component that calls this directly will
+ * not re-render when the user rebinds the command in SCR-62. Use
+ * `useEffectiveBinding` in any tooltip or label that must track a rebind.
  */
 export function getEffectiveBinding(id: string): string[] | undefined {
   const userBinding = useShortcutStore.getState().userBindings[id];
   if (userBinding) return userBinding;
   return getDefaultBinding(id);
+}
+
+/** Subscribing counterpart to `getEffectiveBinding` — re-renders on rebind. [RT-14] */
+export function useEffectiveBinding(id: string): string[] | undefined {
+  return useShortcutStore((s) => s.userBindings[id] ?? getDefaultBinding(id));
 }
 
 /**

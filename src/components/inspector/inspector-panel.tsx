@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Rows3, List, Braces } from 'lucide-react';
+import { Rows3, List, Braces } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { FieldRow } from './field-row';
 import { JsonRecordView } from './json-record-view';
@@ -10,10 +10,11 @@ type ViewMode = 'list' | 'json';
 interface InspectorPanelProps {
   columns: ColumnInfo[];
   row: (string | null)[] | null;
-  onClose: () => void;
 }
 
-export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
+/** Renders inside the right dock (M2) — the dock owns the close control and
+ *  Escape handling, so this panel is content only. */
+export function InspectorPanel({ columns, row }: InspectorPanelProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
 
@@ -25,42 +26,34 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
     }`;
 
   return (
-    <div className="flex h-full flex-col border-l border-border bg-surface">
+    <div className="flex h-full flex-col bg-surface">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <span className="text-xs font-semibold text-text-primary">{t("inspector.title")}</span>
-        <div className="flex items-center gap-1">
-          {row !== null && (
-            <div className="flex items-center gap-0.5 mr-1">
-              <button
-                type="button"
-                className={toggleBtnCls(viewMode === 'list')}
-                onClick={() => setViewMode('list')}
-                title={t("inspector.listView")}
-              >
-                <List size={11} />
-                {t("inspector.list")}
-              </button>
-              <button
-                type="button"
-                className={toggleBtnCls(viewMode === 'json')}
-                onClick={() => setViewMode('json')}
-                title={t("inspector.jsonView")}
-              >
-                <Braces size={11} />
-                {t("inspector.json")}
-              </button>
-            </div>
-          )}
-          <button
-            onClick={onClose}
-            className="rounded p-0.5 text-text-muted hover:bg-surface-muted hover:text-text-secondary"
-            title={t("inspector.closeInspector")}
-            aria-label={t("inspector.closeInspector")}
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
+        {row !== null && (
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              className={toggleBtnCls(viewMode === 'list')}
+              onClick={() => setViewMode('list')}
+              title={t("inspector.listView")}
+              aria-label={t("inspector.listView")}
+            >
+              <List size={11} />
+              {t("inspector.list")}
+            </button>
+            <button
+              type="button"
+              className={toggleBtnCls(viewMode === 'json')}
+              onClick={() => setViewMode('json')}
+              title={t("inspector.jsonView")}
+              aria-label={t("inspector.jsonView")}
+            >
+              <Braces size={11} />
+              {t("inspector.json")}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Body */}

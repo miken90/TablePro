@@ -1,7 +1,6 @@
 import { useEditorStore, type EditorTab } from "./editorStore";
 import { useConnectionStore } from "./connectionStore";
 import { useChangeStore } from "./changeStore";
-import { useLayoutStore } from "./layoutStore";
 
 /**
  * The one place that turns "which tab is active" into the side state other
@@ -9,10 +8,12 @@ import { useLayoutStore } from "./layoutStore";
  * mode, because there is none — `WorkspaceBody` derives what to render from
  * the active tab directly.
  *
- * Responsibilities, in order:
- *  1. Scope `changeStore` to the active table tab, or release the scope
- *     without touching any table's staged edits (`clearActiveTable`).
- *  2. Apply the inspector visibility rule for the tab kind.
+ * Responsibility: scope `changeStore` to the active table tab, or release the
+ * scope without touching any table's staged edits (`clearActiveTable`). The
+ * right dock (M2) is tab-kind-agnostic — it stays wherever the user left it
+ * across tab switches, so there is no inspector-visibility rule to apply here
+ * any more (that per-tab-kind auto-hide/restore was retired with `dockOpen`/
+ * `dockPane` replacing it, per the M2 plan's Risk Assessment).
  *
  * Every activation path must call this: tab click, keyboard tab switch, tab
  * close, quick switcher, sidebar open, preview table, history select, and the
@@ -27,13 +28,11 @@ export function syncActiveTabContext(tabId: string | null): void {
     const connectionId = tab.connectionId ?? useConnectionStore.getState().selectedConnectionId;
     if (connectionId) {
       useChangeStore.getState().setActiveTable(connectionId, tab.tableSchema ?? null, tab.tableName);
-      useLayoutStore.getState().syncInspectorForTabKind("table");
       return;
     }
   }
 
   useChangeStore.getState().clearActiveTable();
-  useLayoutStore.getState().syncInspectorForTabKind(tab?.type ?? "query");
 }
 
 /** Create or focus the table-browse tab for a table and sync the side state. */

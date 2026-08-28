@@ -1,16 +1,14 @@
 import { useEffect, useRef } from "react";
-import { X, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAiChatStore } from "../../stores/aiChatStore";
 import { AiChatInput } from "./ai-chat-input";
 import { AiChatMessage } from "./ai-chat-message";
 import { AiConversationList } from "./ai-conversation-list";
 
-interface AiChatPanelProps {
-  onClose: () => void;
-}
-
-export function AiChatPanel({ onClose }: AiChatPanelProps) {
+/** Renders inside the right dock (M2) — the dock owns the close control and
+ *  Escape handling, so this panel is content only. */
+export function AiChatPanel() {
   const { t } = useTranslation();
   const conversations = useAiChatStore((s) => s.conversations);
   const activeConversationId = useAiChatStore((s) => s.activeConversationId);
@@ -37,43 +35,21 @@ export function AiChatPanel({ onClose }: AiChatPanelProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Escape to close
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
   return (
-    <div className="flex h-full flex-col border-l border-border bg-surface">
+    <div className="flex h-full flex-col bg-surface">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Sparkles size={14} className="text-purple-500" />
           <span className="text-xs font-medium text-text-primary">{t("aiChat.title")}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <AiConversationList
-            conversations={conversations}
-            activeConversationId={activeConversationId}
-            onSwitch={switchConversation}
-            onNew={() => void newConversation()}
-            onDelete={deleteConversation}
-          />
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-text-muted transition hover:bg-surface-muted hover:text-text-primary"
-            aria-label={t("aiChat.closePanel")}
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
+        <AiConversationList
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onSwitch={switchConversation}
+          onNew={() => void newConversation()}
+          onDelete={deleteConversation}
+        />
       </div>
 
       {/* Messages area */}

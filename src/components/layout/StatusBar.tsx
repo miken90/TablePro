@@ -4,6 +4,8 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useLayoutStore } from "../../stores/layoutStore";
+import { useDockStore } from "../../stores/dock-store";
+import { useEffectiveBinding } from "../../hooks/useCommandRegistry";
 
 function formatDriverType(dbType: string | undefined): string {
   if (!dbType) return "";
@@ -39,8 +41,9 @@ export function StatusBar() {
   const selectedDatabase = useSchemaStore((s) => s.selectedDatabase);
   const tableCount = useSchemaStore((s) => s.tables.length);
 
-  const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
+  const inspectorPaneOpen = useDockStore((s) => s.dockOpen && s.dockPane === "inspector");
   const filterVisible = useLayoutStore((s) => s.filterVisible);
+  const inspectorShortcut = (useEffectiveBinding("nav.toggleInspector") ?? []).join("+");
 
   const activeConnection = selectedConnectionId
     ? connections.get(selectedConnectionId)
@@ -116,10 +119,10 @@ export function StatusBar() {
       {isConnected && (
         <div className="ml-3 flex items-center gap-1">
           <button
-            aria-pressed={inspectorVisible}
-            onClick={() => useLayoutStore.getState().toggleInspector()}
-            className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${inspectorVisible ? "bg-surface-muted text-text-primary" : "hover:bg-surface-muted"}`}
-            title={t("statusBar.toggleInspector")}
+            aria-pressed={inspectorPaneOpen}
+            onClick={() => useDockStore.getState().toggleDockPane("inspector")}
+            className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${inspectorPaneOpen ? "bg-surface-muted text-text-primary" : "hover:bg-surface-muted"}`}
+            title={t("statusBar.toggleInspector", { shortcut: inspectorShortcut })}
           >
             <PanelRight size={10} />
             <span>{t("statusBar.inspector")}</span>

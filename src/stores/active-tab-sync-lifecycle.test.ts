@@ -10,7 +10,6 @@ import { __resetInvokeImpl, __setInvokeImpl } from '../__tests__/mocks/tauri';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useEditorStore } from '../stores/editorStore';
 import { makeTableKey, useChangeStore } from '../stores/changeStore';
-import { useLayoutStore } from '../stores/layoutStore';
 import { makeStructureKey, useStructureChangeStore } from '../stores/structureChangeStore';
 import { syncActiveTabContext, openTableTab, openStructureTab } from '../stores/active-tab-sync';
 
@@ -25,7 +24,6 @@ function resetStores() {
   useEditorStore.setState({ tabs: [], activeTabId: null });
   useChangeStore.setState({ _byTable: {}, _activeTableKey: null });
   useStructureChangeStore.setState({ _byTable: {}, _activeKey: null, changes: [] });
-  useLayoutStore.setState({ inspectorVisible: true, queryInspectorVisible: true, queryInspectorPreferenceSet: false });
   useConnectionStore.setState({
     connections: new Map(),
     groups: new Map(),
@@ -103,6 +101,5 @@ describe('active tab lifecycle', () => {
     expect(useChangeStore.getState()._activeTableKey).toBeNull();
     syncActiveTabContext(useEditorStore.getState().activeTabId);
     expect(useChangeStore.getState()._activeTableKey).toBe(makeTableKey('conn-1', 'public', 'users'));
-    expect(useLayoutStore.getState().inspectorVisible).toBe(false);
   });
 });

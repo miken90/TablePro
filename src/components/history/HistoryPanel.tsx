@@ -6,10 +6,11 @@ import { Field } from "../ui";
 
 interface HistoryPanelProps {
   onSelectQuery: (query: string) => void;
-  onClose: () => void;
 }
 
-export function HistoryPanel({ onSelectQuery, onClose }: HistoryPanelProps) {
+/** Renders inside the right dock (M2) — the dock owns the close control and
+ *  Escape handling, so this panel is content only. */
+export function HistoryPanel({ onSelectQuery }: HistoryPanelProps) {
   const { t } = useTranslation();
   const entries = useHistoryStore((s) => s.entries);
   const isLoading = useHistoryStore((s) => s.isLoading);
@@ -24,18 +25,6 @@ export function HistoryPanel({ onSelectQuery, onClose }: HistoryPanelProps) {
   useEffect(() => {
     fetchRecent();
   }, [fetchRecent]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   const handleSearch = useCallback(
     (text: string) => {
@@ -91,30 +80,21 @@ export function HistoryPanel({ onSelectQuery, onClose }: HistoryPanelProps) {
   }, []);
 
   return (
-    <div className="flex h-full flex-col border-l border-border bg-surface">
+    <div className="flex h-full flex-col bg-surface">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Clock size={14} className="text-text-muted" />
           <span className="text-xs font-medium text-text-primary">{t("history.title")}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={clearAll}
-            className="rounded p-1 text-xs text-text-muted transition hover:bg-surface-muted hover:text-red-500"
-            title={t("history.clearAll")}
-            aria-label={t("history.clearAll")}
-          >
-            <Trash2 size={12} aria-hidden="true" />
-          </button>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-text-muted transition hover:bg-surface-muted hover:text-text-primary"
-            aria-label={t("history.closePanel")}
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
+        <button
+          onClick={clearAll}
+          className="rounded p-1 text-xs text-text-muted transition hover:bg-surface-muted hover:text-red-500"
+          title={t("history.clearAll")}
+          aria-label={t("history.clearAll")}
+        >
+          <Trash2 size={12} aria-hidden="true" />
+        </button>
       </div>
 
       {/* Search */}

@@ -366,7 +366,7 @@
     "tableCount": "{{count}} bảng",
     "tableCountPlural": "{{count}} bảng",
     "inspector": "Thanh tra",
-    "toggleInspector": "Bật/tắt thanh tra (Ctrl+Shift+I)",
+    "toggleInspector": "Bật/tắt thanh tra ({{shortcut}})",
     "toggleFilter": "Bật/tắt bộ lọc (Ctrl+Shift+L)",
     "rowsAffected": "{{count}} bị ảnh hưởng",
     "rowCount": "{{count}} hàng",
@@ -534,7 +534,6 @@
   "history": {
     "title": "Lịch sử truy vấn",
     "clearAll": "Xóa toàn bộ lịch sử",
-    "closePanel": "Đóng bảng lịch sử",
     "searchPlaceholder": "Tìm kiếm truy vấn…",
     "searchLabel": "Tìm kiếm lịch sử truy vấn",
     "noHistory": "Chưa có lịch sử truy vấn",
@@ -551,9 +550,13 @@
     "list": "Danh sách",
     "jsonView": "Dạng JSON",
     "json": "JSON",
-    "closeInspector": "Đóng thanh tra (Ctrl+Shift+I)",
     "selectRow": "Chọn một hàng để xem chi tiết",
     "columnCount": "{{count}} cột"
+  },
+  "dock": {
+    "tablist": "Bảng thanh tra, lịch sử và trò chuyện AI",
+    "historyTab": "Lịch sử",
+    "close": "Đóng bảng"
   },
   "exportDialog": {
     "title": "Xuất kết quả",
@@ -640,7 +643,6 @@
   },
   "aiChat": {
     "title": "Trò chuyện AI",
-    "closePanel": "Đóng bảng trò chuyện AI",
     "emptyMessage": "Đặt câu hỏi về cơ sở dữ liệu, tạo SQL hoặc nhận trợ giúp về truy vấn."
   },
   "languages": {

@@ -14,7 +14,7 @@ import { useEditorViewRef } from "../../contexts/editor-view-context";
 import { statementAtCursor } from "../../editor/statement-scanner";
 import { SafeModeConfirmDialog } from "../shared/SafeModeConfirmDialog";
 import { RunSplitButton } from "./run-split-button";
-import { getEffectiveBinding } from "../../hooks/useCommandRegistry";
+import { getEffectiveBinding, useEffectiveBinding } from "../../hooks/useCommandRegistry";
 
 interface ToolbarProps {
   onToggleSidebar: () => void;
@@ -68,6 +68,8 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
   // Show whatever binding the user actually has for Import SQL, not a
   // hardcoded default the shortcut editor may have changed.
   const importShortcut = (getEffectiveBinding("data.importSql") ?? []).join("+");
+  const historyShortcut = (useEffectiveBinding("nav.toggleHistory") ?? []).join("+");
+  const aiChatShortcut = (useEffectiveBinding("nav.toggleAiChat") ?? []).join("+");
 
   const connection = selectedConnectionId ? connections.get(selectedConnectionId) : null;
   const isKeyValueDb = connection?.config?.dbType === "redis";
@@ -266,7 +268,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
         <button
           onClick={onToggleHistory}
           className="rounded p-1 text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-          title="Query History (Ctrl+H)"
+          title={`Query History (${historyShortcut})`}
           aria-label="Toggle query history"
         >
           <Clock size={15} aria-hidden="true" />
@@ -275,7 +277,7 @@ export function Toolbar({ onToggleSidebar, onOpenSettings, onToggleHistory, onTo
         <button
           onClick={onToggleAiChat}
           className="rounded p-1 text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-          title="AI Chat (Ctrl+Shift+L)"
+          title={`AI Chat (${aiChatShortcut})`}
           aria-label="Toggle AI chat"
         >
           <Sparkles size={15} aria-hidden="true" />

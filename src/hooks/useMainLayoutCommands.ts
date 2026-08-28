@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../stores/layoutStore";
+import { useDockStore } from "../stores/dock-store";
 import { resolveActiveQuerySessionId, useQueryStore } from "../stores/queryStore";
 import { useEditorStore } from "../stores/editorStore";
 import { requestCloseTab } from "../stores/active-tab-sync";
@@ -53,21 +54,21 @@ export function buildMainLayoutCommands(t: Translate): Command[] {
       label: "Toggle History",
       shortcut: shortcutFor("nav.toggleHistory"),
       category: "Navigation" as const,
-      action: () => useLayoutStore.getState().toggleHistory(),
+      action: () => useDockStore.getState().toggleDockPane("history"),
     },
     {
       id: "nav.toggleAiChat",
       label: "Toggle AI Chat",
       shortcut: shortcutFor("nav.toggleAiChat"),
       category: "Navigation" as const,
-      action: () => useLayoutStore.getState().toggleAiChat(),
+      action: () => useDockStore.getState().toggleDockPane("ai"),
     },
     {
       id: "nav.toggleInspector",
       label: "Toggle Inspector",
       shortcut: shortcutFor("nav.toggleInspector"),
       category: "Navigation" as const,
-      action: () => useLayoutStore.getState().toggleInspector(),
+      action: () => useDockStore.getState().toggleDockPane("inspector"),
     },
     {
       id: "nav.commandPalette",

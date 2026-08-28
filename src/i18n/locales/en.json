@@ -366,7 +366,7 @@
     "tableCount": "{{count}} table",
     "tableCountPlural": "{{count}} tables",
     "inspector": "Inspector",
-    "toggleInspector": "Toggle Inspector (Ctrl+Shift+I)",
+    "toggleInspector": "Toggle Inspector ({{shortcut}})",
     "toggleFilter": "Toggle Filter (Ctrl+Shift+L)",
     "rowsAffected": "{{count}} affected",
     "rowCount": "{{count}} row",
@@ -534,7 +534,6 @@
   "history": {
     "title": "Query History",
     "clearAll": "Clear all history",
-    "closePanel": "Close history panel",
     "searchPlaceholder": "Search queries…",
     "searchLabel": "Search query history",
     "noHistory": "No query history",
@@ -551,9 +550,13 @@
     "list": "List",
     "jsonView": "JSON view",
     "json": "JSON",
-    "closeInspector": "Close inspector (Ctrl+Shift+I)",
     "selectRow": "Select a row to inspect",
     "columnCount": "{{count}} columns"
+  },
+  "dock": {
+    "tablist": "Inspector, history and AI chat panels",
+    "historyTab": "History",
+    "close": "Close panel"
   },
   "exportDialog": {
     "title": "Export Results",
@@ -640,7 +643,6 @@
   },
   "aiChat": {
     "title": "AI Chat",
-    "closePanel": "Close AI chat panel",
     "emptyMessage": "Ask questions about your database, generate SQL, or get help with queries."
   },
   "languages": {

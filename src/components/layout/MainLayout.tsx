@@ -5,6 +5,7 @@ import { StatusBar } from "./StatusBar";
 import { EditorViewProvider } from "../../contexts/editor-view-context";
 import { useEditorStore } from "../../stores/editorStore";
 import { useLayoutStore } from "../../stores/layoutStore";
+import { useDockStore } from "../../stores/dock-store";
 import { activateQueryTab, installActiveTabSync, syncActiveTabContext } from "../../stores/active-tab-sync";
 import { useChangeStore } from "../../stores/changeStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -98,8 +99,8 @@ export function MainLayout() {
         <Toolbar
           onToggleSidebar={() => useLayoutStore.getState().toggleSidebar()}
           onOpenSettings={() => useLayoutStore.getState().setSettingsOpen(true)}
-          onToggleHistory={() => useLayoutStore.getState().toggleHistory()}
-          onToggleAiChat={() => useLayoutStore.getState().toggleAiChat()}
+          onToggleHistory={() => useDockStore.getState().toggleDockPane("history")}
+          onToggleAiChat={() => useDockStore.getState().toggleDockPane("ai")}
           onRunQuery={() => activateQueryTab()}
         />
 

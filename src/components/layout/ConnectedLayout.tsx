@@ -2,27 +2,18 @@ import { lazy, Suspense, useRef, type MutableRefObject } from "react";
 import { Sidebar } from "./Sidebar";
 import { EditorTabBar } from "../editor/EditorTabBar";
 import { WelcomeView } from "../connection/WelcomeView";
-import { InspectorPanel } from "../inspector/inspector-panel";
-import { HistoryPanel } from "../history/HistoryPanel";
 import { PanelLoader } from "../shared/PanelLoader";
 import { ErrorBoundary } from "../shared/error-boundary";
 import { WorkspaceBody } from "./workspace-body";
+import { RightDock } from "./right-dock";
 import { useConnectionStore } from "../../stores/connectionStore";
-import { resolveActiveQuerySessionId, useQueryStore } from "../../stores/queryStore";
-import { useInspectorStore } from "../../stores/inspectorStore";
+import { resolveActiveQuerySessionId } from "../../stores/queryStore";
 import { refreshActiveSchema, useSchemaStore } from "../../stores/schemaStore";
 import { openStructureTab } from "../../stores/active-tab-sync";
-import {
-  useLayoutStore,
-  SIDEBAR_MIN,
-  SIDEBAR_MAX,
-  INSPECTOR_MIN,
-  INSPECTOR_MAX,
-} from "../../stores/layoutStore";
+import { useLayoutStore, SIDEBAR_MIN, SIDEBAR_MAX } from "../../stores/layoutStore";
 import { useResizable } from "../../hooks/useResizable";
 import { useTableCallbacks } from "../../hooks/useTableCallbacks";
 
-const AiChatPanel = lazy(() => import("../ai/ai-chat-panel").then(m => ({ default: m.AiChatPanel })));
 const ImportDialog = lazy(() => import("../import/import-dialog").then(m => ({ default: m.ImportDialog })));
 
 interface ConnectedLayoutProps {
@@ -64,13 +55,8 @@ export function ConnectedLayout({
 
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
   const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
-  const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
-  const inspectorWidth = useLayoutStore((s) => s.inspectorWidth);
-  const selectedRowIndex = useLayoutStore((s) => s.selectedRowIndex);
-  const historyVisible = useLayoutStore((s) => s.historyVisible);
-  const aiChatVisible = useLayoutStore((s) => s.aiChatVisible);
 
-  const { handleOpenTable, handleOpenPreviewTable, handleHistorySelect } = useTableCallbacks();
+  const { handleOpenTable, handleOpenPreviewTable } = useTableCallbacks();
 
   const { onMouseDown: handleSidebarResize } = useResizable({
     direction: "horizontal",
@@ -79,23 +65,6 @@ export function ConnectedLayout({
     currentValue: sidebarWidth,
     onResize: useLayoutStore.getState().setSidebarWidth,
   });
-
-  const { onMouseDown: handleInspectorResize } = useResizable({
-    direction: "horizontal",
-    min: INSPECTOR_MIN,
-    max: INSPECTOR_MAX,
-    currentValue: inspectorWidth,
-    invert: true,
-    onResize: useLayoutStore.getState().setInspectorWidth,
-  });
-
-  const queryResult = useQueryStore((s) => s.result);
-  const inspectorStoreColumns = useInspectorStore((s) => s.columns);
-  const inspectorStoreRow = useInspectorStore((s) => s.row);
-
-  const inspectorColumns = inspectorStoreRow ? inspectorStoreColumns : (queryResult?.columns ?? []);
-  const selectedRow = inspectorStoreRow
-    ?? (queryResult && selectedRowIndex !== null ? (queryResult.rows[selectedRowIndex] ?? null) : null);
 
   const sessionId = resolveActiveQuerySessionId();
   const importOpen = useLayoutStore((s) => s.importOpen);
@@ -151,65 +120,11 @@ export function ConnectedLayout({
         </ErrorBoundary>
       </main>
 
-      {/* Inspector */}
-      {inspectorVisible && isConnected && (
-        <>
-          <div
-            className="group w-1.5 cursor-col-resize bg-border-subtle hover:bg-accent-blue flex flex-col items-center justify-center"
-            onMouseDown={handleInspectorResize}
-          >
-            <SplitterGrip />
-          </div>
-          <div style={{ width: inspectorWidth }} className="flex-shrink-0 overflow-hidden">
-            <ErrorBoundary name="inspector">
-              <InspectorPanel
-                columns={inspectorColumns}
-                row={selectedRow}
-                onClose={() => useLayoutStore.getState().toggleInspector()}
-              />
-            </ErrorBoundary>
-          </div>
-        </>
-      )}
-
-      {/* History slide-over */}
-      {historyVisible && isConnected && (
-        <>
-          <div
-            className="absolute inset-0 z-20 bg-black/20"
-            onClick={() => useLayoutStore.getState().toggleHistory()}
-          />
-          <div
-            className="absolute right-0 top-0 h-full w-[360px] transform shadow-panel slide-in-right"
-            style={{ zIndex: 21 }}
-          >
-            <HistoryPanel
-              onSelectQuery={handleHistorySelect}
-              onClose={() => useLayoutStore.getState().toggleHistory()}
-            />
-          </div>
-        </>
-      )}
-
-      {/* AI Chat slide-over */}
-      {aiChatVisible && isConnected && (
-        <>
-          <div
-            className="absolute inset-0 z-20 bg-black/20"
-            onClick={() => useLayoutStore.getState().toggleAiChat()}
-          />
-          <div
-            className="absolute right-0 top-0 h-full w-[400px] transform shadow-panel slide-in-right"
-            style={{ zIndex: 21 }}
-          >
-            <Suspense fallback={<PanelLoader className="w-[400px] h-full" />}>
-              <AiChatPanel
-                onClose={() => useLayoutStore.getState().toggleAiChat()}
-              />
-            </Suspense>
-          </div>
-        </>
-      )}
+      {/* Right dock (M2) — Inspector, History and AI Chat as one persistent,
+          resizable column with three tabs. No scrim, no click-away close. */}
+      <ErrorBoundary name="right-dock">
+        <RightDock isConnected={isConnected} />
+      </ErrorBoundary>
 
       {/* SQL file import — opened by the `data.importSql` command (toolbar
           button, command palette, or its keyboard shortcut). Lives here
