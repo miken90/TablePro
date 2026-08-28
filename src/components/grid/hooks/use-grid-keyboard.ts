@@ -5,6 +5,10 @@ import type { ColumnInfo } from '../../../types/query';
 import { DEFAULT_COL_WIDTH, FIXED_COLS_WIDTH } from './use-column-widths';
 
 export const ROW_HEIGHT = 28;
+/** Two-line column header (M7): name over type, its own token-free constant
+ *  since data-grid.tsx sticks it above the virtualized rows rather than
+ *  inside the virtualizer's own row math. */
+export const HEADER_HEIGHT = 40;
 
 interface UseGridKeyboardProps {
   editingCell?: { rowIdx: number; colIdx: number } | null;
@@ -87,12 +91,12 @@ export function useGridKeyboard({
         if (e.ctrlKey || e.metaKey) { onMoveToLast?.(); } else { onMoveToRowEnd?.(); }
         break;
       case 'PageUp': {
-        const visibleCount = parentRef.current ? Math.floor(parentRef.current.clientHeight / ROW_HEIGHT) : 10;
+        const visibleCount = parentRef.current ? Math.floor((parentRef.current.clientHeight - HEADER_HEIGHT) / ROW_HEIGHT) : 10;
         onMoveActivePage?.(-1, visibleCount);
         break;
       }
       case 'PageDown': {
-        const visibleCount = parentRef.current ? Math.floor(parentRef.current.clientHeight / ROW_HEIGHT) : 10;
+        const visibleCount = parentRef.current ? Math.floor((parentRef.current.clientHeight - HEADER_HEIGHT) / ROW_HEIGHT) : 10;
         onMoveActivePage?.(1, visibleCount);
         break;
       }
@@ -118,6 +122,12 @@ export function useGridKeyboard({
       : selection.active.row;
     if (displayIdx >= 0) {
       virtualizer.scrollToIndex(displayIdx, { align: 'auto' });
+      // The virtualizer has no notion of the sticky header sitting above its
+      // scroll viewport, so 'auto' can still park a row's top edge under it.
+      const rowTop = displayIdx * ROW_HEIGHT;
+      if (rowTop < parentRef.current.scrollTop + HEADER_HEIGHT) {
+        parentRef.current.scrollTop = Math.max(0, rowTop - HEADER_HEIGHT);
+      }
     }
 
     const colIdx = selection.active.col;

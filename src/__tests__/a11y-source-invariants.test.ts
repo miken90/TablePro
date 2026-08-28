@@ -70,7 +70,7 @@ describe('B2 — text-muted is content-free', () => {
     { file: '../components/editor/EditorTabBar.tsx', line: 243, reason: 'icon-only new-tab button' },
     { file: '../components/editor/explain-panel.tsx', line: 69, reason: 'icon-only close button' },
     { file: '../components/filter/quick-search-bar.tsx', line: 95, reason: 'icon-only clear button' },
-    { file: '../components/grid/grid-header.tsx', line: 99, reason: 'decorative chevron, visible only on hover' },
+    { file: '../components/grid/grid-header.tsx', line: 98, reason: 'decorative chevron, visible only on hover' },
     { file: '../components/history/HistoryPanel.tsx', line: 87, reason: 'decorative Clock icon' },
     { file: '../components/history/HistoryPanel.tsx', line: 92, reason: 'icon-only clear-all button, hover to red (semantic danger)' },
     { file: '../components/history/HistoryPanel.tsx', line: 138, reason: 'icon-only copy button, hover to blue (semantic)' },
@@ -124,8 +124,7 @@ describe('M10 — hover:bg-surface-hover / hover:bg-surface-muted pair with prim
   // 5.2's own numbers, unlike bg-hover) — plus controls that intentionally
   // hover to a semantic action colour instead of primary.
   const ALLOWED: Array<{ file: string; line: number; reason: string }> = [
-    { file: '../components/grid/grid-row.tsx', line: 84, reason: 'row container; cell values already render at text-primary regardless of hover' },
-    { file: '../components/grid/grid-header.tsx', line: 81, reason: 'header cell container; name is already primary, type carries its own group-hover:text-primary' },
+    { file: '../components/grid/grid-header.tsx', line: 82, reason: 'header cell container; name is already primary, type carries its own group-hover:text-primary' },
     { file: '../components/history/HistoryPanel.tsx', line: 129, reason: 'entry row container; query text already renders at text-primary' },
     { file: '../components/connection/connection-export-dialog.tsx', line: 124, reason: 'row container; name already primary, host:port carries group-hover:text-primary' },
     { file: '../components/connection/ConnectionGroupSection.tsx', line: 74, reason: 'group header container; name already primary, count carries group-hover:text-primary' },

@@ -4,6 +4,7 @@ import type { SortingState } from '@tanstack/react-table';
 import { Key, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ColumnMenu } from './column-menu';
+import { HEADER_HEIGHT } from './hooks/use-grid-keyboard';
 
 interface GridHeaderProps {
   columns: ColumnInfo[];
@@ -26,7 +27,7 @@ interface MenuState {
 
 function SortIndicator({ dir }: { dir: 'asc' | 'desc' | false }) {
   if (!dir) return <span className="w-3 inline-block" />;
-  return <span className="text-blue-500">{dir === 'asc' ? '↑' : '↓'}</span>;
+  return <span className="text-accent-blue">{dir === 'asc' ? '↑' : '↓'}</span>;
 }
 
 /**
@@ -70,7 +71,7 @@ export const GridHeader = React.memo(function GridHeader({
 
   return (
     <>
-      <div className="flex text-xs select-none">
+      <div className="flex text-xs select-none" style={{ height: HEADER_HEIGHT }}>
         {columns.map((col) => {
           const width = columnWidths[col.name] ?? 120;
           const sortDir = sortMap.get(col.name) ?? false;
@@ -82,31 +83,33 @@ export const GridHeader = React.memo(function GridHeader({
               style={{ width }}
               onClick={() => onSortChange(col.name)}
             >
-              <div className="flex items-center gap-1 px-2 py-1.5 overflow-hidden">
-                {col.isPrimaryKey && (
-                  <Key size={10} className="text-amber-500 flex-shrink-0" />
-                )}
-                <span className="truncate font-medium text-text-primary">
-                  {col.name}
-                </span>
-                <span className="text-text-secondary group-hover:text-text-primary text-[10px] flex-shrink-0">
+              <div className="flex h-full flex-col justify-center gap-0.5 px-2 py-1 overflow-hidden">
+                <div className="flex items-center gap-1 min-w-0">
+                  {col.isPrimaryKey && (
+                    <Key size={10} className="text-grid-pk-fg flex-shrink-0" />
+                  )}
+                  <span className="truncate font-medium text-text-primary">
+                    {col.name}
+                  </span>
+                  <SortIndicator dir={sortDir} />
+
+                  {/* Chevron — visible on hover */}
+                  <button
+                    className="ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 text-text-muted hover:text-text-secondary transition-opacity p-0.5 rounded"
+                    onClick={(e) => handleChevronClick(e, col)}
+                    title={t("grid.columnMenu.columnOptions")}
+                  >
+                    <ChevronDown size={10} />
+                  </button>
+                </div>
+                <span className="truncate text-text-secondary group-hover:text-text-primary text-ui-2xs">
                   {col.typeName}
                 </span>
-                <SortIndicator dir={sortDir} />
-
-                {/* Chevron — visible on hover */}
-                <button
-                  className="ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 text-text-muted hover:text-text-secondary transition-opacity p-0.5 rounded"
-                  onClick={(e) => handleChevronClick(e, col)}
-                  title={t("grid.columnMenu.columnOptions")}
-                >
-                  <ChevronDown size={10} />
-                </button>
               </div>
 
               {/* Resize handle */}
               <div
-                className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-400 dark:hover:bg-blue-500 z-10"
+                className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-accent-blue z-10"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => {
                   e.stopPropagation();

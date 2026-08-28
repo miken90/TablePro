@@ -67,7 +67,11 @@ function truncateForTitle(val: string | null, max = 1024): string | undefined {
   return str.length > max ? str.slice(0, max) + '…' : str;
 }
 
+/** design-spec 5.16 row-state table: each state's own background token, a
+ *  left border on every non-default state, and a glyph or strikethrough so
+ *  the signal never rides on colour alone. */
 function getRowClassName(
+  displayRowIndex: number,
   isSelected: boolean,
   changeType?: 'modified' | 'inserted' | 'deleted',
 ): string {
@@ -75,13 +79,15 @@ function getRowClassName(
   let cls = base;
 
   if (changeType === 'deleted') {
-    cls += ' bg-red-500/10 border-l-[4px] border-l-red-500 text-text-secondary';
+    cls += ' bg-grid-row-deleted border-l-4 border-l-accent-red text-text-secondary line-through';
   } else if (changeType === 'inserted') {
-    cls += ' bg-green-500/10 border-l-[4px] border-l-green-500';
+    cls += ' bg-grid-row-inserted border-l-4 border-l-accent-green';
   } else if (changeType === 'modified') {
-    cls += ' bg-yellow-500/10 border-l-[4px] border-l-yellow-500';
+    cls += ' bg-grid-row-updated border-l-4 border-l-accent-yellow';
+  } else if (isSelected) {
+    cls += ' bg-grid-row-selected border-l-2 border-l-accent-blue';
   } else {
-    cls += ' hover:bg-surface-hover';
+    cls += (displayRowIndex % 2 === 1 ? ' bg-grid-row-alt' : '') + ' hover:bg-grid-row-hover';
   }
 
   if (isSelected && changeType) {
@@ -89,6 +95,14 @@ function getRowClassName(
   }
 
   return cls;
+}
+
+/** Inserted/updated rows swap the row number for a glyph — deleted rows keep
+ *  the number and rely on the row's own strikethrough as their signal. */
+function rowGlyph(changeType: GridRowProps['changeType']): string | null {
+  if (changeType === 'inserted') return '+';
+  if (changeType === 'modified') return '~';
+  return null;
 }
 
 function CellContent({
@@ -157,7 +171,7 @@ function CellContent({
 
 export const GridRow = React.memo(function GridRow({
   rowIndex,
-  displayRowIndex: _displayRowIndex,
+  displayRowIndex,
   rowNumber,
   row,
   columns,
@@ -185,9 +199,10 @@ export const GridRow = React.memo(function GridRow({
   onFkNavigate,
   sessionId,
 }: GridRowProps) {
+  const glyph = rowGlyph(changeType);
   return (
     <div
-      className={getRowClassName(isSelected, changeType)}
+      className={getRowClassName(displayRowIndex, isSelected, changeType)}
       style={{ top: virtualTop, height: 28, ...(editingCell ? { zIndex: 10 } : undefined) }}
       onClick={(e) => { if ((e.target as HTMLElement).closest('[data-cell]')) return; onRowClick(rowIndex, e); }}
     >
@@ -196,7 +211,9 @@ export const GridRow = React.memo(function GridRow({
         className="group/rowheader w-10 flex-shrink-0 px-1 flex items-center justify-center text-text-secondary border-r border-border-subtle select-none cursor-pointer hover:bg-surface-hover hover:text-text-primary"
         onClick={(e) => { e.stopPropagation(); onRowHeaderClick?.(rowIndex, e); }}
       >
-        {isTableMode ? (
+        {glyph ? (
+          <span className="text-xs font-mono">{glyph}</span>
+        ) : isTableMode ? (
           <>
             <input
               type="checkbox"
@@ -231,7 +248,7 @@ export const GridRow = React.memo(function GridRow({
 
         let cellCls = 'flex-shrink-0 px-2 flex items-center border-r border-border-subtle cursor-default';
         if (!isEditing) cellCls += ' overflow-hidden';
-        else cellCls += ' overflow-visible relative';
+        else cellCls += ' overflow-visible relative bg-grid-cell-editing ring-1 ring-inset ring-focus-ring';
         if (inSelection) cellCls += ' bg-blue-100/60 dark:bg-blue-900/40';
         if (active && !isEditing) cellCls += ' ring-2 ring-inset ring-blue-500 z-[1]';
 
