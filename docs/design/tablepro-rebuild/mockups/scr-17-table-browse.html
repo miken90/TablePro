@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 pilot mockup
+  SCR-17 Table Browse (with SCR-06, SCR-16, SCR-23 slimmed, SCR-24 + SCR-25 restored)
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Mobbin refs this screen follows (design-spec.md section 7.1):
+    ref 1  Snowflake        -> M6: object tree carries its OWN search field + refresh
+                               icon in its header, not behind a right-click.
+    ref 2  Replit DB studio -> M1: sub-tabs layered over one grid, no second sidebar.
+                               M7: column TYPE printed beside/under the column name;
+                               NULL rendered as a distinct dimmed token.
+    ref 4  Supabase         -> M3: results strip tab row on the left, actions right.
+    ref 5  Rows             -> M4: PERSISTENT bottom strip under the sheet (their
+                               Sum/Avg/Min/Max aggregate strip) = the pending-changes
+                               strip. Also the real header-dropdown popover for SCR-19.
+    ref 6  Canva sheets     -> M4 / Gate 2 decision 2: actions popover ANCHORED under a
+                               toolbar button = the restored SCR-25 SQL preview.
+
+  What this mockup exists to prove:
+    - SCR-24 is reachable. The strip is gated on hasChanges ALONE; the dead
+      `tableName && !hideChangeToolbar` prop pair is gone.
+    - SCR-25 is reachable. Preview SQL opens an anchored popover (shown open).
+    - Q2 RESOLVED: SCR-23 holds row actions only. No undo/redo/discard/execute here.
+    - Q6 RESOLVED: the column type ALWAYS shows.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme on
+  <html> and syncs the `light` class, because tokens.css keys on `.light` — the
+  mechanism the app really ships (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-17 Table Browse — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ---------- SCR-02 Toolbar ---------- */
+.toolbar{
+  height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle);
+}
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);
+  display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.iconbtn.on{background:var(--color-bg-muted);color:var(--color-accent-blue)}
+.iconbtn[disabled]{opacity:.45;cursor:not-allowed}
+.connpill{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-md);
+  height:var(--control-h-sm);border-radius:var(--radius-sm);background:var(--color-bg-muted)}
+.dot{width:6px;height:6px;border-radius:var(--radius-full);flex:none}
+.engine{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.badge{
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);font-weight:var(--font-weight-medium);
+  padding:2px var(--space-sm);border-radius:var(--radius-xs);text-transform:uppercase;letter-spacing:.04em;
+}
+.badge.prod{color:var(--color-env-prod);border:1px solid var(--color-env-prod)}
+/* Safe Mode level 2 "Alert" is YELLOW in source (Toolbar.tsx LEVEL_COLORS);
+   --color-accent-orange is levels 3-4 (Alert+ / Safe). See design-spec 5.6. */
+.safemode{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border-radius:var(--radius-xs);font-size:var(--font-size-2xs);
+  font-weight:var(--font-weight-medium);color:var(--color-state-warning-fg);
+  background:var(--color-state-warning-bg);
+  border:1px solid var(--color-state-warning-fg)}
+.spacer{flex:1}
+
+/* ---------- body row ---------- */
+.body{flex:1;display:flex;min-height:0}
+
+/* ---------- SCR-04 Sidebar (M6) ---------- */
+.sidebar{width:var(--w-sidebar-default);flex:none;display:flex;flex-direction:column;
+  background:var(--color-bg-surface);min-height:0}
+.tree-head{display:flex;align-items:center;gap:var(--space-xs);padding:var(--space-sm) var(--space-md);
+  border-bottom:1px solid var(--color-border-subtle)}
+.field{display:flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-md);
+  border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-secondary)}
+/* B1: the ring moves to the WRAPPER — never zeroed on the inner input. */
+.field:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+.tree-head .field{flex:1}
+.field input{flex:1;min-width:0;background:none;border:0;
+  font-size:var(--font-size-sm);color:var(--color-text-primary)}
+.field input::placeholder{color:var(--color-text-secondary)}
+.tree{flex:1;overflow:auto;padding:var(--space-xs) 0}
+.node{display:flex;align-items:center;gap:var(--space-sm);height:var(--row-h-tree);
+  padding:0 var(--space-md);white-space:nowrap;cursor:default;color:var(--color-text-secondary)}
+.node:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.node:hover .count{color:var(--color-text-primary)}
+.node.sel{background:var(--color-accent-blue-subtle);color:var(--color-text-primary);
+  box-shadow:inset 2px 0 0 0 var(--color-accent-blue)}
+.node.grp{color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  font-weight:var(--font-weight-medium);text-transform:uppercase;letter-spacing:.05em}
+.node .count{margin-left:auto;color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.i1{padding-left:var(--space-2xl)}
+.i2{padding-left:var(--space-3xl)}
+
+.resizer{width:var(--h-resizer);flex:none;background:var(--color-border-subtle);cursor:col-resize;
+  display:grid;place-items:center}
+.resizer:hover{background:var(--color-accent-blue)}
+.grip{display:flex;flex-direction:column;gap:3px;opacity:.4}
+.grip i{width:2px;height:2px;border-radius:var(--radius-full);background:var(--color-text-muted)}
+
+/* ---------- main ---------- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+
+/* ---------- SCR-06 Tab bar ---------- */
+.tabbar{height:var(--h-tabbar);flex:none;display:flex;align-items:stretch;
+  background:var(--color-bg-surface);border-bottom:1px solid var(--color-border-subtle)}
+.tab{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-lg);
+  color:var(--color-text-secondary);border-right:1px solid var(--color-border-subtle);
+  max-width:200px;white-space:nowrap}
+.tab:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.tab.active{color:var(--color-text-primary);background:var(--color-bg-base);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+.tab .dirty{width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-accent-yellow)}
+.tab .x{color:var(--color-text-secondary);opacity:0}
+.tab:hover .x{opacity:1}
+.tabadd{width:var(--h-tabbar);display:grid;place-items:center;color:var(--color-text-secondary)}
+.tabadd:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+/* ---------- SCR-23 Contextual bar — ROW ACTIONS ONLY (Q2 resolved) ---------- */
+.rowbar{height:var(--control-h-lg);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-lg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn.sm{height:var(--control-h-xs);padding:0 var(--space-md);font-size:var(--font-size-2xs)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.btn.danger-ghost{color:var(--color-accent-red)}
+.btn.danger-ghost:hover{background:var(--color-accent-red-subtle);color:var(--color-accent-red)}
+.btn.danger-ghost:active{background:var(--color-accent-red-subtle);box-shadow:var(--shadow-inset)}
+.selcount{color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+
+/* ---------- SCR-16 Result strip (M3) ---------- */
+.strip{height:var(--control-h-lg);flex:none;display:flex;align-items:stretch;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-base);
+  border-bottom:1px solid var(--color-border-subtle)}
+.rtab{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-md);
+  color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+.rtab:hover{color:var(--color-text-primary)}
+.rtab.active{color:var(--color-text-primary);font-weight:var(--font-weight-medium);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+.rtab .pill{font-size:var(--font-size-2xs);padding:1px var(--space-sm);border-radius:var(--radius-full);
+  background:var(--color-bg-muted);color:var(--color-text-secondary);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.qsearch:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+.qsearch{display:flex;align-items:center;gap:var(--space-sm);align-self:center;height:var(--control-h-sm);
+  padding:0 var(--space-md);border-radius:var(--radius-sm);background:var(--color-bg-surface);
+  border:1px solid var(--color-border-subtle);color:var(--color-text-secondary);width:200px}
+.qsearch input{flex:1;min-width:0;background:none;border:0;font-size:var(--font-size-xs)}
+.striptools{display:flex;align-items:center;gap:var(--space-xs);align-self:center}
+
+/* ---------- SCR-17 Data grid ---------- */
+.gridwrap{flex:1;overflow:auto;min-height:0;position:relative}
+table.grid{border-collapse:separate;border-spacing:0;width:100%;
+  font-variant-numeric:var(--font-numeric-tabular)}
+table.grid th{position:sticky;top:0;z-index:var(--z-sticky);text-align:left;vertical-align:top;
+  background:var(--color-grid-header-bg);padding:var(--space-xs) var(--space-sm);
+  border-bottom:1px solid var(--color-border);border-right:1px solid var(--color-border-subtle);
+  font-weight:var(--font-weight-medium);font-size:var(--font-size-xs);white-space:nowrap}
+/* M7 / Q6 RESOLVED — the type ALWAYS shows, on its own line so a narrow
+   column truncates the NAME and never loses the type. */
+.colname{display:flex;align-items:center;gap:var(--space-xs);color:var(--color-text-primary);
+  overflow:hidden}
+.colname span{overflow:hidden;text-overflow:ellipsis}
+.coltype{display:block;font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-weight:var(--font-weight-regular);color:var(--color-text-secondary);
+  font-family:var(--font-mono);margin-top:1px}
+.pk{color:var(--color-grid-pk-fg)}
+.caret{margin-left:auto;color:var(--color-text-secondary);opacity:0}
+th:hover .caret{opacity:1}
+table.grid td{height:var(--row-h-grid);padding:0 var(--space-sm);white-space:nowrap;
+  border-bottom:1px solid var(--color-border-subtle);
+  border-right:1px solid var(--color-border-subtle);overflow:hidden;text-overflow:ellipsis;max-width:220px}
+tr.alt td{background:var(--color-grid-row-alt)}
+tr.hov td{background:var(--color-grid-row-hover)}
+tr.sel td{background:var(--color-grid-row-selected)}
+tr.sel td:first-child{box-shadow:inset 2px 0 0 0 var(--color-accent-blue)}
+/* Staged states carry a glyph AND a left border, never colour alone. */
+tr.ins td{background:var(--color-grid-row-inserted)}
+tr.ins td:first-child{box-shadow:inset 2px 0 0 0 var(--color-accent-green)}
+tr.upd td{background:var(--color-grid-row-updated)}
+tr.upd td:first-child{box-shadow:inset 2px 0 0 0 var(--color-accent-yellow)}
+tr.del td{background:var(--color-grid-row-deleted);text-decoration:line-through;
+  color:var(--color-text-secondary)}
+tr.del td:first-child{box-shadow:inset 2px 0 0 0 var(--color-accent-red)}
+.gutter{width:34px;min-width:34px;text-align:center;color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs)}
+.g-ins{color:var(--color-accent-green)}
+.g-upd{color:var(--color-accent-yellow)}
+.g-del{color:var(--color-accent-red)}
+.null{color:var(--color-grid-null-fg);font-size:var(--font-size-xs);font-style:italic}
+.mono{font-family:var(--font-mono);font-size:var(--font-size-xs)}
+.num{text-align:right}
+
+/* ---------- Pagination ---------- */
+.pager{height:var(--control-h-lg);flex:none;display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs);font-variant-numeric:var(--font-numeric-tabular)}
+
+/* ---------- SCR-24 RESTORED — pending-changes strip ----------
+   Sticky bottom of SCR-16 at --z-sticky. Rendered ONLY when hasChanges.
+   Zero height when idle. Mobbin ref 5 (Rows) bottom aggregate strip. */
+.pending{position:relative;z-index:var(--z-sticky);height:var(--control-h-lg);flex:none;
+  display:flex;align-items:center;gap:var(--space-md);padding:0 var(--space-lg);
+  background:var(--color-accent-yellow-subtle);
+  border-top:1px solid var(--color-accent-yellow)}
+.pending .count{font-weight:var(--font-weight-medium);
+  font-variant-numeric:var(--font-numeric-tabular)}
+
+/* ---------- SCR-25 RESTORED — anchored popover ----------
+   Anchored below-start of Preview SQL. Mobbin ref 6 (Canva sheets). */
+.anchor{position:relative}
+.popover{
+  position:absolute;bottom:calc(100% + var(--space-sm));left:0;z-index:var(--z-popover);
+  width:var(--w-popover-max);max-width:var(--w-popover-max);
+  background:var(--color-bg-elevated);border:1px solid var(--color-border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-popup);overflow:hidden;
+}
+.pop-head{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-sm) var(--space-lg);
+  border-bottom:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs);font-weight:var(--font-weight-medium)}
+.pop-body{max-height:var(--h-popover-max);overflow:auto;padding:var(--space-lg);
+  font-family:var(--font-mono);font-size:var(--font-size-sm);line-height:var(--line-height-md);
+  color:var(--color-text-primary);white-space:pre;background:var(--color-bg-base)}
+.kw{color:var(--color-accent-blue)}
+.str{color:var(--color-accent-green)}
+.pop-foot{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-sm) var(--space-lg);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs)}
+kbd{font-family:var(--font-mono);font-size:var(--font-size-2xs);padding:1px var(--space-xs);
+  border:1px solid var(--color-border);border-radius:var(--radius-xs);color:var(--color-text-secondary)}
+
+/* ---------- SCR-03 Status bar ---------- */
+.status{height:var(--h-statusbar);flex:none;display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.status .grp{display:flex;align-items:center;gap:var(--space-xs)}
+.stog{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border-radius:var(--radius-xs);color:var(--color-text-secondary)}
+.stog:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.stog.on{background:var(--color-bg-muted);color:var(--color-text-primary)}
+
+/* mockup scaffolding only */
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* m10: one control per screen is shown in its focused state, so the
+   mandatory ring is actually visible in the set. Matches the
+   .demo-focus convention in sheet-bulk-dialogs / sheet-confirm-dialogs. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="ic" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></g>
+<symbol id="i-panel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+<symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M10 3v18"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-braces" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/></symbol>
+<symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h11a2 2 0 0 1 2 2v3H8z"/><path d="M8 8v11a2 2 0 0 1-2 2 2 2 0 0 1-2-2V6a2 2 0 0 1 2-2"/><path d="M12 12h6M12 16h6"/></symbol>
+<symbol id="i-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></symbol>
+<symbol id="i-redo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.7L21 8"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18-6-6 6-6M15 6l6 6-6 6"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 14 8-14 8z"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13M7 8l5-5 5 5"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 16V3M7 11l5 5 5-5"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M9 6h6M6 13v5M4 15.5h4M15 12l1.8 4.2L21 18l-4.2 1.8L15 24l-1.8-4.2L9 18l4.2-1.8z"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+<symbol id="i-panelright" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8M17 6l2 2M14 9l2 2"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="app">
+
+  <!-- ===== SCR-02 Toolbar ===== -->
+  <header class="toolbar">
+    <button class="iconbtn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+Shift+E)"><svg width="15" height="15" aria-hidden="true"><use href="#i-panel"/></svg></button>
+    <div class="connpill">
+      <span class="dot" style="background:var(--color-accent-indigo)"></span>
+      <span style="font-weight:var(--font-weight-medium)">Analytics</span>
+      <span class="engine">PostgreSQL</span>
+    </div>
+    <span class="badge prod">prod</span>
+    <button class="iconbtn" aria-label="Reconnect to database" title="Reconnect"><svg width="15" height="15" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+    <button class="iconbtn" aria-label="Disconnect from database" title="Disconnect"><svg width="15" height="15" aria-hidden="true"><use href="#i-plug"/></svg></button>
+    <button class="safemode" title="Safe Mode: Alert — click to cycle (Off → Alert → Read-Only)">Safe Mode: Alert</button>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+    <button class="iconbtn" aria-label="Import SQL" title="Import SQL (Ctrl+Shift+M)"><svg width="15" height="15" aria-hidden="true"><use href="#i-upload"/></svg></button>
+    <button class="iconbtn" aria-label="Toggle query history" title="Query History (Ctrl+H)"><svg width="15" height="15" aria-hidden="true"><use href="#i-history"/></svg></button>
+    <button class="iconbtn" aria-label="Toggle AI chat" title="AI Chat (Ctrl+Shift+L)"><svg width="15" height="15" aria-hidden="true"><use href="#i-sparkles"/></svg></button>
+    <button class="iconbtn" aria-label="Open settings" title="Settings (Ctrl+,)"><svg width="15" height="15" aria-hidden="true"><use href="#i-settings"/></svg></button>
+  </header>
+
+  <div class="body">
+
+    <!-- ===== SCR-04 Sidebar — M6: own search + refresh in the header ===== -->
+    <nav class="sidebar" aria-label="Schema">
+      <div class="tree-head">
+        <label class="field">
+          <svg width="12" height="12" aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="text" placeholder="Filter objects" aria-label="Filter objects">
+        </label>
+        <button class="iconbtn" aria-label="Refresh Tables" title="Refresh Tables"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="tree">
+        <div class="node"><svg width="12" height="12" aria-hidden="true"><use href="#i-chev-d"/></svg><svg width="13" height="13" aria-hidden="true"><use href="#i-db"/></svg><span>analytics</span></div>
+        <div class="node i1 grp"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg><span>Tables</span><span class="count">7</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg><span>customers</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg><span>order_items</span></div>
+        <div class="node i2 sel"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg><span>orders</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg><span>products</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg><span>shipments</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg><span>users</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg><span>warehouses</span></div>
+        <div class="node i1 grp"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-r"/></svg><span>Views</span><span class="count">2</span></div>
+        <div class="node i1 grp"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg><span>Functions</span><span class="count">3</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-braces"/></svg><span>calculate_tax</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-braces"/></svg><span>fn_order_total</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-braces"/></svg><span>normalize_email</span></div>
+        <div class="node i1 grp"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg><span>Procedures</span><span class="count">1</span></div>
+        <div class="node i2"><svg width="12" height="12" aria-hidden="true"><use href="#i-scroll"/></svg><span>sp_rebuild_indexes</span></div>
+      </div>
+    </nav>
+    <div class="resizer" aria-hidden="true"><span class="grip"><i></i><i></i><i></i></span></div>
+
+    <!-- ===== main ===== -->
+    <main class="main">
+        <h1 class="sr-only">Table browse — public.orders · Analytics (PostgreSQL)</h1>
+
+      <!-- SCR-06 Tab bar — stays visible; structure is a tab kind, not a takeover (M1) -->
+      <div class="tabbar" role="tablist" aria-label="Open tabs">
+        <button class="tab active" role="tab" aria-selected="true"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg>orders<svg class="x" width="11" height="11" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button class="tab" role="tab" aria-selected="false"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg>customers<svg class="x" width="11" height="11" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button class="tab" role="tab" aria-selected="false"><svg width="12" height="12" aria-hidden="true"><use href="#i-code"/></svg>revenue by month<span class="dirty" title="Unsaved"></span></button>
+        <button class="tab" role="tab" aria-selected="false"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg>orders — structure<svg class="x" width="11" height="11" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button class="tabadd" aria-label="New query tab" title="New query tab (Ctrl+T)"><svg width="14" height="14" aria-hidden="true"><use href="#i-plus"/></svg></button>
+      </div>
+
+      <!-- SCR-23 — Q2 RESOLVED: row actions ONLY. No undo/redo/discard/execute here. -->
+      <div class="rowbar">
+        <button class="btn ghost"><svg width="13" height="13" aria-hidden="true"><use href="#i-plus"/></svg>Add row</button>
+        <button class="btn danger-ghost"><svg width="13" height="13" aria-hidden="true"><use href="#i-trash"/></svg>Delete selected</button>
+        <span class="selcount">1 row selected</span>
+        <button class="btn ghost">Deselect all</button>
+      </div>
+
+      <!-- SCR-16 result strip (M3) -->
+      <div class="strip" role="tablist" aria-label="Result view">
+        <button class="rtab active" role="tab" aria-selected="true">Results <span class="pill">142</span></button>
+        <button class="rtab" role="tab" aria-selected="false">Explain</button>
+        <button class="rtab" role="tab" aria-selected="false">Messages</button>
+        <span class="spacer"></span>
+        <label class="qsearch">
+          <svg width="11" height="11" aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="text" placeholder="Search all columns" aria-label="Search all columns">
+        </label>
+        <div class="striptools">
+          <button class="iconbtn" aria-label="Query Editor" title="Query Editor"><svg width="14" height="14" aria-hidden="true"><use href="#i-code"/></svg></button>
+          <button class="iconbtn" aria-label="Refresh" title="Refresh (F5)"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+          <button class="iconbtn" aria-label="Export results" title="Export results"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg></button>
+        </div>
+      </div>
+
+      <!-- SCR-17 grid — M7/Q6: type ALWAYS shown under the name -->
+      <div class="gridwrap">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th class="gutter" scope="col"></th>
+              <th scope="col" aria-sort="ascending"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg><span>order_id</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><span>customer_id</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><span>status</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">text</span></th>
+              <th scope="col"><span class="colname"><span>total_amount</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">numeric(12,2)</span></th>
+              <th scope="col"><span class="colname"><span>currency</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">char(3)</span></th>
+              <th scope="col"><span class="colname"><span>created_at</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">timestamptz</span></th>
+              <th scope="col"><span class="colname"><span>shipped_at</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">timestamptz</span></th>
+              <th scope="col"><span class="colname"><span>notes</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">text</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="gutter">1</td><td class="num">10241</td><td class="num">4820</td><td>shipped</td><td class="num">129.50</td><td class="mono">USD</td><td class="mono">2026-08-19 09:14:22+07</td><td class="mono">2026-08-20 11:02:00+07</td><td><span class="null">NULL</span></td></tr>
+            <tr class="alt"><td class="gutter">2</td><td class="num">10242</td><td class="num">4821</td><td>pending</td><td class="num">89.00</td><td class="mono">USD</td><td class="mono">2026-08-19 10:41:07+07</td><td><span class="null">NULL</span></td><td>rush order</td></tr>
+            <tr class="hov"><td class="gutter">3</td><td class="num">10243</td><td class="num">4822</td><td>shipped</td><td class="num">1240.75</td><td class="mono">EUR</td><td class="mono">2026-08-19 12:03:51+07</td><td class="mono">2026-08-21 08:15:30+07</td><td><span class="null">NULL</span></td></tr>
+            <tr class="sel"><td class="gutter">4</td><td class="num">10244</td><td class="num">4823</td><td>cancelled</td><td class="num">45.20</td><td class="mono">USD</td><td class="mono">2026-08-19 14:22:09+07</td><td><span class="null">NULL</span></td><td>customer request</td></tr>
+            <tr class="upd"><td class="gutter g-upd" title="Updated">~</td><td class="num">10245</td><td class="num">4824</td><td>processing</td><td class="num">310.00</td><td class="mono">GBP</td><td class="mono">2026-08-19 16:47:33+07</td><td><span class="null">NULL</span></td><td><span class="null">NULL</span></td></tr>
+            <tr class="ins"><td class="gutter g-ins" title="Inserted">+</td><td class="num"><span class="null">NULL</span></td><td class="num">4825</td><td>pending</td><td class="num">75.00</td><td class="mono">USD</td><td class="mono">now()</td><td><span class="null">NULL</span></td><td><span class="null">NULL</span></td></tr>
+            <tr class="del"><td class="gutter g-del" title="Deleted">&minus;</td><td class="num">10247</td><td class="num">4826</td><td>shipped</td><td class="num">62.10</td><td class="mono">USD</td><td class="mono">2026-08-20 08:11:04+07</td><td class="mono">2026-08-21 09:40:12+07</td><td>NULL</td></tr>
+            <tr class="alt"><td class="gutter">8</td><td class="num">10248</td><td class="num">4827</td><td>pending</td><td class="num">998.00</td><td class="mono">USD</td><td class="mono">2026-08-20 09:26:18+07</td><td><span class="null">NULL</span></td><td><span class="null">NULL</span></td></tr>
+            <tr><td class="gutter">9</td><td class="num">10249</td><td class="num">4828</td><td>shipped</td><td class="num">204.99</td><td class="mono">EUR</td><td class="mono">2026-08-20 10:55:41+07</td><td class="mono">2026-08-22 07:30:00+07</td><td>gift wrap</td></tr>
+            <tr class="alt"><td class="gutter">10</td><td class="num">10250</td><td class="num">4829</td><td>pending</td><td class="num">17.40</td><td class="mono">USD</td><td class="mono">2026-08-20 11:38:26+07</td><td><span class="null">NULL</span></td><td><span class="null">NULL</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <span>Rows 1&ndash;100 of 142</span>
+        <button class="btn ghost" disabled>Previous</button>
+        <button class="btn ghost">Next</button>
+        <span class="spacer"></span>
+        <span>Page size 100</span>
+      </div>
+
+      <!-- ============================================================
+           SCR-24 RESTORED — pending-changes strip.
+           Gated on changeStore.hasChanges ALONE. The dead guard
+           `tableName && !hideChangeToolbar` is gone; that prop pair is
+           exactly what made this unreachable at 94a061a0.
+           ============================================================ -->
+      <div class="pending">
+        <span class="count">3 changes</span>
+        <span class="selcount">1 insert &middot; 1 update &middot; 1 delete</span>
+        <span class="spacer"></span>
+        <button class="btn ghost" title="Undo (Ctrl+Z)"><svg width="13" height="13" aria-hidden="true"><use href="#i-undo"/></svg>Undo</button>
+        <button class="btn ghost" title="Redo (Ctrl+Y)"><svg width="13" height="13" aria-hidden="true"><use href="#i-redo"/></svg>Redo</button>
+        <button class="btn ghost">Discard</button>
+
+        <!-- SCR-25 RESTORED — anchored popover, shown OPEN (Mobbin ref 6) -->
+        <span class="anchor">
+          <button class="btn sec demo-focus" aria-expanded="true" aria-controls="sqlpreview" autofocus>
+            <svg width="13" height="13" aria-hidden="true"><use href="#i-code"/></svg>Preview SQL
+          </button>
+          <div class="popover" id="sqlpreview" role="dialog" aria-label="Generated SQL">
+            <div class="pop-head">
+              <svg width="12" height="12" aria-hidden="true"><use href="#i-code"/></svg>
+              <span>Generated SQL &mdash; 3 statements</span>
+              <span class="spacer"></span>
+              <button class="btn ghost" style="height:var(--control-h-xs);padding:0 var(--space-sm)"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy</button>
+            </div>
+<div class="pop-body" id="sqlbody"><span class="kw">UPDATE</span> public.orders
+   <span class="kw">SET</span> status = <span class="str">'processing'</span>
+ <span class="kw">WHERE</span> order_id = 10245;
+
+<span class="kw">INSERT INTO</span> public.orders
+       (customer_id, status, total_amount, currency, created_at)
+<span class="kw">VALUES</span> (4825, <span class="str">'pending'</span>, 75.00, <span class="str">'USD'</span>, now());
+
+<span class="kw">DELETE FROM</span> public.orders
+ <span class="kw">WHERE</span> order_id = 10247;</div>
+            <div class="pop-foot">
+              <span>Preview only &mdash; nothing has run yet.</span>
+              <span class="spacer"></span>
+              <kbd>Esc</kbd><span>close</span>
+            </div>
+          </div>
+        </span>
+
+        <button class="btn pri"><svg width="13" height="13" aria-hidden="true"><use href="#i-play"/></svg>Execute 3 changes</button>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ===== SCR-03 Status bar ===== -->
+  <footer class="status">
+    <span class="grp"><span class="dot" style="background:var(--color-accent-green)"></span>Connected</span>
+    <span>PostgreSQL</span>
+    <span class="grp"><svg width="10" height="10" aria-hidden="true"><use href="#i-db"/></svg>analytics</span>
+    <span class="grp"><svg width="10" height="10" aria-hidden="true"><use href="#i-table"/></svg>7 tables</span>
+    <span class="spacer"></span>
+    <span class="grp"><svg width="10" height="10" aria-hidden="true"><use href="#i-check"/></svg>142 rows</span>
+    <span>38ms</span>
+    <!-- The filter toggle SCR-23 no longer owns lives here (already ships at StatusBar.tsx:129) -->
+    <button class="stog" aria-pressed="false"><svg width="10" height="10" aria-hidden="true"><use href="#i-filter"/></svg>Filter</button>
+    <button class="stog on" aria-pressed="true"><svg width="10" height="10" aria-hidden="true"><use href="#i-panelright"/></svg>Inspector</button>
+  </footer>
+</div>
+
+<script>
+/* Mockup scaffolding only — not a product feature.
+   Writes data-theme on <html> and syncs the `light` class, because tokens.css
+   keys on `.light`, matching the shipped mechanism in src/hooks/useTheme.ts. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

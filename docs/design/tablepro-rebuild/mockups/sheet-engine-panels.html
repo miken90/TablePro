@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (partition: overlays / settings / engine panels / error surface)
+  SCR-69 MongoDB Query Panel · SCR-70 Redis Command Panel
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Both panels are "Tab body" surfaces per design-spec.md 2.4 (fill the
+  workspace, never overlay) — they REPLACE SCR-13, not float over it
+  (screens.md: "SCR-69/70 ... replaces SCR-13"). So each is shown as a full
+  mini app-shell frame (toolbar, sidebar, tab bar, panel, results, status bar)
+  rather than a small popover, stacked in one sheet per the deliverable split.
+
+  Engine boundary — design-spec.md 2.5 (Gate 2 decision 4), followed exactly:
+    - Sidebar object group is "Collections" (Mongo) / "Keys" (Redis), not
+      "Tables"; Views/Functions/Procedures groups do not render for either.
+    - SCR-23 Contextual Bar (row add/delete) and SCR-26 Filter Panel stay
+      hidden — neither engine supports row mutation or the SQL filter model.
+    - The pending-changes strip (M4/SCR-24) never appears — neither engine
+      stages row edits.
+    - NO structure tab, no "View structure" affordance, no placeholder for
+      one. This is a deliberate boundary, not a gap — "do not invent one."
+  Content for the panels themselves is verbatim from screens.md:
+    SCR-69 — Collection select ("Select collection…"), Filter (JSON)
+      placeholder {"age": {"$gt": 25}}, Sort (JSON) placeholder {"name": 1},
+      Limit (default 100), "Execute find()".
+    SCR-70 — "Redis CLI" input, placeholder
+      "GET key / SET key value / SCAN 0 MATCH * COUNT 200".
+  Result grid contents below each panel are illustrative example data (not
+  literally enumerated in screens.md, same convention the pilot mockups use
+  for row data) — flagged in the fan-out final report.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme
+  on <html> and syncs the `light` class, because tokens.css keys on `.light` —
+  copied verbatim from ../mockups/scr-17-table-browse.html.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-69 / SCR-70 Engine Panels — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;
+}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Canonical .board — design-spec 5.16 */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;align-items:center;gap:var(--space-2xl);background:var(--color-bg-base)}
+.scr{color:var(--color-text-secondary);font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+  text-transform:uppercase;letter-spacing:.06em}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);align-self:flex-end}
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+/* AUDIT m5-pattern — max-width, never width, so a narrow window shrinks the
+   frame instead of forcing a horizontal scrollbar on the board. */
+.frame{width:100%;max-width:1040px;height:640px;display:flex;flex-direction:column;
+  border:1px solid var(--color-border);border-radius:var(--radius-lg);overflow:hidden;
+  box-shadow:var(--shadow-lg)}
+
+/* ---------- toolbar ---------- */
+.toolbar{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);border-bottom:1px solid var(--color-border-subtle)}
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);display:grid;place-items:center;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.connpill{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-md);
+  height:var(--control-h-sm);border-radius:var(--radius-sm);background:var(--color-bg-muted)}
+.dot{width:6px;height:6px;border-radius:var(--radius-full);flex:none}
+.engine{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.badge{font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);font-weight:var(--font-weight-medium);
+  padding:2px var(--space-sm);border-radius:var(--radius-xs);text-transform:uppercase;letter-spacing:.04em}
+.badge.dev{color:var(--color-env-dev);border:1px solid var(--color-env-dev)}
+.spacer{flex:1}
+
+/* ---------- body ---------- */
+.body{flex:1;display:flex;min-height:0}
+.sidebar{width:200px;flex:none;display:flex;flex-direction:column;background:var(--color-bg-surface);
+  border-right:1px solid var(--color-border-subtle);min-height:0}
+.tree-head{display:flex;align-items:center;gap:var(--space-xs);padding:var(--space-sm) var(--space-md);
+  border-bottom:1px solid var(--color-border-subtle)}
+/* Canonical .field — design-spec 5.16, the inline bordered control wrapper */
+.field{display:flex;align-items:center;gap:var(--space-sm);flex:1;height:var(--control-h-md);
+  padding:0 var(--space-md);border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-secondary)}
+/* AUDIT B1 — the ring moves to the wrapper (:focus-within), never deleted */
+.field:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.field input{flex:1;min-width:0;background:none;border:0;font-size:var(--font-size-sm);
+  color:var(--color-text-primary)}
+.field input::placeholder{color:var(--color-text-secondary)}
+.tree{flex:1;overflow:auto;padding:var(--space-xs) 0}
+.node{display:flex;align-items:center;gap:var(--space-sm);height:var(--row-h-tree);
+  padding:0 var(--space-md);white-space:nowrap;color:var(--color-text-secondary)}
+.node:hover{background:var(--color-bg-hover)}
+.node.sel{background:var(--color-accent-blue-subtle);color:var(--color-text-primary);
+  box-shadow:inset 2px 0 0 0 var(--color-accent-blue)}
+.node.grp{color:var(--color-text-secondary);font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+  text-transform:uppercase;letter-spacing:.05em}
+.node .count{margin-left:auto;color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.i1{padding-left:var(--space-2xl)}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.tabbar{height:var(--h-tabbar);flex:none;display:flex;background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+/* AUDIT m12 — base .tab no longer bakes in the active look; only .tab.active gets it,
+   matching every other file in the set (a second tab would otherwise also render active). */
+.tab{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-lg);
+  color:var(--color-text-secondary);border-right:1px solid var(--color-border-subtle)}
+.tab:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.tab.active{color:var(--color-text-primary);background:var(--color-bg-base);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+.tabadd{width:var(--h-tabbar);display:grid;place-items:center;color:var(--color-text-secondary)}
+
+/* ---------- SCR-69 / SCR-70 panel (replaces SCR-13) ---------- */
+.panel{flex:none;padding:var(--space-lg);background:var(--color-bg-base);
+  border-bottom:1px solid var(--color-border-subtle);display:flex;flex-direction:column;gap:var(--space-md)}
+.panelrow{display:flex;align-items:flex-end;gap:var(--space-lg);flex-wrap:wrap}
+.fld{display:flex;flex-direction:column;gap:var(--space-2xs)}
+.fld label{font-size:var(--font-size-xs);color:var(--color-text-secondary);font-weight:var(--font-weight-medium)}
+/* AUDIT m14 — bg-base, not bg-elevated; matches 5.16 Input and every other file */
+.ctl{height:var(--control-h-md);border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-primary);padding:0 var(--space-md);
+  font-size:var(--font-size-md)}
+.ctl.mono{font-family:var(--font-mono);font-size:var(--font-size-sm)}
+.ctl.wide{width:280px}
+.ctl.grow{flex:1;min-width:200px}
+.ctl.narrow{width:80px}
+.ctl::placeholder{color:var(--color-text-secondary)}
+/* Canonical .btn — design-spec 5.16 */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),color var(--duration-fast) var(--ease-snappy)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.cliwrap{display:flex;align-items:center;gap:var(--space-md)}
+.clilabel{font-family:var(--font-mono);font-size:var(--font-size-sm);color:var(--color-accent-green);
+  font-weight:var(--font-weight-medium)}
+
+/* ---------- SCR-16 result strip + grid (no SCR-23, no pending strip — 2.5) ---------- */
+.strip{height:var(--control-h-lg);flex:none;display:flex;align-items:stretch;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-base);border-bottom:1px solid var(--color-border-subtle)}
+.rtab{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-md);
+  color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+.rtab.active{color:var(--color-text-primary);font-weight:var(--font-weight-medium);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+.rtab .pill{font-size:var(--font-size-2xs);padding:1px var(--space-sm);border-radius:var(--radius-full);
+  background:var(--color-bg-muted);color:var(--color-text-secondary);font-variant-numeric:var(--font-numeric-tabular)}
+.striptools{display:flex;align-items:center;gap:var(--space-xs);align-self:center;margin-left:auto}
+.gridwrap{flex:1;overflow:auto;min-height:0}
+table.grid{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:var(--font-numeric-tabular)}
+table.grid th{position:sticky;top:0;text-align:left;background:var(--color-grid-header-bg);
+  padding:var(--space-xs) var(--space-sm);border-bottom:1px solid var(--color-border);
+  border-right:1px solid var(--color-border-subtle);font-weight:var(--font-weight-medium);
+  font-size:var(--font-size-xs);white-space:nowrap}
+table.grid td{height:var(--row-h-grid);padding:0 var(--space-sm);white-space:nowrap;
+  border-bottom:1px solid var(--color-border-subtle);border-right:1px solid var(--color-border-subtle);
+  overflow:hidden;text-overflow:ellipsis;max-width:260px}
+tr.alt td{background:var(--color-grid-row-alt)}
+.null{color:var(--color-grid-null-fg);font-size:var(--font-size-xs);font-style:italic}
+.mono{font-family:var(--font-mono);font-size:var(--font-size-xs)}
+.num{text-align:right}
+
+.status{height:var(--h-statusbar);flex:none;display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);border-top:1px solid var(--color-border-subtle);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);font-variant-numeric:var(--font-numeric-tabular)}
+.status .grp{display:flex;align-items:center;gap:var(--space-xs)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-panel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+<symbol id="i-braces" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8M17 6l2 2M14 9l2 2"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 14 8-14 8z"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 16V3M7 11l5 5 5-5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+</defs></svg>
+
+<div class="board">
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+    <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+  </button>
+
+  <!-- ===================== SCR-69 MongoDB Query Panel ===================== -->
+  <span class="scr">SCR-69 &middot; MongoDB Query Panel (replaces SCR-13)</span>
+  <div class="frame">
+    <header class="toolbar">
+      <button class="iconbtn" aria-label="Toggle sidebar"><svg width="15" height="15" aria-hidden="true"><use href="#i-panel"/></svg></button>
+      <div class="connpill"><span class="dot" style="background:var(--color-accent-green)"></span>
+        <span style="font-weight:var(--font-weight-medium)">Reporting</span><span class="engine">MongoDB</span></div>
+      <span class="badge dev">dev</span>
+      <button class="iconbtn" aria-label="Reconnect"><svg width="15" height="15" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+      <button class="iconbtn" aria-label="Disconnect"><svg width="15" height="15" aria-hidden="true"><use href="#i-plug"/></svg></button>
+      <span class="spacer"></span>
+    </header>
+    <div class="body">
+      <nav class="sidebar" aria-label="Schema">
+        <div class="tree-head">
+          <label class="field"><svg width="12" height="12" aria-hidden="true"><use href="#i-search"/></svg>
+            <input type="text" placeholder="Filter objects" aria-label="Filter objects"></label>
+          <button class="iconbtn" aria-label="Refresh Collections"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+        </div>
+        <div class="tree">
+          <div class="node"><svg width="12" height="12" aria-hidden="true"><use href="#i-chev-d"/></svg><svg width="13" height="13" aria-hidden="true"><use href="#i-db"/></svg><span>reporting</span></div>
+          <!-- 2.5: group is "Collections", not "Tables"; no Views/Functions/Procedures -->
+          <div class="node i1 grp"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg><span>Collections</span><span class="count">4</span></div>
+          <div class="node i1 sel"><svg width="12" height="12" aria-hidden="true"><use href="#i-braces"/></svg><span style="padding-left:var(--space-md)">users</span></div>
+          <div class="node i1"><svg width="12" height="12" aria-hidden="true"><use href="#i-braces"/></svg><span style="padding-left:var(--space-md)">events</span></div>
+          <div class="node i1"><svg width="12" height="12" aria-hidden="true"><use href="#i-braces"/></svg><span style="padding-left:var(--space-md)">sessions</span></div>
+          <div class="node i1"><svg width="12" height="12" aria-hidden="true"><use href="#i-braces"/></svg><span style="padding-left:var(--space-md)">audit_log</span></div>
+        </div>
+      </nav>
+      <main class="main">
+        <h1 class="sr-only">MongoDB Query Panel</h1>
+        <!-- No structure tab kind offered for this engine — deliberate boundary, 2.5 -->
+        <div class="tabbar" role="tablist" aria-label="Open tabs">
+          <button class="tab active" role="tab" aria-selected="true"><svg width="12" height="12" aria-hidden="true"><use href="#i-braces"/></svg>find: users</button>
+          <span class="tabadd" aria-hidden="true"></span>
+        </div>
+
+        <!-- SCR-69 fields — verbatim from screens.md -->
+        <section class="panel" aria-label="MongoDB query">
+          <div class="panelrow">
+            <div class="fld">
+              <label for="mcoll">Collection</label>
+              <select id="mcoll" class="ctl wide demo-focus"><option>users</option><option>events</option><option>sessions</option><option>audit_log</option></select>
+            </div>
+            <div class="fld">
+              <label for="mlimit">Limit</label>
+              <input id="mlimit" class="ctl narrow" type="number" value="100">
+            </div>
+            <button class="btn pri"><svg width="13" height="13" aria-hidden="true"><use href="#i-play"/></svg>Execute find()</button>
+          </div>
+          <div class="panelrow">
+            <div class="fld" style="flex:1;min-width:260px">
+              <label for="mfilter">Filter (JSON)</label>
+              <input id="mfilter" class="ctl mono grow" placeholder='{"age": {"$gt": 25}}'>
+            </div>
+            <div class="fld" style="flex:1;min-width:200px">
+              <label for="msort">Sort (JSON)</label>
+              <input id="msort" class="ctl mono grow" placeholder='{"name": 1}'>
+            </div>
+          </div>
+        </section>
+
+        <!-- SCR-16 — no SCR-23 rowbar, no pending-changes strip for this engine -->
+        <div class="strip" role="tablist" aria-label="Result view">
+          <button class="rtab active" role="tab" aria-selected="true">Results <span class="pill">4</span></button>
+          <button class="rtab" role="tab" aria-selected="false">Messages</button>
+          <div class="striptools">
+            <button class="iconbtn" aria-label="Refresh"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+            <button class="iconbtn" aria-label="Export results"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg></button>
+          </div>
+        </div>
+        <div class="gridwrap">
+          <table class="grid">
+            <thead><tr>
+              <th scope="col">_id</th><th scope="col">name</th><th scope="col">email</th>
+              <th scope="col">age</th><th scope="col">created_at</th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="mono">64f1a2…e91b</td><td>Priya Shah</td><td>priya.shah@example.com</td><td class="num">34</td><td class="mono">2026-06-02T09:14:22Z</td></tr>
+              <tr class="alt"><td class="mono">64f1a2…c204</td><td>Marco Bellini</td><td>marco.b@example.com</td><td class="num">29</td><td class="mono">2026-06-04T13:02:10Z</td></tr>
+              <tr><td class="mono">64f1a2…9a17</td><td>Lena Fischer</td><td><span class="null">NULL</span></td><td class="num">41</td><td class="mono">2026-06-07T18:45:03Z</td></tr>
+              <tr class="alt"><td class="mono">64f1a2…5f88</td><td>Ken Ito</td><td>ken.ito@example.com</td><td class="num">27</td><td class="mono">2026-06-11T07:29:51Z</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+    <footer class="status">
+      <span class="grp"><span class="dot" style="background:var(--color-accent-green)"></span>Connected</span>
+      <span>MongoDB</span>
+      <span class="grp"><svg width="10" height="10" aria-hidden="true"><use href="#i-db"/></svg>reporting</span>
+      <span class="spacer"></span>
+      <span class="grp"><svg width="10" height="10" aria-hidden="true"><use href="#i-check"/></svg>4 documents</span>
+      <span>19ms</span>
+    </footer>
+  </div>
+
+  <!-- ===================== SCR-70 Redis Command Panel ===================== -->
+  <span class="scr">SCR-70 &middot; Redis Command Panel (replaces SCR-13)</span>
+  <div class="frame">
+    <header class="toolbar">
+      <button class="iconbtn" aria-label="Toggle sidebar"><svg width="15" height="15" aria-hidden="true"><use href="#i-panel"/></svg></button>
+      <div class="connpill"><span class="dot" style="background:var(--color-accent-green)"></span>
+        <span style="font-weight:var(--font-weight-medium)">Cache</span><span class="engine">Redis</span></div>
+      <span class="badge dev">dev</span>
+      <button class="iconbtn" aria-label="Reconnect"><svg width="15" height="15" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+      <button class="iconbtn" aria-label="Disconnect"><svg width="15" height="15" aria-hidden="true"><use href="#i-plug"/></svg></button>
+      <span class="spacer"></span>
+    </header>
+    <div class="body">
+      <nav class="sidebar" aria-label="Schema">
+        <div class="tree-head">
+          <label class="field"><svg width="12" height="12" aria-hidden="true"><use href="#i-search"/></svg>
+            <input type="text" placeholder="Filter objects" aria-label="Filter objects"></label>
+          <button class="iconbtn" aria-label="Refresh Keys"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+        </div>
+        <div class="tree">
+          <div class="node"><svg width="12" height="12" aria-hidden="true"><use href="#i-chev-d"/></svg><svg width="13" height="13" aria-hidden="true"><use href="#i-db"/></svg><span>db0</span></div>
+          <!-- 2.5: group is "Keys", not "Tables"; no Views/Functions/Procedures -->
+          <div class="node i1 grp"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg><span>Keys</span><span class="count">3</span></div>
+          <div class="node i1 sel"><svg width="12" height="12" aria-hidden="true"><use href="#i-key"/></svg><span style="padding-left:var(--space-md)">session:8f21ac</span></div>
+          <div class="node i1"><svg width="12" height="12" aria-hidden="true"><use href="#i-key"/></svg><span style="padding-left:var(--space-md)">user:42:profile</span></div>
+          <div class="node i1"><svg width="12" height="12" aria-hidden="true"><use href="#i-key"/></svg><span style="padding-left:var(--space-md)">cache:products:featured</span></div>
+        </div>
+      </nav>
+      <main class="main">
+        <h1 class="sr-only">Redis Command Panel</h1>
+        <div class="tabbar" role="tablist" aria-label="Open tabs">
+          <button class="tab active" role="tab" aria-selected="true"><svg width="12" height="12" aria-hidden="true"><use href="#i-terminal"/></svg>redis cli</button>
+          <span class="tabadd" aria-hidden="true"></span>
+        </div>
+
+        <!-- SCR-70 field — verbatim from screens.md -->
+        <section class="panel" aria-label="Redis command">
+          <div class="cliwrap">
+            <span class="clilabel">&gt;</span>
+            <input class="ctl mono grow demo-focus" style="flex:1" placeholder="GET key / SET key value / SCAN 0 MATCH * COUNT 200" value="SCAN 0 MATCH session:* COUNT 200">
+            <button class="btn pri"><svg width="13" height="13" aria-hidden="true"><use href="#i-play"/></svg>Execute</button>
+          </div>
+        </section>
+
+        <div class="strip" role="tablist" aria-label="Result view">
+          <button class="rtab active" role="tab" aria-selected="true">Results <span class="pill">3</span></button>
+          <button class="rtab" role="tab" aria-selected="false">Messages</button>
+          <div class="striptools">
+            <button class="iconbtn" aria-label="Refresh"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+            <button class="iconbtn" aria-label="Export results"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg></button>
+          </div>
+        </div>
+        <div class="gridwrap">
+          <table class="grid">
+            <thead><tr><th scope="col">key</th><th scope="col">type</th><th scope="col">ttl</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">session:8f21ac</td><td>string</td><td class="num">1740</td></tr>
+              <tr class="alt"><td class="mono">session:2c90fe</td><td>string</td><td class="num">612</td></tr>
+              <tr><td class="mono">session:aa14d0</td><td>string</td><td class="mono"><span class="null">no expiry</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+    <footer class="status">
+      <span class="grp"><span class="dot" style="background:var(--color-accent-green)"></span>Connected</span>
+      <span>Redis</span>
+      <span class="grp"><svg width="10" height="10" aria-hidden="true"><use href="#i-db"/></svg>db0</span>
+      <span class="spacer"></span>
+      <span class="grp"><svg width="10" height="10" aria-hidden="true"><use href="#i-check"/></svg>3 keys</span>
+      <span>2ms</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

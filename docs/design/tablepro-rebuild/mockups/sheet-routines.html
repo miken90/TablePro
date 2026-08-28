@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (structure/routines/data-movement partition)
+  Grouped component sheet: SCR-36 Procedure Execute Dialog + SCR-37 Procedure
+  Source Panel — two labeled surfaces on one neutral board.
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+  Pattern authority: scr-17-table-browse.html, scr-13-query-workspace.html
+
+  AUDIT REMEDIATION PHASE 2 applied — see design-spec.md 5.16 (now canonical):
+    m5 / consistency#4  `.board` was `width:1400px` (fixed), forcing a
+      horizontal scrollbar below that viewport width. Rebuilt to the settled
+      model: `max-width:1400px` + `margin:0 auto`, background `--color-bg-base`,
+      and the two specimens now sit in a `.specimenrow` (`flex-wrap:wrap`,
+      each `flex:1 1 380px`) so the row wraps to a single column instead of
+      overflowing on a narrow window. This file is a review board and stays
+      exempt from the `<main>` + heading rule (M8/M9) — boards are not screens.
+    B2  --color-text-muted demoted to non-text use; text uses (param type
+      hints, the result-summary line, the SQL comment) -> text-secondary.
+    B1  no outline:none was present; unchanged.
+    M2  role="dialog" already carried aria-modal="true" on both surfaces —
+      this file was one of the 8 that got it right originally; unchanged.
+    M5  `.btn.danger` on SCR-37's in-panel Drop is exactly the case 5.16's
+      table names — "SCR-37 Drop routine" is filled-red by definition.
+      Unchanged.
+    Canon .dialog  both surfaces rebuilt to the banded header/body/footer
+      model. Width judgment call (not literally named in 5.16's table, which
+      only gives worked examples): SCR-36 carries three regions (params, SQL
+      preview, result grid) so it takes the "multi-region" .lg tier (760px);
+      SCR-37 is one primary region (source) plus an inline alert, so it takes
+      .md (560px). Height cap is adapted from the viewport-relative canon
+      formula to `calc(100% - space-3xl*2)` of this file's own `.stage`,
+      since these two dialogs render nested inside a bounded review frame,
+      not the real viewport — flagged in the final report as unresolved.
+    Canon .btn  base height control-h-md with .btn.lg on every action here
+      (all of them sit in a dialog footer).
+    M10  `.btn.sec:hover` now also sets text-primary explicctly, matching
+      `.btn.ghost:hover` / `.iconbtn:hover`.
+    m8  aria-hidden="true" added to every inline icon <svg>.
+    m10  one control shown in its focused state (the fill_factor value field
+      in SCR-36 — the one editable, non-NULL parameter).
+
+  Modality (design-spec.md 2.4): both are Modal (SCR-33–47 range) — bg-elevated,
+  shadow-modal, over --color-scrim at --z-modal-scrim, focus trapped, Esc closes.
+  Both reached from SCR-04's routine node actions (screens.md): Execute → SCR-36,
+  View source → SCR-37. Grouped in one sheet because they act on the same
+  routine, sp_rebuild_indexes, from the pilot's sidebar Procedures group.
+
+  What this mockup exists to prove:
+    - SCR-36: parameter rows with a NULL toggle per param, a generated SQL
+      preview, and a result set area — all named explicitly in screens.md.
+    - SCR-37: routine source text with Copy source and an in-panel Drop
+      confirm (not a separate dialog) — screens.md names "drop-confirm" as
+      a state of SCR-37 itself, not a child screen.
+
+  Theme scaffolding only (not a product feature): the toggle writes
+  data-theme on <html> and syncs the `light` class, because tokens.css keys
+  on `.light` — copied verbatim from the pilot's mechanism.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Routines sheet — SCR-36 / SCR-37 — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+/* ---------- Canonical .board — design-spec.md 5.16 ---------- */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);background:var(--color-bg-base)}
+.boardhead{display:flex;align-items:center;gap:var(--space-md)}
+.boardhead h1{font-size:var(--font-size-lg);font-weight:var(--font-weight-semibold)}
+.boardhead .sub{color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+.themetoggle{margin-left:auto;display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+/* wrapping row of specimens — never produces a horizontal scrollbar */
+.specimenrow{display:flex;flex-wrap:wrap;gap:var(--space-xl)}
+.slot{flex:1 1 380px;display:flex;flex-direction:column;gap:var(--space-md);min-width:0}
+.slotlabel{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);text-transform:uppercase;letter-spacing:.04em;font-weight:var(--font-weight-medium)}
+.slotlabel .scrid{color:var(--color-accent-blue);font-family:var(--font-mono);letter-spacing:0}
+
+.stage{position:relative;height:600px;border-radius:var(--radius-md);overflow:hidden;
+  background:var(--color-bg-surface);box-shadow:var(--shadow-lg)}
+.scrim{position:absolute;inset:0;background:var(--color-scrim);z-index:var(--z-modal-scrim)}
+
+/* ---------- Canonical Dialog — design-spec.md 5.16
+     Height adapted to this file's bounded .stage instead of 100vh — see
+     header comment. ---------- */
+.dialog{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:var(--z-modal);
+  width:100%;max-height:calc(100% - var(--space-3xl) * 2);
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--color-bg-elevated);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal)}
+.dialog.md{max-width:560px}
+.dialog.lg{max-width:760px}
+.dhead{flex:none;padding:var(--space-xl) var(--space-2xl);border-bottom:1px solid var(--color-border-subtle)}
+.dhead h1{font-size:var(--font-size-xl);font-weight:var(--font-weight-semibold);margin-bottom:var(--space-xs)}
+.dhead .sub{color:var(--color-text-secondary);font-size:var(--font-size-md);font-family:var(--font-mono)}
+.dbody{flex:1;overflow:auto;padding:var(--space-2xl);display:flex;flex-direction:column;min-height:0}
+.dfoot{flex:none;padding:var(--space-lg) var(--space-2xl);border-top:1px solid var(--color-border-subtle);
+  display:flex;align-items:center;gap:var(--space-md)}
+
+.sectitle{font-size:var(--font-size-sm);font-weight:var(--font-weight-medium);
+  color:var(--color-text-secondary);margin-bottom:var(--space-sm)}
+
+/* SCR-36 param rows */
+table.params{width:100%;border-collapse:separate;border-spacing:0;margin-bottom:var(--space-xl)}
+table.params th{text-align:left;background:var(--color-grid-header-bg);padding:var(--space-sm) var(--space-md);
+  border-bottom:1px solid var(--color-border);font-size:var(--font-size-xs);
+  font-weight:var(--font-weight-medium);color:var(--color-text-secondary)}
+table.params td{padding:var(--space-xs) var(--space-md);border-bottom:1px solid var(--color-border-subtle)}
+.cellinput{height:var(--control-h-sm);width:100%;padding:0 var(--space-sm);border-radius:var(--radius-xs);
+  background:var(--color-bg-base);border:1px solid var(--color-border-subtle);color:var(--color-text-primary);
+  font-size:var(--font-size-sm);font-family:var(--font-mono)}
+.cellinput[disabled]{opacity:.45}
+.nulltoggle{display:flex;align-items:center;gap:var(--space-xs);font-size:var(--font-size-xs);
+  color:var(--color-text-secondary)}
+.chk{width:13px;height:13px;accent-color:var(--color-accent-blue-fill)}
+.mono{font-family:var(--font-mono)}
+.typehint{color:var(--color-text-secondary)}
+
+.sqlbox{background:var(--editor-bg);border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);
+  padding:var(--space-md) var(--space-lg);font-family:var(--font-mono);font-size:var(--font-size-sm);
+  color:var(--editor-fg);white-space:pre;margin-bottom:var(--space-xl)}
+.k{color:var(--color-accent-blue)}
+.f{color:var(--color-accent-indigo)}
+
+.resultbox{flex:1;overflow:auto;border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);
+  margin-bottom:var(--space-xl)}
+table.res{width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:var(--font-numeric-tabular)}
+table.res th{text-align:left;background:var(--color-grid-header-bg);padding:var(--space-xs) var(--space-md);
+  border-bottom:1px solid var(--color-border);font-size:var(--font-size-xs);
+  font-weight:var(--font-weight-medium);color:var(--color-text-secondary)}
+table.res td{height:26px;padding:0 var(--space-md);border-bottom:1px solid var(--color-border-subtle);
+  font-size:var(--font-size-xs)}
+.ok{color:var(--color-accent-green)}
+.resultsummary{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+
+/* ---------- Canonical .btn — design-spec.md 5.16 ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.btn.danger{background:var(--color-accent-red-fill);color:var(--color-text-inverse)}
+.btn.danger:hover{background:var(--color-accent-red-fill-hover)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+/* SCR-37 source panel */
+.srcbody{flex:1;overflow:auto;background:var(--editor-bg);color:var(--editor-fg);
+  border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);
+  padding:var(--space-lg);font-family:var(--font-mono);font-size:var(--font-size-sm);
+  line-height:var(--line-height-md);white-space:pre;margin-bottom:var(--space-xl)}
+.s{color:var(--color-accent-green)}
+.c{color:var(--color-text-secondary);font-style:italic}
+
+.dropconfirm{display:flex;align-items:center;gap:var(--space-md);padding:var(--space-md) var(--space-lg);
+  background:var(--color-state-danger-bg);border:1px solid var(--color-accent-red);
+  border-radius:var(--radius-sm);margin-bottom:var(--space-xl);color:var(--color-state-danger-fg);
+  font-size:var(--font-size-sm)}
+
+/* one control shown focused (audit m10) — mimics :focus-visible statically,
+   since a static file cannot hold real browser focus */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 14 8-14 8z"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h11a2 2 0 0 1 2 2v3H8z"/><path d="M8 8v11a2 2 0 0 1-2 2 2 2 0 0 1-2-2V6a2 2 0 0 1 2-2"/><path d="M12 12h6M12 16h6"/></symbol>
+</defs></svg>
+
+<div class="board">
+
+  <div class="boardhead">
+    <h1>Routines</h1>
+    <span class="sub">sp_rebuild_indexes &mdash; sidebar Procedures group</span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+  </div>
+
+  <div class="specimenrow">
+
+    <!-- ============================================================
+         SCR-36 — Procedure Execute Dialog
+         ============================================================ -->
+    <div class="slot">
+      <div class="slotlabel"><svg width="12" height="12" aria-hidden="true"><use href="#i-scroll"/></svg>Surface <span class="scrid">SCR-36</span> &middot; Procedure Execute Dialog</div>
+      <div class="stage">
+        <div class="scrim"></div>
+        <div class="dialog lg" role="dialog" aria-modal="true" aria-labelledby="exec-title">
+          <div class="dhead">
+            <h1 id="exec-title">Execute sp_rebuild_indexes</h1>
+            <p class="sub">public.sp_rebuild_indexes(table_name text, fill_factor integer)</p>
+          </div>
+          <div class="dbody">
+            <div class="sectitle">Parameters</div>
+            <table class="params">
+              <thead><tr><th scope="col">Parameter</th><th scope="col">Value</th><th scope="col">NULL</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="mono">table_name <span class="typehint">text</span></td>
+                  <td><input class="cellinput" placeholder="&mdash;" disabled aria-label="table_name value"></td>
+                  <td><label class="nulltoggle"><input class="chk" type="checkbox" checked aria-label="table_name is NULL">NULL</label></td>
+                </tr>
+                <tr>
+                  <td class="mono">fill_factor <span class="typehint">integer</span></td>
+                  <td><input class="cellinput demo-focus" value="90" aria-label="fill_factor value"></td>
+                  <td><label class="nulltoggle"><input class="chk" type="checkbox" aria-label="fill_factor is NULL">NULL</label></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="sectitle">Generated SQL</div>
+            <div class="sqlbox"><span class="k">CALL</span> public.sp_rebuild_indexes(<span class="f">NULL</span>, 90);</div>
+
+            <div class="sectitle">Result</div>
+            <div class="resultbox">
+              <table class="res">
+                <thead><tr><th scope="col">Index</th><th scope="col">Table</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">orders_pkey</td><td>orders</td><td class="ok">rebuilt</td></tr>
+                  <tr><td class="mono">idx_orders_customer_id</td><td>orders</td><td class="ok">rebuilt</td></tr>
+                  <tr><td class="mono">customers_pkey</td><td>customers</td><td class="ok">rebuilt</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="dfoot">
+            <span class="resultsummary mono">3 indexes rebuilt &middot; 812ms</span>
+            <span class="spacer"></span>
+            <button class="btn ghost lg"><svg width="13" height="13" aria-hidden="true"><use href="#i-copy"/></svg>Copy SQL</button>
+            <button class="btn ghost lg"><svg width="13" height="13" aria-hidden="true"><use href="#i-copy"/></svg>Copy result as TSV</button>
+            <button class="btn sec lg">Close</button>
+            <button class="btn pri lg"><svg width="13" height="13" aria-hidden="true"><use href="#i-play"/></svg>Execute</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCR-37 — Procedure Source Panel
+         ============================================================ -->
+    <div class="slot">
+      <div class="slotlabel"><svg width="12" height="12" aria-hidden="true"><use href="#i-scroll"/></svg>Surface <span class="scrid">SCR-37</span> &middot; Procedure Source Panel</div>
+      <div class="stage">
+        <div class="scrim"></div>
+        <div class="dialog md" role="dialog" aria-modal="true" aria-labelledby="src-title">
+          <div class="dhead">
+            <h1 id="src-title">sp_rebuild_indexes</h1>
+            <p class="sub">public.sp_rebuild_indexes(table_name text, fill_factor integer)</p>
+          </div>
+          <div class="dbody">
+            <div class="srcbody"><span class="c">-- procedure definition, read-only</span>
+<span class="k">CREATE OR REPLACE PROCEDURE</span> public.sp_rebuild_indexes(
+    table_name text <span class="k">DEFAULT</span> <span class="s">NULL</span>,
+    fill_factor integer <span class="k">DEFAULT</span> 90
+)
+<span class="k">LANGUAGE</span> plpgsql
+<span class="k">AS</span> $$
+<span class="k">DECLARE</span>
+    idx record;
+<span class="k">BEGIN</span>
+    <span class="k">FOR</span> idx <span class="k">IN</span>
+        <span class="k">SELECT</span> indexname, tablename <span class="k">FROM</span> pg_indexes
+         <span class="k">WHERE</span> schemaname = <span class="s">'public'</span>
+           <span class="k">AND</span> (table_name <span class="k">IS NULL OR</span> tablename = table_name)
+    <span class="k">LOOP</span>
+        <span class="k">EXECUTE</span> <span class="k">format</span>(<span class="s">'REINDEX INDEX %I'</span>, idx.indexname);
+    <span class="k">END LOOP</span>;
+<span class="k">END</span>;
+$$;</div>
+
+            <div class="dropconfirm" role="alert">
+              <svg width="14" height="14" aria-hidden="true"><use href="#i-alert"/></svg>
+              <span>Drop sp_rebuild_indexes? This cannot be undone.</span>
+              <span class="spacer"></span>
+              <button class="btn ghost lg">Keep it</button>
+              <button class="btn danger lg"><svg width="13" height="13" aria-hidden="true"><use href="#i-trash"/></svg>Drop</button>
+            </div>
+          </div>
+          <div class="dfoot">
+            <button class="btn ghost lg"><svg width="13" height="13" aria-hidden="true"><use href="#i-copy"/></svg>Copy source</button>
+            <span class="spacer"></span>
+            <button class="btn sec lg">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

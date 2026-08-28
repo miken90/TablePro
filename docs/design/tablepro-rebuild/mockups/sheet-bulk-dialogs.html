@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Audit remediation, phase 2
+  Sheet: Bulk dialogs — SCR-40 Bulk Insert, SCR-41 Bulk Update, SCR-42 Bulk Delete
+  Authority: ../design-spec.md section 5.16 (canon, post-audit) · ../tokens.css
+  (post-audit) · ../screens.md. Do not edit those three — phase 1 owns them.
+
+  Remediation applied here (see audit-260828-1120-tablepro-mockup-guidelines.md):
+    B1  removed outline:none from text-entry controls; .field(unused, dropped)/
+        .ctl never zero the outline; global :focus-visible does the work.
+    B2  every --color-text-muted TEXT use -> --color-text-secondary (9 rules).
+    M2  role="dialog" now carries aria-modal="true" on all three.
+    M5  SCR-42's commit button is .btn.danger (filled, writes). Nothing in this
+        file merely stages an intent, so .btn.danger-ghost is unused here.
+    M10 hover rules that set bg-hover also set color:text-primary.
+    M11 the 9 <th> in SCR-40's row-entry grid now carry scope="col".
+    canon .btn/.iconbtn/.dialog/.board rewritten to match 5.16 exactly:
+      dialog has NO border (5.16 settled this), banded header/body/footer,
+      .dialog.md (560px, SCR-40/41/42 per 5.16's width table), h1 title,
+      max-height:min(680px, 100vh - 2*space-3xl). Board is the canonical
+      max-width:1400px column-of-rows model with .scr specimen chips.
+      SCR-41's Column/New value controls now use .formrow + .ctl, the name
+      5.16 settled for the label-over-control stack (was a nonstandard
+      .lbl/.field hybrid).
+    m8  aria-hidden="true" on every inline icon <svg> that renders a <use>.
+    m10 exactly ONE demonstrated focus state in this file (SCR-42 Cancel) —
+        this file already had one; kept it there per the audit's own note
+        that this is the pattern the rest of the set was told to copy.
+
+  Pattern authority unchanged: ../scr-17-table-browse.html ·
+  ../scr-13-query-workspace.html — theme-toggle mechanism, icon-sprite
+  approach, density and markup semantics.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Bulk dialogs — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+.page{display:flex;flex-direction:column;height:100vh}
+
+/* ---------- sheet header (not a product surface) ---------- */
+.sheethead{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.sheethead h1{font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)}
+.sheethead .sub{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+/* ---------- Canonical .board — design-spec.md 5.16 ---------- */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);background:var(--color-bg-base);
+  flex:1;overflow:auto;width:100%}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-xl)}
+.cardwrap{display:flex;flex-direction:column;gap:var(--space-md);flex:1 1 380px}
+.scr{display:inline-flex;align-items:center;gap:var(--space-sm);align-self:flex-start;
+  height:var(--control-h-xs);padding:0 var(--space-sm);border-radius:var(--radius-xs);
+  background:var(--color-bg-muted);color:var(--color-text-secondary);
+  font-family:var(--font-mono);font-size:var(--font-size-2xs);font-weight:var(--font-weight-medium)}
+
+/* ---------- Canonical .dialog — design-spec.md 5.16 ---------- */
+.dialog{width:100%;display:flex;flex-direction:column;background:var(--color-bg-elevated);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);
+  max-height:min(680px, calc(100vh - var(--space-3xl) * 2))}
+.dialog.md{max-width:560px}
+.dialog-head{display:flex;align-items:center;gap:var(--space-md);
+  padding:var(--space-xl) var(--space-2xl);border-bottom:1px solid var(--color-border-subtle)}
+.dialog-head h1{font-size:var(--font-size-xl);line-height:var(--line-height-xl);
+  font-weight:var(--font-weight-semibold)}
+.dialog-body{padding:var(--space-2xl);overflow:auto;flex:1;display:flex;flex-direction:column;
+  gap:var(--space-lg)}
+.dialog-foot{display:flex;align-items:center;gap:var(--space-md);
+  padding:var(--space-lg) var(--space-2xl);border-top:1px solid var(--color-border-subtle)}
+.dialog p.desc{color:var(--color-text-secondary);font-size:var(--font-size-md);
+  line-height:var(--line-height-md)}
+.footinfo{color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+
+/* ---------- Canonical .iconbtn — design-spec.md 5.16 ---------- */
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);display:grid;place-items:center;
+  flex:none;border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+/* ---------- Canonical .btn — design-spec.md 5.16 ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+/* M5 — filled: this commits an irreversible destructive write */
+.btn.danger{background:var(--color-accent-red-fill);color:var(--color-text-inverse)}
+.btn.danger:hover{background:var(--color-accent-red-fill-hover)}
+/* M5 — text-only: stages/selects a destructive intent, nothing written yet (unused in this file, kept for canon completeness) */
+.btn.danger-ghost{color:var(--color-accent-red)}
+.btn.danger-ghost:hover{background:var(--color-accent-red-subtle);color:var(--color-accent-red)}
+/* design-spec.md 5.16: destructive-confirm focus lands on Cancel, never the action */
+.btn.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+
+/* ---------- .formrow + .ctl — design-spec.md 5.16 (renamed from the old .lbl/.field hybrid) ---------- */
+.formrow{display:flex;flex-direction:column;gap:var(--space-2xs)}
+.formrow label{font-size:var(--font-size-xs);color:var(--color-text-secondary)}
+.ctl{height:var(--control-h-md);border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-primary);font-size:var(--font-size-md);
+  padding:0 var(--space-md);width:100%}
+/* B1 — never outline:none. The border+ring combo comes from the global rule plus this. */
+.ctl:focus-visible{border-color:var(--color-focus-ring)}
+select.ctl{appearance:none;-webkit-appearance:none}
+
+.radiorow{display:flex;align-items:center;gap:var(--space-sm);font-size:var(--font-size-md)}
+.radiorow input{accent-color:var(--color-accent-blue-fill)}
+.radiorow .count{color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+
+/* ---------- SCR-40 row-entry grid ---------- */
+table.rows{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--color-border-subtle);
+  border-radius:var(--radius-sm);overflow:hidden;font-variant-numeric:var(--font-numeric-tabular)}
+table.rows th{background:var(--color-bg-muted);text-align:left;padding:var(--space-xs) var(--space-sm);
+  font-size:var(--font-size-2xs);font-weight:var(--font-weight-medium);color:var(--color-text-secondary);
+  white-space:nowrap;border-bottom:1px solid var(--color-border-subtle)}
+table.rows th.auto{color:var(--color-text-secondary);font-style:italic}
+table.rows td{padding:var(--space-xs);border-bottom:1px solid var(--color-border-subtle)}
+table.rows tr:last-child td{border-bottom:0}
+table.rows td input{width:100%;height:var(--control-h-sm);padding:0 var(--space-xs);
+  border-radius:var(--radius-xs);background:var(--color-bg-base);border:1px solid var(--color-border-subtle);
+  font-size:var(--font-size-xs);color:var(--color-text-primary);font-family:var(--font-mono)}
+table.rows td input::placeholder{color:var(--color-text-secondary)}
+table.rows td.auto{color:var(--color-text-secondary);font-size:var(--font-size-xs);font-style:italic;
+  font-family:var(--font-mono);text-align:center}
+table.rows td.rm{width:28px;text-align:center}
+.addrow{align-self:flex-start;color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.addrow:hover{color:var(--color-text-primary)}
+
+.warnbox{display:flex;gap:var(--space-md);padding:var(--space-lg);border-radius:var(--radius-sm);
+  background:var(--color-state-danger-bg);color:var(--color-state-danger-fg)}
+.warnbox svg{margin-top:1px}
+.warnbox p{font-size:var(--font-size-md);line-height:var(--line-height-md);color:var(--color-text-primary)}
+.warnbox strong{color:var(--color-state-danger-fg)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="page">
+  <header class="sheethead">
+    <h1>Bulk dialogs</h1>
+    <span class="sub">SCR-40 · SCR-41 · SCR-42 — component sheet, not a live app state</span>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+      <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+    </button>
+  </header>
+
+  <div class="board">
+    <div class="row">
+
+    <!-- ===== SCR-40 Bulk Insert Dialog ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-40 · Bulk Insert Dialog</span>
+      <div class="dialog md" role="dialog" aria-modal="true" aria-labelledby="d40-title">
+        <div class="dialog-head">
+          <h1 id="d40-title">Bulk Insert — orders</h1>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <table class="rows">
+            <thead>
+              <tr>
+                <th class="auto" scope="col">order_id</th>
+                <th scope="col">customer_id</th>
+                <th scope="col">status</th>
+                <th scope="col">total_amount</th>
+                <th scope="col">currency</th>
+                <th scope="col">created_at</th>
+                <th scope="col">shipped_at</th>
+                <th scope="col">notes</th>
+                <th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="auto">auto</td>
+                <td><input value="4830" aria-label="customer_id, row 1"></td>
+                <td><input value="pending" aria-label="status, row 1"></td>
+                <td><input value="56.00" aria-label="total_amount, row 1"></td>
+                <td><input value="USD" aria-label="currency, row 1"></td>
+                <td><input value="now()" aria-label="created_at, row 1"></td>
+                <td><input value="" placeholder="NULL" aria-label="shipped_at, row 1"></td>
+                <td><input value="" placeholder="NULL" aria-label="notes, row 1"></td>
+                <td class="rm"><button class="iconbtn" aria-label="Remove row 1" style="height:22px;width:22px"><svg width="12" height="12" aria-hidden="true"><use href="#i-x"/></svg></button></td>
+              </tr>
+              <tr>
+                <td class="auto">auto</td>
+                <td><input value="4831" aria-label="customer_id, row 2"></td>
+                <td><input value="pending" aria-label="status, row 2"></td>
+                <td><input value="212.50" aria-label="total_amount, row 2"></td>
+                <td><input value="USD" aria-label="currency, row 2"></td>
+                <td><input value="now()" aria-label="created_at, row 2"></td>
+                <td><input value="" placeholder="NULL" aria-label="shipped_at, row 2"></td>
+                <td><input value="gift wrap" aria-label="notes, row 2"></td>
+                <td class="rm"><button class="iconbtn" aria-label="Remove row 2" style="height:22px;width:22px"><svg width="12" height="12" aria-hidden="true"><use href="#i-x"/></svg></button></td>
+              </tr>
+              <tr>
+                <td class="auto">auto</td>
+                <td><input value="4832" aria-label="customer_id, row 3"></td>
+                <td><input value="pending" aria-label="status, row 3"></td>
+                <td><input value="18.90" aria-label="total_amount, row 3"></td>
+                <td><input value="EUR" aria-label="currency, row 3"></td>
+                <td><input value="now()" aria-label="created_at, row 3"></td>
+                <td><input value="" placeholder="NULL" aria-label="shipped_at, row 3"></td>
+                <td><input value="" placeholder="NULL" aria-label="notes, row 3"></td>
+                <td class="rm"><button class="iconbtn" aria-label="Remove row 3" style="height:22px;width:22px"><svg width="12" height="12" aria-hidden="true"><use href="#i-x"/></svg></button></td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="btn ghost addrow"><svg width="13" height="13" aria-hidden="true"><use href="#i-plus"/></svg>Add row</button>
+        </div>
+        <div class="dialog-foot">
+          <span class="footinfo">3 rows to insert</span>
+          <span class="spacer"></span>
+          <button class="btn ghost">Cancel</button>
+          <button class="btn lg pri">Insert 3 rows</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCR-41 Bulk Update Dialog ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-41 · Bulk Update Dialog</span>
+      <div class="dialog md" role="dialog" aria-modal="true" aria-labelledby="d41-title">
+        <div class="dialog-head">
+          <h1 id="d41-title">Bulk Update — orders</h1>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <div class="formrow">
+            <label for="d41-col">Column</label>
+            <select class="ctl" id="d41-col">
+              <option>status</option>
+              <option>currency</option>
+              <option>notes</option>
+            </select>
+          </div>
+          <div class="formrow">
+            <label for="d41-val">New value</label>
+            <input class="ctl" id="d41-val" value="shipped">
+          </div>
+          <div class="formrow">
+            <span id="d41-scope-label">Scope</span>
+            <span class="radiorow"><input type="radio" name="scope41" id="s41a" checked><label for="s41a">Selected rows</label><span class="count">12</span></span>
+            <span class="radiorow"><input type="radio" name="scope41" id="s41b"><label for="s41b">All rows in this result</label><span class="count">142</span></span>
+          </div>
+        </div>
+        <div class="dialog-foot">
+          <span class="spacer"></span>
+          <button class="btn ghost">Cancel</button>
+          <button class="btn lg pri">Update 12 rows</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCR-42 Bulk Delete Dialog ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-42 · Bulk Delete Dialog</span>
+      <div class="dialog md" role="dialog" aria-modal="true" aria-labelledby="d42-title">
+        <div class="dialog-head">
+          <h1 id="d42-title">Bulk Delete — orders</h1>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <div class="warnbox">
+            <svg width="16" height="16" aria-hidden="true"><use href="#i-alert"/></svg>
+            <p>This will permanently delete <strong>12 selected rows</strong> from <code style="font-family:var(--font-mono)">public.orders</code>. This cannot be undone.</p>
+          </div>
+        </div>
+        <div class="dialog-foot">
+          <span class="spacer"></span>
+          <!-- design-spec.md 5.16: on open, focus lands on Cancel — never on the destructive action.
+               Only demo-focus instance in this file (m10: one per screen). -->
+          <button class="btn sec demo-focus" autofocus>Cancel</button>
+          <!-- M5: this commits an irreversible destructive write -> filled .btn.danger -->
+          <button class="btn lg danger"><svg width="13" height="13" aria-hidden="true"><use href="#i-trash"/></svg>Delete 12 rows</button>
+        </div>
+      </div>
+    </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

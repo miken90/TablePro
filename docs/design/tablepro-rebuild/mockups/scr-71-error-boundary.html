@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (partition: overlays / settings / engine panels / error surface)
+  SCR-71 Error Boundary Fallback
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Content sourced verbatim from src/components/shared/error-boundary.tsx (card
+  copy: "Something went wrong", mono error message, "Hint: " prefix, "Try
+  Again" button) and src/i18n/locales/en.json error.hints.* (real hint text per
+  classified error kind: databaseError, notConnected, connectionRefused,
+  authFailure). screens.md SCR-71: boundary names are App (root), statusbar,
+  overlays, sidebar, editor, inspector — each region contains a crash instead
+  of blanking the window, so this sheet shows the fallback scoped to two named
+  regions (sidebar, editor) rather than one full-window instance, to make that
+  per-region containment legible.
+
+  Design-spec 6.2 State feedback: "Failure puts the driver's own message in
+  the Messages tab, verbatim... Errors never auto-dismiss." This card is the
+  render-crash analogue: it never auto-dismisses either, only Try Again resets
+  the boundary's local state.
+
+  AUDIT REMEDIATION PHASE 2 — applied against design-spec.md 5.16 canon:
+    M8/M9: page skipped straight to <h2>; added a visually-hidden <h1> as the
+        first heading (sequential headings, one per document) and wrapped the
+        content in <main> — this file does NOT get the sheet-* board exemption
+        from the main-landmark rule even though it uses the .board pattern,
+        because it is an scr-* file (per the fan-out brief).
+    B2: --color-text-muted was text (SCR chip, boundary labels, theme toggle)
+        — moved to --color-text-secondary.
+    m8: aria-hidden="true" on the inline icon <svg>.
+    m10: one "Try Again" button shown in its permanent focused state.
+    .btn.danger left FILLED, matching error-boundary.tsx's real shipped
+        `bg-red-600 text-white` button exactly — kept deliberately even though
+        M5's taxonomy defines filled red as "commits an irreversible
+        destructive write" and Try Again does not write anything. This is a
+        verified source-backed rendering, not a fresh authoring choice, so it
+        was not reclassified to .danger-ghost to fit the new abstract rule;
+        flagged in the fan-out report.
+    Canon .board / `.scr` chip for the SCR-71 label; the two "Boundary: x"
+        captions are a different kind of label (not an SCR id) and keep their
+        own `.regionlabel` class, also moved off text-muted.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme
+  on <html> and syncs the `light` class, because tokens.css keys on `.light` —
+  copied verbatim from ../mockups/scr-17-table-browse.html.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-71 Error Boundary Fallback — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;
+}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Canonical .board — design-spec 5.16 */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;align-items:center;gap:var(--space-2xl);background:var(--color-bg-base)}
+.scr{color:var(--color-text-secondary);font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+  text-transform:uppercase;letter-spacing:.06em}
+.regionlabel{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);align-self:flex-end}
+
+.regions{display:flex;gap:var(--space-2xl);align-items:flex-start;flex-wrap:wrap;justify-content:center}
+.region{display:flex;flex-direction:column;gap:var(--space-sm)}
+.regionframe{width:340px;height:220px;display:flex;align-items:center;justify-content:center;
+  background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);
+  padding:var(--space-xl)}
+
+/* ---------- SCR-71 error card ---------- */
+.errcard{max-width:300px;background:var(--color-state-danger-bg);border:1px solid var(--color-accent-red);
+  border-radius:var(--radius-lg);padding:var(--space-xl)}
+.errcard h2{font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);
+  color:var(--color-state-danger-fg);margin-bottom:var(--space-sm)}
+.errmsg{max-height:100px;overflow:auto;white-space:pre-wrap;font-family:var(--font-mono);
+  font-size:var(--font-size-xs);color:var(--color-state-danger-fg);margin-bottom:var(--space-sm)}
+.errhint{font-size:var(--font-size-xs);color:var(--color-accent-red);margin-bottom:var(--space-lg)}
+.errhint b{font-weight:var(--font-weight-medium)}
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);
+  transition:background var(--duration-fast) var(--ease-snappy),color var(--duration-fast) var(--ease-snappy)}
+.btn.danger{background:var(--color-accent-red-fill);color:var(--color-text-inverse)}
+.btn.danger:hover{background:var(--color-accent-red-fill-hover)}
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="board">
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+    <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+  </button>
+
+  <h1 class="sr-only">Error Boundary Fallback</h1>
+  <span class="scr">SCR-71 &middot; Error Boundary Fallback</span>
+
+  <!-- Two named boundaries, per screens.md ("App (root), statusbar, overlays,
+       sidebar, editor, inspector"): each contains its own crash so the rest
+       of the window keeps working. -->
+  <main class="regions" aria-label="Error boundary fallback, two example regions">
+    <div class="region">
+      <span class="regionlabel">Boundary: <code>editor</code></span>
+      <div class="regionframe">
+        <div class="errcard" role="alert">
+          <h2>Something went wrong</h2>
+          <div class="errmsg">Failed to connect: connection refused</div>
+          <div class="errhint"><b>Hint: </b>Check if the server is running on the correct host and port</div>
+          <button class="btn danger demo-focus">Try Again</button>
+        </div>
+      </div>
+    </div>
+    <div class="region">
+      <span class="regionlabel">Boundary: <code>sidebar</code></span>
+      <div class="regionframe">
+        <div class="errcard" role="alert">
+          <h2>Something went wrong</h2>
+          <div class="errmsg">TypeError: Cannot read properties of undefined (reading 'tables')</div>
+          <button class="btn danger">Try Again</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

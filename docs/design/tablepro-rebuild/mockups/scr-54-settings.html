@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (partition: overlays / settings / engine panels / error surface)
+  SCR-54 Settings View — all eight panes SCR-55..62 as labeled states in one column
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  M9 (design-spec.md 2.3): single category column, grouped headers; every pane
+  row is label + description with the control right-aligned; SCR-57's theme
+  picker is a row of radio cards (Light / Dark / System). Ref 9 Perplexity.
+
+  Content sourced verbatim from src/i18n/locales/en.json settings.* (row
+  labels/descriptions, Safe Mode level strings, date-format options, AI
+  feature names) and from source components where a string is hardcoded
+  rather than translated:
+    - settings-diagnostics.tsx: log/crash-dump paths and copy are hardcoded
+      English, not i18n keys — reproduced verbatim here.
+    - settings-ai.tsx PROVIDER_TYPE_OPTIONS: OpenAI, OpenRouter, LM Studio,
+      Ollama, Custom (real provider types, not invented).
+    - tokens.css --font-mono stack: 'JetBrains Mono', 'Fira Code', 'Consolas',
+      'Cascadia Code' — used as the Editor > Font options.
+  The category rail's own grouping (M9 "grouped headers") has no source text
+  to anchor group names to, so the rail is shown flat (8 items, no invented
+  group labels) — flagged in the fan-out final report as spec-underspecified.
+
+  Modality per design-spec.md 2.4: Modal (full-screen shell) — SCR-54 is in
+  the Modal row alongside SCR-63–68.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme
+  on <html> and syncs the `light` class, because tokens.css keys on `.light` —
+  copied verbatim from ../mockups/scr-17-table-browse.html.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-54 Settings View — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;
+}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+.app{display:flex;flex-direction:column;height:100vh}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+/* ---------- header ---------- */
+.head{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-xl);background:var(--color-bg-surface);border-bottom:1px solid var(--color-border-subtle)}
+.head h1{font-size:var(--font-size-lg);font-weight:var(--font-weight-semibold)}
+.spacer{flex:1}
+
+/* Canonical .iconbtn — design-spec 5.16 */
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.linkbtn{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.linkbtn:hover{color:var(--color-text-primary)}
+
+/* ---------- body: rail + column ---------- */
+.body{flex:1;display:flex;min-height:0}
+.rail{width:200px;flex:none;background:var(--color-bg-surface);border-right:1px solid var(--color-border-subtle);
+  overflow:auto;padding:var(--space-lg) 0}
+.railitem{display:flex;align-items:center;gap:var(--space-sm);height:var(--control-h-lg);
+  padding:0 var(--space-xl);color:var(--color-text-secondary);width:100%;text-align:left}
+.railitem:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.railitem.on{background:var(--color-accent-blue-subtle);color:var(--color-text-primary);
+  box-shadow:inset 2px 0 0 0 var(--color-accent-blue);font-weight:var(--font-weight-medium)}
+
+.col{flex:1;overflow:auto;padding:var(--space-2xl) var(--space-3xl) var(--space-3xl);max-width:760px}
+.pane{padding-bottom:var(--space-2xl);margin-bottom:var(--space-2xl);border-bottom:1px solid var(--color-border-subtle)}
+.pane:last-child{border-bottom:0}
+.panehead{display:flex;align-items:baseline;gap:var(--space-md);margin-bottom:var(--space-md)}
+.panehead h2{font-size:var(--font-size-lg);font-weight:var(--font-weight-semibold)}
+.panehead .scrid{color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.04em}
+.panedesc{color:var(--color-text-secondary);font-size:var(--font-size-xs);margin-bottom:var(--space-lg)}
+
+/* row = label + description, control right-aligned (M9) */
+.row{display:flex;align-items:center;gap:var(--space-xl);padding:var(--space-md) 0;
+  border-top:1px solid var(--color-border-subtle)}
+.row:first-of-type{border-top:0}
+.row .info{flex:1;min-width:0}
+.row .lbl{font-size:var(--font-size-md);color:var(--color-text-primary);font-weight:var(--font-weight-medium)}
+.row .desc{font-size:var(--font-size-xs);color:var(--color-text-secondary);margin-top:2px}
+.row .ctl-wrap{flex:none}
+
+.ctl{height:var(--control-h-md);border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-primary);padding:0 var(--space-md);
+  font-size:var(--font-size-md)}
+.ctl.w-num{width:90px;text-align:right;font-variant-numeric:var(--font-numeric-tabular)}
+.ctl.w-sel{width:220px}
+.ctl.w-text{width:120px}
+/* AUDIT m10 — one control shown permanently focused so the mandatory ring is visible in the set */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+/* toggle switch — now a real <button role="switch"> (audit B4), not a span */
+.toggle{position:relative;width:34px;height:18px;border-radius:var(--radius-full);background:var(--color-bg-muted);
+  border:1px solid var(--color-border);flex:none}
+.toggle .knob{position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:var(--radius-full);
+  background:var(--color-text-muted)}
+.toggle.on{background:var(--color-accent-blue-fill);border-color:var(--color-accent-blue-fill)}
+.toggle.on .knob{left:17px;background:var(--color-text-inverse)}
+
+/* radio cards (SCR-57) */
+.radiocards{display:flex;gap:var(--space-md)}
+.rcard{display:flex;flex-direction:column;align-items:center;gap:var(--space-xs);width:96px;
+  padding:var(--space-md);border:1px solid var(--color-border);border-radius:var(--radius-md);
+  color:var(--color-text-secondary)}
+.rcard.on{border-color:var(--color-accent-blue);background:var(--color-accent-blue-subtle);color:var(--color-text-primary)}
+.rcard svg{color:inherit}
+.rcard .t{font-size:var(--font-size-xs);font-weight:var(--font-weight-medium)}
+
+/* Canonical .btn — design-spec 5.16 */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),color var(--duration-fast) var(--ease-snappy)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover)}
+.btn.sm{height:var(--control-h-xs);padding:0 var(--space-md);font-size:var(--font-size-2xs)}
+/* AUDIT M5 — .btn.danger is the filled destructive-WRITE variant (unused in this
+   file); .btn.danger-ghost stages/selects a destructive intent, nothing written yet. */
+.btn.danger-ghost{color:var(--color-accent-red)}
+.btn.danger-ghost:hover{background:var(--color-accent-red-subtle);color:var(--color-accent-red)}
+
+/* SCR-59 AI provider card */
+.provider{display:flex;align-items:center;gap:var(--space-md);padding:var(--space-md);
+  border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);margin-bottom:var(--space-sm)}
+.provider .pdot{width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-accent-green);flex:none}
+.provider .pname{font-weight:var(--font-weight-medium)}
+.provider .ptype{color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.provider .ptest{margin-left:auto;color:var(--color-state-success-fg);font-size:var(--font-size-xs)}
+.noteBox{font-size:var(--font-size-xs);color:var(--color-text-secondary);background:var(--color-bg-muted);
+  border-radius:var(--radius-sm);padding:var(--space-md);line-height:var(--line-height-md)}
+.noteBox code{font-family:var(--font-mono);font-size:var(--font-size-2xs);background:var(--color-bg-elevated);
+  padding:1px var(--space-2xs);border-radius:var(--radius-xs)}
+.diagrow{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-lg);
+  padding:var(--space-md) 0}
+.emptydumps{text-align:center;color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  padding:var(--space-xl) 0;border:1px dashed var(--color-border-subtle);border-radius:var(--radius-sm)}
+
+/* SCR-62 shortcut rows */
+.shcgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2xl)}
+.shcgrp h3{font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--color-text-secondary);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:var(--space-sm)}
+.shcrow{display:flex;align-items:center;justify-content:space-between;padding:var(--space-xs) 0;
+  border-bottom:1px solid var(--color-border-subtle);font-variant-numeric:var(--font-numeric-tabular)}
+.shcrow .lbl{font-size:var(--font-size-sm)}
+/* Canonical kbd — design-spec 5.16: no background, the border alone reads as a key cap */
+kbd{font-family:var(--font-mono);font-size:var(--font-size-2xs);padding:0 var(--space-xs);
+  border:1px solid var(--color-border);border-radius:var(--radius-xs);color:var(--color-text-secondary)}
+kbd.custom{border-color:var(--color-accent-blue);color:var(--color-accent-blue)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-general" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18-6-6 6-6M15 6l6 6-6 6"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M9 6h6M6 13v5M4 15.5h4M15 12l1.8 4.2L21 18l-4.2 1.8L15 24l-1.8-4.2L9 18l4.2-1.8z"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14 16 8"/><circle cx="12" cy="14" r="8"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+<symbol id="i-keyboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M8 13h8"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4z"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <header class="head">
+    <h1>Settings</h1>
+    <span class="spacer"></span>
+    <button class="linkbtn">Reset to Defaults</button>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+      <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+    </button>
+    <button class="iconbtn" aria-label="Close settings" title="Close settings"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </header>
+
+  <div class="body">
+    <!-- single category column (M9) — flat, no sourced group headers -->
+    <nav class="rail" aria-label="Settings sections">
+      <button class="railitem on"><svg width="14" height="14" aria-hidden="true"><use href="#i-general"/></svg>General</button>
+      <button class="railitem"><svg width="14" height="14" aria-hidden="true"><use href="#i-code"/></svg>Editor</button>
+      <button class="railitem"><svg width="14" height="14" aria-hidden="true"><use href="#i-sun"/></svg>Appearance</button>
+      <button class="railitem"><svg width="14" height="14" aria-hidden="true"><use href="#i-plug"/></svg>Connection</button>
+      <button class="railitem"><svg width="14" height="14" aria-hidden="true"><use href="#i-sparkles"/></svg>AI</button>
+      <button class="railitem"><svg width="14" height="14" aria-hidden="true"><use href="#i-gauge"/></svg>Performance</button>
+      <button class="railitem"><svg width="14" height="14" aria-hidden="true"><use href="#i-activity"/></svg>Diagnostics</button>
+      <button class="railitem"><svg width="14" height="14" aria-hidden="true"><use href="#i-keyboard"/></svg>Shortcuts</button>
+    </nav>
+
+    <main class="col" aria-label="Settings panes">
+
+      <!-- SCR-55 General -->
+      <section class="pane">
+        <div class="panehead"><h2>General</h2><span class="scrid">SCR-55</span></div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-general-language">Language</div><div class="desc">Application display language</div></div>
+          <div class="ctl-wrap"><select class="ctl w-sel demo-focus" aria-labelledby="lbl-general-language"><option>English</option><option>Tiếng Việt</option></select></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-general-pagesize">Page size</div><div class="desc">Number of rows loaded per page</div></div>
+          <div class="ctl-wrap"><input class="ctl w-num" type="number" value="100" aria-labelledby="lbl-general-pagesize"></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-general-nulldisplay">Null display</div><div class="desc">Text shown for NULL values</div></div>
+          <div class="ctl-wrap"><input class="ctl w-text" value="NULL" aria-labelledby="lbl-general-nulldisplay"></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-general-dateformat">Date format</div><div class="desc">How dates are displayed in results</div></div>
+          <div class="ctl-wrap">
+            <select class="ctl w-sel" aria-labelledby="lbl-general-dateformat">
+              <option>ISO 8601 (2026-03-13)</option><option>US (03/13/2026)</option>
+              <option>EU (13/03/2026)</option><option>Unix timestamp</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCR-56 Editor -->
+      <section class="pane">
+        <div class="panehead"><h2>Editor</h2><span class="scrid">SCR-56</span></div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-editor-font">Font</div><div class="desc">Editor font family</div></div>
+          <div class="ctl-wrap">
+            <select class="ctl w-sel" aria-labelledby="lbl-editor-font">
+              <option>JetBrains Mono</option><option>Fira Code</option><option>Consolas</option><option>Cascadia Code</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-editor-fontsize">Font size</div><div class="desc">Editor font size (10–24)</div></div>
+          <div class="ctl-wrap"><input class="ctl w-num" type="number" value="13" aria-labelledby="lbl-editor-fontsize"></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-editor-vimmode">Vim mode</div><div class="desc">Enable Vim keybindings in the editor</div></div>
+          <div class="ctl-wrap"><button type="button" class="toggle" role="switch" aria-checked="false" aria-labelledby="lbl-editor-vimmode"><span class="knob"></span></button></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-editor-tabsize">Tab size</div><div class="desc">Number of spaces per tab</div></div>
+          <div class="ctl-wrap"><input class="ctl w-num" type="number" value="2" aria-labelledby="lbl-editor-tabsize"></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-editor-wordwrap">Word wrap</div><div class="desc">Wrap long lines in the editor</div></div>
+          <div class="ctl-wrap"><button type="button" class="toggle on" role="switch" aria-checked="true" aria-labelledby="lbl-editor-wordwrap"><span class="knob"></span></button></div>
+        </div>
+      </section>
+
+      <!-- SCR-57 Appearance -->
+      <section class="pane">
+        <div class="panehead"><h2>Appearance</h2><span class="scrid">SCR-57</span></div>
+        <div class="row">
+          <div class="info"><div class="lbl">Theme</div><div class="desc">Color theme for the application</div></div>
+          <div class="ctl-wrap">
+            <div class="radiocards" role="radiogroup" aria-label="Theme">
+              <button class="rcard" role="radio" aria-checked="false"><svg width="18" height="18" aria-hidden="true"><use href="#i-sun"/></svg><span class="t">Light</span></button>
+              <button class="rcard on" role="radio" aria-checked="true"><svg width="18" height="18" aria-hidden="true"><use href="#i-moon"/></svg><span class="t">Dark</span></button>
+              <button class="rcard" role="radio" aria-checked="false"><svg width="18" height="18" aria-hidden="true"><use href="#i-monitor"/></svg><span class="t">System</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCR-58 Connection -->
+      <section class="pane">
+        <div class="panehead"><h2>Connection</h2><span class="scrid">SCR-58</span></div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-connection-timeout">Default timeout</div><div class="desc">Query timeout in seconds (0 = unlimited)</div></div>
+          <div class="ctl-wrap"><input class="ctl w-num" type="number" value="30" aria-labelledby="lbl-connection-timeout"></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-connection-safemode">Safe mode</div><div class="desc">Controls query confirmation before destructive or write operations</div></div>
+          <div class="ctl-wrap">
+            <select class="ctl w-sel" aria-labelledby="lbl-connection-safemode">
+              <option>0 – Off: no checks</option>
+              <option>1 – Silent: log to console only</option>
+              <option selected>2 – Alert: confirm DELETE/DROP/TRUNCATE</option>
+              <option>3 – Alert+: confirm all DML + DDL</option>
+              <option>4 – Safe: confirm + type table name</option>
+              <option>5 – Read-Only: block all writes</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-connection-remember">Remember passwords in Windows Credential Manager</div>
+            <div class="desc">Mirrors saved credentials into the OS keychain in addition to DPAPI storage</div></div>
+          <div class="ctl-wrap"><button type="button" class="toggle" role="switch" aria-checked="false" aria-labelledby="lbl-connection-remember"><span class="knob"></span></button></div>
+        </div>
+      </section>
+
+      <!-- SCR-59 AI -->
+      <section class="pane">
+        <div class="panehead"><h2>AI</h2><span class="scrid">SCR-59</span></div>
+        <div class="provider">
+          <span class="pdot"></span>
+          <div><div class="pname">OpenAI</div><div class="ptype">Type: OpenAI &middot; Model: gpt-4o-mini</div></div>
+          <span class="ptest">✓ Connected</span>
+          <button class="btn ghost sm">Fetch Models</button>
+          <button class="btn danger-ghost sm" aria-label="Remove provider"><svg width="12" height="12" aria-hidden="true"><use href="#i-trash"/></svg></button>
+        </div>
+        <button class="btn sec sm" style="margin-bottom:var(--space-lg)"><svg width="12" height="12" aria-hidden="true"><use href="#i-plus"/></svg>Add</button>
+
+        <div class="row" style="border-top:1px solid var(--color-border-subtle);padding-top:var(--space-lg)">
+          <div class="info"><div class="lbl">Feature Routing</div><div class="desc">Which provider handles each AI feature</div></div>
+        </div>
+        <div class="row"><div class="info"><span class="lbl" id="lbl-ai-feat-chat" style="font-weight:var(--font-weight-regular)">Chat</span></div>
+          <div class="ctl-wrap"><select class="ctl w-sel" aria-labelledby="lbl-ai-feat-chat"><option>OpenAI</option><option>— None —</option></select></div></div>
+        <div class="row"><div class="info"><span class="lbl" id="lbl-ai-feat-explain" style="font-weight:var(--font-weight-regular)">Explain Query</span></div>
+          <div class="ctl-wrap"><select class="ctl w-sel" aria-labelledby="lbl-ai-feat-explain"><option>OpenAI</option><option>— None —</option></select></div></div>
+        <div class="row"><div class="info"><span class="lbl" id="lbl-ai-feat-fixerror" style="font-weight:var(--font-weight-regular)">Fix Error</span></div>
+          <div class="ctl-wrap"><select class="ctl w-sel" aria-labelledby="lbl-ai-feat-fixerror"><option selected>— None —</option><option>OpenAI</option></select></div></div>
+        <div class="row"><div class="info"><span class="lbl" id="lbl-ai-feat-inline" style="font-weight:var(--font-weight-regular)">Inline Suggestions</span></div>
+          <div class="ctl-wrap"><select class="ctl w-sel" aria-labelledby="lbl-ai-feat-inline"><option>OpenAI</option><option>— None —</option></select></div></div>
+
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-ai-maxtables">Max schema tables</div><div class="desc">Maximum tables included in AI context (1–50)</div></div>
+          <div class="ctl-wrap"><input class="ctl w-num" type="number" value="20" aria-labelledby="lbl-ai-maxtables"></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-ai-inlinesugg">Inline suggestions</div><div class="desc">Show AI-powered inline completions in the editor</div></div>
+          <div class="ctl-wrap"><button type="button" class="toggle on" role="switch" aria-checked="true" aria-labelledby="lbl-ai-inlinesugg"><span class="knob"></span></button></div>
+        </div>
+      </section>
+
+      <!-- SCR-60 Performance -->
+      <section class="pane">
+        <div class="panehead"><h2>Performance</h2><span class="scrid">SCR-60</span></div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-perf-streaming">Streaming threshold (rows)</div>
+            <div class="desc">Queries returning more rows than this stream chunked instead of loading all at once. Higher = more RAM, lower = more chunks.</div></div>
+          <div class="ctl-wrap"><input class="ctl w-num" type="number" value="10000" aria-labelledby="lbl-perf-streaming"></div>
+        </div>
+        <div class="row">
+          <div class="info"><div class="lbl" id="lbl-perf-storemax">Store max rows</div>
+            <div class="desc">Maximum rows kept in memory. Beyond this, rows are dropped (use Export for full data). Higher = more RAM.</div></div>
+          <div class="ctl-wrap"><input class="ctl w-num" type="number" value="50000" aria-labelledby="lbl-perf-storemax"></div>
+        </div>
+      </section>
+
+      <!-- SCR-61 Diagnostics -->
+      <section class="pane">
+        <div class="panehead"><h2>Diagnostics</h2><span class="scrid">SCR-61</span></div>
+        <div class="diagrow">
+          <p class="noteBox">Backend logs and query metrics are written to
+            <code>%LOCALAPPDATA%\TablePro\logs\</code>. They stay on this machine.</p>
+          <button class="btn sec sm"><svg width="12" height="12" aria-hidden="true"><use href="#i-folder"/></svg>Open Log Folder</button>
+        </div>
+        <div class="diagrow">
+          <p class="noteBox">Crash dumps are stored locally in <code>%LOCALAPPDATA%\TablePro\crashes\</code>
+            and (for WER native dumps) <code>%LOCALAPPDATA%\CrashDumps\</code>. Attach them manually when filing a bug report.</p>
+          <button class="btn sec sm"><svg width="12" height="12" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+        </div>
+        <div class="emptydumps">No crash dumps. Nothing to worry about.</div>
+      </section>
+
+      <!-- SCR-62 Shortcuts -->
+      <section class="pane">
+        <div class="panehead"><h2>Keyboard Shortcuts</h2><span class="scrid">SCR-62</span></div>
+        <div class="row" style="border-top:0">
+          <div class="info"><div class="desc">Click on a shortcut to customize it. Custom bindings are highlighted in blue.</div></div>
+          <div class="ctl-wrap"><button class="btn ghost sm">Reset All</button></div>
+        </div>
+        <div class="shcgrid">
+          <div class="shcgrp"><h3>Editor</h3>
+            <div class="shcrow"><span class="lbl">Run Query</span><kbd>Ctrl+Enter</kbd></div>
+            <div class="shcrow"><span class="lbl">Explain Query</span><kbd class="custom">Ctrl+Shift+X</kbd></div>
+            <div class="shcrow"><span class="lbl">Format SQL</span><kbd>Ctrl+Shift+F</kbd></div>
+          </div>
+          <div class="shcgrp"><h3>Tabs &amp; Data</h3>
+            <div class="shcrow"><span class="lbl">New Tab</span><kbd>Ctrl+T</kbd></div>
+            <div class="shcrow"><span class="lbl">Insert Row</span><kbd>Ctrl+I</kbd></div>
+            <div class="shcrow"><span class="lbl">Import SQL</span><kbd>Ctrl+Shift+M</kbd></div>
+          </div>
+          <div class="shcgrp"><h3>Navigation</h3>
+            <div class="shcrow"><span class="lbl">Quick Switcher</span><kbd>Ctrl+K</kbd></div>
+            <div class="shcrow"><span class="lbl">Command Palette</span><kbd>Ctrl+Shift+P</kbd></div>
+            <div class="shcrow"><span class="lbl">Toggle History</span><kbd>Ctrl+H</kbd></div>
+          </div>
+          <div class="shcgrp"><h3>General</h3>
+            <div class="shcrow"><span class="lbl">Settings</span><kbd>Ctrl+,</kbd></div>
+            <div class="shcrow"><span class="lbl">Refresh Schema</span><kbd>F5</kbd></div>
+            <div class="shcrow"><span class="lbl">Keyboard Shortcuts</span><kbd>F1</kbd></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

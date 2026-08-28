@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Audit remediation, phase 2
+  Sheet: Side panels — SCR-48 Inspector, SCR-49 History, SCR-50 AI Chat,
+  SCR-51 AI Conversation List
+  Authority: ../design-spec.md section 5.16 (canon, post-audit) · ../tokens.css
+  (post-audit) · ../screens.md. Do not edit those three — phase 1 owns them.
+
+  Remediation applied here (see audit-260828-1120-tablepro-mockup-guidelines.md):
+    B1  removed outline:none from .field input (the History search box); the
+        ring now moves to the wrapper via .field:focus-within, per 5.16 — the
+        only sanctioned way to relocate a ring, never delete it.
+    B2  every --color-text-muted TEXT use -> --color-text-secondary: the
+        .field wrapper's default color, its placeholder, .frow .ftype (column
+        type annotations), .hmeta (history timestamps), .msgmeta (chat
+        timestamps/model), .codehead label, .ctime (conversation timestamps).
+        8 rules converted.
+    M10 hover rules that set bg-hover also set color:text-primary (.hitem,
+        .citem — .dtab/.newconv/.iconbtn already did).
+    M12 added SCR-49's missing "No history yet" empty state as a 5th specimen
+        (flow 3.4's exact copy).
+    m7  the two icon-only List/JSON view buttons in SCR-48's segmented control
+        now carry aria-label="List view" / aria-label="JSON view".
+    m8  aria-hidden="true" on every inline icon <svg> that renders a <use>.
+    canon .board/.iconbtn/.btn/.field rewritten to match 5.16 exactly: board
+    is the canonical max-width:1400px column-of-rows model with .scr specimen
+    chips (renamed from .scrtag); .field keeps its name as the bordered inline
+    wrapper (5.16 settled this — the other, unbordered label-over-control
+    stack was renamed .formrow elsewhere and does not appear in this file).
+    No dialogs, .btn.danger or .btn.danger-ghost in this file — the dock has
+    no destructive actions and is not modal (design-spec.md 2.4 "Dock pane").
+
+  Pattern authority unchanged: ../scr-13-query-workspace.html — the dock
+  chrome (.dock, .docktabs, .dtab, .dockbody, .dockbar, .field, .hitem/
+  .hmeta/.hsql) is reused from that pilot's M2 right-dock implementation.
+
+  Per design-spec.md M2 (Gate 3, 2026-08-28), SCR-48/49/50/51 are three tabs
+  of ONE persistent right dock, no scrim, resizable, surviving tab switches
+  (design-spec.md 2.4 "Dock pane" modality row). This sheet shows each tab's
+  full content — plus SCR-49's empty state — as its own dock instance so all
+  five are visible at once; in the running app only one dock exists and its
+  active tab/state switches in place.
+
+  SCR-51 is listed in the same "Dock pane" modality row as the other three
+  (design-spec.md 2.4) — not an anchored popover — so it is shown here as an
+  in-dock state of the AI tab (replacing the message list), never as a
+  floating overlay with its own scrim.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Side panels — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+.page{display:flex;flex-direction:column;height:100vh}
+
+.sheethead{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.sheethead h1{font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)}
+.sheethead .sub{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+/* ---------- Canonical .board — design-spec.md 5.16 ---------- */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);background:var(--color-bg-base);
+  flex:1;overflow:auto;width:100%}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-xl)}
+.cardwrap{display:flex;flex-direction:column;gap:var(--space-md);flex:1 1 380px}
+.scr{display:inline-flex;align-items:center;gap:var(--space-sm);align-self:flex-start;
+  height:var(--control-h-xs);padding:0 var(--space-sm);border-radius:var(--radius-xs);
+  background:var(--color-bg-muted);color:var(--color-text-secondary);
+  font-family:var(--font-mono);font-size:var(--font-size-2xs);font-weight:var(--font-weight-medium)}
+
+/* ---------- dock chrome — reused from scr-13-query-workspace.html ---------- */
+.dock{width:var(--w-dock-default);height:640px;flex:none;display:flex;flex-direction:column;
+  min-height:0;background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);
+  box-shadow:var(--shadow-panel);border-radius:var(--radius-lg);overflow:hidden}
+.docktabs{height:var(--h-tabbar);flex:none;display:flex;align-items:stretch;
+  border-bottom:1px solid var(--color-border-subtle)}
+.dtab{flex:1;display:flex;align-items:center;justify-content:center;gap:var(--space-sm);
+  color:var(--color-text-secondary);font-size:var(--font-size-sm);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.dtab:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.dtab.active{color:var(--color-text-primary);font-weight:var(--font-weight-medium);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+.dockbody{flex:1;overflow:auto;min-height:0;z-index:var(--z-dock-content)}
+.dockbar{display:flex;align-items:center;gap:var(--space-xs);padding:var(--space-sm) var(--space-md);
+  border-bottom:1px solid var(--color-border-subtle)}
+
+/* ---------- Canonical .field — design-spec.md 5.16 (kept name: inline bordered wrapper) ---------- */
+.field{display:flex;align-items:center;gap:var(--space-sm);flex:1;height:var(--control-h-md);
+  padding:0 var(--space-md);border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-secondary)}
+/* B1 — never outline:none. Ring moves to the wrapper because a bare ring on
+   the inner input would draw inside this border. */
+.field:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+.field input{flex:1;min-width:0;background:none;border:0;font-size:var(--font-size-sm);
+  color:var(--color-text-primary)}
+.field input::placeholder{color:var(--color-text-secondary)}
+
+/* ---------- Canonical .iconbtn — design-spec.md 5.16 ---------- */
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);display:grid;place-items:center;
+  flex:none;border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+.hitem{padding:var(--space-md) var(--space-lg);border-bottom:1px solid var(--color-border-subtle);
+  cursor:default}
+/* M10 — hover that sets bg-hover must also set color:text-primary */
+.hitem:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.hmeta{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);margin-bottom:var(--space-xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.hsql{font-family:var(--font-mono);font-size:var(--font-size-xs);color:var(--color-text-secondary);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hitem:hover .hsql{color:var(--color-text-primary)}
+.hactions{display:flex;gap:var(--space-xs);margin-top:var(--space-xs);opacity:0}
+.hitem:hover .hactions{opacity:1}
+
+/* ---------- Canonical .btn — design-spec.md 5.16 ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.btn.sm{height:var(--control-h-xs);padding:0 var(--space-md);font-size:var(--font-size-2xs)}
+.seg{display:flex;border:1px solid var(--color-border);border-radius:var(--radius-sm);overflow:hidden}
+.seg button{padding:0 var(--space-md);height:var(--control-h-xs);font-size:var(--font-size-2xs);
+  color:var(--color-text-secondary)}
+.seg button.on{background:var(--color-bg-muted);color:var(--color-text-primary)}
+
+/* ---------- SCR-48 Inspector — field list ---------- */
+.fieldlist{display:flex;flex-direction:column}
+.frow{display:flex;align-items:baseline;gap:var(--space-md);padding:var(--space-sm) var(--space-lg);
+  border-bottom:1px solid var(--color-border-subtle)}
+.frow .fname{width:120px;flex:none;color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  display:flex;align-items:center;gap:var(--space-xs)}
+.frow .ftype{display:block;color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  font-family:var(--font-mono)}
+.frow .fval{flex:1;min-width:0;font-family:var(--font-mono);font-size:var(--font-size-xs);
+  color:var(--color-text-primary);overflow-wrap:anywhere}
+.pk{color:var(--color-grid-pk-fg)}
+.null{color:var(--color-grid-null-fg);font-style:italic}
+
+/* ---------- SCR-49 History — empty state (M12) ---------- */
+.emptystate{height:100%;min-height:200px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:var(--space-sm);padding:var(--space-2xl);text-align:center;
+  color:var(--color-text-secondary)}
+.emptystate svg{color:var(--color-text-secondary)}
+.emptystate p{font-size:var(--font-size-md);font-weight:var(--font-weight-medium);
+  color:var(--color-text-primary)}
+.emptystate span{font-size:var(--font-size-xs);color:var(--color-text-secondary)}
+
+/* ---------- SCR-50 AI Chat — messages ---------- */
+.chatlist{display:flex;flex-direction:column;gap:var(--space-lg);padding:var(--space-lg)}
+.msg{display:flex;flex-direction:column;gap:var(--space-xs);max-width:88%}
+.msg.user{align-self:flex-end;align-items:flex-end}
+.msg.ai{align-self:flex-start}
+.bubble{padding:var(--space-sm) var(--space-md);border-radius:var(--radius-md);
+  font-size:var(--font-size-sm);line-height:var(--line-height-md)}
+.msg.user .bubble{background:var(--color-accent-blue-subtle);color:var(--color-text-primary)}
+.msg.ai .bubble{background:var(--color-bg-muted);color:var(--color-text-primary)}
+.msgmeta{display:flex;align-items:center;gap:var(--space-xs);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs)}
+.msgmeta .indigo{color:var(--color-accent-indigo)}
+.codeblock{margin-top:var(--space-xs);font-family:var(--font-mono);font-size:var(--font-size-xs);
+  line-height:var(--line-height-sm);white-space:pre;background:var(--color-bg-base);
+  border:1px solid var(--color-border-subtle);border-radius:var(--radius-sm);padding:var(--space-md);
+  color:var(--color-text-primary)}
+.codehead{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-xs) var(--space-sm);
+  font-size:var(--font-size-2xs);color:var(--color-text-secondary);background:var(--color-bg-muted);
+  border:1px solid var(--color-border-subtle);border-bottom:0;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.kw{color:var(--color-accent-blue)}
+.str{color:var(--color-accent-green)}
+.streaming{display:flex;align-items:center;gap:2px}
+.streaming i{width:4px;height:4px;border-radius:var(--radius-full);background:var(--color-accent-indigo);
+  animation:pulse 1s var(--ease-snappy) infinite}
+.streaming i:nth-child(2){animation-delay:.15s}
+.streaming i:nth-child(3){animation-delay:.3s}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+.chatinput{flex:none;display:flex;align-items:flex-end;gap:var(--space-sm);padding:var(--space-md);
+  border-top:1px solid var(--color-border-subtle)}
+.chatinput textarea{flex:1;min-width:0;resize:none;height:56px;padding:var(--space-sm) var(--space-md);
+  border-radius:var(--radius-sm);background:var(--color-bg-base);border:1px solid var(--color-border);
+  font-size:var(--font-size-sm);color:var(--color-text-primary)}
+.chatinput textarea::placeholder{color:var(--color-text-secondary)}
+.sendbtn{height:var(--control-h-lg);width:var(--control-h-lg);flex:none;border-radius:var(--radius-sm);
+  background:var(--color-accent-blue-fill);color:var(--color-text-inverse);display:grid;place-items:center}
+.sendbtn:hover{background:var(--color-accent-blue-fill-hover)}
+.convselect{display:flex;align-items:center;gap:var(--space-sm);flex:1;min-width:0;color:var(--color-text-primary)}
+.convselect span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--font-weight-medium)}
+
+/* ---------- SCR-51 AI Conversation List — in-dock state, replaces the messages ---------- */
+.convlist{display:flex;flex-direction:column}
+.citem{display:flex;flex-direction:column;gap:var(--space-xs);padding:var(--space-md) var(--space-lg);
+  border-bottom:1px solid var(--color-border-subtle)}
+/* M10 — hover that sets bg-hover must also set color:text-primary */
+.citem:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.citem.active{background:var(--color-accent-blue-subtle);box-shadow:inset 2px 0 0 0 var(--color-accent-blue)}
+.ctitle{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-primary);
+  font-size:var(--font-size-sm);font-weight:var(--font-weight-medium)}
+.csnippet{color:var(--color-text-secondary);font-size:var(--font-size-xs);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.ctime{color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.newconv{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md) var(--space-lg);
+  color:var(--color-text-secondary);border-bottom:1px solid var(--color-border-subtle)}
+.newconv:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-panelright" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M9 6h6M6 13v5M4 15.5h4M15 12l1.8 4.2L21 18l-4.2 1.8L15 24l-1.8-4.2L9 18l4.2-1.8z"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8M17 6l2 2M14 9l2 2"/></symbol>
+<symbol id="i-braces" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+<symbol id="i-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18-6-6 6-6M15 6l6 6-6 6"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="page">
+  <header class="sheethead">
+    <h1>Side panels — right dock</h1>
+    <span class="sub">SCR-48 · SCR-49 · SCR-50 · SCR-51 — M2: three tabs of ONE dock, no scrim; component sheet, not a live app state</span>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+      <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+    </button>
+  </header>
+
+  <div class="board">
+    <div class="row">
+
+    <!-- ===== SCR-48 Inspector Panel ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-48 · Inspector Panel — dock tab: Inspector</span>
+      <aside class="dock" aria-label="Right dock — Inspector">
+        <div class="docktabs" role="tablist" aria-label="Dock panel">
+          <button class="dtab active" role="tab" aria-selected="true"><svg width="13" height="13" aria-hidden="true"><use href="#i-panelright"/></svg>Inspector</button>
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-history"/></svg>History</button>
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-sparkles"/></svg>AI</button>
+        </div>
+        <div class="dockbar">
+          <span class="spacer"></span>
+          <!-- m7: shipped strings "List view" / "JSON view" -->
+          <span class="seg" role="group" aria-label="Inspector view">
+            <button class="on" aria-pressed="true" aria-label="List view"><svg width="11" height="11" aria-hidden="true"><use href="#i-list"/></svg></button>
+            <button aria-pressed="false" aria-label="JSON view"><svg width="11" height="11" aria-hidden="true"><use href="#i-braces"/></svg></button>
+          </span>
+        </div>
+        <div class="dockbody">
+          <div class="fieldlist">
+            <div class="frow"><span class="fname"><svg class="pk" width="10" height="10" aria-hidden="true"><use href="#i-key"/></svg>order_id<span class="ftype">bigint</span></span><span class="fval">10245</span></div>
+            <div class="frow"><span class="fname">customer_id<span class="ftype">bigint</span></span><span class="fval">4824</span></div>
+            <div class="frow"><span class="fname">status<span class="ftype">text</span></span><span class="fval">processing</span></div>
+            <div class="frow"><span class="fname">total_amount<span class="ftype">numeric(12,2)</span></span><span class="fval">310.00</span></div>
+            <div class="frow"><span class="fname">currency<span class="ftype">char(3)</span></span><span class="fval">GBP</span></div>
+            <div class="frow"><span class="fname">created_at<span class="ftype">timestamptz</span></span><span class="fval">2026-08-19 16:47:33+07</span></div>
+            <div class="frow"><span class="fname">shipped_at<span class="ftype">timestamptz</span></span><span class="fval null">NULL</span></div>
+            <div class="frow"><span class="fname">notes<span class="ftype">text</span></span><span class="fval null">NULL</span></div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ===== SCR-49 History Panel ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-49 · History Panel — dock tab: History</span>
+      <aside class="dock" aria-label="Right dock — History">
+        <div class="docktabs" role="tablist" aria-label="Dock panel">
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-panelright"/></svg>Inspector</button>
+          <button class="dtab active" role="tab" aria-selected="true"><svg width="13" height="13" aria-hidden="true"><use href="#i-history"/></svg>History</button>
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-sparkles"/></svg>AI</button>
+        </div>
+        <div class="dockbar">
+          <label class="field"><svg width="12" height="12" aria-hidden="true"><use href="#i-search"/></svg><input type="text" placeholder="Search history" aria-label="Search history"></label>
+          <button class="iconbtn" aria-label="Clear all" title="Clear all"><svg width="14" height="14" aria-hidden="true"><use href="#i-trash"/></svg></button>
+        </div>
+        <div class="dockbody">
+          <div class="hitem">
+            <div class="hmeta"><span class="dot" style="width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-accent-green)"></span>09:41:12<span>&middot;</span>38ms<span>&middot;</span>24 rows</div>
+            <div class="hsql">SELECT date_trunc('month', o.created_at) AS month, o.currency, count(*) AS orders&hellip;</div>
+            <div class="hactions">
+              <button class="btn ghost sm" title="Copy query"><svg width="11" height="11" aria-hidden="true"><use href="#i-copy"/></svg>Copy query</button>
+              <button class="btn ghost sm" title="Delete entry"><svg width="11" height="11" aria-hidden="true"><use href="#i-trash"/></svg>Delete entry</button>
+            </div>
+          </div>
+          <div class="hitem">
+            <div class="hmeta"><span class="dot" style="width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-accent-green)"></span>09:38:44<span>&middot;</span>12ms<span>&middot;</span>142 rows</div>
+            <div class="hsql">SELECT * FROM public.orders WHERE status = 'pending' ORDER BY created_at DESC;</div>
+          </div>
+          <div class="hitem">
+            <div class="hmeta"><span class="dot" style="width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-accent-red)"></span>09:36:02<span>&middot;</span>failed</div>
+            <div class="hsql">ALTER TABLE public.orders ADD COLUMN fulfilled_by bigint REFERENCES warehouses;</div>
+          </div>
+          <div class="hitem">
+            <div class="hmeta"><span class="dot" style="width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-accent-green)"></span>09:31:55<span>&middot;</span>4ms<span>&middot;</span>1 row</div>
+            <div class="hsql">SELECT count(*) FROM public.customers;</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ===== SCR-49 History Panel — empty state (M12) ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-49 · History Panel — dock tab: History, empty state</span>
+      <aside class="dock" aria-label="Right dock — History, empty">
+        <div class="docktabs" role="tablist" aria-label="Dock panel">
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-panelright"/></svg>Inspector</button>
+          <button class="dtab active" role="tab" aria-selected="true"><svg width="13" height="13" aria-hidden="true"><use href="#i-history"/></svg>History</button>
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-sparkles"/></svg>AI</button>
+        </div>
+        <div class="dockbar">
+          <label class="field"><svg width="12" height="12" aria-hidden="true"><use href="#i-search"/></svg><input type="text" placeholder="Search history" aria-label="Search history" disabled></label>
+          <button class="iconbtn" aria-label="Clear all" title="Clear all" disabled style="opacity:.45"><svg width="14" height="14" aria-hidden="true"><use href="#i-trash"/></svg></button>
+        </div>
+        <div class="dockbody">
+          <!-- design-spec.md flow 3.4: L -->|no history| LE[["EMPTY: 'No history yet'"]] -->
+          <div class="emptystate">
+            <svg width="28" height="28" aria-hidden="true"><use href="#i-history"/></svg>
+            <p>No history yet</p>
+            <span>Run a query to start building history.</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ===== SCR-50 AI Chat Panel ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-50 · AI Chat Panel — dock tab: AI (chat state)</span>
+      <aside class="dock" aria-label="Right dock — AI Chat">
+        <div class="docktabs" role="tablist" aria-label="Dock panel">
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-panelright"/></svg>Inspector</button>
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-history"/></svg>History</button>
+          <button class="dtab active" role="tab" aria-selected="true"><svg width="13" height="13" aria-hidden="true"><use href="#i-sparkles"/></svg>AI</button>
+        </div>
+        <div class="dockbar">
+          <button class="convselect" aria-haspopup="true" aria-expanded="false" title="Switch conversation">
+            <svg width="13" height="13" style="color:var(--color-accent-indigo)" aria-hidden="true"><use href="#i-sparkles"/></svg>
+            <span>Why is the orders query slow?</span>
+            <svg width="12" height="12" aria-hidden="true"><use href="#i-chev-d"/></svg>
+          </button>
+          <button class="iconbtn" aria-label="New conversation" title="New conversation"><svg width="14" height="14" aria-hidden="true"><use href="#i-plus"/></svg></button>
+        </div>
+        <div class="dockbody">
+          <div class="chatlist">
+            <div class="msg user">
+              <div class="bubble">Why is the monthly revenue query slow on orders?</div>
+              <span class="msgmeta">09:52</span>
+            </div>
+            <div class="msg ai">
+              <span class="msgmeta"><svg class="indigo" width="11" height="11" aria-hidden="true"><use href="#i-sparkles"/></svg>Assistant</span>
+              <div class="bubble">
+                The plan shows a sequential scan on <code style="font-family:var(--font-mono)">orders</code> filtered by <code style="font-family:var(--font-mono)">status</code>. Add an index on that column:
+                <div class="codehead"><svg width="11" height="11" aria-hidden="true"><use href="#i-code"/></svg>SQL &middot; <button class="btn ghost sm" style="height:auto;padding:0" title="Insert into editor">Insert into editor</button></div>
+                <div class="codeblock"><span class="kw">CREATE INDEX</span> idx_orders_status
+  <span class="kw">ON</span> public.orders (status);</div>
+              </div>
+              <span class="msgmeta">09:52 &middot; gpt-4.1</span>
+            </div>
+            <div class="msg ai">
+              <span class="msgmeta"><svg class="indigo" width="11" height="11" aria-hidden="true"><use href="#i-sparkles"/></svg>Assistant</span>
+              <div class="bubble">Want me to check the other filtered columns on this table too? <span class="streaming" aria-label="Streaming response"><i></i><i></i><i></i></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="chatinput">
+          <textarea placeholder="Ask about this schema or query&hellip;" aria-label="Message"></textarea>
+          <button class="sendbtn" aria-label="Send message" title="Send"><svg width="15" height="15" aria-hidden="true"><use href="#i-send"/></svg></button>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ===== SCR-51 AI Conversation List ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-51 · AI Conversation List — dock tab: AI (conversation-list state)</span>
+      <aside class="dock" aria-label="Right dock — AI conversations">
+        <div class="docktabs" role="tablist" aria-label="Dock panel">
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-panelright"/></svg>Inspector</button>
+          <button class="dtab" role="tab" aria-selected="false"><svg width="13" height="13" aria-hidden="true"><use href="#i-history"/></svg>History</button>
+          <button class="dtab active" role="tab" aria-selected="true"><svg width="13" height="13" aria-hidden="true"><use href="#i-sparkles"/></svg>AI</button>
+        </div>
+        <div class="dockbar">
+          <button class="iconbtn" aria-label="Back to conversation" title="Back to conversation"><svg width="14" height="14" aria-hidden="true"><use href="#i-chev-l"/></svg></button>
+          <span style="font-size:var(--font-size-sm);font-weight:var(--font-weight-medium)">Conversations</span>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="New conversation" title="New conversation"><svg width="14" height="14" aria-hidden="true"><use href="#i-plus"/></svg></button>
+        </div>
+        <div class="dockbody">
+          <div class="convlist">
+            <div class="citem active">
+              <span class="ctitle"><svg class="indigo" width="12" height="12" style="color:var(--color-accent-indigo)" aria-hidden="true"><use href="#i-sparkles"/></svg>Why is the orders query slow?</span>
+              <span class="csnippet">Want me to check the other filtered columns on this table too?</span>
+              <span class="ctime">09:52 today</span>
+            </div>
+            <div class="citem">
+              <span class="ctitle">Draft monthly revenue report</span>
+              <span class="csnippet">Here's a query grouping orders by month and currency&hellip;</span>
+              <span class="ctime">Yesterday, 16:10</span>
+            </div>
+            <div class="citem">
+              <span class="ctitle">Explain the customers &harr; orders FK</span>
+              <span class="csnippet">customer_id on orders references customers.customer_id&hellip;</span>
+              <span class="ctime">2026-08-25</span>
+            </div>
+            <div class="citem">
+              <span class="ctitle">Safe way to backfill shipped_at</span>
+              <span class="csnippet">I'd stage this as an UPDATE with a WHERE clause first&hellip;</span>
+              <span class="ctime">2026-08-21</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

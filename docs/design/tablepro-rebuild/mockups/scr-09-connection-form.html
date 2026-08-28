@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 mockup
+  SCR-09 Connection Form — editing an existing PostgreSQL connection
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Pattern authority: design-spec.md 5.16 canonical definitions. .btn, .iconbtn,
+  Input/Select and kbd are the canonical rules verbatim.
+
+  AUDIT consistency #1 — this file was one of the three that used `.field` for a
+  label-over-control STACK while ten other files used the same name for a bordered
+  inline WRAPPER. 5.16 settled it: the wrapper keeps `.field`, the stack is renamed
+  `.formrow`. Every stack below is now `.formrow`, so CSS lifted between files
+  cannot break a control any more.
+
+  Surface class: SCR-09 is drawn here as a FULL PANE, not a modal — `showForm`
+  replaces the SCR-08 list inside the same content region, which is what
+  screens.md records and what the shipped ConnectionForm does. A modal is also the
+  wrong container for this content: nine field groups, two collapsible sections
+  and a URL-import row do not fit a dialog without scrolling the thing the user is
+  filling in.
+
+  Section structure is the real one, in the real order (ConnectionForm.tsx):
+    1  Import settings from connection URL   (collapsible row, shown open)
+    2  Name · Color · Tag · Type             (identity, engine-independent)
+    3  engine-specific config                (PostgreSQL shown: Host/Port,
+                                              Database, User, Password, SSL Mode
+                                              + the per-engine SSL sentence)
+    4  SSH Tunnel                            (section toggle, shown ON)
+    5  Advanced                              (collapsible, shown open —
+                                              Startup Commands only)
+    6  Group                                 (only when groups exist)
+    7  test result                           (inline, never a dialog)
+    8  Test · Cancel · Save · Connect
+  Engines that take a different section 3: SQLite collapses it to one Database
+  File field; MongoDB drops SSL Mode and SSH; Redis swaps in Database (0-15) and
+  its own TLS / SSL section with a CA Certificate path.
+
+  The SSL sentence under the selector is per-engine, not per-mode-name: the five
+  mode names are shared across engines but the drivers do not behave the same, so
+  the form states what the selected mode actually does. Shown: PostgreSQL +
+  `require` → encrypted, certificate unchecked.
+
+  AUDIT M12 — the inventory names testing / saving / error states for this screen
+  and none of them was drawn. All three are now rendered, at the foot of the form,
+  in a clearly-marked scaffolding block: they are alternate renderings of controls
+  that already exist above, not extra controls. Error copy is the driver's own
+  message, unmodified, which is what extractErrorMessage passes through.
+
+  Theme scaffolding only: the toggle writes data-theme on <html> and syncs the
+  `light` class, because tokens.css keys on `.light` (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-09 Connection Form — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* mockup scaffolding only */
+.scrid{display:inline-flex;align-items:center;height:var(--control-h-xs);padding:0 var(--space-sm);
+  border:1px dashed var(--color-border-strong);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-family:var(--font-mono);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  letter-spacing:.04em;white-space:nowrap;flex:none}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+/* AUDIT m10 — one control per screen shown focused, so the mandatory ring is
+   visible in the set. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+
+/* ---------- 5.16 canonical .btn ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-lg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn.sm{height:var(--control-h-xs);padding:0 var(--space-md);font-size:var(--font-size-2xs)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+
+/* ---------- 5.16 canonical .iconbtn ---------- */
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);
+  display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+/* ---------- shell chrome (SCR-02 / SCR-03) ---------- */
+.toolbar{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.nocon{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs)}
+.dot{width:6px;height:6px;border-radius:var(--radius-full);flex:none}
+.status{height:var(--h-statusbar);flex:none;display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs)}
+
+/* ---------- SCR-09 pane ---------- */
+.pane{flex:1;overflow:auto;display:flex;justify-content:center;
+  padding:var(--space-2xl) var(--space-xl) var(--space-3xl)}
+.col{width:100%;max-width:var(--w-popover-max);display:flex;flex-direction:column;
+  gap:var(--space-xl)}
+.formhead{display:flex;align-items:center;gap:var(--space-md)}
+.formhead h1{font-size:var(--font-size-xl);line-height:var(--line-height-xl);
+  font-weight:var(--font-weight-semibold)}
+
+/* ---------- 5.16 `.formrow` — the label-over-control stack ----------
+   Renamed from `.field`; see the header note. Not a box, a layout: no border,
+   no height, no background. The .ctl inside owns all of that. */
+.formrow{display:flex;flex-direction:column;gap:var(--space-2xs)}
+.formrow > label{font-size:var(--font-size-xs);line-height:var(--line-height-xs);
+  font-weight:var(--font-weight-medium);color:var(--color-text-secondary)}
+.fields{display:flex;flex-direction:column;gap:var(--space-lg)}
+
+/* ---------- 5.16 Input / Select ----------
+   AUDIT B1: no outline:none. The focus ring is the global :focus-visible rule,
+   and the border additionally goes to --color-focus-ring. */
+.ctl{height:var(--control-h-md);width:100%;padding:0 var(--space-md);
+  border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-primary);
+  font-size:var(--font-size-md)}
+.ctl:focus-visible{border-color:var(--color-focus-ring)}
+.ctl::placeholder{color:var(--color-text-secondary)}
+.ctl[disabled]{opacity:.45;cursor:not-allowed}
+select.ctl{appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--color-text-secondary) 50%),
+                   linear-gradient(135deg,var(--color-text-secondary) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 12px,calc(100% - 9px) 12px;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+  padding-right:var(--space-2xl)}
+textarea.ctl{height:auto;min-height:76px;padding:var(--space-sm) var(--space-md);
+  font-family:var(--font-mono);font-size:var(--font-size-sm);resize:vertical}
+.hint{font-size:var(--font-size-xs);line-height:var(--line-height-xs);
+  color:var(--color-text-secondary)}
+.row3{display:grid;grid-template-columns:2fr 1fr;gap:var(--space-md)}
+.inline{display:flex;gap:var(--space-sm);align-items:center}
+.inline .ctl{flex:1;min-width:0}
+
+/* the URL import row */
+.urlrow{display:flex;flex-direction:column;gap:var(--space-md);padding:var(--space-lg);
+  border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);
+  background:var(--color-bg-surface)}
+.urlrow .top{display:flex;align-items:center;gap:var(--space-md)}
+.urlrow .top span{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+
+/* colour swatches — the shipped picker offers ten fixed presets */
+.swatches{display:flex;align-items:center;gap:var(--space-sm);flex-wrap:wrap}
+.sw{width:20px;height:20px;border-radius:var(--radius-full);
+  border:1px solid var(--color-border)}
+.sw.on{border-color:var(--color-text-primary);box-shadow:0 0 0 1px var(--color-text-primary)}
+.swnone{height:var(--control-h-xs);padding:0 var(--space-md);border-radius:var(--radius-sm);
+  border:1px solid var(--color-border);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs)}
+
+/* collapsible / toggled sections */
+.section{border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden}
+.sectionhead{display:flex;align-items:center;gap:var(--space-md);width:100%;
+  height:var(--control-h-lg);padding:0 var(--space-lg);text-align:left;
+  font-size:var(--font-size-sm);font-weight:var(--font-weight-medium);
+  color:var(--color-text-primary);background:var(--color-bg-surface);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.sectionhead:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+/* The OFF track is --color-bg-muted, an inset-well colour. --color-bg-hover is
+   the hover LAYER and must not be used as a resting surface. */
+.switch{width:28px;height:14px;border-radius:var(--radius-full);flex:none;
+  background:var(--color-bg-muted);border:1px solid var(--color-border);
+  display:flex;align-items:center;padding:1px;
+  transition:background var(--duration-fast) var(--ease-snappy)}
+.switch i{width:10px;height:10px;border-radius:var(--radius-full);
+  background:var(--color-text-secondary);
+  transition:transform var(--duration-fast) var(--ease-snappy)}
+.switch.on{background:var(--color-accent-blue-fill);border-color:var(--color-accent-blue-fill)}
+.switch.on i{background:var(--color-text-inverse);transform:translateX(14px)}
+.sectionbody{display:flex;flex-direction:column;gap:var(--space-lg);
+  padding:var(--space-lg);border-top:1px solid var(--color-border);
+  background:var(--color-bg-base)}
+
+/* test result / error — inline, never a dialog (flow 3.1) */
+.result{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md) var(--space-lg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-xs);
+  background:var(--color-state-success-bg);color:var(--color-state-success-fg)}
+.result.err{background:var(--color-state-danger-bg);color:var(--color-state-danger-fg);
+  align-items:flex-start}
+.result.err .msg{font-family:var(--font-mono);line-height:var(--line-height-xs)}
+
+/* footer actions */
+.actions{display:flex;align-items:center;gap:var(--space-md);
+  padding-top:var(--space-md);border-top:1px solid var(--color-border-subtle)}
+.actions .btn{height:var(--control-h-lg)}
+
+/* AUDIT M12 — scaffolding block for the three states the inventory names but
+   that only one rendering can show at a time. */
+.variants{display:flex;flex-direction:column;gap:var(--space-lg);
+  padding:var(--space-lg);border:1px dashed var(--color-border-strong);
+  border-radius:var(--radius-md)}
+.variants h2{font-size:var(--font-size-xs);line-height:var(--line-height-xs);
+  font-weight:var(--font-weight-medium);color:var(--color-text-secondary);
+  text-transform:uppercase;letter-spacing:.05em}
+.variant{display:flex;align-items:flex-start;gap:var(--space-lg)}
+.variant .vlabel{width:104px;flex:none;font-size:var(--font-size-2xs);
+  line-height:var(--line-height-md);color:var(--color-text-secondary)}
+.variant .vbody{flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-md)}
+.spin{width:11px;height:11px;flex:none;border-radius:var(--radius-full);
+  border:2px solid var(--color-border);border-top-color:var(--color-text-primary);
+  animation:sp var(--duration-slow) linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ---------- 5.16 canonical kbd ---------- */
+kbd{font-family:var(--font-mono);font-size:var(--font-size-2xs);
+  padding:0 var(--space-xs);border:1px solid var(--color-border);
+  border-radius:var(--radius-xs);color:var(--color-text-secondary)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-panel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+<symbol id="i-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M9 6h6M6 13v5M4 15.5h4M15 12l1.8 4.2L21 18l-4.2 1.8L15 24l-1.8-4.2L9 18l4.2-1.8z"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="app">
+
+  <header class="toolbar">
+    <button class="iconbtn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+Shift+E)"><svg width="15" height="15" aria-hidden="true"><use href="#i-panel"/></svg></button>
+    <span class="nocon"><span class="dot" style="background:var(--color-text-secondary)"></span>No connection</span>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+    <button class="iconbtn" aria-label="Toggle query history" title="Query History (Ctrl+H)"><svg width="15" height="15" aria-hidden="true"><use href="#i-history"/></svg></button>
+    <button class="iconbtn" aria-label="Toggle AI chat" title="AI Chat (Ctrl+Shift+L)"><svg width="15" height="15" aria-hidden="true"><use href="#i-sparkles"/></svg></button>
+    <button class="iconbtn" aria-label="Open settings" title="Settings (Ctrl+,)"><svg width="15" height="15" aria-hidden="true"><use href="#i-settings"/></svg></button>
+  </header>
+
+  <main class="pane">
+    <form class="col" onsubmit="return false">
+
+      <div class="formhead">
+        <button class="iconbtn" type="button" aria-label="Back to Connection Manager" title="Cancel (Esc)"><svg width="15" height="15" aria-hidden="true"><use href="#i-chev-l"/></svg></button>
+        <h1>Edit Connection</h1>
+        <span class="spacer"></span>
+        <span class="scrid">SCR-09 Connection Form</span>
+      </div>
+
+      <!-- ===== 1. import settings from connection URL, shown open ===== -->
+      <div class="urlrow">
+        <div class="top">
+          <svg width="13" height="13" aria-hidden="true" style="color:var(--color-text-secondary)"><use href="#i-link"/></svg>
+          <span>Import settings from connection URL</span>
+          <span class="spacer"></span>
+          <button type="button" class="btn ghost sm">Hide</button>
+        </div>
+        <input class="ctl" type="text" aria-label="Connection URL"
+               placeholder="postgresql://user:pass@host:5432/database"
+               style="font-family:var(--font-mono);font-size:var(--font-size-sm)">
+        <p class="hint">Parsing a URL fills the fields below; nothing is saved until you press Save.</p>
+      </div>
+
+      <!-- ===== 2. identity ===== -->
+      <div class="fields">
+        <div class="formrow">
+          <label for="f-name">Name</label>
+          <input class="ctl" id="f-name" type="text" value="Analytics" placeholder="My DB">
+        </div>
+
+        <div class="formrow">
+          <label id="f-color">Color</label>
+          <!-- TOKEN-GAP: the shipped picker offers ten fixed preset hexes
+               (connection-color-picker.tsx). tokens.css has no connection-colour
+               palette, so each swatch below uses the nearest existing accent /
+               environment token. Violet (#a855f7) and pink (#ec4899) have no near
+               token at all and fall back to --color-accent-indigo and
+               --color-accent-red; the count of ten is preserved so the row is not
+               misread as an eight-colour picker. Needed: a ten-step
+               --color-conn-* swatch ramp, theme-invariant. -->
+          <div class="swatches" role="radiogroup" aria-labelledby="f-color">
+            <button type="button" class="swnone" role="radio" aria-checked="false">None</button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Red"    style="background:var(--color-accent-red)"></button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Orange" style="background:var(--color-accent-orange)"></button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Amber"  style="background:var(--color-env-staging)"></button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Yellow" style="background:var(--color-accent-yellow)"></button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Green"  style="background:var(--color-accent-green)"></button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Emerald" style="background:var(--color-env-dev)"></button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Blue"   style="background:var(--color-accent-blue)"></button>
+            <button type="button" class="sw on" role="radio" aria-checked="true" aria-label="Indigo" style="background:var(--color-accent-indigo)"></button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Violet" style="background:var(--color-accent-indigo)"></button>
+            <button type="button" class="sw" role="radio" aria-checked="false" aria-label="Pink"   style="background:var(--color-accent-red)"></button>
+          </div>
+        </div>
+
+        <div class="row3">
+          <div class="formrow">
+            <label for="f-tag">Tag</label>
+            <select class="ctl" id="f-tag">
+              <option>production</option>
+              <option>staging</option>
+              <option>development</option>
+              <option>testing</option>
+              <option>local</option>
+            </select>
+          </div>
+          <div class="formrow">
+            <label for="f-type">Type</label>
+            <select class="ctl" id="f-type">
+              <option selected>postgres</option>
+              <option>mysql</option>
+              <option>mssql</option>
+              <option>sqlite</option>
+              <option>mongodb</option>
+              <option>redis</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 3. engine-specific config — PostgreSQL ===== -->
+      <div class="fields">
+        <div class="row3">
+          <div class="formrow">
+            <label for="f-host">Host</label>
+            <!-- AUDIT m10 — shown focused so the mandatory ring appears in the set. -->
+            <input class="ctl demo-focus" id="f-host" type="text" value="db.internal" placeholder="localhost"
+                   style="border-color:var(--color-focus-ring)">
+          </div>
+          <div class="formrow">
+            <label for="f-port">Port</label>
+            <input class="ctl" id="f-port" type="text" value="5432"
+                   style="font-variant-numeric:var(--font-numeric-tabular)">
+          </div>
+        </div>
+
+        <div class="formrow">
+          <label for="f-db">Database</label>
+          <input class="ctl" id="f-db" type="text" value="analytics" placeholder="postgres">
+        </div>
+
+        <div class="formrow">
+          <label for="f-user">User</label>
+          <input class="ctl" id="f-user" type="text" value="postgres" placeholder="postgres">
+        </div>
+
+        <div class="formrow">
+          <label for="f-pass">Password</label>
+          <input class="ctl" id="f-pass" type="password" value="000000000000">
+          <p class="hint">Stored DPAPI-encrypted, per Windows user account. Never written to connections.json.</p>
+        </div>
+
+        <div class="formrow">
+          <label for="f-ssl">SSL Mode</label>
+          <select class="ctl" id="f-ssl">
+            <option>disable</option>
+            <option>prefer</option>
+            <option selected>require</option>
+            <option>verify-ca</option>
+            <option>verify-full</option>
+          </select>
+          <!-- The sentence is chosen per engine AND mode: PostgreSQL `require`
+               encrypts but accepts an invalid certificate or host name. -->
+          <p class="hint">Encrypted, but the server certificate is not checked &mdash; no protection against a man-in-the-middle.</p>
+        </div>
+      </div>
+
+      <!-- ===== 4. SSH Tunnel — section toggle, shown ON ===== -->
+      <section class="section">
+        <button type="button" class="sectionhead" aria-expanded="true" aria-controls="ssh-body">
+          <span class="switch on" aria-hidden="true"><i></i></span>
+          <span>SSH Tunnel</span>
+        </button>
+        <div class="sectionbody" id="ssh-body">
+          <div class="formrow">
+            <label for="f-sshcfg">SSH Config Host</label>
+            <select class="ctl" id="f-sshcfg">
+              <option selected>(Manual entry)</option>
+              <option>bastion-prod (bastion.example.com)</option>
+              <option>bastion-stg (stg-bastion.example.com)</option>
+            </select>
+            <p class="hint">Read from the machine's SSH config. Picking one fills the fields below.</p>
+          </div>
+          <div class="row3">
+            <div class="formrow">
+              <label for="f-sshhost">SSH Host</label>
+              <input class="ctl" id="f-sshhost" type="text" value="bastion.example.com" placeholder="bastion.example.com">
+            </div>
+            <div class="formrow">
+              <label for="f-sshport">SSH Port</label>
+              <input class="ctl" id="f-sshport" type="text" value="22"
+                     style="font-variant-numeric:var(--font-numeric-tabular)">
+            </div>
+          </div>
+          <div class="formrow">
+            <label for="f-sshuser">SSH User</label>
+            <input class="ctl" id="f-sshuser" type="text" value="ec2-user" placeholder="ec2-user">
+          </div>
+          <div class="formrow">
+            <label for="f-sshauth">Auth Method</label>
+            <select class="ctl" id="f-sshauth">
+              <option>Password</option>
+              <option selected>Private Key</option>
+            </select>
+          </div>
+          <div class="formrow">
+            <label for="f-sshkey">Key File</label>
+            <div class="inline">
+              <input class="ctl" id="f-sshkey" type="text" value="/home/user/.ssh/id_rsa" placeholder="/home/user/.ssh/id_rsa"
+                     style="font-family:var(--font-mono);font-size:var(--font-size-sm)">
+              <button type="button" class="btn sec sm" aria-label="Browse for key file" title="Browse for key file">&hellip;</button>
+            </div>
+          </div>
+          <div class="formrow">
+            <label for="f-sshpass">Passphrase</label>
+            <input class="ctl" id="f-sshpass" type="password" placeholder="(optional)">
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 5. Advanced — collapsible, shown open ===== -->
+      <section class="section">
+        <button type="button" class="sectionhead" aria-expanded="true" aria-controls="adv-body">
+          <span>Advanced</span>
+          <span class="spacer"></span>
+          <span aria-hidden="true">&minus;</span>
+        </button>
+        <div class="sectionbody" id="adv-body">
+          <div class="formrow">
+            <label for="f-startup">Startup Commands</label>
+            <textarea class="ctl" id="f-startup" rows="4" placeholder="SET search_path TO public;">SET search_path TO public;</textarea>
+            <p class="hint">Run once on every new session, before anything you type.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 6. Group — only rendered when at least one group exists ===== -->
+      <div class="formrow">
+        <label for="f-group">Group</label>
+        <select class="ctl" id="f-group">
+          <option>&mdash; No group &mdash;</option>
+          <option selected>Production</option>
+          <option>Staging</option>
+        </select>
+      </div>
+
+      <!-- ===== 7. test result — inline, form stays open, values kept ===== -->
+      <p class="result" role="status"><svg width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>Connection test succeeded!</p>
+
+      <!-- ===== 8. actions ===== -->
+      <div class="actions">
+        <button type="button" class="btn sec">Test</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost">Cancel <kbd>Esc</kbd></button>
+        <button type="button" class="btn sec">Save</button>
+        <button type="button" class="btn pri"><svg width="13" height="13" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+      </div>
+
+      <!-- ===== AUDIT M12 — the three states the inventory names ===== -->
+      <div class="variants">
+        <h2>Other states &mdash; scaffolding, one screen can only show one at a time</h2>
+
+        <div class="variant">
+          <span class="vlabel">testing</span>
+          <div class="vbody">
+            <button type="button" class="btn sec" disabled><span class="spin" aria-hidden="true"></span>Testing&hellip;</button>
+            <span class="hint">Test is disabled for the duration. Every field stays editable &mdash; a reachability probe does not lock the form.</span>
+          </div>
+        </div>
+
+        <div class="variant">
+          <span class="vlabel">saving</span>
+          <div class="vbody">
+            <button type="button" class="btn sec" disabled><span class="spin" aria-hidden="true"></span>Saving&hellip;</button>
+            <span class="hint">On success the pane closes back to SCR-08. There is no success strip for Save &mdash; the list reappearing is the confirmation.</span>
+          </div>
+        </div>
+
+        <div class="variant">
+          <span class="vlabel">error</span>
+          <div class="vbody" style="display:block">
+            <p class="result err" role="alert">
+              <svg width="12" height="12" aria-hidden="true" style="margin-top:1px"><use href="#i-alert"/></svg>
+              <span class="msg">password authentication failed for user &ldquo;postgres&rdquo;</span>
+            </p>
+            <p class="hint" style="margin-top:var(--space-sm)">The driver's own message, unmodified. The form stays open and every value is kept, so a retry is one keystroke. Replaces the success strip in the same slot &mdash; the two never show together.</p>
+          </div>
+        </div>
+      </div>
+
+    </form>
+  </main>
+
+  <footer class="status">
+    <span><span class="dot" style="background:var(--color-text-secondary);display:inline-block;margin-right:var(--space-xs)"></span>No connection</span>
+    <span class="spacer"></span>
+    <span>Editing &ldquo;Analytics&rdquo; &middot; unsaved</span>
+  </footer>
+</div>
+
+<script>
+/* Mockup scaffolding only — see the SCR-17 file for the same note. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

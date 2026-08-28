@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Audit remediation, phase 2
+  Sheet: Confirmation dialogs — SCR-43 Confirm Execute, SCR-44 Confirm Refresh,
+  SCR-45 Confirm Discard, SCR-46 Unsaved Changes, SCR-47 Safe Mode Confirm
+  Authority: ../design-spec.md section 5.16 (canon, post-audit) · ../tokens.css
+  (post-audit) · ../screens.md. Do not edit those three — phase 1 owns them.
+
+  Remediation applied here (see audit-260828-1120-tablepro-mockup-guidelines.md):
+    B1  no text-entry controls in this file carried outline:none; verified none
+        introduced by this pass.
+    B2  every --color-text-muted TEXT use -> --color-text-secondary (2 rules:
+        .tokengap, and the now-removed unused .meta rule).
+    M2  role="dialog" now carries aria-modal="true" on all five.
+    M5  SCR-43's Execute button is now filled .btn.danger — the staged set it
+        confirms contains a DELETE, and 5.16's table names exactly this case
+        ("the destructive item of SCR-43 when the staged set contains
+        deletes"). SCR-45/46/47 keep filled .btn.danger — each is the single
+        commit action inside its own confirm dialog, matching 5.16's general
+        rule ("a filled red button writes; a control that opens a further
+        confirmation is the only case that stays ghost"). SCR-44 is discussed
+        in the final report — 5.16's example list does not name it explicitly.
+    M10 hover rules that set bg-hover also set color:text-primary.
+    canon .btn/.iconbtn/.dialog/.board rewritten to match 5.16 exactly:
+      dialog has NO border (5.16 settled this — SCR-47's outer red border/glow
+      from the first pass is REMOVED; severity now reads through the shield
+      icon, the Read-Only badge and the danger-tinted held-SQL block only),
+      banded header/body/footer, .dialog.sm (420px, SCR-43..47 per 5.16's
+      width table), h1 title, max-height:min(680px, 100vh - 2*space-3xl).
+      Board is the canonical max-width:1400px column-of-rows model with .scr
+      specimen chips (renamed from .scrtag).
+    m8  aria-hidden="true" on every inline icon <svg> that renders a <use>.
+    m10 exactly ONE demonstrated focus state in this file (SCR-47 Cancel — the
+        most severe dialog, where the "focus never lands on the destructive
+        action" rule matters most). The first pass had three (44/45/47);
+        trimmed to one per screen, matching the cross-cutting instruction.
+
+  Pattern authority unchanged: ../scr-17-table-browse.html ·
+  ../scr-13-query-workspace.html — theme-toggle mechanism, icon-sprite
+  approach, density and markup semantics.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Confirmation dialogs — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+.page{display:flex;flex-direction:column;height:100vh}
+
+.sheethead{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.sheethead h1{font-size:var(--font-size-md);font-weight:var(--font-weight-semibold)}
+.sheethead .sub{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+/* ---------- Canonical .board — design-spec.md 5.16 ---------- */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);background:var(--color-bg-base);
+  flex:1;overflow:auto;width:100%}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-xl)}
+.cardwrap{display:flex;flex-direction:column;gap:var(--space-md);flex:1 1 380px}
+.scr{display:inline-flex;align-items:center;gap:var(--space-sm);align-self:flex-start;
+  height:var(--control-h-xs);padding:0 var(--space-sm);border-radius:var(--radius-xs);
+  background:var(--color-bg-muted);color:var(--color-text-secondary);
+  font-family:var(--font-mono);font-size:var(--font-size-2xs);font-weight:var(--font-weight-medium)}
+.scr.severe{background:var(--color-state-danger-bg);color:var(--color-state-danger-fg)}
+
+/* ---------- Canonical .dialog — design-spec.md 5.16 ---------- */
+.dialog{width:100%;display:flex;flex-direction:column;background:var(--color-bg-elevated);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);
+  max-height:min(680px, calc(100vh - var(--space-3xl) * 2))}
+.dialog.sm{max-width:420px}
+.dialog-head{display:flex;align-items:center;gap:var(--space-md);
+  padding:var(--space-xl) var(--space-2xl);border-bottom:1px solid var(--color-border-subtle)}
+.dialog-head h1{font-size:var(--font-size-xl);line-height:var(--line-height-xl);
+  font-weight:var(--font-weight-semibold)}
+.dialog-body{padding:var(--space-2xl);overflow:auto;flex:1;display:flex;flex-direction:column;
+  gap:var(--space-lg)}
+.dialog-foot{display:flex;align-items:center;gap:var(--space-md);
+  padding:var(--space-lg) var(--space-2xl);border-top:1px solid var(--color-border-subtle)}
+.dialog p.desc{color:var(--color-text-secondary);font-size:var(--font-size-md);
+  line-height:var(--line-height-md)}
+.dialog p.desc strong{color:var(--color-text-primary);font-weight:var(--font-weight-medium)}
+
+/* ---------- Canonical .iconbtn — design-spec.md 5.16 ---------- */
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);display:grid;place-items:center;
+  flex:none;border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+/* ---------- Canonical .btn — design-spec.md 5.16 ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+/* M5 — filled: this commits an irreversible destructive write */
+.btn.danger{background:var(--color-accent-red-fill);color:var(--color-text-inverse)}
+.btn.danger:hover{background:var(--color-accent-red-fill-hover)}
+/* M5 — text-only: stages/selects a destructive intent, nothing written yet (unused in this file, kept for canon completeness) */
+.btn.danger-ghost{color:var(--color-accent-red)}
+.btn.danger-ghost:hover{background:var(--color-accent-red-subtle);color:var(--color-accent-red)}
+.btn.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+
+/* ---------- SQL block, shared mono style from SCR-25's popover body ---------- */
+.sqlblock{font-family:var(--font-mono);font-size:var(--font-size-sm);line-height:var(--line-height-md);
+  color:var(--color-text-primary);white-space:pre;background:var(--color-bg-base);
+  border:1px solid var(--color-border-subtle);border-radius:var(--radius-sm);
+  padding:var(--space-md);max-height:var(--h-popover-max);overflow:auto}
+.kw{color:var(--color-accent-blue)}
+.str{color:var(--color-accent-green)}
+
+.pendinfo{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-sm) var(--space-md);
+  border-radius:var(--radius-sm);background:var(--color-accent-yellow-subtle);
+  color:var(--color-text-primary);font-size:var(--font-size-xs)}
+.pendinfo strong{font-variant-numeric:var(--font-numeric-tabular)}
+
+/* ---------- SCR-47 Safe Mode — most severe of the five ----------
+   The dialog surface itself takes NO border/glow (5.16 settled "Border: none"
+   for every dialog, no exceptions) — severity now reads through the icon,
+   the level badge and the danger-tinted held-SQL block instead. */
+.severe-icon{color:var(--color-accent-red)}
+.levelbadge{display:inline-flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border-radius:var(--radius-xs);font-size:var(--font-size-2xs);
+  font-weight:var(--font-weight-medium);color:var(--color-accent-red);
+  border:1px solid var(--color-accent-red);text-transform:uppercase;letter-spacing:.04em}
+.heldsql{font-family:var(--font-mono);font-size:var(--font-size-sm);line-height:var(--line-height-md);
+  white-space:pre;padding:var(--space-md);border-radius:var(--radius-sm);
+  background:var(--color-state-danger-bg);color:var(--color-state-danger-fg);
+  border:1px solid var(--color-accent-red)}
+
+.tokengap{font-size:var(--font-size-2xs);color:var(--color-text-secondary);font-style:italic;
+  padding:0 var(--space-2xl) var(--space-lg)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 14 8-14 8z"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="page">
+  <header class="sheethead">
+    <h1>Confirmation dialogs</h1>
+    <span class="sub">SCR-43 · SCR-44 · SCR-45 · SCR-46 · SCR-47 — component sheet, not a live app state</span>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+      <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+    </button>
+  </header>
+
+  <div class="board">
+    <div class="row">
+
+    <!-- ===== SCR-43 Confirm Execute Dialog ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-43 · Confirm Execute Dialog</span>
+      <div class="dialog sm" role="dialog" aria-modal="true" aria-labelledby="d43-title">
+        <div class="dialog-head">
+          <h1 id="d43-title">Confirm Execute</h1>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <p class="desc">This will run <strong>3 statements</strong> against <strong>public.orders</strong>:</p>
+          <div class="sqlblock"><span class="kw">UPDATE</span> public.orders
+   <span class="kw">SET</span> status = <span class="str">'processing'</span>
+ <span class="kw">WHERE</span> order_id = 10245;
+
+<span class="kw">INSERT INTO</span> public.orders
+       (customer_id, status, total_amount, currency, created_at)
+<span class="kw">VALUES</span> (4825, <span class="str">'pending'</span>, 75.00, <span class="str">'USD'</span>, now());
+
+<span class="kw">DELETE FROM</span> public.orders
+ <span class="kw">WHERE</span> order_id = 10247;</div>
+        </div>
+        <div class="dialog-foot">
+          <span class="spacer"></span>
+          <button class="btn sec">Cancel</button>
+          <!-- M5: staged set contains a DELETE -> filled .btn.danger (5.16's named example) -->
+          <button class="btn lg danger"><svg width="13" height="13" aria-hidden="true"><use href="#i-play"/></svg>Execute 3 statements</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCR-44 Confirm Refresh Dialog ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-44 · Confirm Refresh Dialog</span>
+      <div class="dialog sm" role="dialog" aria-modal="true" aria-labelledby="d44-title">
+        <div class="dialog-head">
+          <h1 id="d44-title">Refresh table?</h1>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <p class="desc">Refreshing <strong>orders</strong> will discard <strong>3 unsaved changes</strong>. This cannot be undone.</p>
+          <span class="pendinfo"><svg width="13" height="13" aria-hidden="true"><use href="#i-alert"/></svg>1 insert &middot; 1 update &middot; 1 delete pending</span>
+        </div>
+        <div class="dialog-foot">
+          <span class="spacer"></span>
+          <button class="btn sec">Cancel</button>
+          <!-- M5: single-click commit inside its own confirm dialog, no further step -> filled .btn.danger (see final report: not in 5.16's named list, applied by the general rule) -->
+          <button class="btn lg danger"><svg width="13" height="13" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh anyway</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCR-45 Confirm Discard Dialog ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-45 · Confirm Discard Dialog</span>
+      <div class="dialog sm" role="dialog" aria-modal="true" aria-labelledby="d45-title">
+        <div class="dialog-head">
+          <h1 id="d45-title">Discard changes?</h1>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <p class="desc">This will discard <strong>3 staged changes</strong> to <strong>orders</strong> (1 insert, 1 update, 1 delete). This cannot be undone.</p>
+        </div>
+        <div class="dialog-foot">
+          <span class="spacer"></span>
+          <button class="btn sec">Cancel</button>
+          <!-- M5: 5.16's named example -->
+          <button class="btn lg danger"><svg width="13" height="13" aria-hidden="true"><use href="#i-trash"/></svg>Discard</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCR-46 Unsaved Changes Dialog ===== -->
+    <section class="cardwrap">
+      <span class="scr">SCR-46 · Unsaved Changes Dialog</span>
+      <div class="dialog sm" role="dialog" aria-modal="true" aria-labelledby="d46-title">
+        <div class="dialog-head">
+          <h1 id="d46-title">Unsaved changes</h1>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <p class="desc">You have <strong>3 unsaved changes</strong> in <strong>orders</strong>. Save them before switching to <strong>customers</strong>?</p>
+        </div>
+        <div class="dialog-foot">
+          <span class="spacer"></span>
+          <button class="btn ghost">Cancel</button>
+          <!-- M5: commits discard inside this confirm dialog -> filled .btn.danger -->
+          <button class="btn lg danger">Discard</button>
+          <button class="btn lg pri"><svg width="13" height="13" aria-hidden="true"><use href="#i-save"/></svg>Save</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SCR-47 Safe Mode Confirm Dialog — most severe ===== -->
+    <section class="cardwrap">
+      <span class="scr severe">SCR-47 · Safe Mode Confirm Dialog</span>
+      <div class="dialog sm" role="dialog" aria-modal="true" aria-labelledby="d47-title">
+        <div class="dialog-head">
+          <svg class="severe-icon" width="18" height="18" aria-hidden="true"><use href="#i-shield"/></svg>
+          <h1 id="d47-title">Destructive statement held</h1>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="15" height="15" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dialog-body">
+          <span class="levelbadge"><svg width="11" height="11" aria-hidden="true"><use href="#i-alert"/></svg>Safe Mode: Read-Only</span>
+          <p class="desc">This statement was intercepted before it could run against <strong>public.orders</strong>:</p>
+          <div class="heldsql"><span class="kw">TRUNCATE TABLE</span> public.orders;</div>
+          <p class="desc">Confirming runs it anyway, once, for this statement only. Safe Mode stays armed for everything after it.</p>
+        </div>
+        <div class="dialog-foot">
+          <span class="spacer"></span>
+          <!-- design-spec.md 5.16: on open, focus lands on Cancel — never on the destructive action.
+               Only demo-focus instance in this file (m10: one per screen), placed on the most
+               severe dialog in the set since that is where the rule matters most. -->
+          <button class="btn sec demo-focus" autofocus>Cancel</button>
+          <button class="btn lg danger"><svg width="13" height="13" aria-hidden="true"><use href="#i-play"/></svg>Run anyway</button>
+        </div>
+      </div>
+      <p class="tokengap">TOKEN-GAP: no dedicated token distinguishes Safe Mode "Read-Only" from "Alert" (--color-accent-orange, design-spec.md 5.4) — used --color-accent-red / --color-state-danger-* here since this level must read as more severe than the orange Alert badge shown in the toolbar on scr-17/scr-13.</p>
+    </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

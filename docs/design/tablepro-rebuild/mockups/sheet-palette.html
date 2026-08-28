@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (partition: overlays / settings / engine panels / error surface)
+  SCR-52 Quick Switcher (object mode) + SCR-53 Command Palette (command mode)
+  — merged into ONE palette, TWO MODES, per design-spec.md M5 / Q1 RESOLVED.
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  M5 (design-spec.md 2.3, Q1 resolved 2026-08-28): bare query searches objects
+  (SCR-52 mode); a leading `>` switches to commands (SCR-53 mode). The mode is
+  a removable prefix chip in the input; both shortcuts stay bound — the
+  quick-switcher shortcut opens bare, the command-palette shortcut opens with
+  `>` pre-seeded. Backspace on an empty input drops the chip back to object
+  mode. Grounded in Mobbin ref 7 (Fey, per-row shortcut chip) and ref 8 (Vapi,
+  sectioned results + footer legend + count).
+
+  Per-row shape used here: a dimmed KIND/CATEGORY tag next to the label (the
+  "dimmed group tag per row" the brief calls for) plus a right-edge chip.
+  Object rows have no individual keybinding, so their right-edge chip carries
+  the row's real metadata instead (schema, or query recency) — sourced from
+  quick-switcher.tsx's own `item.subtitle` field. Command rows carry their
+  real keybinding in that same slot. Documented so this interpretive choice
+  is visible, not silently substituted — see the fan-out final report.
+
+  Content sources:
+    - Group labels (Tables, Recent Queries): quick-switcher.tsx KIND_LABELS.
+    - Table names + query text: reused verbatim from
+      ../mockups/scr-13-query-workspace.html and scr-17-table-browse.html's
+      own schema (customers/orders/order_items/products, "public" schema,
+      the same two history SQL strings) for cross-mockup continuity.
+    - Footer legend hints + result count: quick-switcher.tsx footer (↑↓
+      navigate / ↵ open / Esc close) for object mode; command-palette.tsx
+      i18n keys commandPalette.navigate/run/closeLabel ("navigate"/"run"/
+      "close") for command mode — genuinely different verbs in source, kept
+      distinct rather than harmonized.
+    - Command labels, categories, and default keybindings: real, from
+      src/hooks/useCommandRegistry.ts (COMMANDS array).
+    - Recent section label: commandPalette.recent i18n key ("Recent").
+
+  Modality per design-spec.md 2.4: Centered overlay — SCR-52 / SCR-53,
+  `--z-popover`, no scrim, Esc closes.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme
+  on <html> and syncs the `light` class, because tokens.css keys on `.light` —
+  copied verbatim from ../mockups/scr-17-table-browse.html.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-52 / SCR-53 Unified Palette — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;
+}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Canonical .board — design-spec 5.16 */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;align-items:center;gap:var(--space-2xl);background:var(--color-bg-base)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);align-self:flex-end}
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+.switchnote{max-width:1100px;text-align:center;color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  background:var(--color-bg-surface);border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);
+  padding:var(--space-md) var(--space-xl)}
+.switchnote b{color:var(--color-text-primary)}
+
+.row2{display:flex;gap:var(--space-xl);align-items:flex-start;flex-wrap:wrap;justify-content:center}
+.col{display:flex;flex-direction:column;gap:var(--space-sm);align-items:center}
+.scr{color:var(--color-text-secondary);font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+  text-transform:uppercase;letter-spacing:.06em}
+
+/* ---------- shared palette shell ----------
+   AUDIT: no border — the modal-dialog "no border, shadow separates the
+   surface" ruling in 5.16 applies now that the palette is settled as modal
+   (role=dialog aria-modal=true). Width (520px) and shadow-2xl are kept from
+   the real source (quick-switcher.tsx `w-[520px]` `shadow-2xl`) rather than
+   forced onto 5.16's sm/md/lg scale, which does not list SCR-52/53 at all —
+   flagged as a canon gap in the fan-out report. */
+.palette{width:520px;max-width:90vw;background:var(--color-bg-elevated);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-2xl);overflow:hidden}
+.searchbar{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md) var(--space-lg);
+  border-bottom:1px solid var(--color-border-subtle)}
+/* AUDIT B1 — outline:none removed from the inner input; the ring moves to the
+   wrapper via :focus-within instead, the sanctioned way to relocate a ring. */
+.searchbar:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.searchbar svg.lens{color:var(--color-text-muted);flex:none}
+.modechip{display:flex;align-items:center;gap:var(--space-2xs);height:20px;padding:0 var(--space-xs) 0 var(--space-sm);
+  border-radius:var(--radius-full);background:var(--color-accent-blue-subtle);color:var(--color-accent-blue);
+  font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);flex:none}
+.modechip svg{color:inherit;opacity:.7}
+.searchbar input{flex:1;min-width:0;background:none;border:0;font-size:var(--font-size-md);
+  color:var(--color-text-primary)}
+.searchbar input::placeholder{color:var(--color-text-secondary)}
+
+.results{max-height:360px;overflow:auto;padding:var(--space-xs) 0}
+.sechead{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-md) var(--space-lg) var(--space-2xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);font-weight:var(--font-weight-semibold);
+  text-transform:uppercase;letter-spacing:.06em}
+.sechead .n{margin-left:auto;font-weight:var(--font-weight-regular);font-variant-numeric:var(--font-numeric-tabular)}
+.item{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-sm) var(--space-lg)}
+.item:hover,.item.active{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.item .ic{color:var(--color-text-muted);flex:none}
+.item.active .ic,.item:hover .ic{color:var(--color-text-inverse);opacity:.85}
+.item .lbl{font-weight:var(--font-weight-medium);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .sql{font-family:var(--font-mono);font-size:var(--font-size-xs);color:var(--color-text-secondary);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.item.active .sql,.item:hover .sql{color:var(--color-text-inverse);opacity:.85}
+/* dimmed group tag PER ROW */
+.tag{flex:none;font-size:var(--font-size-2xs);color:var(--color-text-secondary);
+  border:1px solid var(--color-border-subtle);border-radius:var(--radius-xs);padding:0 var(--space-xs)}
+.item.active .tag,.item:hover .tag{color:var(--color-text-inverse);border-color:rgba(255,255,255,.4)}
+.fill{flex:1;min-width:0}
+/* per-row shortcut / metadata chip, right edge */
+.chip{flex:none;font-family:var(--font-mono);font-size:var(--font-size-2xs);color:var(--color-text-secondary);
+  padding:2px var(--space-sm);border-radius:var(--radius-xs);background:var(--color-bg-muted)}
+.item.active .chip,.item:hover .chip{background:rgba(255,255,255,.18);color:var(--color-text-inverse)}
+
+.footer{display:flex;align-items:center;gap:var(--space-lg);padding:var(--space-sm) var(--space-lg);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.footer .hint{display:flex;align-items:center;gap:var(--space-xs)}
+/* Canonical kbd — design-spec 5.16: no background */
+kbd{font-family:var(--font-mono);font-size:var(--font-size-2xs);padding:0 var(--space-xs);
+  border:1px solid var(--color-border);border-radius:var(--radius-xs);color:var(--color-text-secondary)}
+.footer .count{margin-left:auto;font-variant-numeric:var(--font-numeric-tabular)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M10 3v18"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-chevright" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="board">
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+    <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+  </button>
+
+  <div class="switchnote">
+    <b>The mode switch (M5):</b> a bare query stays in object mode; typing <kbd>&gt;</kbd> as the first
+    character swaps in the removable <b>Commands</b> chip shown below. Backspacing that chip at an empty
+    input returns to object mode. Both existing shortcuts stay bound and just pre-seed the mode.
+  </div>
+
+  <div class="row2">
+
+    <!-- ===================== SCR-52 — object mode ===================== -->
+    <div class="col">
+      <span class="scr">SCR-52 &middot; Object mode &middot; opens on <kbd>Ctrl+K</kbd></span>
+      <div class="palette" role="dialog" aria-modal="true" aria-label="Search tables, schemas, databases, queries">
+        <h1 class="sr-only">Search tables, schemas, databases, queries</h1>
+        <div class="searchbar demo-focus">
+          <svg class="lens" width="15" height="15" aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="text" placeholder="Search tables, schemas, databases, queries…" aria-label="Search tables, schemas, databases, queries">
+        </div>
+        <div class="results">
+          <div class="sechead"><svg width="11" height="11" aria-hidden="true"><use href="#i-table"/></svg>Tables<span class="n">7</span></div>
+          <div class="item active">
+            <svg class="ic" width="13" height="13" aria-hidden="true"><use href="#i-table"/></svg>
+            <span class="lbl">orders</span><span class="tag">Table</span><span class="fill"></span>
+            <span class="chip">public</span>
+          </div>
+          <div class="item">
+            <svg class="ic" width="13" height="13" aria-hidden="true"><use href="#i-table"/></svg>
+            <span class="lbl">order_items</span><span class="tag">Table</span><span class="fill"></span>
+            <span class="chip">public</span>
+          </div>
+          <div class="item">
+            <svg class="ic" width="13" height="13" aria-hidden="true"><use href="#i-table"/></svg>
+            <span class="lbl">customers</span><span class="tag">Table</span><span class="fill"></span>
+            <span class="chip">public</span>
+          </div>
+          <div class="item">
+            <svg class="ic" width="13" height="13" aria-hidden="true"><use href="#i-table"/></svg>
+            <span class="lbl">products</span><span class="tag">Table</span><span class="fill"></span>
+            <span class="chip">public</span>
+          </div>
+
+          <div class="sechead"><svg width="11" height="11" aria-hidden="true"><use href="#i-clock"/></svg>Recent Queries<span class="n">2</span></div>
+          <div class="item">
+            <svg class="ic" width="13" height="13" aria-hidden="true"><use href="#i-clock"/></svg>
+            <span class="sql">SELECT date_trunc('month', o.created_at) AS month, o.currency, count(*)&hellip;</span>
+            <span class="tag">Query</span><span class="chip">2m ago</span>
+          </div>
+          <div class="item">
+            <svg class="ic" width="13" height="13" aria-hidden="true"><use href="#i-clock"/></svg>
+            <span class="sql">SELECT * FROM public.orders WHERE status = 'pending' ORDER BY created_at DESC;</span>
+            <span class="tag">Query</span><span class="chip">6m ago</span>
+          </div>
+        </div>
+        <div class="footer">
+          <span class="hint"><kbd>&uarr;&darr;</kbd>navigate</span>
+          <span class="hint"><kbd>&crarr;</kbd>open</span>
+          <span class="hint"><kbd>Esc</kbd>close</span>
+          <span class="count">6 results</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== SCR-53 — command mode ===================== -->
+    <div class="col">
+      <span class="scr">SCR-53 &middot; Command mode &middot; opens on <kbd>Ctrl+Shift+P</kbd></span>
+      <div class="palette" role="dialog" aria-modal="true" aria-label="Command Palette">
+        <h1 class="sr-only">Command Palette</h1>
+        <div class="searchbar demo-focus">
+          <svg class="lens" width="15" height="15" aria-hidden="true"><use href="#i-search"/></svg>
+          <span class="modechip">&gt;&nbsp;Commands<svg width="10" height="10" aria-hidden="true"><use href="#i-x"/></svg></span>
+          <input type="text" placeholder="Type a command…" aria-label="Type a command">
+        </div>
+        <div class="results">
+          <div class="sechead">Recent<span class="n">2</span></div>
+          <div class="item active">
+            <span class="lbl">Toggle AI Chat</span><span class="tag">Navigation</span><span class="fill"></span>
+            <span class="chip">Ctrl+Shift+L</span>
+          </div>
+          <div class="item">
+            <span class="lbl">Settings</span><span class="tag">Settings</span><span class="fill"></span>
+            <span class="chip">Ctrl+,</span>
+          </div>
+
+          <div class="sechead">Navigation<span class="n">4</span></div>
+          <div class="item">
+            <span class="lbl">Quick Switcher</span><span class="tag">Navigation</span><span class="fill"></span>
+            <span class="chip">Ctrl+K</span>
+          </div>
+          <div class="item">
+            <span class="lbl">Command Palette</span><span class="tag">Navigation</span><span class="fill"></span>
+            <span class="chip">Ctrl+Shift+P</span>
+          </div>
+          <div class="item">
+            <span class="lbl">Toggle Sidebar</span><span class="tag">Navigation</span><span class="fill"></span>
+            <span class="chip">Ctrl+Shift+E</span>
+          </div>
+          <div class="item">
+            <span class="lbl">Toggle History</span><span class="tag">Navigation</span><span class="fill"></span>
+            <span class="chip">Ctrl+H</span>
+          </div>
+
+          <div class="sechead">Query<span class="n">2</span></div>
+          <div class="item">
+            <span class="lbl">Run Query</span><span class="tag">Query</span><span class="fill"></span>
+            <span class="chip">Ctrl+Enter</span>
+          </div>
+          <div class="item">
+            <span class="lbl">Explain Query</span><span class="tag">Query</span><span class="fill"></span>
+            <span class="chip">Ctrl+Shift+X</span>
+          </div>
+        </div>
+        <div class="footer">
+          <span class="hint"><kbd>&uarr;&darr;</kbd>navigate</span>
+          <span class="hint"><kbd>&crarr;</kbd>run</span>
+          <span class="hint"><kbd>Esc</kbd>close</span>
+          <span class="count">8 results</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

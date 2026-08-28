@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (partition: overlays / settings / engine panels / error surface)
+  SCR-63 Shortcuts Help
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Content sourced from src/hooks/useCommandRegistry.ts (COMMANDS array — real
+  ids, labels, defaultBinding) and src/i18n/locales/en.json settings.shortcuts.*
+  (the same four group names SCR-62 uses: Editor, Tabs & Data, Navigation,
+  General — screens.md SCR-63 states this overlay repeats SCR-62's four groups
+  read-only). Not every registered command is shown; a representative slice per
+  group keeps the sheet legible, matching the "most repetitive, shell-once"
+  brief for this partition.
+
+  AUDIT REMEDIATION PHASE 2 — applied against design-spec.md 5.16 canon:
+    B2: --color-text-muted was text (caption, closebtn glyph, group headers,
+        footer hint, theme toggle) — moved to --color-text-secondary.
+    Canon .dialog: border removed; width set to .lg (760px) — 5.16's width
+        table does not list SCR-63 (only sm/md/lg member lists, none include
+        it); the 2-column shortcut grid needs more than .md's 560px, so .lg
+        was chosen and this gap is flagged in the fan-out report. Header/body/
+        footer padding now match 5.16 exactly (xl/2xl header, 2xl body,
+        lg/2xl footer).
+    Canon .iconbtn used for the close control.
+    m8: aria-hidden="true" on every inline icon <svg>.
+    m10: the close button is shown in its permanent focused state.
+    m11: font-variant-numeric: tabular-nums applied to the shortcut rows —
+        the keycap glyphs (F1, F5) are the numeric content this rule targets.
+    Canon .board / `.scr` chip.
+
+  Modality: role="dialog" aria-modal="true" (design-spec 5.16, audit M2).
+  screens.md SCR-63 additionally states "Press Esc or click outside to close".
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme
+  on <html> and syncs the `light` class, because tokens.css keys on `.light` —
+  copied verbatim from ../mockups/scr-17-table-browse.html.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-63 Shortcuts Help — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;
+}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+/* Canonical .board — design-spec 5.16 */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;align-items:center;gap:var(--space-3xl);background:var(--color-bg-base)}
+.scr{color:var(--color-text-secondary);font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+  text-transform:uppercase;letter-spacing:.06em}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);align-self:flex-end}
+
+/* Canonical .iconbtn — design-spec 5.16 */
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+/* ---------- Canonical .dialog — design-spec 5.16, width class .lg (760px) ---------- */
+.dialog{width:100%;max-width:760px;max-height:min(680px, calc(100vh - var(--space-3xl) * 2));
+  display:flex;flex-direction:column;background:var(--color-bg-elevated);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);overflow:hidden}
+.dhead{flex:none;display:flex;align-items:center;padding:var(--space-xl) var(--space-2xl);
+  border-bottom:1px solid var(--color-border-subtle)}
+.dhead h1{font-size:var(--font-size-xl);font-weight:var(--font-weight-semibold)}
+.spacer{flex:1}
+.dbody{flex:1;overflow:auto;padding:var(--space-2xl);
+  display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2xl)}
+.grp h2{font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--color-text-secondary);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:var(--space-sm)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-md);
+  padding:var(--space-xs) 0;border-bottom:1px solid var(--color-border-subtle);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.row .lbl{font-size:var(--font-size-md);color:var(--color-text-primary)}
+.keys{display:flex;gap:var(--space-2xs)}
+/* Canonical kbd — design-spec 5.16: no background */
+kbd{font-family:var(--font-mono);font-size:var(--font-size-2xs);padding:0 var(--space-xs);
+  border:1px solid var(--color-border);border-radius:var(--radius-xs);color:var(--color-text-secondary)}
+.dfoot{flex:none;padding:var(--space-lg) var(--space-2xl);border-top:1px solid var(--color-border-subtle);
+  color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="board">
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+    <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+  </button>
+
+  <span class="scr">SCR-63 &middot; Shortcuts Help</span>
+
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts">
+    <div class="dhead">
+      <h1>Keyboard Shortcuts</h1>
+      <span class="spacer"></span>
+      <button class="iconbtn demo-focus" aria-label="Close"><svg width="14" height="14" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="dbody">
+      <div class="grp">
+        <h2>Editor</h2>
+        <div class="row"><span class="lbl">Run Query</span><span class="keys"><kbd>Ctrl</kbd><kbd>Enter</kbd></span></div>
+        <div class="row"><span class="lbl">Cancel Query</span><span class="keys"><kbd>Esc</kbd></span></div>
+        <div class="row"><span class="lbl">Explain Query</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>X</kbd></span></div>
+        <div class="row"><span class="lbl">Format SQL</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></span></div>
+        <div class="row"><span class="lbl">Toggle Comment</span><span class="keys"><kbd>Ctrl</kbd><kbd>/</kbd></span></div>
+      </div>
+      <div class="grp">
+        <h2>Tabs &amp; Data</h2>
+        <div class="row"><span class="lbl">New Tab</span><span class="keys"><kbd>Ctrl</kbd><kbd>T</kbd></span></div>
+        <div class="row"><span class="lbl">Close Tab</span><span class="keys"><kbd>Ctrl</kbd><kbd>W</kbd></span></div>
+        <div class="row"><span class="lbl">Next Tab</span><span class="keys"><kbd>Ctrl</kbd><kbd>Tab</kbd></span></div>
+        <div class="row"><span class="lbl">Previous Tab</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Tab</kbd></span></div>
+        <div class="row"><span class="lbl">Save Changes</span><span class="keys"><kbd>Ctrl</kbd><kbd>S</kbd></span></div>
+        <div class="row"><span class="lbl">Insert Row</span><span class="keys"><kbd>Ctrl</kbd><kbd>I</kbd></span></div>
+        <div class="row"><span class="lbl">Import SQL</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>M</kbd></span></div>
+      </div>
+      <div class="grp">
+        <h2>Navigation</h2>
+        <div class="row"><span class="lbl">Quick Switcher</span><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></div>
+        <div class="row"><span class="lbl">Command Palette</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></span></div>
+        <div class="row"><span class="lbl">Toggle Sidebar</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></span></div>
+        <div class="row"><span class="lbl">Toggle History</span><span class="keys"><kbd>Ctrl</kbd><kbd>H</kbd></span></div>
+        <div class="row"><span class="lbl">Toggle AI Chat</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>L</kbd></span></div>
+        <div class="row"><span class="lbl">Toggle Inspector</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>I</kbd></span></div>
+      </div>
+      <div class="grp">
+        <h2>General</h2>
+        <div class="row"><span class="lbl">Settings</span><span class="keys"><kbd>Ctrl</kbd><kbd>,</kbd></span></div>
+        <div class="row"><span class="lbl">Refresh Schema</span><span class="keys"><kbd>F5</kbd></span></div>
+        <div class="row"><span class="lbl">Keyboard Shortcuts</span><span class="keys"><kbd>F1</kbd></span></div>
+        <div class="row"><span class="lbl">About TablePro</span><span class="keys"><kbd>Shift</kbd><kbd>F1</kbd></span></div>
+      </div>
+    </div>
+    <div class="dfoot">Press <kbd>Esc</kbd> or click outside to close.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

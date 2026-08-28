@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (structure/routines/data-movement partition)
+  SCR-34 Create Table Wizard
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+  Pattern authority: scr-17-table-browse.html, scr-13-query-workspace.html
+
+  AUDIT REMEDIATION PHASE 2 applied — see design-spec.md 5.16 (now canonical):
+    consistency#1  this file's `.field` was the label-over-control STACK variant
+      (opposite box model from the bordered inline `.field` in scr-01/13/17/26/27/
+      28). 5.16 renamed that variant to `.formrow`, with a real `.ctl` control
+      beneath — renamed here; the two-field ROW (name + schema side by side)
+      is now `.fieldrow` so it stops colliding with the renamed component.
+    B2  --color-text-muted demoted to non-text use; text/placeholder uses ->
+      text-secondary.
+    M2  role="dialog" already carried aria-modal="true"; unchanged.
+    M5  "Remove column" only edits the wizard's local draft list — nothing is
+      written until Create table — so it stays a plain ghost icon button, not
+      a danger variant (5.16's danger table does not name this control).
+    M8/M9  full-window screen was missing <main> + a heading; added <main>
+      with a visually-hidden <h1>, kept the file-id label as a plain span.
+    Canon .dialog  rebuilt to the settled banded header/body/footer model,
+      width scale (.dialog.lg = 760px per 5.16 — SCR-34 is explicitly listed
+      under "multi-region"), height cap, no border, one <h1> per dialog.
+    Canon .btn / .iconbtn  rewritten to match 5.16 exactly (transition list,
+      iconbtn hover now text-primary per M10, not the ad hoc accent-red it
+      carried before).
+    M10  hover rules that set bg-hover now also set text-primary.
+    m8  aria-hidden="true" added to every inline icon <svg>.
+    m10  one control shown in its focused state (the table-name field).
+    m11  tabular-nums applied to the grid-cell inputs (type/default strings
+      that carry embedded numeric precision, e.g. "numeric(12,2)").
+
+  Modality (design-spec.md 2.4 + 5.16 Dialog): true modal, bg-elevated,
+  shadow-modal, over --color-scrim at --z-modal-scrim, focus trapped, Esc
+  closes. Reached from SCR-04's "New table" sidebar action (screens.md).
+
+  What this mockup exists to prove: table name (placeholder "users"),
+  schema select, column definition rows with type/nullable/default/PK, and
+  the live DDL preview that screens.md names as SCR-34's defining feature.
+
+  Theme scaffolding only (not a product feature): the toggle writes
+  data-theme on <html> and syncs the `light` class, because tokens.css keys
+  on `.light` — copied verbatim from the pilot's mechanism.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-34 Create Table Wizard — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;
+  align-items:center;gap:var(--space-2xl);padding:var(--space-3xl)}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+.boardhead{display:flex;align-items:center;gap:var(--space-md);align-self:flex-start;width:1040px}
+.boardhead .filelabel{font-size:var(--font-size-lg);font-weight:var(--font-weight-semibold)}
+.boardhead .scrid{font-family:var(--font-mono);color:var(--color-accent-blue);font-size:var(--font-size-sm)}
+.themetoggle{margin-left:auto;display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+.stage{position:relative;width:1040px;height:720px;border-radius:var(--radius-md);
+  overflow:hidden;background:var(--color-bg-surface);box-shadow:var(--shadow-lg)}
+.chrome{position:absolute;inset:0;display:flex;flex-direction:column}
+.chrome .tb{height:var(--h-toolbar);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.chrome .row{flex:1;display:flex}
+.chrome .sb{width:var(--w-sidebar-default);background:var(--color-bg-surface);
+  border-right:1px solid var(--color-border-subtle)}
+.chrome .ct{flex:1;background:var(--color-bg-base)}
+.scrim{position:absolute;inset:0;background:var(--color-scrim);z-index:var(--z-modal-scrim)}
+
+/* ---------- Canonical Dialog — design-spec.md 5.16 ---------- */
+.dialog{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:var(--z-modal);
+  width:100%;max-height:min(680px, calc(100vh - var(--space-3xl) * 2));
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--color-bg-elevated);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal)}
+.dialog.lg{max-width:760px}
+.dhead{flex:none;padding:var(--space-xl) var(--space-2xl);border-bottom:1px solid var(--color-border-subtle)}
+.dhead h1{font-size:var(--font-size-xl);font-weight:var(--font-weight-semibold)}
+.dbody{flex:1;overflow:auto;padding:var(--space-2xl);display:flex;flex-direction:column;min-height:0}
+.dfoot{flex:none;padding:var(--space-lg) var(--space-2xl);border-top:1px solid var(--color-border-subtle);
+  display:flex;justify-content:flex-end;gap:var(--space-md)}
+
+/* row of formrow stacks side by side (table name + schema) */
+.fieldrow{display:flex;gap:var(--space-lg);margin-bottom:var(--space-xl)}
+
+/* ---------- consistency#1: label-over-control stack, renamed to .formrow ---------- */
+.formrow{flex:1;display:flex;flex-direction:column;gap:var(--space-2xs)}
+.formrow label{font-size:var(--font-size-xs);color:var(--color-text-secondary);font-weight:var(--font-weight-medium)}
+.formrow.grow{flex:2}
+.ctl{height:var(--control-h-md);padding:0 var(--space-md);border-radius:var(--radius-sm);
+  background:var(--color-bg-base);border:1px solid var(--color-border);color:var(--color-text-primary);
+  font-size:var(--font-size-md)}
+.ctl::placeholder{color:var(--color-text-secondary)}
+.ctl:focus{border-color:var(--color-focus-ring)}
+
+.sectitle{font-size:var(--font-size-sm);font-weight:var(--font-weight-medium);
+  color:var(--color-text-secondary);margin-bottom:var(--space-sm)}
+.colsbox{flex:1;overflow:auto;border:1px solid var(--color-border-subtle);border-radius:var(--radius-md)}
+table.cols{width:100%;border-collapse:separate;border-spacing:0}
+table.cols th{text-align:left;background:var(--color-grid-header-bg);padding:var(--space-sm) var(--space-md);
+  border-bottom:1px solid var(--color-border);font-size:var(--font-size-xs);
+  font-weight:var(--font-weight-medium);color:var(--color-text-secondary)}
+table.cols td{padding:var(--space-xs) var(--space-md);border-bottom:1px solid var(--color-border-subtle);
+  vertical-align:middle}
+table.cols tr:last-child td{border-bottom:0}
+.cellinput{height:var(--control-h-sm);width:100%;padding:0 var(--space-sm);border-radius:var(--radius-xs);
+  background:var(--color-bg-base);border:1px solid var(--color-border-subtle);color:var(--color-text-primary);
+  font-size:var(--font-size-sm);font-variant-numeric:var(--font-numeric-tabular)}
+.cellinput.mono{font-family:var(--font-mono)}
+.chk{width:14px;height:14px;accent-color:var(--color-accent-blue-fill)}
+.colsfoot{padding:var(--space-sm) var(--space-md)}
+
+/* ---------- Canonical .btn / .iconbtn — design-spec.md 5.16 ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.lg{height:var(--control-h-lg)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+.ddlpreview{margin-top:var(--space-xl)}
+.ddlbody{font-family:var(--font-mono);font-size:var(--font-size-xs);line-height:var(--line-height-md);
+  background:var(--editor-bg);color:var(--editor-fg);border-radius:var(--radius-md);
+  padding:var(--space-md) var(--space-lg);white-space:pre;overflow:auto;
+  border:1px solid var(--color-border-subtle);max-height:140px;font-variant-numeric:var(--font-numeric-tabular)}
+.k{color:var(--color-accent-blue)}
+
+/* one control shown focused (audit m10) — mimics :focus-visible statically,
+   since a static file cannot hold real browser focus */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+</defs></svg>
+
+<div class="boardhead">
+  <span class="filelabel">SCR-34</span>
+  <span class="scrid">Create Table Wizard</span>
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+</div>
+
+<main aria-label="SCR-34 Create Table Wizard">
+  <h1 class="sr-only">SCR-34 Create Table Wizard</h1>
+  <div class="stage">
+    <div class="chrome"><div class="tb"></div><div class="row"><div class="sb"></div><div class="ct"></div></div></div>
+    <div class="scrim"></div>
+    <div class="dialog lg" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+      <div class="dhead"><h1 id="wizard-title">New table</h1></div>
+      <div class="dbody">
+        <div class="fieldrow">
+          <label class="formrow grow">
+            <span>Table name</span>
+            <input class="ctl demo-focus" type="text" placeholder="users" aria-label="Table name" autofocus>
+          </label>
+          <label class="formrow">
+            <span>Schema</span>
+            <select class="ctl" aria-label="Schema">
+              <option selected>public</option>
+              <option>analytics</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="sectitle">Columns</div>
+        <div class="colsbox">
+          <table class="cols">
+            <thead><tr>
+              <th scope="col">Name</th><th scope="col">Type</th><th scope="col">Not null</th>
+              <th scope="col">Default</th><th scope="col">PK</th><th scope="col"></th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td><input class="cellinput mono" value="id" aria-label="Column name"></td>
+                <td><input class="cellinput mono" value="bigint generated always as identity" aria-label="Column type"></td>
+                <td style="text-align:center"><input class="chk" type="checkbox" checked aria-label="Not null"></td>
+                <td><input class="cellinput mono" placeholder="&mdash;" aria-label="Default value"></td>
+                <td style="text-align:center"><input class="chk" type="checkbox" checked aria-label="Primary key"></td>
+                <td><button class="iconbtn" aria-label="Remove column"><svg width="13" height="13" aria-hidden="true"><use href="#i-trash"/></svg></button></td>
+              </tr>
+              <tr>
+                <td><input class="cellinput mono" value="name" aria-label="Column name"></td>
+                <td><input class="cellinput mono" value="text" aria-label="Column type"></td>
+                <td style="text-align:center"><input class="chk" type="checkbox" checked aria-label="Not null"></td>
+                <td><input class="cellinput mono" placeholder="&mdash;" aria-label="Default value"></td>
+                <td style="text-align:center"><input class="chk" type="checkbox" aria-label="Primary key"></td>
+                <td><button class="iconbtn" aria-label="Remove column"><svg width="13" height="13" aria-hidden="true"><use href="#i-trash"/></svg></button></td>
+              </tr>
+              <tr>
+                <td><input class="cellinput mono" value="email" aria-label="Column name"></td>
+                <td><input class="cellinput mono" value="text" aria-label="Column type"></td>
+                <td style="text-align:center"><input class="chk" type="checkbox" checked aria-label="Not null"></td>
+                <td><input class="cellinput mono" placeholder="&mdash;" aria-label="Default value"></td>
+                <td style="text-align:center"><input class="chk" type="checkbox" aria-label="Primary key"></td>
+                <td><button class="iconbtn" aria-label="Remove column"><svg width="13" height="13" aria-hidden="true"><use href="#i-trash"/></svg></button></td>
+              </tr>
+              <tr>
+                <td><input class="cellinput mono" value="created_at" aria-label="Column name"></td>
+                <td><input class="cellinput mono" value="timestamptz" aria-label="Column type"></td>
+                <td style="text-align:center"><input class="chk" type="checkbox" checked aria-label="Not null"></td>
+                <td><input class="cellinput mono" value="now()" aria-label="Default value"></td>
+                <td style="text-align:center"><input class="chk" type="checkbox" aria-label="Primary key"></td>
+                <td><button class="iconbtn" aria-label="Remove column"><svg width="13" height="13" aria-hidden="true"><use href="#i-trash"/></svg></button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="colsfoot"><button class="btn ghost"><svg width="12" height="12" aria-hidden="true"><use href="#i-plus"/></svg>Add column</button></div>
+        </div>
+
+        <div class="ddlpreview">
+          <div class="sectitle">Preview</div>
+          <div class="ddlbody"><span class="k">CREATE TABLE</span> public.users (
+    id         bigint <span class="k">GENERATED ALWAYS AS IDENTITY PRIMARY KEY</span>,
+    name       text <span class="k">NOT NULL</span>,
+    email      text <span class="k">NOT NULL</span>,
+    created_at timestamptz <span class="k">NOT NULL DEFAULT</span> now()
+);</div>
+        </div>
+      </div>
+      <div class="dfoot">
+        <button class="btn sec lg">Cancel</button>
+        <button class="btn pri lg">Create table</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

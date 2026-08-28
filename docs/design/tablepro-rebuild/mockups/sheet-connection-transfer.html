@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 component sheet
+  SCR-11 Connection Export Dialog · SCR-12 Connection Import Dialog
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Pattern authority: design-spec.md 5.16 canonical definitions. .dialog, .board,
+  .btn, .iconbtn and Input/Select are the canonical rules verbatim.
+
+  AUDIT consistency #3 — the dialog is now the settled canonical one, which
+  changes three things in this file:
+    - NO border. --shadow-modal over --color-scrim already separates the surface;
+      a border on top read as a second frame. The border these two carried is gone.
+    - BANDED header / body / footer, which this file already was. The credentials
+      block folds into the body, because a dialog has exactly three bands and the
+      fourth one here was an invented region.
+    - WIDTH from the three-step scale, not a per-file number. 5.16 assigns the
+      SCR-11/12 transfer flow to `.dialog.lg` (max-width 760px). They were 440px
+      and 520px, mirroring the shipped components; the scale wins. Width is
+      `width:100%` + `max-width`, so a narrow window shrinks them instead of
+      clipping, and the height rule caps at the viewport less a --space-3xl gutter.
+
+  Why a sheet: both are modals under 2.4 — scrim at --color-scrim, --z-modal,
+  focus trapped, Esc closes. Neither is a view of its own, and they are the two
+  halves of one round trip: what SCR-11 writes is exactly what SCR-12 reads.
+  Comparing them side by side is the only way to see whether the passphrase
+  contract matches on both ends. Each surface sits on its own scrim patch so the
+  modality is visible on a static board.
+
+  Heading levels: this is a review board, not a screen. 5.16 puts one <h1> in each
+  dialog; here the board owns the <h1> and the dialog titles are <h3> under their
+  specimen's <h2>, so the page keeps one coherent outline. In a shipped screen the
+  dialog title IS the <h1>. Boards are already exempt from <main> and the skip
+  link (6.4) for the same reason.
+
+  Three surfaces are drawn:
+    SCR-11              export, credentials included, passphrase pair filled
+    SCR-12 preview      the resolution table — the step that carries all the risk
+    SCR-12 passphrase   the encrypted-file gate, error state shown
+
+  Copy is the shipped strings, verbatim: connection.export.* and
+  connection.import.* in src/i18n/locales/en.json. Command labels stay English.
+
+  What these surfaces have to get right:
+    - A duplicate defaults to Skip, never to Replace. Replace overwrites a saved
+      connection the user already trusts; it has to be chosen, not inherited.
+    - "Include Credentials" is off until asked for, and turning it on immediately
+      demands the passphrase pair. An export carrying secrets under no passphrase
+      is the failure this dialog exists to prevent.
+    - The import count on the primary button counts only entries not set to Skip,
+      so the button never claims more than it will do.
+
+  AUDIT M5 — nothing to rename. Neither dialog has a destructive control: Export
+  writes a file, Import writes connections, and Replace is chosen per row in a
+  select, not by a red button. No .btn.danger, no .btn.danger-ghost here.
+
+  Theme scaffolding only: the toggle writes data-theme on <html> and syncs the
+  `light` class, because tokens.css keys on `.light` (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Connection transfer dialogs — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+/* mockup scaffolding only — sheet chrome, screen-ID markers, theme toggle */
+.sheethead{height:var(--h-toolbar);display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle);position:sticky;top:0;
+  z-index:var(--z-sticky)}
+.sheethead h1{font-size:var(--font-size-lg);line-height:var(--line-height-lg);
+  font-weight:var(--font-weight-semibold)}
+.sheethead p{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.scrid{display:inline-flex;align-items:center;height:var(--control-h-xs);padding:0 var(--space-sm);
+  border:1px dashed var(--color-border-strong);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-family:var(--font-mono);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  letter-spacing:.04em;white-space:nowrap;flex:none}
+/* AUDIT m10 — one control per sheet shown focused, so the mandatory ring is
+   visible in the set. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+
+/* ---------- 5.16 canonical .board ---------- */
+.board{max-width:1400px;margin:0 auto;
+  padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);
+  background:var(--color-bg-base)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-xl)}
+.cell{flex:1 1 380px;display:flex;flex-direction:column;gap:var(--space-md);
+  padding:var(--space-xl);border-radius:var(--radius-md);
+  background:var(--color-bg-surface)}
+.cellhead{display:flex;flex-direction:column;gap:var(--space-xs)}
+.cellhead h2{font-size:var(--font-size-md);line-height:var(--line-height-md);
+  font-weight:var(--font-weight-medium)}
+.trigger{color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  line-height:var(--line-height-xs)}
+.states{color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  line-height:var(--line-height-2xs)}
+.states strong{color:var(--color-text-primary);font-weight:var(--font-weight-medium)}
+/* the scrim patch that makes the modal class visible on a static board */
+.modalframe{padding:var(--space-2xl);border-radius:var(--radius-lg);
+  background:var(--color-scrim)}
+
+/* ---------- 5.16 canonical .dialog ----------
+   No border. Banded. Width from the three-step scale, height capped to the
+   viewport less a --space-3xl gutter top and bottom. */
+.dialog{display:flex;flex-direction:column;width:100%;
+  background:var(--color-bg-elevated);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-modal);overflow:hidden;
+  max-height:min(680px, calc(100vh - var(--space-3xl) * 2))}
+.dialog.sm{max-width:420px}
+.dialog.md{max-width:560px}
+.dialog.lg{max-width:760px}
+.dlghead{display:flex;align-items:center;gap:var(--space-md);flex:none;
+  padding:var(--space-xl) var(--space-2xl);
+  border-bottom:1px solid var(--color-border-subtle)}
+.dlghead h3{font-size:var(--font-size-xl);line-height:var(--line-height-xl);
+  font-weight:var(--font-weight-semibold)}
+.dlgbody{flex:1;overflow:auto;padding:var(--space-2xl);
+  display:flex;flex-direction:column;gap:var(--space-lg)}
+.dlgfoot{display:flex;align-items:center;justify-content:flex-end;gap:var(--space-md);
+  flex:none;padding:var(--space-lg) var(--space-2xl);
+  border-top:1px solid var(--color-border-subtle)}
+.bodydiv{height:1px;background:var(--color-border-subtle);
+  margin:var(--space-sm) 0}
+
+/* ---------- 5.16 canonical .iconbtn ----------
+   AUDIT m13 — this file used --color-text-muted here where all fourteen others
+   used --color-text-secondary. Corrected, and B2 forbids the old value anyway. */
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);
+  display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+/* ---------- 5.16 canonical .btn ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-lg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.dlgfoot .btn{height:var(--control-h-lg)}
+
+.listhead{display:flex;align-items:center;gap:var(--space-md);
+  color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.linkbtn{color:var(--color-accent-blue);font-size:var(--font-size-xs)}
+.linkbtn:hover{text-decoration:underline}
+.pick{display:flex;align-items:center;gap:var(--space-md);height:var(--control-h-md);
+  padding:0 var(--space-md);border-radius:var(--radius-sm);cursor:pointer;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.pick:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.pick .nm{font-size:var(--font-size-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick .hostmeta{margin-left:auto;color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  font-family:var(--font-mono);font-variant-numeric:var(--font-numeric-tabular)}
+input[type=checkbox]{accent-color:var(--color-accent-blue-fill);width:13px;height:13px;flex:none}
+
+.opt{display:flex;align-items:center;gap:var(--space-md);cursor:pointer;
+  font-size:var(--font-size-sm)}
+.optbody{display:flex;flex-direction:column;gap:var(--space-md);
+  padding-left:var(--space-2xl)}
+
+/* ---------- 5.16 Input / Select ----------
+   AUDIT B1: no outline:none anywhere. The ring is the global :focus-visible
+   rule; the border additionally goes to --color-focus-ring. */
+.ctl{height:var(--control-h-md);width:100%;padding:0 var(--space-md);
+  border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-primary);
+  font-size:var(--font-size-md)}
+.ctl:focus-visible{border-color:var(--color-focus-ring)}
+.ctl::placeholder{color:var(--color-text-secondary)}
+.ctl.bad{border-color:var(--color-accent-red)}
+.hint{font-size:var(--font-size-xs);line-height:var(--line-height-xs);
+  color:var(--color-text-secondary)}
+.err{font-size:var(--font-size-xs);line-height:var(--line-height-xs);
+  color:var(--color-state-danger-fg)}
+
+/* SCR-12 preview table */
+table.prev{width:100%;border-collapse:separate;border-spacing:0;font-size:var(--font-size-xs)}
+table.prev th{text-align:left;padding:0 var(--space-sm) var(--space-xs) 0;
+  border-bottom:1px solid var(--color-border);color:var(--color-text-secondary);
+  font-weight:var(--font-weight-medium);white-space:nowrap}
+table.prev td{padding:var(--space-sm) var(--space-sm) var(--space-sm) 0;
+  border-bottom:1px solid var(--color-border-subtle);vertical-align:middle;
+  max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.prev td.dim{color:var(--color-text-secondary);font-family:var(--font-mono);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.sbadge{display:inline-flex;align-items:center;gap:var(--space-xs);white-space:nowrap}
+.sbadge.ready{color:var(--color-state-success-fg)}
+.sbadge.dupe,.sbadge.warns{color:var(--color-state-warning-fg)}
+select.act{height:var(--control-h-xs);padding:0 var(--space-sm);border-radius:var(--radius-xs);
+  background:var(--color-bg-base);border:1px solid var(--color-border);
+  color:var(--color-text-primary);font-size:var(--font-size-2xs)}
+select.act:focus-visible{border-color:var(--color-focus-ring)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 16V3M7 11l5 5 5-5"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13M7 8l5-5 5 5"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<header class="sheethead">
+  <h1>Connection transfer</h1>
+  <p>Modals &mdash; scrim, focus trapped, Esc closes. Two halves of one round trip.</p>
+  <span class="spacer"></span>
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+</header>
+
+<div class="board">
+  <div class="row">
+
+  <!-- ===== SCR-11 ===== -->
+  <section class="cell">
+    <div class="cellhead">
+      <span class="scrid">SCR-11</span>
+      <h2>Connection Export Dialog</h2>
+      <p class="trigger">Opened by Export in SCR-10. Writes one <span style="font-family:var(--font-mono)">.tablepro</span> file.</p>
+    </div>
+    <div class="modalframe">
+      <div class="dialog lg" role="dialog" aria-modal="true" aria-labelledby="exp-title">
+        <div class="dlghead">
+          <svg width="14" height="14" aria-hidden="true" style="color:var(--color-text-secondary)"><use href="#i-download"/></svg>
+          <h3 id="exp-title">Export Connections</h3>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="13" height="13" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+
+        <div class="dlgbody">
+          <div class="listhead">
+            <span>3 / 7 selected</span>
+            <span class="spacer"></span>
+            <button class="linkbtn">Select All</button>
+          </div>
+          <div>
+            <label class="pick"><input type="checkbox" checked><span class="nm">Analytics</span><span class="hostmeta">db.internal:5432</span></label>
+            <label class="pick"><input type="checkbox" checked><span class="nm">Billing</span><span class="hostmeta">mysql-01.internal:3306</span></label>
+            <label class="pick"><input type="checkbox"><span class="nm">Analytics Staging</span><span class="hostmeta">stg-db.internal:5432</span></label>
+            <label class="pick"><input type="checkbox"><span class="nm">Sessions</span><span class="hostmeta">stg-cache.internal:6379</span></label>
+            <label class="pick"><input type="checkbox" checked><span class="nm">Catalog</span><span class="hostmeta">localhost:27017</span></label>
+            <label class="pick"><input type="checkbox"><span class="nm">Reporting</span><span class="hostmeta">mssql-dev.internal:1433</span></label>
+            <label class="pick"><input type="checkbox"><span class="nm">Local Cache</span><span class="hostmeta">scratch.sqlite3</span></label>
+          </div>
+
+          <div class="bodydiv" role="separator"></div>
+
+          <!-- Credentials are opt-in, and opting in immediately demands the pair.
+               Folded into the body: 5.16 gives a dialog three bands, not four. -->
+          <label class="opt"><input type="checkbox" checked><svg width="12" height="12" aria-hidden="true" style="color:var(--color-text-secondary)"><use href="#i-lock"/></svg>Include Credentials</label>
+          <div class="optbody">
+            <p class="hint">Credentials will be encrypted with your passphrase</p>
+            <input class="ctl" type="password" value="000000000000" aria-label="Passphrase" placeholder="Passphrase">
+            <input class="ctl" type="password" value="000000000000" aria-label="Confirm Passphrase" placeholder="Confirm Passphrase">
+          </div>
+        </div>
+
+        <div class="dlgfoot">
+          <button class="btn ghost">Cancel</button>
+          <button class="btn pri">Export</button>
+        </div>
+      </div>
+    </div>
+    <p class="states"><strong>States:</strong> idle / exporting (Export reads <em>Loading&hellip;</em> and the
+      dialog cannot be dismissed mid-write) / passphrase too short &mdash;
+      <span style="color:var(--color-state-warning-fg)">Minimum 8 characters</span> &mdash;
+      / passphrase mismatch &mdash;
+      <span style="color:var(--color-state-danger-fg)">Passphrases don't match</span>.
+      Both messages sit under the field they belong to and hold Export disabled.
+      With Include Credentials off, the whole passphrase block collapses and Export
+      is available immediately.</p>
+  </section>
+
+  <!-- ===== SCR-12, preview step ===== -->
+  <section class="cell">
+    <div class="cellhead">
+      <span class="scrid">SCR-12 &middot; preview</span>
+      <h2>Connection Import Dialog</h2>
+      <p class="trigger">Opened by Import in SCR-08. The file picker opens on mount; dismissing it closes the dialog.</p>
+    </div>
+    <div class="modalframe">
+      <div class="dialog lg" role="dialog" aria-modal="true" aria-labelledby="imp-title">
+        <div class="dlghead">
+          <svg width="14" height="14" aria-hidden="true" style="color:var(--color-text-secondary)"><use href="#i-upload"/></svg>
+          <h3 id="imp-title">Import Connections</h3>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="13" height="13" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+
+        <div class="dlgbody">
+          <p class="hint">4 connection(s) from v0.7.0</p>
+          <table class="prev">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Host</th>
+                <th scope="col">Type</th>
+                <th scope="col">Status</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Analytics</td>
+                <td class="dim">db.internal</td>
+                <td class="dim">postgres</td>
+                <td><span class="sbadge dupe"><svg width="10" height="10" aria-hidden="true"><use href="#i-alert"/></svg>Duplicate</span></td>
+                <td><select class="act" aria-label="Resolution for Analytics"><option selected>Skip</option><option>Import</option><option>Replace</option><option>Import as Copy</option></select></td>
+              </tr>
+              <tr>
+                <td>Billing</td>
+                <td class="dim">mysql-01.internal</td>
+                <td class="dim">mysql</td>
+                <td><span class="sbadge ready"><svg width="10" height="10" aria-hidden="true"><use href="#i-check"/></svg>Ready</span></td>
+                <td><select class="act" aria-label="Resolution for Billing"><option selected>Import</option><option>Skip</option></select></td>
+              </tr>
+              <tr>
+                <td>Catalog</td>
+                <td class="dim">localhost</td>
+                <td class="dim">mongodb</td>
+                <td><span class="sbadge ready"><svg width="10" height="10" aria-hidden="true"><use href="#i-check"/></svg>Ready</span></td>
+                <td><select class="act" aria-label="Resolution for Catalog"><option selected>Import</option><option>Skip</option></select></td>
+              </tr>
+              <tr>
+                <td>Local Cache</td>
+                <td class="dim">scratch.sqlite3</td>
+                <td class="dim">sqlite</td>
+                <td><span class="sbadge warns" title="Credentials were not included in this export"><svg width="10" height="10" aria-hidden="true"><use href="#i-alert"/></svg>Warnings</span></td>
+                <td><select class="act" aria-label="Resolution for Local Cache"><option selected>Skip</option><option>Import</option></select></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="dlgfoot">
+          <button class="btn ghost">Cancel</button>
+          <!-- AUDIT m10 — shown focused so the mandatory ring appears in the set. -->
+          <button class="btn pri demo-focus">Import (2)</button>
+        </div>
+      </div>
+    </div>
+    <p class="states"><strong>States:</strong> file (picker open) / file + loading / passphrase / preview /
+      importing. A row whose Status is Duplicate defaults to <em>Skip</em>, and Replace and
+      Import as Copy are offered only on those rows &mdash; a duplicate is the one case
+      where the wrong default overwrites something the user already trusts. The
+      primary button counts only rows not set to Skip, so <em>Import (2)</em> here is two
+      Ready rows, not four listed ones. With every row on Skip the button is disabled.
+      Warnings carries its reason in the row's title, not in a second dialog.</p>
+  </section>
+
+  <!-- ===== SCR-12, passphrase step ===== -->
+  <section class="cell">
+    <div class="cellhead">
+      <span class="scrid">SCR-12 &middot; passphrase</span>
+      <h2>Encrypted file gate</h2>
+      <p class="trigger">Reached when the preview call reports the file is encrypted. Error state shown.</p>
+    </div>
+    <div class="modalframe">
+      <div class="dialog lg" role="dialog" aria-modal="true" aria-labelledby="imp2-title">
+        <div class="dlghead">
+          <svg width="14" height="14" aria-hidden="true" style="color:var(--color-text-secondary)"><use href="#i-lock"/></svg>
+          <h3 id="imp2-title">Import Connections</h3>
+          <span class="spacer"></span>
+          <button class="iconbtn" aria-label="Close"><svg width="13" height="13" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dlgbody">
+          <p class="hint">This file is encrypted. Enter passphrase:</p>
+          <input class="ctl bad" type="password" value="00000000" autofocus aria-label="Passphrase"
+                 aria-describedby="imp-err" placeholder="Passphrase">
+          <p class="err" id="imp-err" role="alert">Incorrect passphrase</p>
+        </div>
+        <div class="dlgfoot">
+          <button class="btn ghost">Cancel</button>
+          <button class="btn pri">OK</button>
+        </div>
+      </div>
+    </div>
+    <p class="states"><strong>States:</strong> empty passphrase holds OK disabled; Enter submits;
+      a rejected passphrase keeps the step, the file path and the typed value, so
+      retry is one keystroke. A correct one advances to the preview step above.</p>
+  </section>
+
+  </div>
+</div>
+
+<script>
+/* Mockup scaffolding only — see the SCR-17 file for the same note. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

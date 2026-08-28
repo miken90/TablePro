@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 component sheet
+  SCR-05 Sidebar Database Context Menu · SCR-07 Tab Context Menu ·
+  SCR-10 Connection Card Context Menu
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Pattern authority: design-spec.md 5.16 canonical definitions. The menu surface,
+  the .board and the specimen row are the canonical rules verbatim.
+
+  Why a sheet and not three pages: all three are anchored popovers under
+  design-spec.md 2.4 — no page of their own, no scrim, dismissed on Esc or an
+  outside click, focus returning to the trigger. Laying them on one neutral board
+  is the only way to compare their item density and destructive treatment.
+
+  Menu style is 5.16: bg --color-bg-elevated, border --color-border, radius
+  --radius-md, --shadow-popup, min-width 220px, item height --control-h-md,
+  --space-lg horizontal padding, --font-size-sm. Destructive items take
+  --color-accent-red on --color-accent-red-subtle hover and sit below a
+  --color-border-subtle divider.
+
+  AUDIT M5 — nothing to rename here. 5.16 says menu destructive items are
+  `.btn.danger-ghost` BY CONSTRUCTION: red label, red-subtle hover, no fill. That
+  is exactly what .mi.danger already draws, and it is correct under the new rule
+  for a second reason — SCR-10's Delete opens a confirmation, and a control that
+  opens a confirmation is always ghost. The fill belongs to the button inside
+  that dialog, which lives in sheet-confirm-dialogs.
+
+  Item labels are the shipped strings, verbatim:
+    SCR-05  sidebar.refreshTables / sidebar.refreshDatabases
+    SCR-07  tabContextMenu.pinTab | unpinTab / close / closeOthers / closeAll /
+            closeToRight
+    SCR-10  Connect / Edit Connection / Duplicate / Export / Copy import link /
+            Delete
+
+  Icon policy on this sheet: a glyph only where the action already has an
+  unambiguous one in the sprite. SCR-07 stays text-only — Close, Close Others,
+  Close All and Close to the Right differ by scope, not by kind, so four
+  near-identical icons would carry no information and the shipped menu is
+  text-only too.
+
+  Theme scaffolding only: the toggle writes data-theme on <html> and syncs the
+  `light` class, because tokens.css keys on `.light` (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Context menus — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+/* mockup scaffolding only — sheet chrome, screen-ID markers, theme toggle */
+.sheethead{height:var(--h-toolbar);display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle);position:sticky;top:0;
+  z-index:var(--z-sticky)}
+.sheethead h1{font-size:var(--font-size-lg);line-height:var(--line-height-lg);
+  font-weight:var(--font-weight-semibold)}
+.sheethead p{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.scrid{display:inline-flex;align-items:center;height:var(--control-h-xs);padding:0 var(--space-sm);
+  border:1px dashed var(--color-border-strong);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-family:var(--font-mono);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  letter-spacing:.04em;white-space:nowrap;flex:none}
+/* AUDIT m10 — one control per sheet shown focused, so the mandatory ring is
+   visible in the set. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+
+/* ---------- 5.16 canonical .board ----------
+   max-width, never width, so no board can produce a horizontal scrollbar.
+   The neutral is --color-bg-base; specimens sit on --color-bg-surface frames
+   and elevated surfaces above those, which is the ordering that reads correctly
+   in both themes. */
+.board{max-width:1400px;margin:0 auto;
+  padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);
+  background:var(--color-bg-base)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-xl)}
+.cell{flex:1 1 380px;display:flex;flex-direction:column;gap:var(--space-md);
+  padding:var(--space-xl);border-radius:var(--radius-md);
+  background:var(--color-bg-surface)}
+.cellhead{display:flex;flex-direction:column;gap:var(--space-xs)}
+.cellhead h2{font-size:var(--font-size-md);line-height:var(--line-height-md);
+  font-weight:var(--font-weight-medium)}
+.trigger{color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  line-height:var(--line-height-xs)}
+.states{color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  line-height:var(--line-height-2xs)}
+.states strong{color:var(--color-text-primary);font-weight:var(--font-weight-medium)}
+.specimen{display:flex;padding:var(--space-lg) 0}
+
+/* ---------- 5.16 Menu / context menu ---------- */
+.menu{min-width:220px;padding:var(--space-xs) 0;background:var(--color-bg-elevated);
+  border:1px solid var(--color-border);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-popup)}
+.mi{display:flex;align-items:center;gap:var(--space-md);width:100%;height:var(--control-h-md);
+  padding:0 var(--space-lg);color:var(--color-text-primary);font-size:var(--font-size-sm);
+  text-align:left;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+/* AUDIT M10 — a hover that changes the background raises the text, never lowers it. */
+.mi:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.mi.danger{color:var(--color-accent-red)}
+.mi.danger:hover{background:var(--color-accent-red-subtle);color:var(--color-accent-red)}
+.mdiv{height:1px;margin:var(--space-xs) 0;background:var(--color-border-subtle)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16z"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 16V3M7 11l5 5 5-5"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<header class="sheethead">
+  <h1>Context menus</h1>
+  <p>Anchored popovers &mdash; no scrim, Esc or outside click closes, focus returns to the trigger.</p>
+  <span class="spacer"></span>
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+</header>
+
+<div class="board">
+  <div class="row">
+
+  <!-- ===== SCR-05 ===== -->
+  <section class="cell">
+    <div class="cellhead">
+      <span class="scrid">SCR-05</span>
+      <h2>Sidebar Database Context Menu</h2>
+      <p class="trigger">Right-click a database node in SCR-04.</p>
+    </div>
+    <div class="specimen">
+      <div class="menu" role="menu" aria-label="analytics database actions">
+        <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh Tables</button>
+        <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-db"/></svg>Refresh Databases</button>
+      </div>
+    </div>
+    <p class="states"><strong>States:</strong> open / closed only. Both items refetch without reconnecting.
+      Under M6 these two also appear as the tree header's refresh control, so this
+      menu is a shortcut, no longer the only way in.</p>
+  </section>
+
+  <!-- ===== SCR-07 ===== -->
+  <section class="cell">
+    <div class="cellhead">
+      <span class="scrid">SCR-07</span>
+      <h2>Tab Context Menu</h2>
+      <p class="trigger">Right-click a tab in SCR-06.</p>
+    </div>
+    <div class="specimen">
+      <div class="menu" role="menu" aria-label="revenue by month tab actions">
+        <!-- AUDIT m10 — shown focused so the mandatory ring appears in the set. -->
+        <button class="mi demo-focus" role="menuitem">Pin Tab</button>
+        <div class="mdiv" role="separator"></div>
+        <button class="mi" role="menuitem">Close</button>
+        <button class="mi" role="menuitem">Close Others</button>
+        <button class="mi" role="menuitem">Close All</button>
+        <div class="mdiv" role="separator"></div>
+        <button class="mi" role="menuitem">Close to the Right</button>
+      </div>
+    </div>
+    <p class="states"><strong>States:</strong> the first item is the only one that changes &mdash;
+      a pinned tab reads <em>Unpin Tab</em> in the same slot. Closing a dirty tab routes
+      through SCR-45 Confirm Discard rather than closing outright. None of these
+      items is destructive in the 5.16 sense: closing a tab writes nothing.</p>
+  </section>
+
+  <!-- ===== SCR-10 =====
+       Same markup the SCR-08 pilot draws on the Analytics card. -->
+  <section class="cell">
+    <div class="cellhead">
+      <span class="scrid">SCR-10</span>
+      <h2>Connection Card Context Menu</h2>
+      <p class="trigger">Right-click a connection card in SCR-08.</p>
+    </div>
+    <div class="specimen">
+      <div class="menu" role="menu" aria-label="Analytics connection actions">
+        <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+        <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-pencil"/></svg>Edit Connection</button>
+        <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Duplicate</button>
+        <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
+        <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-link"/></svg>Copy import link</button>
+        <div class="mdiv" role="separator"></div>
+        <button class="mi danger" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-trash"/></svg>Delete</button>
+      </div>
+    </div>
+    <p class="states"><strong>States:</strong> items are conditional on the handler being supplied,
+      so a card can show fewer. Edit opens SCR-09, Export opens SCR-11, Copy import
+      link writes to the clipboard and closes. Delete is red-label, not red-fill:
+      it opens a confirmation and writes nothing itself, which is the 5.16 rule for
+      <em>.btn.danger-ghost</em>. The filled red button is the one inside that dialog.</p>
+  </section>
+
+  </div>
+</div>
+
+<script>
+/* Mockup scaffolding only — see the SCR-17 file for the same note. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

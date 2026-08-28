@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out · component sheet
+  SCR-16 Result Panel states · SCR-15 Explain (as a results-strip tab) · SCR-14 Editor Status Bar
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+  Pattern authority: scr-17-table-browse.html · scr-13-query-workspace.html
+
+  Mobbin refs this sheet follows (design-spec.md section 7.1):
+    ref 4  Supabase   -> M3: the results strip owns the tab row
+                         (Results / Explain / Messages) on the left, actions on the
+                         right. Supabase's "Chart" tab is deliberately NOT copied —
+                         TablePro ships no chart feature (rejection R11).
+    ref 3  Snowflake worksheet -> the plan/detail column reading as ordinary tabular
+                         data rather than a floating band.
+
+  What this sheet exists to prove:
+    - SCR-16 has FOUR non-happy states and each one says what happened and what to
+      do next. An error selects the Messages tab rather than returning a silently
+      empty grid (design-spec.md section 3.2).
+    - A truncated result must announce itself, or a partial answer reads as a whole
+      one (design-spec.md section 3.7).
+    - M3: Explain is a TAB of SCR-16, not the max-h-[40%] stacked band it is at
+      94a061a0.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme on
+  <html> and syncs the `light` class, because tokens.css keys on `.light` — the
+  mechanism the app really ships (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-16 result states · SCR-15 · SCR-14 — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+/* ---------- neutral board ---------- */
+.board{max-width:1400px;margin:0 auto;
+  padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);
+  background:var(--color-bg-base)}
+.boardhead{display:flex;align-items:center;gap:var(--space-lg);margin-bottom:var(--space-2xl)}
+.boardhead h1{font-size:var(--font-size-xl);line-height:var(--line-height-xl);
+  font-weight:var(--font-weight-semibold)}
+.boardhead p{color:var(--color-text-secondary);font-size:var(--font-size-md)}
+.sect{margin-bottom:var(--space-3xl)}
+.secthead{display:flex;align-items:center;gap:var(--space-md);margin-bottom:var(--space-lg);
+  padding-bottom:var(--space-sm);border-bottom:1px solid var(--color-border-subtle)}
+.secthead h2{font-size:var(--font-size-lg);line-height:var(--line-height-lg);
+  font-weight:var(--font-weight-semibold)}
+.scr{font-family:var(--font-mono);font-size:var(--font-size-2xs);
+  padding:2px var(--space-sm);border-radius:var(--radius-xs);
+  background:var(--color-accent-blue-subtle);color:var(--color-accent-blue);
+  font-weight:var(--font-weight-medium);white-space:nowrap}
+.specimen{margin-bottom:var(--space-xl)}
+.caption{display:flex;align-items:baseline;gap:var(--space-md);margin-bottom:var(--space-sm);
+  color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.caption b{color:var(--color-text-primary);font-weight:var(--font-weight-medium)}
+.frame{border:1px solid var(--color-border);border-radius:var(--radius-lg);overflow:hidden;
+  background:var(--color-bg-surface);box-shadow:var(--shadow-sm)}
+
+/* ---------- SCR-16 strip (shared with the pilot) ---------- */
+.strip{height:var(--control-h-lg);display:flex;align-items:stretch;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-base);
+  border-bottom:1px solid var(--color-border-subtle)}
+.rtab{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-md);
+  color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+.rtab:hover{color:var(--color-text-primary)}
+.rtab.active{color:var(--color-text-primary);font-weight:var(--font-weight-medium);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+.rtab .pill{font-size:var(--font-size-2xs);padding:1px var(--space-sm);border-radius:var(--radius-full);
+  background:var(--color-bg-muted);color:var(--color-text-secondary);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.rtab .pill.err{background:var(--color-state-danger-bg);color:var(--color-state-danger-fg)}
+.striptools{display:flex;align-items:center;gap:var(--space-xs);align-self:center}
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);
+  display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.iconbtn.on{background:var(--color-bg-muted);color:var(--color-accent-blue)}
+.iconbtn[disabled]{opacity:.45;cursor:not-allowed}
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-lg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn.sm{height:var(--control-h-xs);padding:0 var(--space-md);font-size:var(--font-size-2xs)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.body{background:var(--color-bg-base);min-height:180px;display:flex;flex-direction:column}
+
+/* ---------- loading skeleton ----------
+   The grid keeps its header and column widths while rows stream, so nothing
+   reflows when data lands (design-spec.md section 3.2). */
+table.grid{border-collapse:separate;border-spacing:0;width:100%;
+  font-variant-numeric:var(--font-numeric-tabular)}
+table.grid th{text-align:left;vertical-align:top;background:var(--color-grid-header-bg);
+  padding:var(--space-xs) var(--space-sm);border-bottom:1px solid var(--color-border);
+  border-right:1px solid var(--color-border-subtle);font-weight:var(--font-weight-medium);
+  font-size:var(--font-size-xs);white-space:nowrap}
+.colname{display:flex;align-items:center;gap:var(--space-xs);color:var(--color-text-primary);
+  overflow:hidden}
+.colname span{overflow:hidden;text-overflow:ellipsis}
+.coltype{display:block;font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-weight:var(--font-weight-regular);color:var(--color-text-secondary);
+  font-family:var(--font-mono);margin-top:1px}
+.pk{color:var(--color-grid-pk-fg)}
+table.grid td{height:var(--row-h-grid);padding:0 var(--space-sm);white-space:nowrap;
+  border-bottom:1px solid var(--color-border-subtle);
+  border-right:1px solid var(--color-border-subtle)}
+tr.alt td{background:var(--color-grid-row-alt)}
+.skel{display:block;height:8px;border-radius:var(--radius-xs);background:var(--color-bg-muted)}
+.null{color:var(--color-grid-null-fg);font-size:var(--font-size-xs);font-style:italic}
+.mono{font-family:var(--font-mono);font-size:var(--font-size-xs)}
+.num{text-align:right}
+
+/* ---------- empty state ---------- */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:var(--space-sm);padding:var(--space-3xl) var(--space-xl);text-align:center}
+.empty .ico{color:var(--color-text-muted);margin-bottom:var(--space-xs)}
+.empty h3{font-size:var(--font-size-md);font-weight:var(--font-weight-medium)}
+.empty p{color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+.empty .acts{display:flex;gap:var(--space-md);margin-top:var(--space-md)}
+
+/* ---------- messages tab / error ---------- */
+.msglist{flex:1;overflow:auto;padding:var(--space-md) 0}
+.msg{display:flex;gap:var(--space-md);padding:var(--space-md) var(--space-lg);align-items:flex-start}
+.msg + .msg{border-top:1px solid var(--color-border-subtle)}
+.msg time{color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  font-variant-numeric:var(--font-numeric-tabular);padding-top:2px;white-space:nowrap}
+.msg .txt{flex:1;min-width:0;font-family:var(--font-mono);font-size:var(--font-size-xs);
+  line-height:var(--line-height-md);white-space:pre-wrap;word-break:break-word}
+.msg.error .txt{color:var(--color-state-danger-fg)}
+.msg.ok .txt{color:var(--color-text-secondary)}
+.errstrip{display:flex;align-items:center;gap:var(--space-md);padding:var(--space-md) var(--space-lg);
+  background:var(--color-state-danger-bg);color:var(--color-state-danger-fg);
+  border-bottom:1px solid var(--color-accent-red);font-size:var(--font-size-sm)}
+.infostrip{display:flex;align-items:center;gap:var(--space-md);padding:var(--space-sm) var(--space-lg);
+  background:var(--color-state-info-bg);color:var(--color-state-info-fg);
+  border-bottom:1px solid var(--color-accent-blue);font-size:var(--font-size-xs)}
+
+/* ---------- pagination ---------- */
+.pager{height:var(--control-h-lg);display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs);font-variant-numeric:var(--font-numeric-tabular)}
+
+/* ---------- SCR-15 explain ---------- */
+.explain-head{display:flex;align-items:center;gap:var(--space-md);padding:var(--space-sm) var(--space-lg);
+  border-bottom:1px solid var(--color-border-subtle);background:var(--color-bg-base)}
+.seg{display:flex;border:1px solid var(--color-border);border-radius:var(--radius-sm);overflow:hidden}
+.seg button{padding:0 var(--space-md);height:var(--control-h-xs);font-size:var(--font-size-2xs);
+  color:var(--color-text-secondary)}
+.seg button.on{background:var(--color-bg-muted);color:var(--color-text-primary)}
+table.plan{width:100%;border-collapse:separate;border-spacing:0;
+  font-variant-numeric:var(--font-numeric-tabular)}
+table.plan th{text-align:left;background:var(--color-grid-header-bg);
+  padding:var(--space-xs) var(--space-md);border-bottom:1px solid var(--color-border);
+  font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+  color:var(--color-text-secondary)}
+table.plan th.r,table.plan td.r{text-align:right}
+table.plan td{height:var(--row-h-grid);padding:0 var(--space-md);
+  border-bottom:1px solid var(--color-border-subtle);white-space:nowrap}
+table.plan tr:hover td{background:var(--color-grid-row-hover)}
+.op{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-primary)}
+.d1{padding-left:var(--space-xl)}.d2{padding-left:var(--space-3xl)}
+.d3{padding-left:calc(var(--space-3xl) + var(--space-xl))}
+.d4{padding-left:calc(var(--space-3xl) + var(--space-3xl))}
+.detail{color:var(--color-text-secondary);font-family:var(--font-mono);font-size:var(--font-size-xs)}
+.hot{color:var(--color-accent-yellow);font-weight:var(--font-weight-medium)}
+.raw{padding:var(--space-lg);font-family:var(--font-mono);font-size:var(--font-size-sm);
+  line-height:var(--line-height-md);white-space:pre;color:var(--color-text-primary);
+  background:var(--color-bg-base);overflow:auto}
+
+/* ---------- SCR-14 editor status bar ---------- */
+.editstatus{height:var(--h-statusbar);display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  line-height:var(--line-height-2xs);font-variant-numeric:var(--font-numeric-tabular)}
+.editstatus .sel{color:var(--color-accent-blue)}
+.editstatus .err{color:var(--color-state-danger-fg)}
+
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* m10: one control per screen is shown in its focused state, so the
+   mandatory ring is actually visible in the set. Matches the
+   .demo-focus convention in sheet-bulk-dialogs / sheet-confirm-dialogs. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 16V3M7 11l5 5 5-5"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18-6-6 6-6M15 6l6 6-6 6"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+<symbol id="i-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8M17 6l2 2M14 9l2 2"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="board">
+
+  <header class="boardhead">
+    <div>
+      <h1>Result panel states, Explain, editor status</h1>
+      <p>SCR-16 &middot; SCR-15 &middot; SCR-14 &mdash; component sheet</p>
+    </div>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+  </header>
+
+  <!-- =================== SCR-16 =================== -->
+  <section class="sect">
+    <div class="secthead"><span class="scr">SCR-16</span><h2>Result Panel &mdash; non-happy states</h2></div>
+
+    <!-- 1. LOADING -->
+    <div class="specimen">
+      <p class="caption"><b>Loading</b><span>Header and column widths are already sized, so nothing reflows when rows land. Cancel stays armed for the whole run.</span></p>
+      <div class="frame">
+        <div class="strip" role="tablist" aria-label="Result view">
+          <button class="rtab active" role="tab" aria-selected="true">Results</button>
+          <button class="rtab" role="tab" aria-selected="false">Explain</button>
+          <button class="rtab" role="tab" aria-selected="false">Messages</button>
+          <span class="spacer"></span>
+          <div class="striptools">
+            <button class="btn ghost sm">Cancel</button>
+            <button class="iconbtn" aria-label="Refresh" title="Refresh (F5)" disabled><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+            <button class="iconbtn" aria-label="Export results" title="Export results" disabled><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg></button>
+          </div>
+        </div>
+        <div class="body">
+          <table class="grid">
+            <thead><tr>
+              <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg><span>order_id</span></span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><span>customer_id</span></span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><span>status</span></span><span class="coltype">text</span></th>
+              <th scope="col"><span class="colname"><span>total_amount</span></span><span class="coltype">numeric(12,2)</span></th>
+              <th scope="col"><span class="colname"><span>created_at</span></span><span class="coltype">timestamptz</span></th>
+            </tr></thead>
+            <tbody aria-busy="true">
+              <tr><td><span class="skel" style="width:52px"></span></td><td><span class="skel" style="width:44px"></span></td><td><span class="skel" style="width:60px"></span></td><td><span class="skel" style="width:56px"></span></td><td><span class="skel" style="width:130px"></span></td></tr>
+              <tr class="alt"><td><span class="skel" style="width:52px"></span></td><td><span class="skel" style="width:44px"></span></td><td><span class="skel" style="width:48px"></span></td><td><span class="skel" style="width:64px"></span></td><td><span class="skel" style="width:130px"></span></td></tr>
+              <tr><td><span class="skel" style="width:52px"></span></td><td><span class="skel" style="width:44px"></span></td><td><span class="skel" style="width:66px"></span></td><td><span class="skel" style="width:40px"></span></td><td><span class="skel" style="width:130px"></span></td></tr>
+              <tr class="alt"><td><span class="skel" style="width:52px"></span></td><td><span class="skel" style="width:44px"></span></td><td><span class="skel" style="width:54px"></span></td><td><span class="skel" style="width:58px"></span></td><td><span class="skel" style="width:130px"></span></td></tr>
+              <tr><td><span class="skel" style="width:52px"></span></td><td><span class="skel" style="width:44px"></span></td><td><span class="skel" style="width:60px"></span></td><td><span class="skel" style="width:50px"></span></td><td><span class="skel" style="width:130px"></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager"><span>Running&hellip;</span><span class="spacer"></span><span>Page size 100</span></div>
+      </div>
+    </div>
+
+    <!-- 2. EMPTY — query mode. Copy is the shipped string (result-panel.tsx:487). -->
+    <div class="specimen">
+      <p class="caption"><b>Empty &mdash; query mode</b><span>No statement has run yet. An empty editor is a no-op, not an error.</span></p>
+      <div class="frame">
+        <div class="strip" role="tablist" aria-label="Result view">
+          <button class="rtab active" role="tab" aria-selected="true">Results</button>
+          <button class="rtab" role="tab" aria-selected="false">Explain</button>
+          <button class="rtab" role="tab" aria-selected="false">Messages</button>
+          <span class="spacer"></span>
+          <div class="striptools">
+            <button class="iconbtn" aria-label="Export results" title="Export results" disabled><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg></button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="empty">
+            <span class="ico"><svg width="24" height="24" aria-hidden="true"><use href="#i-db"/></svg></span>
+            <h3>Run a query to see results</h3>
+            <p>Press Ctrl+Enter to execute the current statement</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. EMPTY — table browse. Offers the two actions that change the state
+         (design-spec.md section 3.2), rather than a bare message. -->
+    <div class="specimen">
+      <p class="caption"><b>Empty &mdash; table browse, filtered to zero</b><span>Offers the two actions that actually change it. A bare &ldquo;no rows&rdquo; leaves the user stuck.</span></p>
+      <div class="frame">
+        <div class="strip" role="tablist" aria-label="Result view">
+          <button class="rtab active" role="tab" aria-selected="true">Results <span class="pill">0</span></button>
+          <button class="rtab" role="tab" aria-selected="false">Messages</button>
+          <span class="spacer"></span>
+          <div class="striptools">
+            <button class="iconbtn" aria-label="Refresh" title="Refresh (F5)"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="empty">
+            <span class="ico"><svg width="24" height="24" aria-hidden="true"><use href="#i-filter"/></svg></span>
+            <h3>No rows match the current filter</h3>
+            <p>public.orders has 142 rows. 2 filter conditions are active.</p>
+            <div class="acts">
+              <button class="btn sec"><svg width="13" height="13" aria-hidden="true"><use href="#i-filter"/></svg>Clear filters</button>
+              <button class="btn ghost"><svg width="13" height="13" aria-hidden="true"><use href="#i-plus"/></svg>Add row</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. ERROR — Messages tab auto-selected, driver text verbatim.
+         Returning a silently empty grid is the failure mode to avoid. -->
+    <div class="specimen">
+      <p class="caption"><b>Error</b><span>The Messages tab is auto-selected and carries the driver&rsquo;s own text, unedited. SCR-13 marks the offending line in parallel.</span></p>
+      <div class="frame">
+        <div class="strip" role="tablist" aria-label="Result view">
+          <button class="rtab" role="tab" aria-selected="false">Results</button>
+          <button class="rtab" role="tab" aria-selected="false">Explain</button>
+          <button class="rtab active" role="tab" aria-selected="true">Messages <span class="pill err">1</span></button>
+          <span class="spacer"></span>
+          <div class="striptools">
+            <button class="btn sec sm demo-focus" autofocus><svg width="11" height="11" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button>
+            <button class="iconbtn" aria-label="Export results" title="Export results" disabled><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg></button>
+          </div>
+        </div>
+        <div class="errstrip" role="alert">
+          <svg width="14" height="14" aria-hidden="true"><use href="#i-alert"/></svg>
+          <span>Statement failed &mdash; nothing was committed.</span>
+        </div>
+        <div class="body">
+          <div class="msglist">
+            <div class="msg error">
+              <time>09:36:02</time>
+<pre class="txt">ERROR: relation "public.order_item" does not exist
+LINE 5:   FROM public.order_item o
+               ^</pre>
+            </div>
+            <div class="msg ok">
+              <time>09:35:58</time>
+              <span class="txt">SET search_path TO public;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. TRUNCATED — a capped result must say so and offer Export, or a partial
+         answer reads as a whole one (design-spec.md section 3.7). -->
+    <div class="specimen">
+      <p class="caption"><b>Truncated</b><span>The most damaging silent failure in a DB client is a partial result that looks complete.</span></p>
+      <div class="frame">
+        <div class="strip" role="tablist" aria-label="Result view">
+          <button class="rtab active" role="tab" aria-selected="true">Results <span class="pill">10 000</span></button>
+          <button class="rtab" role="tab" aria-selected="false">Explain</button>
+          <button class="rtab" role="tab" aria-selected="false">Messages</button>
+          <span class="spacer"></span>
+          <div class="striptools">
+            <button class="iconbtn" aria-label="Refresh" title="Refresh (F5)"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+            <button class="iconbtn" aria-label="Export results" title="Export results"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg></button>
+          </div>
+        </div>
+        <div class="infostrip">
+          <svg width="13" height="13" aria-hidden="true"><use href="#i-info"/></svg>
+          <span>Showing the first 10 000 rows. The result set is larger &mdash; sorting and search cover the loaded rows only.</span>
+          <span class="spacer"></span>
+          <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-download"/></svg>Export full result</button>
+        </div>
+        <div class="body">
+          <table class="grid">
+            <thead><tr>
+              <th scope="col" aria-sort="ascending"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg><span>order_id</span></span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><span>customer_id</span></span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><span>status</span></span><span class="coltype">text</span></th>
+              <th scope="col"><span class="colname"><span>total_amount</span></span><span class="coltype">numeric(12,2)</span></th>
+              <th scope="col"><span class="colname"><span>created_at</span></span><span class="coltype">timestamptz</span></th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="num">10241</td><td class="num">4820</td><td>shipped</td><td class="num">129.50</td><td class="mono">2026-08-19 09:14:22+07</td></tr>
+              <tr class="alt"><td class="num">10242</td><td class="num">4821</td><td>pending</td><td class="num">89.00</td><td class="mono">2026-08-19 10:41:07+07</td></tr>
+              <tr><td class="num">10243</td><td class="num">4822</td><td>shipped</td><td class="num">1240.75</td><td class="mono">2026-08-19 12:03:51+07</td></tr>
+              <tr class="alt"><td class="num">10244</td><td class="num">4823</td><td>cancelled</td><td class="num">45.20</td><td class="mono">2026-08-19 14:22:09+07</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span>Rows 1&ndash;100 of 10 000+</span>
+          <button class="btn ghost" disabled>Previous</button>
+          <button class="btn ghost">Next</button>
+          <span class="spacer"></span><span>Page size 100</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== SCR-15 =================== -->
+  <section class="sect">
+    <div class="secthead"><span class="scr">SCR-15</span><h2>Explain &mdash; a tab of the results strip (M3)</h2></div>
+    <p class="caption" style="margin-bottom:var(--space-lg)"><span>At 94a061a0 this was a stacked band above the results capped at <code class="mono">max-h-[40%]</code>. As a tab it reclaims that height and stops competing with the grid.</span></p>
+
+    <div class="specimen">
+      <p class="caption"><b>Tree view</b><span>Default. Cost outliers carry a weight change as well as colour.</span></p>
+      <div class="frame">
+        <div class="strip" role="tablist" aria-label="Result view">
+          <button class="rtab" role="tab" aria-selected="false">Results <span class="pill">24</span></button>
+          <button class="rtab active" role="tab" aria-selected="true">Explain</button>
+          <button class="rtab" role="tab" aria-selected="false">Messages</button>
+          <span class="spacer"></span>
+          <div class="striptools">
+            <button class="iconbtn" aria-label="Export results" title="Export results"><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg></button>
+          </div>
+        </div>
+        <div class="explain-head">
+          <div class="seg" role="group" aria-label="Explain view">
+            <button class="on" aria-pressed="true">Tree view</button>
+            <button aria-pressed="false">Raw view</button>
+          </div>
+          <button class="btn ghost sm">Expand all</button>
+          <span class="spacer"></span>
+          <span style="color:var(--color-text-secondary);font-size:var(--font-size-2xs);font-variant-numeric:var(--font-numeric-tabular)">Planning 0.42ms &middot; Execution 37.6ms</span>
+        </div>
+        <div class="body">
+          <table class="plan">
+            <thead><tr>
+              <th scope="col">Operation</th><th scope="col">Detail</th>
+              <th scope="col" class="r">Cost</th><th scope="col" class="r">Rows</th>
+            </tr></thead>
+            <tbody>
+              <tr><td><span class="op"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg>Sort</span></td><td class="detail">Sort Key: month DESC, revenue DESC</td><td class="r">1284.42</td><td class="r">24</td></tr>
+              <tr><td class="d1"><span class="op"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg>HashAggregate</span></td><td class="detail">Group Key: date_trunc, o.currency</td><td class="r">1201.10</td><td class="r">24</td></tr>
+              <tr><td class="d2"><span class="op"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg>Hash Join</span></td><td class="detail">Cond: c.customer_id = o.customer_id</td><td class="r">1044.86</td><td class="r">8412</td></tr>
+              <tr><td class="d3"><span class="op">Seq Scan on orders o</span></td><td class="detail">Filter: status = 'shipped'</td><td class="r hot">612.00</td><td class="r">8412</td></tr>
+              <tr><td class="d3"><span class="op"><svg width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg>Hash</span></td><td class="detail">Buckets: 8192 &middot; Memory: 289kB</td><td class="r">268.00</td><td class="r">4930</td></tr>
+              <tr><td class="d4"><span class="op">Seq Scan on customers c</span></td><td class="detail">&mdash;</td><td class="r">268.00</td><td class="r">4930</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="specimen">
+      <p class="caption"><b>Raw view</b><span>The planner&rsquo;s own output, unedited, for pasting into a bug report.</span></p>
+      <div class="frame">
+        <div class="explain-head">
+          <div class="seg" role="group" aria-label="Explain view">
+            <button aria-pressed="false">Tree view</button>
+            <button class="on" aria-pressed="true">Raw view</button>
+          </div>
+          <span class="spacer"></span>
+          <button class="btn ghost sm">Copy</button>
+        </div>
+<pre class="raw">Sort  (cost=1284.42..1284.48 rows=24 width=72)
+  Sort Key: (date_trunc('month'::text, o.created_at)) DESC, (sum(o.total_amount)) DESC
+  -&gt;  HashAggregate  (cost=1201.10..1201.34 rows=24 width=72)
+        Group Key: date_trunc('month'::text, o.created_at), o.currency
+        -&gt;  Hash Join  (cost=268.00..1044.86 rows=8412 width=26)
+              Hash Cond: (o.customer_id = c.customer_id)
+              -&gt;  Seq Scan on orders o  (cost=0.00..612.00 rows=8412 width=26)
+                    Filter: (status = 'shipped'::text)
+              -&gt;  Hash  (cost=268.00..268.00 rows=4930 width=8)
+                    Buckets: 8192  Batches: 1  Memory Usage: 289kB
+                    -&gt;  Seq Scan on customers c  (cost=0.00..268.00 rows=4930 width=8)</pre>
+      </div>
+    </div>
+
+    <div class="specimen">
+      <p class="caption"><b>No result</b><span>Some statements have no plan. Say so rather than render an empty table frame.</span></p>
+      <div class="frame">
+        <div class="explain-head">
+          <div class="seg" role="group" aria-label="Explain view">
+            <button class="on" aria-pressed="true">Tree view</button>
+            <button aria-pressed="false">Raw view</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="empty">
+            <span class="ico"><svg width="24" height="24" aria-hidden="true"><use href="#i-code"/></svg></span>
+            <h3>No plan for this statement</h3>
+            <p>EXPLAIN returned no rows. DDL and utility statements have no query plan.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== SCR-14 =================== -->
+  <section class="sect">
+    <div class="secthead"><span class="scr">SCR-14</span><h2>Editor Status Bar &mdash; variants</h2></div>
+    <p class="caption" style="margin-bottom:var(--space-lg)"><span>Read-only strip pinned under SCR-13. Numerics are tabular so the bar does not jitter as the cursor moves.</span></p>
+
+    <div class="specimen">
+      <p class="caption"><b>No selection</b><span>Single statement, caret only.</span></p>
+      <div class="frame"><div class="editstatus">
+        <span>Stmt 1 of 1</span><span>Ln 8, Col 24</span>
+        <span class="spacer"></span><span>Ctrl+Enter to run</span>
+      </div></div>
+    </div>
+
+    <div class="specimen">
+      <p class="caption"><b>With selection</b><span>The selected-character count appears only when a selection exists.</span></p>
+      <div class="frame"><div class="editstatus">
+        <span>Stmt 2 of 3</span><span>Ln 14, Col 22</span><span class="sel">48 selected</span>
+        <span class="spacer"></span><span>Ctrl+Enter to run selection</span>
+      </div></div>
+    </div>
+
+    <div class="specimen">
+      <p class="caption"><b>Multi-statement script</b><span>Statement index tracks the caret, so Ctrl+Enter always names its target.</span></p>
+      <div class="frame"><div class="editstatus">
+        <span>Stmt 7 of 12</span><span>Ln 96, Col 3</span>
+        <span class="spacer"></span><span>Ctrl+Enter to run</span>
+      </div></div>
+    </div>
+
+    <div class="specimen">
+      <p class="caption"><b>Empty editor</b><span>Nothing to run. SCR-16 stays on its empty state instead of raising a dialog.</span></p>
+      <div class="frame"><div class="editstatus">
+        <span>Stmt 0 of 0</span><span>Ln 1, Col 1</span>
+        <span class="spacer"></span><span>Ctrl+Enter to run</span>
+      </div></div>
+    </div>
+
+    <div class="specimen">
+      <p class="caption"><b>Parse error marked</b><span>Pairs with the wavy underline in SCR-13; the message itself lives in the Messages tab, never only here.</span></p>
+      <div class="frame"><div class="editstatus">
+        <span>Stmt 1 of 1</span><span>Ln 5, Col 16</span>
+        <span class="err">Syntax error at or near &ldquo;order_item&rdquo;</span>
+        <span class="spacer"></span><span>Ctrl+Enter to run</span>
+      </div></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* Mockup scaffolding only — not a product feature.
+   Writes data-theme on <html> and syncs the `light` class, because tokens.css
+   keys on `.light`, matching the shipped mechanism in src/hooks/useTheme.ts. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

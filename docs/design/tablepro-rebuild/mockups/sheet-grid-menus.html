@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out · component sheet
+  SCR-18 Grid Context Menu · SCR-19 Column Header Menu
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+  Pattern authority: scr-17-table-browse.html · scr-13-query-workspace.html
+
+  Mobbin refs this sheet follows (design-spec.md section 7.1):
+    ref 5  Rows             -> SCR-19: the column header carries a dropdown caret and
+                               the menu is a REAL anchored popover, not an inline
+                               control strip.
+    ref 2  Replit DB studio -> M7: the column TYPE is printed with the name, and NULL
+                               renders as a distinct dimmed token.
+    ref 6  Canva sheets     -> anchored-popover-from-a-trigger geometry, shared with
+                               the restored SCR-25.
+
+  What this sheet exists to prove:
+    - SCR-19 reflects the RESOLVED M7 header shape: name on line one, type on line
+      two in --font-size-2xs / --color-text-muted, so a narrow column truncates the
+      NAME and never loses the type (design-spec.md section 8.2, Q6 RESOLVED).
+    - SCR-18 is not one menu. Table mode, query mode and disabled-item state are
+      three genuinely different menus and all three are drawn here.
+    - Both menus are shown anchored in a real grid, not floating in a void.
+
+  Menu labels are the shipped English strings (grid-context-menu.tsx,
+  column-menu.tsx). Command labels stay English — standing project rule.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme on
+  <html> and syncs the `light` class, because tokens.css keys on `.light` — the
+  mechanism the app really ships (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-18 grid menu · SCR-19 column menu — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+.board{max-width:1400px;margin:0 auto;
+  padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);
+  background:var(--color-bg-base)}
+.boardhead{display:flex;align-items:center;gap:var(--space-lg);margin-bottom:var(--space-2xl)}
+.boardhead h1{font-size:var(--font-size-xl);line-height:var(--line-height-xl);
+  font-weight:var(--font-weight-semibold)}
+.boardhead p{color:var(--color-text-secondary);font-size:var(--font-size-md)}
+.sect{margin-bottom:var(--space-3xl)}
+.secthead{display:flex;align-items:center;gap:var(--space-md);margin-bottom:var(--space-lg);
+  padding-bottom:var(--space-sm);border-bottom:1px solid var(--color-border-subtle)}
+.secthead h2{font-size:var(--font-size-lg);line-height:var(--line-height-lg);
+  font-weight:var(--font-weight-semibold)}
+.scr{font-family:var(--font-mono);font-size:var(--font-size-2xs);padding:2px var(--space-sm);
+  border-radius:var(--radius-xs);background:var(--color-accent-blue-subtle);
+  color:var(--color-accent-blue);font-weight:var(--font-weight-medium);white-space:nowrap}
+.specimen{margin-bottom:var(--space-2xl)}
+.caption{display:flex;align-items:baseline;gap:var(--space-md);margin-bottom:var(--space-sm);
+  color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.caption b{color:var(--color-text-primary);font-weight:var(--font-weight-medium)}
+.frame{border:1px solid var(--color-border);border-radius:var(--radius-lg);
+  background:var(--color-bg-surface);box-shadow:var(--shadow-sm);padding-bottom:var(--space-3xl)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-xl)}
+
+/* ---------- mini grid host ---------- */
+.gridhost{position:relative;overflow:visible;border-radius:var(--radius-lg);
+  border-bottom-left-radius:var(--radius-lg);border-bottom-right-radius:var(--radius-lg)}
+table.grid{border-collapse:separate;border-spacing:0;width:100%;
+  font-variant-numeric:var(--font-numeric-tabular)}
+table.grid th{text-align:left;vertical-align:top;background:var(--color-grid-header-bg);
+  padding:var(--space-xs) var(--space-sm);border-bottom:1px solid var(--color-border);
+  border-right:1px solid var(--color-border-subtle);font-weight:var(--font-weight-medium);
+  font-size:var(--font-size-xs);white-space:nowrap;position:relative}
+table.grid th:first-child{border-top-left-radius:var(--radius-lg)}
+table.grid th:last-child{border-right:0;border-top-right-radius:var(--radius-lg)}
+/* M7 / Q6 RESOLVED — name line, then type line. */
+.colname{display:flex;align-items:center;gap:var(--space-xs);color:var(--color-text-primary);
+  overflow:hidden}
+.colname > span{overflow:hidden;text-overflow:ellipsis}
+.coltype{display:block;font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-weight:var(--font-weight-regular);color:var(--color-text-secondary);
+  font-family:var(--font-mono);margin-top:1px}
+.pk{color:var(--color-grid-pk-fg)}
+.caret{margin-left:auto;color:var(--color-text-secondary);opacity:0}
+th:hover .caret,th.menuopen .caret{opacity:1}
+th.menuopen{background:var(--color-bg-muted)}
+/* the deliberately narrow column: the NAME truncates, the type survives */
+th.narrow{max-width:74px}
+table.grid td{height:var(--row-h-grid);padding:0 var(--space-sm);white-space:nowrap;
+  border-bottom:1px solid var(--color-border-subtle);
+  border-right:1px solid var(--color-border-subtle);overflow:hidden;
+  text-overflow:ellipsis;max-width:180px}
+table.grid td:last-child{border-right:0}
+tr.alt td{background:var(--color-grid-row-alt)}
+tr.sel td{background:var(--color-grid-row-selected)}
+tr.sel td:first-child{box-shadow:inset 2px 0 0 0 var(--color-accent-blue)}
+tr.del td{background:var(--color-grid-row-deleted);text-decoration:line-through;
+  color:var(--color-text-secondary)}
+tr.del td:first-child{box-shadow:inset 2px 0 0 0 var(--color-accent-red)}
+td.target{outline:1px solid var(--color-focus-ring);outline-offset:-1px}
+.gutter{width:30px;min-width:30px;text-align:center;color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs)}
+.g-del{color:var(--color-accent-red)}
+.null{color:var(--color-grid-null-fg);font-size:var(--font-size-xs);font-style:italic}
+.mono{font-family:var(--font-mono);font-size:var(--font-size-xs)}
+.num{text-align:right}
+
+/* ---------- menu (design-spec.md 5.16 "Menu / context menu") ---------- */
+.menu{position:absolute;z-index:var(--z-popover);min-width:220px;padding:var(--space-xs) 0;
+  background:var(--color-bg-elevated);border:1px solid var(--color-border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-popup)}
+.mi{display:flex;align-items:center;gap:var(--space-md);width:100%;height:var(--control-h-md);
+  padding:0 var(--space-lg);color:var(--color-text-primary);font-size:var(--font-size-sm);
+  text-align:left}
+.mi:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.mi .k{margin-left:auto;font-family:var(--font-mono);font-size:var(--font-size-2xs);
+  color:var(--color-text-secondary)}
+.mi[disabled]{opacity:.45;cursor:not-allowed}
+.mi[disabled]:hover{background:none}
+.mi.danger{color:var(--color-accent-red)}
+.mi.danger:hover{background:var(--color-accent-red-subtle)}
+.mi.danger[disabled]:hover{background:none}
+.mdiv{height:1px;margin:var(--space-xs) 0;background:var(--color-border-subtle)}
+.mlabel{padding:var(--space-sm) var(--space-lg) var(--space-xs);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);text-transform:uppercase;letter-spacing:.05em;
+  font-weight:var(--font-weight-medium)}
+
+.note{margin-top:var(--space-md);padding:var(--space-md) var(--space-lg);
+  background:var(--color-state-info-bg);color:var(--color-state-info-fg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-xs)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* m10: one control per screen is shown in its focused state, so the
+   mandatory ring is actually visible in the set. Matches the
+   .demo-focus convention in sheet-bulk-dialogs / sheet-confirm-dialogs. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8M17 6l2 2M14 9l2 2"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16z"/></symbol>
+<symbol id="i-ban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></symbol>
+<symbol id="i-sortasc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15h8M4 10h12M4 5h16"/><path d="M18 20V9M15 12l3-3 3 3"/></symbol>
+<symbol id="i-sortdesc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h8M4 10h12M4 15h16"/><path d="M18 4v11M15 12l3 3 3-3"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+<symbol id="i-eyeoff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.2A9.9 9.9 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.3 6.3A17 17 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 4.3-1"/><path d="m2 2 20 20M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+<symbol id="i-columns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="board">
+
+  <header class="boardhead">
+    <div>
+      <h1>Grid menus</h1>
+      <p>SCR-18 &middot; SCR-19 &mdash; component sheet</p>
+    </div>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+  </header>
+
+  <!-- =================== SCR-18 =================== -->
+  <section class="sect">
+    <div class="secthead"><span class="scr">SCR-18</span><h2>Grid Context Menu</h2></div>
+
+    <div class="specimen">
+      <p class="caption"><b>Table mode &mdash; full menu</b><span>Right-click on <code class="mono">status</code> in row 4. Copy group, then row mutations, then the bulk group, then the destructive item under a divider.</span></p>
+      <div class="frame">
+        <div class="gridhost">
+          <table class="grid">
+            <thead><tr>
+              <th class="gutter" scope="col"></th>
+              <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg><span>order_id</span></span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><span>status</span></span><span class="coltype">text</span></th>
+              <th scope="col"><span class="colname"><span>total_amount</span></span><span class="coltype">numeric(12,2)</span></th>
+              <th scope="col"><span class="colname"><span>shipped_at</span></span><span class="coltype">timestamptz</span></th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="gutter">1</td><td class="num">10241</td><td>shipped</td><td class="num">129.50</td><td class="mono">2026-08-20 11:02:00+07</td></tr>
+              <tr class="alt"><td class="gutter">2</td><td class="num">10242</td><td>pending</td><td class="num">89.00</td><td><span class="null">NULL</span></td></tr>
+              <tr><td class="gutter">3</td><td class="num">10243</td><td>shipped</td><td class="num">1240.75</td><td class="mono">2026-08-21 08:15:30+07</td></tr>
+              <tr class="sel"><td class="gutter">4</td><td class="num">10244</td><td class="target">cancelled</td><td class="num">45.20</td><td><span class="null">NULL</span></td></tr>
+              <tr class="alt"><td class="gutter">5</td><td class="num">10245</td><td>pending</td><td class="num">310.00</td><td><span class="null">NULL</span></td></tr>
+              <tr><td class="gutter">6</td><td class="num">10246</td><td>shipped</td><td class="num">75.00</td><td class="mono">2026-08-22 07:30:00+07</td></tr>
+              <tr class="alt"><td class="gutter">7</td><td class="num">10247</td><td>pending</td><td class="num">62.10</td><td><span class="null">NULL</span></td></tr>
+            </tbody>
+          </table>
+
+          <div class="menu" role="menu" aria-label="Cell actions" style="top:118px;left:190px">
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Cell<span class="k">Ctrl+C</span></button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Selection</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Row (Tab-separated)</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Row (JSON)</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy as INSERT</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy as UPDATE</button>
+            <div class="mdiv" role="separator"></div>
+            <button class="mi demo-focus" role="menuitem" autofocus><svg width="12" height="12" aria-hidden="true"><use href="#i-pencil"/></svg>Edit Value</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-ban"/></svg>Set NULL</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-plus"/></svg>Duplicate Row</button>
+            <div class="mdiv" role="separator"></div>
+            <div class="mlabel">Bulk</div>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-layers"/></svg>Insert rows</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-layers"/></svg>Update column</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-layers"/></svg>Delete rows</button>
+            <div class="mdiv" role="separator"></div>
+            <button class="mi danger" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-trash"/></svg>Delete Row</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="specimen">
+        <p class="caption"><b>Query mode</b><span>A query result is not editable, so every mutation item is absent &mdash; not disabled. Nothing here implies an action that cannot happen.</span></p>
+        <div class="frame">
+          <div class="gridhost">
+            <table class="grid">
+              <thead><tr>
+                <th scope="col"><span class="colname"><span>month</span></span><span class="coltype">timestamptz</span></th>
+                <th scope="col"><span class="colname"><span>currency</span></span><span class="coltype">char(3)</span></th>
+                <th scope="col"><span class="colname"><span>revenue</span></span><span class="coltype">numeric</span></th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="mono">2026-08-01</td><td class="mono">USD</td><td class="num target">48 210.75</td></tr>
+                <tr class="alt"><td class="mono">2026-08-01</td><td class="mono">EUR</td><td class="num">12 004.10</td></tr>
+                <tr><td class="mono">2026-07-01</td><td class="mono">USD</td><td class="num">51 992.00</td></tr>
+                <tr class="alt"><td class="mono">2026-07-01</td><td class="mono">GBP</td><td class="num">8 415.60</td></tr>
+              </tbody>
+            </table>
+            <div class="menu" role="menu" aria-label="Cell actions" style="top:44px;left:150px;min-width:200px">
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Cell<span class="k">Ctrl+C</span></button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Selection</button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Row (Tab-separated)</button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Row (JSON)</button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy as INSERT</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <p class="caption"><b>Deleted row + primary-key column</b><span>Two independent disables. A staged-deleted row blocks editing; a PK column blocks Set NULL. Both stay visible so the reason is legible.</span></p>
+        <div class="frame">
+          <div class="gridhost">
+            <table class="grid">
+              <thead><tr>
+                <th class="gutter" scope="col"></th>
+                <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg><span>order_id</span></span><span class="coltype">bigint</span></th>
+                <th scope="col"><span class="colname"><span>status</span></span><span class="coltype">text</span></th>
+                <th scope="col"><span class="colname"><span>total_amount</span></span><span class="coltype">numeric(12,2)</span></th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="gutter">1</td><td class="num">10241</td><td>shipped</td><td class="num">129.50</td></tr>
+                <tr class="del"><td class="gutter g-del" title="Deleted">&minus;</td><td class="num target">10247</td><td>pending</td><td class="num">62.10</td></tr>
+                <tr class="alt"><td class="gutter">3</td><td class="num">10248</td><td>pending</td><td class="num">998.00</td></tr>
+                <tr><td class="gutter">4</td><td class="num">10249</td><td>shipped</td><td class="num">204.99</td></tr>
+              </tbody>
+            </table>
+            <div class="menu" role="menu" aria-label="Cell actions" style="top:70px;left:130px;min-width:200px">
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Cell<span class="k">Ctrl+C</span></button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy Row (JSON)</button>
+              <div class="mdiv" role="separator"></div>
+              <button class="mi" role="menuitem" disabled aria-disabled="true"><svg width="12" height="12" aria-hidden="true"><use href="#i-pencil"/></svg>Edit Value</button>
+              <button class="mi" role="menuitem" disabled aria-disabled="true"><svg width="12" height="12" aria-hidden="true"><use href="#i-ban"/></svg>Set NULL</button>
+              <button class="mi" role="menuitem" disabled aria-disabled="true"><svg width="12" height="12" aria-hidden="true"><use href="#i-plus"/></svg>Duplicate Row</button>
+              <div class="mdiv" role="separator"></div>
+              <button class="mi danger" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-trash"/></svg>Delete 3 Rows</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      The destructive item is the only one whose label counts the selection:
+      <b>Delete Row</b> for one, <b>Delete 3 Rows</b> for many. The count belongs in
+      the label because it is the fact that changes the consequence.
+    </div>
+  </section>
+
+  <!-- =================== SCR-19 =================== -->
+  <section class="sect">
+    <div class="secthead"><span class="scr">SCR-19</span><h2>Column Header Menu &mdash; on the resolved M7 header</h2></div>
+
+    <div class="specimen">
+      <p class="caption"><b>Open on <code class="mono">total_amount</code></b><span>The header caret appears on hover and stays lit while its menu is open. <code class="mono">order_id</code> carries <code class="mono">aria-sort=&quot;ascending&quot;</code>.</span></p>
+      <div class="frame">
+        <div class="gridhost">
+          <table class="grid">
+            <thead><tr>
+              <th scope="col" aria-sort="ascending"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg><span>order_id</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><span>status</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">text</span></th>
+              <th scope="col" class="menuopen"><span class="colname"><span>total_amount</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">numeric(12,2)</span></th>
+              <th scope="col"><span class="colname"><span>currency</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">char(3)</span></th>
+              <th scope="col"><span class="colname"><span>created_at</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">timestamptz</span></th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="num">10241</td><td>shipped</td><td class="num">129.50</td><td class="mono">USD</td><td class="mono">2026-08-19 09:14:22+07</td></tr>
+              <tr class="alt"><td class="num">10242</td><td>pending</td><td class="num">89.00</td><td class="mono">USD</td><td class="mono">2026-08-19 10:41:07+07</td></tr>
+              <tr><td class="num">10243</td><td>shipped</td><td class="num">1240.75</td><td class="mono">EUR</td><td class="mono">2026-08-19 12:03:51+07</td></tr>
+              <tr class="alt"><td class="num">10244</td><td>cancelled</td><td class="num">45.20</td><td class="mono">USD</td><td class="mono">2026-08-19 14:22:09+07</td></tr>
+              <tr><td class="num">10245</td><td>pending</td><td class="num">310.00</td><td class="mono">GBP</td><td class="mono">2026-08-19 16:47:33+07</td></tr>
+              <tr class="alt"><td class="num">10246</td><td>pending</td><td class="num">75.00</td><td class="mono">USD</td><td class="mono">2026-08-20 09:26:18+07</td></tr>
+            </tbody>
+          </table>
+          <div class="menu" role="menu" aria-label="total_amount column actions" style="top:42px;left:238px;min-width:210px">
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-sortasc"/></svg>Sort ascending</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-sortdesc"/></svg>Sort descending</button>
+            <div class="mdiv" role="separator"></div>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-filter"/></svg>Filter by column</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-columns"/></svg>Select column</button>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-eyeoff"/></svg>Hide column</button>
+            <div class="mdiv" role="separator"></div>
+            <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Copy column name</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="specimen">
+      <p class="caption"><b>M7 under pressure &mdash; narrow columns</b><span>The whole reason the type went on its own line. Here <code class="mono">total_amount</code> and <code class="mono">created_at</code> are squeezed: the NAME ellipsises, the type stays fully readable.</span></p>
+      <div class="frame">
+        <div class="gridhost">
+          <table class="grid">
+            <thead><tr>
+              <th scope="col" class="narrow"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg><span>order_id</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">bigint</span></th>
+              <th scope="col" class="narrow"><span class="colname"><span>customer_id</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">bigint</span></th>
+              <th scope="col" class="narrow"><span class="colname"><span>total_amount</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">numeric</span></th>
+              <th scope="col" class="narrow"><span class="colname"><span>created_at</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">timestamptz</span></th>
+              <th scope="col"><span class="colname"><span>notes</span><svg class="caret" width="11" height="11" aria-hidden="true"><use href="#i-chev-d"/></svg></span><span class="coltype">text</span></th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="num">10241</td><td class="num">4820</td><td class="num">129.50</td><td class="mono">2026-08-19</td><td><span class="null">NULL</span></td></tr>
+              <tr class="alt"><td class="num">10242</td><td class="num">4821</td><td class="num">89.00</td><td class="mono">2026-08-19</td><td>rush order</td></tr>
+              <tr><td class="num">10243</td><td class="num">4822</td><td class="num">1240.75</td><td class="mono">2026-08-19</td><td><span class="null">NULL</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">
+          Q6 RESOLVED, always show. Had the type been printed inline after the name
+          (<code class="mono">total_amount&nbsp;&nbsp;numeric</code>) it would be the
+          <i>type</i> that got clipped here &mdash; losing the one fact a user cannot
+          infer from the values.
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* Mockup scaffolding only — see scr-17-table-browse.html for the same note. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

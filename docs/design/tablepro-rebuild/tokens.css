@@ -1,0 +1,387 @@
+/* ============================================================================
+   TablePro — Design Tokens (machine source)
+   ----------------------------------------------------------------------------
+   Frozen against inventory commit 94a061a0. Mirrors design-spec.md section 5
+   exactly; if the two disagree, THIS FILE WINS and the spec is the bug.
+
+   Theme mechanism is the shipped one (src/hooks/useTheme.ts): dark is the
+   :root default, `.light` on <html> overrides. Do not invert this — the
+   running app toggles that exact class.
+
+   58 color tokens x 2 themes. 10 shadow tokens x 2 themes. Everything else is
+   theme-invariant.
+
+   [K] = kept unchanged from src/styles/globals.css / tailwind.config.js
+   [N] = newly proposed by this rebuild
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   DARK THEME (default)
+   ------------------------------------------------------------------------ */
+:root {
+  /* AUDIT M6. Windows is the only supported platform, and without this the
+     native <select> popup and the scrollbars render light-on-light inside the
+     dark theme. Must stay paired with the .light override below. */
+  color-scheme: dark;
+
+  /* -- Surface (6) -------------------------------------------------------- */
+  --color-bg-base:      #0f1419;            /* [K] app background            */
+  --color-bg-surface:   #151b23;            /* [K] toolbar, status bar, tree */
+  --color-bg-elevated:  #1c2431;            /* [K] dialogs, popovers, cards  */
+  --color-bg-muted:     #252d3a;            /* [K] inset wells, active chip  */
+  --color-bg-hover:     #2a3344;            /* [K] hover state layer         */
+  --color-scrim:        rgba(0, 0, 0, 0.60);/* [N] modal backdrop only       */
+
+  /* -- Text (4) ----------------------------------------------------------- */
+  --color-text-primary:   #e6edf3;          /* [K] */
+  --color-text-secondary: #8b949e;          /* [K] */
+  /* AUDIT B2 — DEMOTED, NOT RE-PICKED. This token is NOT for content text.
+     It fails AA on every surface in both themes (dark 4.03 base -> 2.76 hover;
+     light 3.04 -> 2.56). It cannot be re-picked either: --color-text-secondary
+     already sits AT the 4.5 floor (4.51 dark on bg-muted), so a dimmer third
+     text tier cannot exist in this palette without inverting the hierarchy.
+     Permitted uses only: disabled control text and glyphs (WCAG 1.4.3 exempts
+     inactive components) and purely decorative icons. Everything that is
+     content -- status bar, placeholders, counts, meta, NULL -- uses
+     --color-text-secondary. See design-spec 5.2 and 6.4. */
+  --color-text-muted:     #6e7681;          /* [K] non-text only            */
+  --color-text-inverse:   #ffffff;          /* [N] text on *-fill surfaces   */
+
+  /* -- Border (3) --------------------------------------------------------- */
+  --color-border-subtle: #2d3848;           /* [K] hairlines, dividers       */
+  /* AUDIT M4. Was #3d4a5c = 2.06:1 on bg-base. An input boundary is a UI
+     component under WCAG 1.4.11 and needs >=3:1. Now >=3:1 on all four
+     resting surfaces: 4.24 base / 3.96 surface / 3.57 elevated / 3.17 muted.
+     (#66768d was tried first and lands on 2.997 against bg-muted — it only
+     ROUNDS to 3.00, so it does not actually clear the floor.) */
+  --color-border:        #6a7a91;           /* [K] inputs, cards, popovers   */
+  --color-border-strong: #4d5b6e;           /* [N] resizers, drag handles    */
+
+  /* -- Focus (1) ---------------------------------------------------------- */
+  --color-focus-ring:    #58a6ff;           /* [K] value, [N] as own token   */
+
+  /* -- Accent, foreground use (6) ----------------------------------------- */
+  --color-accent-blue:   #58a6ff;           /* [K] links, active tab, icons  */
+  --color-accent-green:  #3fb950;           /* [K] success text/icon         */
+  --color-accent-yellow: #d29922;           /* [K] warning text/icon, PK     */
+  --color-accent-red:    #f85149;           /* [K] error text/icon           */
+  --color-accent-orange: #fb923c;           /* [K] Safe Mode "Alert" level   */
+  --color-accent-indigo: #818cf8;           /* [K] AI surfaces               */
+
+  /* -- Accent, fills & tints (8) ------------------------------------------ */
+  /* --color-accent-blue is 2.55:1 on white and MUST NOT back white text.    */
+  --color-accent-blue-fill:        #1f6feb; /* [N] 4.63:1 vs #ffffff        */
+  --color-accent-blue-fill-hover:  #1a63d8; /* [N] 5.50:1 vs #ffffff — AUDIT B3
+                                                 was #388bfd = 3.34:1        */
+  --color-accent-blue-subtle:      #172d4d; /* [N] selected row/tab tint    */
+  --color-accent-green-fill:       #238636; /* [N] 4.57:1 vs #ffffff        */
+  --color-accent-red-fill:         #da3633; /* [N] 4.69:1 vs #ffffff        */
+  --color-accent-red-fill-hover:   #c62f2c; /* [N] 5.46:1 vs #ffffff — AUDIT B3
+                                                 was #f85149 = 3.35:1        */
+  --color-accent-red-subtle:       #2d1618; /* [N] destructive-hover tint   */
+  --color-accent-yellow-subtle:    #2a2410; /* [N] pending-change tint      */
+
+  /* -- State strips (8) --------------------------------------------------- */
+  --color-state-success-bg: #122117;        /* [N] replaces color-mix()      */
+  --color-state-success-fg: #3fb950;        /* [N] */
+  --color-state-warning-bg: #221a09;        /* [N] */
+  --color-state-warning-fg: #d29922;        /* [N] 6.82:1 on warning-bg     */
+  --color-state-danger-bg:  #251314;        /* [N] */
+  --color-state-danger-fg:  #f85149;        /* [N] */
+  --color-state-info-bg:    #0f1d2e;        /* [N] */
+  --color-state-info-fg:    #58a6ff;        /* [N] */
+  /* Severity tier between warning (yellow) and danger (red). Source has no
+     orange bg/fg pair — only a bare --color-accent-orange — so Safe Mode
+     levels 3-4 had nowhere to land. See design-spec 5.6. */
+  --color-state-severe-bg:  #251806;        /* [N] */
+  --color-state-severe-fg:  #fb923c;        /* [N] 7.60:1 on severe-bg      */
+
+  /* -- Environment tags (4) ----------------------------------------------- */
+  --color-env-prod:    #f85149;             /* [K] */
+  --color-env-staging: #d29922;             /* [K] */
+  --color-env-dev:     #3fb950;             /* [K] */
+  --color-env-local:   #58a6ff;             /* [K] */
+
+  /* -- Data grid (10) ----------------------------------------------------- */
+  --color-grid-header-bg:    #1c2431;       /* [N] sticky header row         */
+  --color-grid-row-alt:      #141a22;       /* [N] zebra stripe              */
+  --color-grid-row-hover:    #1f2833;       /* [N] */
+  --color-grid-row-selected: #1b3a5c;       /* [N] */
+  --color-grid-cell-editing: #1e3a5f;       /* [N] SCR-20 active cell        */
+  --color-grid-row-inserted: #12261a;       /* [N] staged INSERT             */
+  --color-grid-row-updated:  #2a2410;       /* [N] staged UPDATE             */
+  --color-grid-row-deleted:  #2d1618;       /* [N] staged DELETE             */
+  /* AUDIT m4. NULL is meaningful content under M7, so it carries text duty
+     and can no longer share the demoted --color-text-muted hex. Verified
+     against all 8 row backgrounds; worst case 4.88:1 (cell-editing). */
+  --color-grid-null-fg:      #a0aab5;       /* [N] >=4.88:1 on every row bg  */
+  --color-grid-pk-fg:        #d29922;       /* [N] primary-key key glyph     */
+
+  /* -- CodeMirror editor (8) ---------------------------------------------- */
+  --editor-bg:               #1e1e1e;       /* [K] */
+  --editor-fg:               #d4d4d4;       /* [K] */
+  --gutter-bg:               #252526;       /* [K] */
+  --gutter-fg:               #929292;       /* [K] 4.92:1 on gutter-bg —
+                                               AUDIT m1, was #858585 = 4.15:1 */
+  --active-line-bg:          #2a2d2e;       /* [K] */
+  --selection-match-bg:      #264f7880;     /* [K] */
+  --active-statement-bg:     #58a6ff10;     /* [K] */
+  --active-statement-border: #58a6ff30;     /* [K] */
+
+  /* -- Elevation (10) ----------------------------------------------------- */
+  --shadow-sm:    0 1px 2px 0 rgba(0, 0, 0, 0.4);                                  /* [K] */
+  --shadow-base:  0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.4); /* [K] */
+  --shadow-md:    0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4); /* [K] */
+  --shadow-lg:    0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3); /* [K] */
+  --shadow-xl:    0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4); /* [K] */
+  --shadow-2xl:   0 25px 50px -12px rgba(0, 0, 0, 0.7);                            /* [K] */
+  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.6);                                   /* [K] */
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.7);                                   /* [K] */
+  --shadow-popup: 0 2px 8px rgba(0, 0, 0, 0.5);                                    /* [K] */
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.4);                              /* [K] */
+}
+
+/* ---------------------------------------------------------------------------
+   LIGHT THEME — `.light` on <html>, applied by src/hooks/useTheme.ts
+   Only the theme-varying tokens are redeclared. Everything below this block
+   is theme-invariant and lives in :root above / the sections that follow.
+   ------------------------------------------------------------------------ */
+.light {
+  color-scheme: light;                      /* AUDIT M6 — see :root */
+
+  /* -- Surface (6) -------------------------------------------------------- */
+  --color-bg-base:      #ffffff;            /* [K] */
+  --color-bg-surface:   #f6f8fa;            /* [K] */
+  --color-bg-elevated:  #ffffff;            /* [K] */
+  --color-bg-muted:     #f0f2f5;            /* [K] */
+  --color-bg-hover:     #e8ecf0;            /* [K] */
+  --color-scrim:        rgba(15, 20, 25, 0.40); /* [N] */
+
+  /* -- Text (4) ----------------------------------------------------------- */
+  --color-text-primary:   #1f2328;          /* [K] */
+  --color-text-secondary: #656d76;          /* [K] */
+  --color-text-muted:     #8c959f;          /* [K] non-text only — see :root */
+  --color-text-inverse:   #ffffff;          /* [N] */
+
+  /* -- Border (3) --------------------------------------------------------- */
+  --color-border-subtle: #d8dee4;           /* [K] */
+  /* AUDIT M4. Was #c8d0d8 = 1.56:1 on bg-base.
+     Now 3.45 base / 3.24 surface / 3.45 elevated / 3.08 muted. */
+  --color-border:        #828b96;           /* [K] */
+  --color-border-strong: #afb8c1;           /* [N] */
+
+  /* -- Focus (1) ---------------------------------------------------------- */
+  --color-focus-ring:    #0969da;           /* [K] value, [N] as own token   */
+
+  /* -- Accent, foreground use (6) ----------------------------------------- */
+  --color-accent-blue:   #0969da;           /* [K] */
+  --color-accent-green:  #1a7f37;           /* [K] */
+  --color-accent-yellow: #9a6700;           /* [K] */
+  --color-accent-red:    #d1242f;           /* [K] */
+  --color-accent-orange: #bc4c00;           /* [K] */
+  --color-accent-indigo: #4f46e5;           /* [K] */
+
+  /* -- Accent, fills & tints (8) ------------------------------------------ */
+  --color-accent-blue-fill:        #0969da; /* [N] 5.27:1 vs #ffffff        */
+  --color-accent-blue-fill-hover:  #0860ca; /* [N] 5.94:1 vs #ffffff        */
+  --color-accent-blue-subtle:      #ddf4ff; /* [N] */
+  --color-accent-green-fill:       #1a7f37; /* [N] 5.02:1 vs #ffffff        */
+  --color-accent-red-fill:         #cf222e; /* [N] 5.44:1 vs #ffffff        */
+  --color-accent-red-fill-hover:   #a40e26; /* [N] 7.87:1 vs #ffffff        */
+  --color-accent-red-subtle:       #ffebe9; /* [N] */
+  --color-accent-yellow-subtle:    #fff8c5; /* [N] */
+
+  /* -- State strips (8) --------------------------------------------------- */
+  --color-state-success-bg: #e8f5ec;        /* [N] */
+  --color-state-success-fg: #1a7f37;        /* [N] */
+  --color-state-warning-bg: #fdf5e3;        /* [N] */
+  --color-state-warning-fg: #8f5f00;        /* [N] 5.08:1 on warning-bg —
+                                               AUDIT m3, was #9a6700 = 4.48:1 */
+  --color-state-danger-bg:  #fdeceb;        /* [N] */
+  --color-state-danger-fg:  #d1242f;        /* [N] */
+  --color-state-info-bg:    #e8f1fc;        /* [N] */
+  --color-state-info-fg:    #0969da;        /* [N] */
+  --color-state-severe-bg:  #fff1e5;        /* [N] */
+  --color-state-severe-fg:  #bc4c00;        /* [N] 4.55:1 on severe-bg      */
+
+  /* -- Environment tags (4) ----------------------------------------------- */
+  --color-env-prod:    #d1242f;             /* [K] */
+  --color-env-staging: #9a6700;             /* [K] */
+  --color-env-dev:     #1a7f37;             /* [K] */
+  --color-env-local:   #0969da;             /* [K] */
+
+  /* -- Data grid (10) ----------------------------------------------------- */
+  --color-grid-header-bg:    #f0f2f5;       /* [N] */
+  --color-grid-row-alt:      #fbfcfd;       /* [N] */
+  --color-grid-row-hover:    #f2f5f8;       /* [N] */
+  --color-grid-row-selected: #dbeafe;       /* [N] */
+  --color-grid-cell-editing: #e0edff;       /* [N] */
+  --color-grid-row-inserted: #e6f4ea;       /* [N] */
+  --color-grid-row-updated:  #fdf6e3;       /* [N] */
+  --color-grid-row-deleted:  #fdecec;       /* [N] */
+  --color-grid-null-fg:      #5a636e;       /* [N] >=5.00:1 on every row bg  */
+  --color-grid-pk-fg:        #9a6700;       /* [N] */
+
+  /* -- CodeMirror editor (8) ---------------------------------------------- */
+  --editor-bg:               #ffffff;       /* [K] */
+  --editor-fg:               #1e1e1e;       /* [K] */
+  --gutter-bg:               #f5f5f5;       /* [K] */
+  --gutter-fg:               #6f6f6f;       /* [K] 4.61:1 on gutter-bg —
+                                               AUDIT m1, was #999999 = 2.61:1 */
+  --active-line-bg:          #f0f0f0;       /* [K] */
+  --selection-match-bg:      #add6ff80;     /* [K] */
+  --active-statement-bg:     #0969da08;     /* [K] */
+  --active-statement-border: #0969da20;     /* [K] */
+
+  /* -- Elevation (10) ----------------------------------------------------- */
+  --shadow-sm:    0 1px 2px 0 rgba(0, 0, 0, 0.06);                                  /* [K] */
+  --shadow-base:  0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.06); /* [K] */
+  --shadow-md:    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06); /* [K] */
+  --shadow-lg:    0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05); /* [K] */
+  --shadow-xl:    0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04); /* [K] */
+  --shadow-2xl:   0 25px 50px -12px rgba(0, 0, 0, 0.25);                            /* [K] */
+  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.12);                                   /* [K] */
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.18);                                   /* [K] */
+  --shadow-popup: 0 2px 8px rgba(0, 0, 0, 0.1);                                     /* [K] */
+  --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.08);                              /* [K] */
+}
+
+/* ---------------------------------------------------------------------------
+   THEME-INVARIANT TOKENS
+   ------------------------------------------------------------------------ */
+:root {
+  /* -- Connection identity swatches (10) -----------------------------------
+     The ten fixed presets shipped by connection-color-picker.tsx:6-17. These
+     are USER DATA, not theme chrome: a connection the user painted red must
+     stay the same red in both themes, so they are theme-invariant by design.
+     Decorative only — every swatch is paired with the connection name, so
+     colour is never the sole carrier of identity (design-spec 6.4).
+     Contrast is therefore held to the >=3:1 UI-glyph floor, not 4.5:1. */
+  --color-conn-red:     #ef4444;                                        /* [N] */
+  --color-conn-orange:  #f97316;                                        /* [N] */
+  --color-conn-amber:   #f59e0b;                                        /* [N] */
+  --color-conn-yellow:  #eab308;                                        /* [N] */
+  --color-conn-green:   #22c55e;                                        /* [N] */
+  --color-conn-emerald: #10b981;                                        /* [N] */
+  --color-conn-blue:    #3b82f6;                                        /* [N] */
+  --color-conn-indigo:  #6366f1;                                        /* [N] */
+  --color-conn-purple:  #a855f7;                                        /* [N] */
+  --color-conn-pink:    #ec4899;                                        /* [N] */
+
+  /* -- Typography: families (2) ------------------------------------------- */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system,
+               BlinkMacSystemFont, 'Segoe UI', sans-serif;              /* [K] */
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Cascadia Code',
+               ui-monospace, monospace;                                 /* [K] */
+
+  /* -- Typography: size / line-height pairs (7) ---------------------------- */
+  --font-size-2xs: 10px;  --line-height-2xs: 14px;   /* [N] status bar, badges  */
+  --font-size-xs:  11px;  --line-height-xs:  15px;   /* [N] dense chrome labels */
+  --font-size-sm:  12px;  --line-height-sm:  16px;   /* [N] DEFAULT UI text     */
+  --font-size-md:  13px;  --line-height-md:  18px;   /* [N] body, form inputs   */
+  --font-size-lg:  14px;  --line-height-lg:  20px;   /* [N] panel/section title */
+  --font-size-xl:  16px;  --line-height-xl:  22px;   /* [N] dialog title        */
+  --font-size-2xl: 20px;  --line-height-2xl: 28px;   /* [N] welcome/onboarding  */
+
+  /* Editor size is user-owned (Settings > Editor, SCR-56); useTheme.ts writes
+     --editor-font-size at runtime. 13px is the shipped default.              */
+  --editor-font-size: 13px;                                             /* [K] */
+
+  /* -- Typography: weights (3) -------------------------------------------- */
+  --font-weight-regular:  400;                                          /* [N] */
+  --font-weight-medium:   500;                                          /* [N] */
+  --font-weight-semibold: 600;                                          /* [N] */
+
+  /* -- Typography: numerals (1) ------------------------------------------- */
+  --font-numeric-tabular: tabular-nums;   /* [N] grid, status bar, pagination */
+
+  /* -- Spacing: 2px base, 8 steps + zero (9) ------------------------------- */
+  --space-0:   0px;                                                     /* [N] */
+  --space-2xs: 2px;                                                     /* [N] */
+  --space-xs:  4px;                                                     /* [N] */
+  --space-sm:  6px;                                                     /* [N] */
+  --space-md:  8px;                                                     /* [N] */
+  --space-lg:  12px;                                                    /* [N] */
+  --space-xl:  16px;                                                    /* [N] */
+  --space-2xl: 24px;                                                    /* [N] */
+  --space-3xl: 32px;                                                    /* [N] */
+
+  /* -- Radius (5) ---------------------------------------------------------- */
+  --radius-xs:   2px;   /* [N] chips, badges, scrollbar thumb              */
+  --radius-sm:   4px;   /* [N] buttons, inputs, menu items                 */
+  --radius-md:   6px;   /* [N] popovers, cards                             */
+  --radius-lg:   8px;   /* [N] dialogs, docked panels                      */
+  --radius-full: 9999px;/* [N] status dots, pills, tag chips               */
+
+  /* -- Density: control heights (4) ---------------------------------------- */
+  /* Desktop utility. The 44x44px mobile touch minimum is deliberately NOT
+     applied here — see design-spec.md section 8, rejection R2.              */
+  --control-h-xs: 20px; /* [N] status-bar toggles, inline chips            */
+  --control-h-sm: 24px; /* [N] toolbar icon buttons, editor tabs           */
+  --control-h-md: 28px; /* [N] inputs, selects, menu items                 */
+  --control-h-lg: 32px; /* [N] primary dialog buttons                      */
+
+  /* -- Density: row heights (2) -------------------------------------------- */
+  --row-h-grid: 24px;   /* [N] data grid row (SCR-17)                      */
+  --row-h-tree: 22px;   /* [N] sidebar tree node (SCR-04)                  */
+
+  /* -- Layout: fixed chrome (4) -------------------------------------------- */
+  --h-toolbar:   40px;  /* [N] SCR-02                                      */
+  --h-tabbar:    32px;  /* [N] SCR-06                                      */
+  --h-statusbar: 24px;  /* [K] source: StatusBar.tsx `h-6`                 */
+  --h-resizer:    6px;  /* [K] source: ConnectedLayout `w-1.5` / `h-1.5`   */
+
+  /* -- Layout: anchored popover geometry (2) -------------------------------- */
+  --w-popover-max: 560px; /* [N] SCR-25 max width                          */
+  --h-popover-max: 320px; /* [N] SCR-25 max height, then internal scroll   */
+
+  /* -- Layout: resizable regions (10) --------------------------------------- */
+  /* Source of truth is src/stores/layoutStore.ts:8-14 — these mirror it.     */
+  --w-sidebar-min:       160px;                                         /* [K] */
+  --w-sidebar-default:   240px;                                         /* [K] */
+  --w-sidebar-max:       480px;                                         /* [K] */
+  --w-inspector-min:     200px;                                         /* [K] */
+  --w-inspector-default: 280px;                                         /* [K] */
+  --w-inspector-max:     500px;                                         /* [K] */
+  --w-dock-min:          280px;  /* [N] unified right dock                */
+  --w-dock-default:      360px;  /* [K] value: History slide-over w-[360px] */
+  --w-dock-max:          520px;  /* [N] was AI 400px, widened for chat     */
+  --h-editor-min:        20%;    /* [K] EDITOR_MIN_PERCENT = 20            */
+
+  /* -- Z-index (7) ---------------------------------------------------------- */
+  --z-base:         0;   /* [N] */
+  --z-sticky:      10;   /* [N] grid header, pending-changes strip         */
+  --z-dock:        20;   /* [N] right dock column                          */
+  --z-dock-content:21;   /* [N] */
+  --z-popover:     50;   /* [N] menus, anchored popovers (SCR-25)          */
+  --z-modal-scrim:100;   /* [N] */
+  --z-modal:      101;   /* [N] */
+
+  /* -- Motion: duration (4) -------------------------------------------------- */
+  --duration-fast:     100ms;                                           /* [K] */
+  --duration-normal:   150ms;                                           /* [K] */
+  --duration-moderate: 200ms;                                           /* [K] */
+  --duration-slow:     300ms;                                           /* [K] */
+
+  /* -- Motion: easing (4) ---------------------------------------------------- */
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);                            /* [K] */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);                     /* [K] */
+  --ease-out:    cubic-bezier(0, 0, 0.2, 1);                            /* [K] */
+  --ease-in:     cubic-bezier(0.4, 0, 1, 1);                            /* [K] */
+
+  /* -- Focus ring geometry (2) ----------------------------------------------- */
+  --focus-ring-width:  2px;   /* [K] source: globals.css *:focus-visible   */
+  --focus-ring-offset: 2px;   /* [K] source: globals.css *:focus-visible   */
+}
+
+/* ---------------------------------------------------------------------------
+   REDUCED MOTION — kept verbatim from src/styles/globals.css
+   ------------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

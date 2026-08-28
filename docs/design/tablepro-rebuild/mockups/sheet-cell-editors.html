@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out · component sheet
+  SCR-20 Inline Cell Editor · SCR-21 Enum Cell Editor · SCR-22 Foreign Key Cell Editor
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+  Pattern authority: scr-17-table-browse.html · scr-13-query-workspace.html
+
+  Mobbin refs this sheet follows (design-spec.md section 7.1):
+    ref 2  Replit DB studio -> M7 header (name + type) and NULL as a dimmed token,
+                               carried into every grid host on this sheet.
+    ref 6  Canva sheets     -> the anchored-overlay geometry SCR-21 and SCR-22 use to
+                               break out of a 24px cell without detaching from it.
+
+  What this sheet exists to prove:
+    - All three editors are drawn IN a grid, anchored to the cell being edited.
+      A cell editor floating in a void hides the only hard constraint it has:
+      --row-h-grid is 24px, so anything richer than a text input must overlay
+      neighbouring rows while staying visually tied to its origin cell.
+    - SCR-20 is the entry point; SCR-21 and SCR-22 are delegations from inside it
+      (cell-editor.tsx:145 for FK, :159 for enum), not sibling components.
+    - Editing a cell stages a change; it does not write. The row picks up the
+      updated tint and the SCR-24 strip appears — see scr-17-table-browse.html.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme on
+  <html> and syncs the `light` class, because tokens.css keys on `.light` — the
+  mechanism the app really ships (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-20 · SCR-21 · SCR-22 cell editors — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+
+.board{max-width:1400px;margin:0 auto;
+  padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;gap:var(--space-3xl);
+  background:var(--color-bg-base)}
+.boardhead{display:flex;align-items:center;gap:var(--space-lg);margin-bottom:var(--space-2xl)}
+.boardhead h1{font-size:var(--font-size-xl);line-height:var(--line-height-xl);
+  font-weight:var(--font-weight-semibold)}
+.boardhead p{color:var(--color-text-secondary);font-size:var(--font-size-md)}
+.sect{margin-bottom:var(--space-3xl)}
+.secthead{display:flex;align-items:center;gap:var(--space-md);margin-bottom:var(--space-lg);
+  padding-bottom:var(--space-sm);border-bottom:1px solid var(--color-border-subtle)}
+.secthead h2{font-size:var(--font-size-lg);line-height:var(--line-height-lg);
+  font-weight:var(--font-weight-semibold)}
+.scr{font-family:var(--font-mono);font-size:var(--font-size-2xs);padding:2px var(--space-sm);
+  border-radius:var(--radius-xs);background:var(--color-accent-blue-subtle);
+  color:var(--color-accent-blue);font-weight:var(--font-weight-medium);white-space:nowrap}
+.specimen{margin-bottom:var(--space-2xl)}
+.caption{display:flex;align-items:baseline;gap:var(--space-md);margin-bottom:var(--space-sm);
+  color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.caption b{color:var(--color-text-primary);font-weight:var(--font-weight-medium)}
+.frame{border:1px solid var(--color-border);border-radius:var(--radius-lg);
+  background:var(--color-bg-surface);box-shadow:var(--shadow-sm);padding-bottom:var(--space-3xl)}
+.frame.tall{padding-bottom:calc(var(--space-3xl) + var(--space-3xl))}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-xl)}
+.note{margin-top:var(--space-md);padding:var(--space-md) var(--space-lg);
+  background:var(--color-state-info-bg);color:var(--color-state-info-fg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-xs)}
+
+/* ---------- grid host ---------- */
+.gridhost{position:relative;overflow:visible}
+table.grid{border-collapse:separate;border-spacing:0;width:100%;
+  font-variant-numeric:var(--font-numeric-tabular)}
+table.grid th{text-align:left;vertical-align:top;background:var(--color-grid-header-bg);
+  padding:var(--space-xs) var(--space-sm);border-bottom:1px solid var(--color-border);
+  border-right:1px solid var(--color-border-subtle);font-weight:var(--font-weight-medium);
+  font-size:var(--font-size-xs);white-space:nowrap}
+table.grid th:first-child{border-top-left-radius:var(--radius-lg)}
+table.grid th:last-child{border-right:0;border-top-right-radius:var(--radius-lg)}
+.colname{display:flex;align-items:center;gap:var(--space-xs);color:var(--color-text-primary)}
+.coltype{display:block;font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-weight:var(--font-weight-regular);color:var(--color-text-secondary);
+  font-family:var(--font-mono);margin-top:1px}
+.pk{color:var(--color-grid-pk-fg)}
+.fk{color:var(--color-accent-indigo)}
+table.grid td{height:var(--row-h-grid);padding:0 var(--space-sm);white-space:nowrap;
+  border-bottom:1px solid var(--color-border-subtle);
+  border-right:1px solid var(--color-border-subtle);position:relative}
+table.grid td:last-child{border-right:0}
+tr.alt td{background:var(--color-grid-row-alt)}
+tr.upd td{background:var(--color-grid-row-updated)}
+tr.upd td:first-child{box-shadow:inset 2px 0 0 0 var(--color-accent-yellow)}
+.gutter{width:30px;min-width:30px;text-align:center;color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs)}
+.g-upd{color:var(--color-accent-yellow)}
+.null{color:var(--color-grid-null-fg);font-size:var(--font-size-xs);font-style:italic}
+.mono{font-family:var(--font-mono);font-size:var(--font-size-xs)}
+.num{text-align:right}
+
+/* ---------- SCR-20 inline editor ----------
+   Fills the cell exactly. design-spec.md 5.16: bg --color-grid-cell-editing,
+   1px inset --color-focus-ring. */
+td.editing{background:var(--color-grid-cell-editing);padding:0}
+.cellinput{width:100%;height:var(--row-h-grid);padding:0 var(--space-sm);
+  background:var(--color-grid-cell-editing);border:0;outline:0;
+  box-shadow:inset 0 0 0 1px var(--color-focus-ring);
+  color:var(--color-text-primary);font-size:var(--font-size-sm);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.cellinput.right{text-align:right}
+.cellhint{position:absolute;top:calc(100% + var(--space-2xs));left:0;z-index:var(--z-popover);
+  display:flex;align-items:center;gap:var(--space-sm);white-space:nowrap;
+  padding:var(--space-2xs) var(--space-sm);border-radius:var(--radius-xs);
+  background:var(--color-bg-elevated);border:1px solid var(--color-border);
+  box-shadow:var(--shadow-popup);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs)}
+.cellhint.invalid{color:var(--color-state-danger-fg);background:var(--color-state-danger-bg);
+  border-color:var(--color-accent-red)}
+kbd{font-family:var(--font-mono);font-size:var(--font-size-2xs);padding:0 var(--space-xs);
+  border:1px solid var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary)}
+
+/* ---------- SCR-21 / SCR-22 overlay ----------
+   Breaks out of the 24px row while staying anchored to the origin cell. */
+.overlay{position:absolute;top:0;left:0;z-index:var(--z-popover);min-width:100%;
+  width:max-content;background:var(--color-bg-elevated);
+  border:1px solid var(--color-focus-ring);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-popup);overflow:hidden}
+.ovhead{display:flex;align-items:center;gap:var(--space-sm);
+  padding:var(--space-2xs) var(--space-sm);height:var(--row-h-grid);
+  background:var(--color-grid-cell-editing);
+  border-bottom:1px solid var(--color-border-subtle);
+  font-size:var(--font-size-sm);color:var(--color-text-primary)}
+.ovhead .t{color:var(--color-text-secondary);font-family:var(--font-mono);
+  font-size:var(--font-size-2xs);margin-left:auto}
+.ovsearch:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+.ovsearch{display:flex;align-items:center;gap:var(--space-sm);
+  padding:0 var(--space-sm);height:var(--control-h-md);
+  border-bottom:1px solid var(--color-border-subtle);color:var(--color-text-secondary)}
+.ovsearch input{flex:1;min-width:0;background:none;border:0;
+  font-size:var(--font-size-sm);color:var(--color-text-primary)}
+.ovsearch input::placeholder{color:var(--color-text-secondary)}
+.ovlist{max-height:var(--h-popover-max);overflow:auto;padding:var(--space-2xs) 0}
+.opt{display:flex;align-items:center;gap:var(--space-md);width:100%;
+  height:var(--control-h-md);padding:0 var(--space-md);text-align:left;
+  font-size:var(--font-size-sm);color:var(--color-text-primary)}
+.opt:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.opt:hover .meta{color:var(--color-text-primary)}
+.opt.on{background:var(--color-accent-blue-subtle)}
+.opt .tick{color:var(--color-accent-blue);opacity:0}
+.opt.on .tick{opacity:1}
+.opt .meta{margin-left:auto;color:var(--color-text-secondary);font-family:var(--font-mono);
+  font-size:var(--font-size-2xs)}
+.opt .box{width:12px;height:12px;flex:none;border-radius:var(--radius-xs);
+  border:1px solid var(--color-border);display:grid;place-items:center;
+  color:var(--color-text-inverse)}
+.opt.on .box{background:var(--color-accent-blue-fill);border-color:var(--color-accent-blue-fill)}
+.opt.nullopt{color:var(--color-grid-null-fg);font-style:italic;font-size:var(--font-size-xs)}
+.ovfoot{display:flex;align-items:center;gap:var(--space-sm);
+  padding:var(--space-2xs) var(--space-sm);border-top:1px solid var(--color-border-subtle);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  background:var(--color-bg-surface)}
+.chips{display:flex;flex-wrap:wrap;gap:var(--space-2xs);padding:var(--space-sm);
+  border-bottom:1px solid var(--color-border-subtle)}
+.chip{display:inline-flex;align-items:center;gap:var(--space-2xs);
+  height:var(--control-h-xs);padding:0 var(--space-sm);border-radius:var(--radius-full);
+  background:var(--color-accent-blue-subtle);color:var(--color-accent-blue);
+  font-size:var(--font-size-2xs);font-weight:var(--font-weight-medium)}
+.skelrow{display:flex;align-items:center;gap:var(--space-md);height:var(--control-h-md);
+  padding:0 var(--space-md)}
+.skel{display:block;height:8px;border-radius:var(--radius-xs);background:var(--color-bg-muted)}
+.errbox{display:flex;flex-direction:column;gap:var(--space-sm);padding:var(--space-lg);
+  background:var(--color-state-danger-bg);color:var(--color-state-danger-fg);
+  font-size:var(--font-size-xs)}
+.errbox .txt{font-family:var(--font-mono);line-height:var(--line-height-md);
+  white-space:pre-wrap}
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-lg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn.sm{height:var(--control-h-xs);padding:0 var(--space-md);font-size:var(--font-size-2xs)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary);
+  background:var(--color-bg-elevated)}
+.btn.sec:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* m10: one control per screen is shown in its focused state, so the
+   mandatory ring is actually visible in the set. Matches the
+   .demo-focus convention in sheet-bulk-dialogs / sheet-confirm-dialogs. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8M17 6l2 2M14 9l2 2"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="board">
+
+  <header class="boardhead">
+    <div>
+      <h1>Cell editors</h1>
+      <p>SCR-20 &middot; SCR-21 &middot; SCR-22 &mdash; component sheet, every specimen in a grid</p>
+    </div>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+  </header>
+
+  <!-- =================== SCR-20 =================== -->
+  <section class="sect">
+    <div class="secthead"><span class="scr">SCR-20</span><h2>Inline Cell Editor</h2></div>
+
+    <div class="specimen">
+      <p class="caption"><b>Editing <code class="mono">total_amount</code> in row 3</b><span>Fills the cell exactly &mdash; no growth, no reflow of neighbouring rows. Row 2 already carries a staged update from an earlier commit.</span></p>
+      <div class="frame">
+        <div class="gridhost">
+          <table class="grid">
+            <thead><tr>
+              <th class="gutter" scope="col"></th>
+              <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg>order_id</span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname">status</span><span class="coltype">text</span></th>
+              <th scope="col"><span class="colname">total_amount</span><span class="coltype">numeric(12,2)</span></th>
+              <th scope="col"><span class="colname">notes</span><span class="coltype">text</span></th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="gutter">1</td><td class="num">10241</td><td>shipped</td><td class="num">129.50</td><td><span class="null">NULL</span></td></tr>
+              <tr class="upd"><td class="gutter g-upd" title="Updated">~</td><td class="num">10242</td><td>processing</td><td class="num">89.00</td><td>rush order</td></tr>
+              <tr><td class="gutter">3</td><td class="num">10243</td><td>shipped</td>
+                <td class="editing">
+                  <input class="cellinput right" type="text" value="1240.75" aria-label="Edit total_amount, row 3">
+                  <span class="cellhint"><kbd>Enter</kbd>commit<kbd>Tab</kbd>commit &amp; next<kbd>Esc</kbd>revert</span>
+                </td>
+                <td><span class="null">NULL</span></td></tr>
+              <tr class="alt"><td class="gutter">4</td><td class="num">10244</td><td>cancelled</td><td class="num">45.20</td><td>customer request</td></tr>
+              <tr><td class="gutter">5</td><td class="num">10245</td><td>pending</td><td class="num">310.00</td><td><span class="null">NULL</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="specimen">
+        <p class="caption"><b>Type rejection</b><span>Validation names the column type, because that is the fact the user needs. Commit stays blocked until the value parses.</span></p>
+        <div class="frame">
+          <div class="gridhost">
+            <table class="grid">
+              <thead><tr>
+                <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg>order_id</span><span class="coltype">bigint</span></th>
+                <th scope="col"><span class="colname">total_amount</span><span class="coltype">numeric(12,2)</span></th>
+                <th scope="col"><span class="colname">currency</span><span class="coltype">char(3)</span></th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="num">10241</td><td class="num">129.50</td><td class="mono">USD</td></tr>
+                <tr class="alt"><td class="num">10242</td>
+                  <td class="editing">
+                    <input class="cellinput right" type="text" value="ninety" aria-invalid="true" aria-label="Edit total_amount, row 2">
+                    <span class="cellhint invalid" role="alert"><svg width="11" height="11" aria-hidden="true"><use href="#i-alert"/></svg>Not valid for numeric(12,2)</span>
+                  </td>
+                  <td class="mono">USD</td></tr>
+                <tr><td class="num">10243</td><td class="num">1240.75</td><td class="mono">EUR</td></tr>
+                <tr class="alt"><td class="num">10244</td><td class="num">45.20</td><td class="mono">USD</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <p class="caption"><b>Nullable column</b><span>A nullable column offers Set NULL in the editor itself, not only through SCR-18 &mdash; clearing to empty string and meaning NULL are different intents.</span></p>
+        <div class="frame">
+          <div class="gridhost">
+            <table class="grid">
+              <thead><tr>
+                <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg>order_id</span><span class="coltype">bigint</span></th>
+                <th scope="col"><span class="colname">notes</span><span class="coltype">text</span></th>
+                <th scope="col"><span class="colname">shipped_at</span><span class="coltype">timestamptz</span></th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="num">10241</td><td><span class="null">NULL</span></td><td class="mono">2026-08-20 11:02:00+07</td></tr>
+                <tr class="alt"><td class="num">10242</td>
+                  <td class="editing">
+                    <input class="cellinput" type="text" value="rush order" aria-label="Edit notes, row 2">
+                    <span class="cellhint"><button class="btn sec sm">Set NULL</button><kbd>Enter</kbd>commit<kbd>Esc</kbd>revert</span>
+                  </td>
+                  <td><span class="null">NULL</span></td></tr>
+                <tr><td class="num">10243</td><td><span class="null">NULL</span></td><td class="mono">2026-08-21 08:15:30+07</td></tr>
+                <tr class="alt"><td class="num">10244</td><td>customer request</td><td><span class="null">NULL</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      Committing stages a change. It does not write. The row takes the updated tint
+      and the restored SCR-24 pending-changes strip appears at the bottom of SCR-16
+      &mdash; see <code class="mono">scr-17-table-browse.html</code>.
+    </div>
+  </section>
+
+  <!-- =================== SCR-21 =================== -->
+  <section class="sect">
+    <div class="secthead"><span class="scr">SCR-21</span><h2>Enum Cell Editor &mdash; delegated from SCR-20</h2></div>
+
+    <div class="row2">
+      <div class="specimen">
+        <p class="caption"><b>ENUM &mdash; single select</b><span>MySQL <code class="mono">order_status</code>. The allowed values are the whole list; typing is not offered because a value outside it cannot be committed.</span></p>
+        <div class="frame tall">
+          <div class="gridhost">
+            <table class="grid">
+              <thead><tr>
+                <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg>order_id</span><span class="coltype">bigint</span></th>
+                <th scope="col"><span class="colname">status</span><span class="coltype">enum('pending','processing','shipped','cancelled','refunded')</span></th>
+                <th scope="col"><span class="colname">total_amount</span><span class="coltype">decimal(12,2)</span></th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="num">10241</td><td>shipped</td><td class="num">129.50</td></tr>
+                <tr class="alt"><td class="num">10242</td>
+                  <td style="padding:0">
+                    <div class="overlay" role="listbox" aria-label="status">
+                      <div class="ovhead">shipped<span class="t">enum</span></div>
+                      <div class="ovlist">
+                        <button class="opt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>pending</button>
+                        <button class="opt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>processing</button>
+                        <button class="opt on" role="option" aria-selected="true"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>shipped</button>
+                        <button class="opt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>cancelled</button>
+                        <button class="opt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>refunded</button>
+                        <button class="opt nullopt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>NULL</button>
+                      </div>
+                      <div class="ovfoot"><kbd>&uarr;</kbd><kbd>&darr;</kbd>move<kbd>Enter</kbd>commit<kbd>Esc</kbd>revert</div>
+                    </div>
+                  </td>
+                  <td class="num">89.00</td></tr>
+                <tr><td class="num">10243</td><td>pending</td><td class="num">1240.75</td></tr>
+                <tr class="alt"><td class="num">10244</td><td>cancelled</td><td class="num">45.20</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <p class="caption"><b>SET &mdash; multi select</b><span>MySQL <code class="mono">SET</code>. Checkboxes, not radios, and the committed value is shown as chips so the comma-joined result is legible before commit.</span></p>
+        <div class="frame tall">
+          <div class="gridhost">
+            <table class="grid">
+              <thead><tr>
+                <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg>order_id</span><span class="coltype">bigint</span></th>
+                <th scope="col"><span class="colname">flags</span><span class="coltype">set('gift','fragile','express','signature')</span></th>
+                <th scope="col"><span class="colname">currency</span><span class="coltype">char(3)</span></th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="num">10241</td><td class="mono">express</td><td class="mono">USD</td></tr>
+                <tr class="alt"><td class="num">10242</td>
+                  <td style="padding:0">
+                    <div class="overlay" role="listbox" aria-multiselectable="true" aria-label="flags">
+                      <div class="ovhead">gift,fragile<span class="t">set</span></div>
+                      <div class="chips">
+                        <span class="chip">gift<svg width="9" height="9" aria-hidden="true"><use href="#i-x"/></svg></span>
+                        <span class="chip">fragile<svg width="9" height="9" aria-hidden="true"><use href="#i-x"/></svg></span>
+                      </div>
+                      <div class="ovlist">
+                        <button class="opt on" role="option" aria-selected="true"><span class="box"><svg width="9" height="9" aria-hidden="true"><use href="#i-check"/></svg></span>gift</button>
+                        <button class="opt on" role="option" aria-selected="true"><span class="box"><svg width="9" height="9" aria-hidden="true"><use href="#i-check"/></svg></span>fragile</button>
+                        <button class="opt" role="option" aria-selected="false"><span class="box"></span>express</button>
+                        <button class="opt" role="option" aria-selected="false"><span class="box"></span>signature</button>
+                      </div>
+                      <div class="ovfoot"><kbd>Space</kbd>toggle<kbd>Enter</kbd>commit<kbd>Esc</kbd>revert</div>
+                    </div>
+                  </td>
+                  <td class="mono">USD</td></tr>
+                <tr><td class="num">10243</td><td><span class="null">NULL</span></td><td class="mono">EUR</td></tr>
+                <tr class="alt"><td class="num">10244</td><td class="mono">gift,signature</td><td class="mono">USD</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== SCR-22 =================== -->
+  <section class="sect">
+    <div class="secthead"><span class="scr">SCR-22</span><h2>Foreign Key Cell Editor &mdash; delegated from SCR-20</h2></div>
+    <p class="caption" style="margin-bottom:var(--space-lg)"><span>A FK column stores an opaque key. The editor shows a human-readable label beside it, so the user picks a customer rather than memorising an id. Three states: loading candidates, list, error.</span></p>
+
+    <div class="specimen">
+      <p class="caption"><b>List</b><span><code class="mono">customer_id</code> &rarr; <code class="mono">public.customers.customer_id</code>. Candidates are fetched over the same session; the raw key stays visible on the right so the committed value is never a mystery.</span></p>
+      <div class="frame tall">
+        <div class="gridhost">
+          <table class="grid">
+            <thead><tr>
+              <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg>order_id</span><span class="coltype">bigint</span></th>
+              <th scope="col"><span class="colname"><svg class="fk" width="11" height="11" aria-hidden="true"><use href="#i-link"/></svg>customer_id</span><span class="coltype">bigint &rarr; customers</span></th>
+              <th scope="col"><span class="colname">status</span><span class="coltype">text</span></th>
+              <th scope="col"><span class="colname">total_amount</span><span class="coltype">numeric(12,2)</span></th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="num">10241</td><td class="num">4820</td><td>shipped</td><td class="num">129.50</td></tr>
+              <tr class="alt"><td class="num">10242</td>
+                <td style="padding:0">
+                  <div class="overlay" role="listbox" aria-label="customer_id">
+                    <div class="ovhead">4821<span class="t">bigint</span></div>
+                    <div class="ovsearch demo-focus">
+                      <svg width="12" height="12" aria-hidden="true"><use href="#i-search"/></svg>
+                      <input type="text" value="ac" aria-label="Search customers" autofocus>
+                    </div>
+                    <div class="ovlist">
+                      <button class="opt on" role="option" aria-selected="true"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>Acme Industries<span class="meta">4821</span></button>
+                      <button class="opt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>Acorn Supply Co<span class="meta">4907</span></button>
+                      <button class="opt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>Pacific Freight<span class="meta">4488</span></button>
+                      <button class="opt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>Atlas Retail Group<span class="meta">4102</span></button>
+                      <button class="opt nullopt" role="option" aria-selected="false"><svg class="tick" width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>NULL</button>
+                    </div>
+                    <div class="ovfoot">4 of 4930 shown<span class="spacer"></span><kbd>Enter</kbd>commit<kbd>Esc</kbd>revert</div>
+                  </div>
+                </td>
+                <td>pending</td><td class="num">89.00</td></tr>
+              <tr><td class="num">10243</td><td class="num">4822</td><td>shipped</td><td class="num">1240.75</td></tr>
+              <tr class="alt"><td class="num">10244</td><td class="num">4823</td><td>cancelled</td><td class="num">45.20</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="specimen">
+        <p class="caption"><b>Loading candidates</b><span>The referenced table is queried on open. The current raw key stays readable throughout, so the cell never looks blank.</span></p>
+        <div class="frame tall">
+          <div class="gridhost">
+            <table class="grid">
+              <thead><tr>
+                <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg>order_id</span><span class="coltype">bigint</span></th>
+                <th scope="col"><span class="colname"><svg class="fk" width="11" height="11" aria-hidden="true"><use href="#i-link"/></svg>customer_id</span><span class="coltype">bigint &rarr; customers</span></th>
+                <th scope="col"><span class="colname">status</span><span class="coltype">text</span></th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="num">10241</td><td class="num">4820</td><td>shipped</td></tr>
+                <tr class="alt"><td class="num">10242</td>
+                  <td style="padding:0">
+                    <div class="overlay" role="listbox" aria-busy="true" aria-label="customer_id">
+                      <div class="ovhead">4821<span class="t">bigint</span></div>
+                      <div class="ovlist">
+                        <div class="skelrow"><span class="skel" style="width:104px"></span><span class="spacer"></span><span class="skel" style="width:28px"></span></div>
+                        <div class="skelrow"><span class="skel" style="width:82px"></span><span class="spacer"></span><span class="skel" style="width:28px"></span></div>
+                        <div class="skelrow"><span class="skel" style="width:120px"></span><span class="spacer"></span><span class="skel" style="width:28px"></span></div>
+                      </div>
+                      <div class="ovfoot">Loading customers&hellip;</div>
+                    </div>
+                  </td>
+                  <td>pending</td></tr>
+                <tr><td class="num">10243</td><td class="num">4822</td><td>shipped</td></tr>
+                <tr class="alt"><td class="num">10244</td><td class="num">4823</td><td>cancelled</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <p class="caption"><b>Error</b><span>The lookup failed, but the cell is still editable: the raw key input remains, so a user who knows the id is not blocked by a failed convenience query.</span></p>
+        <div class="frame tall">
+          <div class="gridhost">
+            <table class="grid">
+              <thead><tr>
+                <th scope="col"><span class="colname"><svg class="pk" width="11" height="11" aria-hidden="true"><use href="#i-key"/></svg>order_id</span><span class="coltype">bigint</span></th>
+                <th scope="col"><span class="colname"><svg class="fk" width="11" height="11" aria-hidden="true"><use href="#i-link"/></svg>customer_id</span><span class="coltype">bigint &rarr; customers</span></th>
+                <th scope="col"><span class="colname">status</span><span class="coltype">text</span></th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="num">10241</td><td class="num">4820</td><td>shipped</td></tr>
+                <tr class="alt"><td class="num">10242</td>
+                  <td style="padding:0">
+                    <div class="overlay" role="dialog" aria-label="customer_id">
+                      <div class="ovhead">4821<span class="t">bigint</span></div>
+                      <div class="errbox" role="alert">
+                        <span style="display:flex;align-items:center;gap:var(--space-sm);font-weight:var(--font-weight-medium)"><svg width="12" height="12" aria-hidden="true"><use href="#i-alert"/></svg>Could not load customers</span>
+                        <span class="txt">ERROR: permission denied for table customers</span>
+                      </div>
+                      <div class="ovsearch">
+                        <input type="text" value="4821" aria-label="customer_id raw value">
+                      </div>
+                      <div class="ovfoot"><button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button><span class="spacer"></span>Enter a key directly<kbd>Enter</kbd>commit</div>
+                    </div>
+                  </td>
+                  <td>pending</td></tr>
+                <tr><td class="num">10243</td><td class="num">4822</td><td>shipped</td></tr>
+                <tr class="alt"><td class="num">10244</td><td class="num">4823</td><td>cancelled</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* Mockup scaffolding only — see scr-17-table-browse.html for the same note. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

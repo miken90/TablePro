@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (structure/routines/data-movement partition)
+  SCR-28 Table Structure View, with SCR-29 Columns / SCR-30 Indexes / SCR-31 Foreign
+  Keys / SCR-32 DDL shown as four labeled sub-tab states in this one page.
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+  Pattern authority: scr-17-table-browse.html, scr-13-query-workspace.html
+
+  What this mockup exists to prove (design-spec.md M1):
+    - Structure is now a TAB KIND, not a full-screen takeover. SCR-06 (the
+      editor tab bar) stays visible above the structure body — opening
+      "orders — structure" no longer destroys the other open tabs.
+    - The four structure sub-tabs (Columns / Indexes / Foreign Keys / DDL)
+      are shown as four separate labeled states stacked in this one file,
+      each fully rendered with its own sub-tab strip + content, since a
+      static mockup cannot demonstrate live tab switching.
+    - SCR-29 also shows the pending-column-change banner (distinct from the
+      SCR-24 row-edit strip) that leads to SCR-33 Schema Preview.
+
+  MongoDB / Redis have no structure surface (Gate 2 decision 4) — this
+  screen and its four sub-tabs are SQL-engine only; no placeholder is
+  designed for the two excluded engines, per the frozen boundary.
+
+  Theme scaffolding only (not a product feature): the toggle writes
+  data-theme on <html> and syncs the `light` class, because tokens.css keys
+  on `.light` — copied verbatim from the pilot's mechanism.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-28 Table Structure View — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+select{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ---------- SCR-02 Toolbar ---------- */
+.toolbar{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.connpill{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-md);
+  height:var(--control-h-sm);border-radius:var(--radius-sm);background:var(--color-bg-muted)}
+.dot{width:6px;height:6px;border-radius:var(--radius-full);flex:none}
+.engine{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.badge{font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-weight:var(--font-weight-medium);padding:2px var(--space-sm);border-radius:var(--radius-xs);
+  text-transform:uppercase;letter-spacing:.04em}
+.badge.prod{color:var(--color-env-prod);border:1px solid var(--color-env-prod)}
+.safemode{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border-radius:var(--radius-xs);font-size:var(--font-size-2xs);
+  font-weight:var(--font-weight-medium);color:var(--color-accent-orange);
+  border:1px solid var(--color-accent-orange)}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+/* ---------- body row ---------- */
+.body{flex:1;display:flex;min-height:0}
+
+/* ---------- SCR-04 Sidebar ---------- */
+.sidebar{width:var(--w-sidebar-default);flex:none;display:flex;flex-direction:column;
+  background:var(--color-bg-surface);min-height:0}
+.tree-head{display:flex;align-items:center;gap:var(--space-xs);padding:var(--space-sm) var(--space-md);
+  border-bottom:1px solid var(--color-border-subtle)}
+.field{display:flex;align-items:center;gap:var(--space-sm);flex:1;height:var(--control-h-md);
+  padding:0 var(--space-md);border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-secondary)}
+.field:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+.field input{flex:1;min-width:0;background:none;border:0;font-size:var(--font-size-sm);
+  color:var(--color-text-primary)}
+.field input::placeholder{color:var(--color-text-secondary)}
+.tree{flex:1;overflow:auto;padding:var(--space-xs) 0}
+.node{display:flex;align-items:center;gap:var(--space-sm);height:var(--row-h-tree);
+  padding:0 var(--space-md);white-space:nowrap;color:var(--color-text-secondary)}
+.node:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.node.sel{background:var(--color-accent-blue-subtle);color:var(--color-text-primary);
+  box-shadow:inset 2px 0 0 0 var(--color-accent-blue)}
+.node.grp{color:var(--color-text-secondary);font-size:var(--font-size-xs);
+  font-weight:var(--font-weight-medium);text-transform:uppercase;letter-spacing:.05em}
+.node .count{margin-left:auto;color:var(--color-text-secondary);font-size:var(--font-size-2xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.i1{padding-left:var(--space-2xl)}
+.i2{padding-left:var(--space-3xl)}
+.resizer{width:var(--h-resizer);flex:none;background:var(--color-border-subtle);cursor:col-resize;
+  display:grid;place-items:center}
+.grip{display:flex;flex-direction:column;gap:3px;opacity:.4}
+.grip i{width:2px;height:2px;border-radius:var(--radius-full);background:var(--color-text-muted)}
+
+/* ---------- main ---------- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+
+/* ---------- SCR-06 Tab bar — MUST stay visible (M1) ---------- */
+.tabbar{height:var(--h-tabbar);flex:none;display:flex;background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.tab{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-lg);
+  color:var(--color-text-secondary);border-right:1px solid var(--color-border-subtle);white-space:nowrap}
+.tab:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.tab.active{color:var(--color-text-primary);background:var(--color-bg-base);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+.tab .dirty{width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-accent-yellow)}
+.tab .x{color:var(--color-text-muted);opacity:0}
+.tab:hover .x{opacity:1}
+.tabadd{width:var(--h-tabbar);display:grid;place-items:center;color:var(--color-text-secondary)}
+.tabadd:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+
+/* ---------- SCR-28 structure body ---------- */
+.structbody{flex:1;overflow:auto;min-height:0;padding:var(--space-2xl);
+  display:flex;flex-direction:column;gap:var(--space-2xl)}
+.structhead{display:flex;align-items:baseline;gap:var(--space-md)}
+.structhead h1{font-size:var(--font-size-xl);font-weight:var(--font-weight-semibold)}
+.structhead .schema{color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+
+/* four labeled mockup states — scaffolding only, not product chrome */
+.statecard{border:1px solid var(--color-border-subtle);border-radius:var(--radius-lg);
+  overflow:hidden;background:var(--color-bg-surface)}
+.statelabel{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-sm) var(--space-lg);
+  border-bottom:1px dashed var(--color-border);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);letter-spacing:.04em;text-transform:uppercase;
+  font-weight:var(--font-weight-medium)}
+.statelabel .scrid{color:var(--color-accent-blue);font-family:var(--font-mono);letter-spacing:0}
+
+/* structure sub-tab strip */
+.subtabs{height:var(--control-h-lg);flex:none;display:flex;align-items:stretch;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-base);
+  border-bottom:1px solid var(--color-border-subtle)}
+.subtab{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-md);
+  color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+.subtab.active{color:var(--color-text-primary);font-weight:var(--font-weight-medium);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+.subtab .pill{font-size:var(--font-size-2xs);padding:1px var(--space-sm);border-radius:var(--radius-full);
+  background:var(--color-bg-muted);color:var(--color-text-secondary);
+  font-variant-numeric:var(--font-numeric-tabular)}
+
+/* pending column-change banner (SCR-28's own banner, distinct from SCR-24) */
+.pendbanner{display:flex;align-items:center;gap:var(--space-md);padding:var(--space-sm) var(--space-lg);
+  background:var(--color-accent-yellow-subtle);border-bottom:1px solid var(--color-accent-yellow);
+  color:var(--color-state-warning-fg);font-size:var(--font-size-sm)}
+.pendbanner .msg{font-weight:var(--font-weight-medium)}
+
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.btn.sm{height:var(--control-h-xs);padding:0 var(--space-md);font-size:var(--font-size-2xs)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+
+/* structure tables (columns / indexes / foreign keys) */
+table.struct{width:100%;border-collapse:separate;border-spacing:0;
+  font-variant-numeric:var(--font-numeric-tabular)}
+table.struct th{text-align:left;background:var(--color-grid-header-bg);
+  padding:var(--space-sm) var(--space-md);border-bottom:1px solid var(--color-border);
+  font-weight:var(--font-weight-medium);font-size:var(--font-size-xs);color:var(--color-text-secondary)}
+table.struct td{height:32px;padding:var(--space-xs) var(--space-md);
+  border-bottom:1px solid var(--color-border-subtle);vertical-align:middle}
+table.struct tr:hover td{background:var(--color-grid-row-hover)}
+table.struct tr.staged td{background:var(--color-grid-row-inserted)}
+table.struct tr.staged td:first-child{box-shadow:inset 2px 0 0 0 var(--color-accent-green)}
+table.struct tr.editing td{background:var(--color-grid-cell-editing)}
+.pk{color:var(--color-grid-pk-fg);display:inline-flex;align-items:center;gap:var(--space-xs)}
+.colname{display:flex;align-items:center;gap:var(--space-xs)}
+.mono{font-family:var(--font-mono);font-size:var(--font-size-xs);color:var(--color-text-secondary)}
+.muted{color:var(--color-text-secondary)}
+.nullbadge{color:var(--color-grid-null-fg);font-size:var(--font-size-xs);font-style:italic}
+.rowactions{display:flex;gap:var(--space-xs);opacity:0}
+tr:hover .rowactions{opacity:1}
+.typepickerwrap{position:relative;display:inline-block}
+.typepicker{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-sm);
+  padding:0 var(--space-sm);border:1px solid var(--color-focus-ring);border-radius:var(--radius-sm);
+  background:var(--color-bg-base)}
+.typemenu{position:absolute;top:calc(100% + 4px);left:0;z-index:var(--z-popover);min-width:160px;
+  background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:var(--radius-sm);
+  box-shadow:var(--shadow-popup);overflow:hidden}
+.typemenu .opt{display:flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-md);font-size:var(--font-size-sm);color:var(--color-text-primary)}
+.typemenu .opt:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.typemenu .opt.sel{color:var(--color-accent-blue)}
+.tablefoot{display:flex;align-items:center;gap:var(--space-md);padding:var(--space-md) var(--space-lg)}
+
+/* empty state */
+.empty{padding:var(--space-2xl);text-align:center;color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+
+/* DDL block */
+.ddlwrap{padding:var(--space-lg)}
+.ddlbar{display:flex;align-items:center;gap:var(--space-md);margin-bottom:var(--space-md)}
+.ddlbody{font-family:var(--font-mono);font-size:var(--font-size-sm);line-height:var(--line-height-md);
+  background:var(--editor-bg);color:var(--editor-fg);border-radius:var(--radius-md);
+  padding:var(--space-lg);white-space:pre;overflow:auto;border:1px solid var(--color-border-subtle)}
+.k{color:var(--color-accent-blue)}
+.s{color:var(--color-accent-green)}
+.c{color:var(--color-text-secondary);font-style:italic}
+
+/* ---------- SCR-03 Status bar ---------- */
+.status{height:var(--h-statusbar);flex:none;display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.status .grp{display:flex;align-items:center;gap:var(--space-xs)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-panel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+<symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M10 3v18"/></symbol>
+<symbol id="i-braces" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/></symbol>
+<symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h11a2 2 0 0 1 2 2v3H8z"/><path d="M8 8v11a2 2 0 0 1-2 2 2 2 0 0 1-2-2V6a2 2 0 0 1 2-2"/><path d="M12 12h6M12 16h6"/></symbol>
+<symbol id="i-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8M17 6l2 2M14 9l2 2"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M9 6h6M6 13v5M4 15.5h4M15 12l1.8 4.2L21 18l-4.2 1.8L15 24l-1.8-4.2L9 18l4.2-1.8z"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13M7 8l5-5 5 5"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+</defs></svg>
+
+<div class="app">
+
+  <header class="toolbar">
+    <button class="iconbtn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+Shift+E)"><svg aria-hidden="true" width="15" height="15"><use href="#i-panel"/></svg></button>
+    <div class="connpill"><span class="dot" style="background:var(--color-accent-indigo)"></span><span style="font-weight:var(--font-weight-medium)">Analytics</span><span class="engine">PostgreSQL</span></div>
+    <span class="badge prod">prod</span>
+    <button class="iconbtn" aria-label="Reconnect to database" title="Reconnect"><svg aria-hidden="true" width="15" height="15"><use href="#i-refresh"/></svg></button>
+    <button class="iconbtn" aria-label="Disconnect from database" title="Disconnect"><svg aria-hidden="true" width="15" height="15"><use href="#i-plug"/></svg></button>
+    <button class="safemode" title="Safe Mode: Alert — click to cycle (Off → Alert → Read-Only)">Safe Mode: Alert</button>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg aria-hidden="true" width="11" height="11"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+    <button class="iconbtn" aria-label="Import SQL" title="Import SQL (Ctrl+Shift+M)"><svg aria-hidden="true" width="15" height="15"><use href="#i-upload"/></svg></button>
+    <button class="iconbtn" aria-label="Toggle query history" title="Query History (Ctrl+H)"><svg aria-hidden="true" width="15" height="15"><use href="#i-history"/></svg></button>
+    <button class="iconbtn" aria-label="Toggle AI chat" title="AI Chat (Ctrl+Shift+L)"><svg aria-hidden="true" width="15" height="15"><use href="#i-sparkles"/></svg></button>
+    <button class="iconbtn" aria-label="Open settings" title="Settings (Ctrl+,)"><svg aria-hidden="true" width="15" height="15"><use href="#i-settings"/></svg></button>
+  </header>
+
+  <div class="body">
+    <nav class="sidebar" aria-label="Schema">
+      <div class="tree-head">
+        <label class="field demo-focus"><svg aria-hidden="true" width="12" height="12"><use href="#i-search"/></svg><input type="text" placeholder="Filter objects" aria-label="Filter objects"></label>
+        <button class="iconbtn" aria-label="Refresh Tables" title="Refresh Tables"><svg aria-hidden="true" width="14" height="14"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="tree">
+        <div class="node"><svg aria-hidden="true" width="12" height="12"><use href="#i-chev-d"/></svg><svg aria-hidden="true" width="13" height="13"><use href="#i-db"/></svg><span>analytics</span></div>
+        <div class="node i1 grp"><svg aria-hidden="true" width="11" height="11"><use href="#i-chev-d"/></svg><span>Tables</span><span class="count">7</span></div>
+        <div class="node i2"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg><span>customers</span></div>
+        <div class="node i2"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg><span>order_items</span></div>
+        <div class="node i2 sel"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg><span>orders</span></div>
+        <div class="node i2"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg><span>products</span></div>
+        <div class="node i2"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg><span>shipments</span></div>
+        <div class="node i2"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg><span>users</span></div>
+        <div class="node i2"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg><span>warehouses</span></div>
+        <div class="node i1 grp"><svg aria-hidden="true" width="11" height="11"><use href="#i-chev-r"/></svg><span>Views</span><span class="count">2</span></div>
+        <div class="node i1 grp"><svg aria-hidden="true" width="11" height="11"><use href="#i-chev-r"/></svg><span>Functions</span><span class="count">3</span></div>
+        <div class="node i1 grp"><svg aria-hidden="true" width="11" height="11"><use href="#i-chev-d"/></svg><span>Procedures</span><span class="count">1</span></div>
+        <div class="node i2"><svg aria-hidden="true" width="12" height="12"><use href="#i-scroll"/></svg><span>sp_rebuild_indexes</span></div>
+      </div>
+    </nav>
+    <div class="resizer" aria-hidden="true"><span class="grip"><i></i><i></i><i></i></span></div>
+
+    <main class="main">
+      <!-- SCR-06 stays visible above the structure body (M1: structure is a tab kind) -->
+      <div class="tabbar" role="tablist" aria-label="Open tabs">
+        <button class="tab" role="tab" aria-selected="false"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg>orders<svg aria-hidden="true" class="x" width="11" height="11"><use href="#i-x"/></svg></button>
+        <button class="tab" role="tab" aria-selected="false"><svg aria-hidden="true" width="12" height="12"><use href="#i-code"/></svg>revenue by month<span class="dirty" title="Unsaved"></span></button>
+        <button class="tab active" role="tab" aria-selected="true"><svg aria-hidden="true" width="12" height="12"><use href="#i-table"/></svg>orders &mdash; structure<svg aria-hidden="true" class="x" width="11" height="11"><use href="#i-x"/></svg></button>
+        <button class="tabadd" aria-label="New query tab" title="New query tab (Ctrl+T)"><svg aria-hidden="true" width="14" height="14"><use href="#i-plus"/></svg></button>
+      </div>
+
+      <div class="structbody">
+        <div class="structhead">
+          <h1>orders</h1>
+          <span class="schema">public schema &middot; SCR-28 Table Structure View</span>
+        </div>
+
+        <!-- ============================================================
+             STATE 1 — SCR-29 Columns tab active, with 1 staged change
+             ============================================================ -->
+        <section class="statecard" aria-label="Columns tab state">
+          <div class="statelabel">State <span class="scrid">SCR-29</span> &middot; Columns tab active, 1 pending column change</div>
+          <div class="subtabs" role="tablist" aria-label="Structure sections">
+            <button class="subtab active" role="tab" aria-selected="true">Columns</button>
+            <button class="subtab" role="tab" aria-selected="false">Indexes <span class="pill">3</span></button>
+            <button class="subtab" role="tab" aria-selected="false">Foreign Keys <span class="pill">1</span></button>
+            <button class="subtab" role="tab" aria-selected="false">DDL</button>
+          </div>
+          <div class="pendbanner">
+            <svg aria-hidden="true" width="14" height="14"><use href="#i-alert"/></svg>
+            <span class="msg">1 pending column change</span>
+            <span class="spacer"></span>
+            <button class="btn ghost sm">Discard</button>
+            <button class="btn pri sm">Apply changes&hellip;</button>
+          </div>
+          <table class="struct">
+            <thead><tr>
+              <th scope="col">Name</th><th scope="col">Type</th><th scope="col">Nullable</th>
+              <th scope="col">Default</th><th scope="col">Primary key</th><th scope="col"></th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="colname"><span class="pk"><svg aria-hidden="true" width="11" height="11"><use href="#i-key"/></svg>order_id</span></td><td class="mono">bigint</td><td>NOT NULL</td><td class="nullbadge">&mdash;</td><td><svg aria-hidden="true" width="12" height="12"><use href="#i-check"/></svg></td><td class="rowactions"><button class="iconbtn" aria-label="Remove column order_id" title="Remove column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+              <tr><td class="colname">customer_id</td><td class="mono">bigint</td><td>NOT NULL</td><td class="nullbadge">&mdash;</td><td></td><td class="rowactions"><button class="iconbtn" aria-label="Remove column customer_id" title="Remove column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+              <tr class="editing"><td class="colname">status</td>
+                <td>
+                  <div class="typepickerwrap">
+                    <button class="typepicker" aria-expanded="true" aria-haspopup="listbox" aria-controls="type-listbox-status">
+                      <span class="mono">text</span>
+                      <svg width="10" height="10" aria-hidden="true"><use href="#i-chev-d"/></svg>
+                    </button>
+                    <!-- roving tabindex: only the selected option is in tab order (0);
+                         the others are -1 and become reachable via ArrowUp/ArrowDown from JS -->
+                    <div class="typemenu" id="type-listbox-status" role="listbox" aria-label="Column type">
+                      <div class="opt sel" role="option" aria-selected="true" tabindex="0">text</div>
+                      <div class="opt" role="option" aria-selected="false" tabindex="-1">varchar(255)</div>
+                      <div class="opt" role="option" aria-selected="false" tabindex="-1">citext</div>
+                    </div>
+                  </div>
+                </td>
+                <td>NOT NULL</td><td class="mono">'pending'</td><td></td><td class="rowactions"><button class="iconbtn" aria-label="Remove column status" title="Remove column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+              <tr><td class="colname">total_amount</td><td class="mono">numeric(12,2)</td><td>NOT NULL</td><td class="nullbadge">&mdash;</td><td></td><td class="rowactions"><button class="iconbtn" aria-label="Remove column total_amount" title="Remove column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+              <tr><td class="colname">currency</td><td class="mono">char(3)</td><td>NOT NULL</td><td class="mono">'USD'</td><td></td><td class="rowactions"><button class="iconbtn" aria-label="Remove column currency" title="Remove column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+              <tr><td class="colname">created_at</td><td class="mono">timestamptz</td><td>NOT NULL</td><td class="mono">now()</td><td></td><td class="rowactions"><button class="iconbtn" aria-label="Remove column created_at" title="Remove column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+              <tr><td class="colname">shipped_at</td><td class="mono">timestamptz</td><td class="muted">NULL</td><td class="nullbadge">&mdash;</td><td></td><td class="rowactions"><button class="iconbtn" aria-label="Remove column shipped_at" title="Remove column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+              <tr><td class="colname">notes</td><td class="mono">text</td><td class="muted">NULL</td><td class="nullbadge">&mdash;</td><td></td><td class="rowactions"><button class="iconbtn" aria-label="Remove column notes" title="Remove column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+              <tr class="staged" title="Staged: new column"><td class="colname">priority</td><td class="mono">smallint</td><td>NOT NULL</td><td class="mono">0</td><td></td><td class="rowactions"><button class="iconbtn" aria-label="Remove staged column priority" title="Remove staged column"><svg aria-hidden="true" width="13" height="13"><use href="#i-trash"/></svg></button></td></tr>
+            </tbody>
+          </table>
+          <div class="tablefoot"><button class="btn ghost sm"><svg aria-hidden="true" width="12" height="12"><use href="#i-plus"/></svg>Add column</button></div>
+        </section>
+
+        <!-- ============================================================
+             STATE 2 — SCR-30 Indexes tab active
+             ============================================================ -->
+        <section class="statecard" aria-label="Indexes tab state">
+          <div class="statelabel">State <span class="scrid">SCR-30</span> &middot; Indexes tab active</div>
+          <div class="subtabs" role="tablist" aria-label="Structure sections">
+            <button class="subtab" role="tab" aria-selected="false">Columns</button>
+            <button class="subtab active" role="tab" aria-selected="true">Indexes <span class="pill">3</span></button>
+            <button class="subtab" role="tab" aria-selected="false">Foreign Keys <span class="pill">1</span></button>
+            <button class="subtab" role="tab" aria-selected="false">DDL</button>
+          </div>
+          <table class="struct">
+            <thead><tr><th scope="col">Name</th><th scope="col">Columns</th><th scope="col">Type</th><th scope="col">Unique</th></tr></thead>
+            <tbody>
+              <tr><td class="colname"><span class="pk"><svg aria-hidden="true" width="11" height="11"><use href="#i-key"/></svg>orders_pkey</span></td><td class="mono">order_id</td><td class="mono">btree</td><td><svg aria-hidden="true" width="12" height="12"><use href="#i-check"/></svg></td></tr>
+              <tr><td class="colname">idx_orders_customer_id</td><td class="mono">customer_id</td><td class="mono">btree</td><td class="nullbadge">&mdash;</td></tr>
+              <tr><td class="colname">idx_orders_status_created_at</td><td class="mono">status, created_at</td><td class="mono">btree</td><td class="nullbadge">&mdash;</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- ============================================================
+             STATE 3 — SCR-31 Foreign Keys tab active
+             ============================================================ -->
+        <section class="statecard" aria-label="Foreign keys tab state">
+          <div class="statelabel">State <span class="scrid">SCR-31</span> &middot; Foreign Keys tab active</div>
+          <div class="subtabs" role="tablist" aria-label="Structure sections">
+            <button class="subtab" role="tab" aria-selected="false">Columns</button>
+            <button class="subtab" role="tab" aria-selected="false">Indexes <span class="pill">3</span></button>
+            <button class="subtab active" role="tab" aria-selected="true">Foreign Keys <span class="pill">1</span></button>
+            <button class="subtab" role="tab" aria-selected="false">DDL</button>
+          </div>
+          <table class="struct">
+            <thead><tr><th scope="col">Name</th><th scope="col">Column</th><th scope="col">References</th><th scope="col">On delete</th></tr></thead>
+            <tbody>
+              <tr><td class="colname"><svg aria-hidden="true" width="11" height="11" style="color:var(--color-text-muted)"><use href="#i-link"/></svg>orders_customer_id_fkey</td><td class="mono">customer_id</td><td class="mono">customers(customer_id)</td><td class="mono">RESTRICT</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- ============================================================
+             STATE 4 — SCR-32 DDL tab active
+             ============================================================ -->
+        <section class="statecard" aria-label="DDL tab state">
+          <div class="statelabel">State <span class="scrid">SCR-32</span> &middot; DDL tab active</div>
+          <div class="subtabs" role="tablist" aria-label="Structure sections">
+            <button class="subtab" role="tab" aria-selected="false">Columns</button>
+            <button class="subtab" role="tab" aria-selected="false">Indexes <span class="pill">3</span></button>
+            <button class="subtab" role="tab" aria-selected="false">Foreign Keys <span class="pill">1</span></button>
+            <button class="subtab active" role="tab" aria-selected="true">DDL</button>
+          </div>
+          <div class="ddlwrap">
+            <div class="ddlbar"><button class="btn sec sm"><svg aria-hidden="true" width="12" height="12"><use href="#i-copy"/></svg>Copy</button></div>
+            <div class="ddlbody"><span class="c">-- generated from the live catalog, read-only</span>
+<span class="k">CREATE TABLE</span> public.orders (
+    order_id       bigint <span class="k">GENERATED ALWAYS AS IDENTITY</span> <span class="k">PRIMARY KEY</span>,
+    customer_id    bigint <span class="k">NOT NULL</span> <span class="k">REFERENCES</span> public.customers(customer_id),
+    status         text <span class="k">NOT NULL</span> <span class="k">DEFAULT</span> <span class="s">'pending'</span>,
+    total_amount   numeric(12,2) <span class="k">NOT NULL</span>,
+    currency       char(3) <span class="k">NOT NULL</span> <span class="k">DEFAULT</span> <span class="s">'USD'</span>,
+    created_at     timestamptz <span class="k">NOT NULL</span> <span class="k">DEFAULT</span> now(),
+    shipped_at     timestamptz,
+    notes          text
+);
+
+<span class="k">CREATE INDEX</span> idx_orders_customer_id <span class="k">ON</span> public.orders (customer_id);
+<span class="k">CREATE INDEX</span> idx_orders_status_created_at <span class="k">ON</span> public.orders (status, created_at);</div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             STATE 5 — SCR-30 Indexes tab, EMPTY state (audit M12: scr-28
+             drew only the populated variant of each tab; this and State 6
+             add the empty variants named in flow 3.5)
+             ============================================================ -->
+        <section class="statecard" aria-label="Indexes tab, empty state">
+          <div class="statelabel">State <span class="scrid">SCR-30</span> &middot; Indexes tab active, no indexes</div>
+          <div class="subtabs" role="tablist" aria-label="Structure sections">
+            <button class="subtab" role="tab" aria-selected="false">Columns</button>
+            <button class="subtab active" role="tab" aria-selected="true">Indexes <span class="pill">0</span></button>
+            <button class="subtab" role="tab" aria-selected="false">Foreign Keys <span class="pill">1</span></button>
+            <button class="subtab" role="tab" aria-selected="false">DDL</button>
+          </div>
+          <div class="empty">No indexes on this table.</div>
+        </section>
+
+        <!-- ============================================================
+             STATE 6 — SCR-31 Foreign Keys tab, EMPTY state
+             ============================================================ -->
+        <section class="statecard" aria-label="Foreign keys tab, empty state">
+          <div class="statelabel">State <span class="scrid">SCR-31</span> &middot; Foreign Keys tab active, no foreign keys</div>
+          <div class="subtabs" role="tablist" aria-label="Structure sections">
+            <button class="subtab" role="tab" aria-selected="false">Columns</button>
+            <button class="subtab" role="tab" aria-selected="false">Indexes <span class="pill">3</span></button>
+            <button class="subtab active" role="tab" aria-selected="true">Foreign Keys <span class="pill">0</span></button>
+            <button class="subtab" role="tab" aria-selected="false">DDL</button>
+          </div>
+          <div class="empty">No foreign keys.</div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <footer class="status">
+    <span class="grp"><span class="dot" style="background:var(--color-accent-green)"></span>Connected</span>
+    <span>PostgreSQL</span>
+    <span class="grp"><svg aria-hidden="true" width="10" height="10"><use href="#i-db"/></svg>analytics</span>
+    <span class="grp"><svg aria-hidden="true" width="10" height="10"><use href="#i-table"/></svg>7 tables</span>
+    <span class="spacer"></span>
+    <span>orders &middot; public</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (structure/routines/data-movement partition)
+  SCR-35 Table Operation Dialog
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+  Pattern authority: scr-17-table-browse.html, scr-13-query-workspace.html
+
+  AUDIT REMEDIATION PHASE 2 applied — see design-spec.md 5.16 (now canonical):
+    consistency#1  this file's `.field` was the label-over-control STACK
+      variant; 5.16 renamed it to `.formrow` with a real `.ctl` control.
+    B2  --color-text-muted demoted to non-text use; text/placeholder uses ->
+      text-secondary.
+    M2  role="dialog" already carried aria-modal="true"; unchanged.
+    M5  `.btn.danger` here is already the CORRECT usage per 5.16's table —
+      "the confirming button inside a destructive dialog: SCR-35 Drop/
+      Truncate" is named explicitly as filled-red. Unchanged.
+    M8/M9  full-window screen was missing <main> + a heading; added <main>
+      with a visually-hidden <h1>, kept the file-id label as a plain span.
+    Canon .dialog  rebuilt to the banded header/body/footer model, width
+      scale (.dialog.md = 560px per 5.16 — SCR-35 is listed under
+      "single-purpose forms", not the confirmation .sm tier, because it
+      carries a type-to-confirm field the pure confirms in SCR-43-47 don't),
+      height cap, no border, one <h1> per dialog (was <h2>).
+    Canon .btn  base height control-h-md with .btn.lg on dialog footers.
+    m8  aria-hidden="true" added to every inline icon <svg>.
+    m10  one control shown in its focused state (the confirmation field —
+      matches the screen's own stated purpose of showing the mismatch state).
+
+  Modality (design-spec.md 2.4 + 5.16 Dialog): true modal, destructive
+  confirm. Reached from SCR-04's truncate / delete-all / drop table-node
+  actions (screens.md); type-to-confirm gates the destructive button
+  independent of Safe Mode (design-spec.md 3.5 edge cases). Focus lands on
+  the confirmation field, not Cancel — 5.16's "or Cancel for a destructive
+  confirm" branch reads as covering confirms with no field (SCR-43-47); this
+  dialog's whole point is typing into that field, so the field takes focus.
+
+  What this mockup exists to prove: the confirmation input must exactly
+  match the target table name before the destructive button enables — shown
+  here mid-typing with a partial, non-matching value so the disabled state
+  is unambiguous.
+
+  Theme scaffolding only (not a product feature): the toggle writes
+  data-theme on <html> and syncs the `light` class, because tokens.css keys
+  on `.light` — copied verbatim from the pilot's mechanism.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-35 Table Operation Dialog — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;
+  align-items:center;gap:var(--space-2xl);padding:var(--space-3xl)}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+.boardhead{display:flex;align-items:center;gap:var(--space-md);align-self:flex-start;width:1040px}
+.boardhead .filelabel{font-size:var(--font-size-lg);font-weight:var(--font-weight-semibold)}
+.boardhead .scrid{font-family:var(--font-mono);color:var(--color-accent-blue);font-size:var(--font-size-sm)}
+.themetoggle{margin-left:auto;display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+.stage{position:relative;width:1040px;height:520px;border-radius:var(--radius-md);
+  overflow:hidden;background:var(--color-bg-surface);box-shadow:var(--shadow-lg)}
+.chrome{position:absolute;inset:0;display:flex;flex-direction:column}
+.chrome .tb{height:var(--h-toolbar);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.chrome .row{flex:1;display:flex}
+.chrome .sb{width:var(--w-sidebar-default);background:var(--color-bg-surface);
+  border-right:1px solid var(--color-border-subtle)}
+.chrome .ct{flex:1;background:var(--color-bg-base)}
+.scrim{position:absolute;inset:0;background:var(--color-scrim);z-index:var(--z-modal-scrim)}
+
+/* ---------- Canonical Dialog — design-spec.md 5.16 ---------- */
+.dialog{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:var(--z-modal);
+  width:100%;max-height:min(680px, calc(100vh - var(--space-3xl) * 2));
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--color-bg-elevated);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal)}
+.dialog.md{max-width:560px}
+.dhead{flex:none;padding:var(--space-xl) var(--space-2xl) 0}
+.dhead .icon{width:36px;height:36px;border-radius:var(--radius-full);display:grid;place-items:center;
+  background:var(--color-accent-red-subtle);color:var(--color-accent-red);margin-bottom:var(--space-lg)}
+.dhead .opbadge{display:inline-flex;align-items:center;gap:var(--space-xs);padding:2px var(--space-sm);
+  border-radius:var(--radius-xs);background:var(--color-accent-red-subtle);color:var(--color-accent-red);
+  font-size:var(--font-size-2xs);font-weight:var(--font-weight-medium);text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:var(--space-md)}
+.dhead h1{font-size:var(--font-size-xl);font-weight:var(--font-weight-semibold);margin-bottom:var(--space-sm)}
+.dbody{flex:1;overflow:auto;padding:var(--space-lg) var(--space-2xl) var(--space-2xl)}
+.dbody .sub{color:var(--color-text-secondary);font-size:var(--font-size-md);margin-bottom:var(--space-xl)}
+.dbody .sub b{color:var(--color-text-primary);font-family:var(--font-mono);font-weight:var(--font-weight-medium)}
+.dfoot{flex:none;padding:var(--space-lg) var(--space-2xl);border-top:1px solid var(--color-border-subtle);
+  display:flex;justify-content:flex-end;gap:var(--space-md)}
+
+/* ---------- consistency#1: label-over-control stack, renamed to .formrow ---------- */
+.formrow{display:flex;flex-direction:column;gap:var(--space-xs)}
+.formrow label{font-size:var(--font-size-xs);color:var(--color-text-secondary);font-weight:var(--font-weight-medium)}
+.ctl{height:var(--control-h-md);padding:0 var(--space-md);border-radius:var(--radius-sm);
+  background:var(--color-bg-base);border:1px solid var(--color-border);color:var(--color-text-primary);
+  font-size:var(--font-size-md);font-family:var(--font-mono)}
+.ctl::placeholder{color:var(--color-text-secondary);font-family:var(--font-sans)}
+.ctl.mismatch{border-color:var(--color-accent-red)}
+.hint{font-size:var(--font-size-xs);color:var(--color-state-danger-fg);margin-top:var(--space-xs)}
+
+/* ---------- Canonical .btn — design-spec.md 5.16 ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-md);
+  padding:0 var(--space-lg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover)}
+.btn.danger{background:var(--color-accent-red-fill);color:var(--color-text-inverse)}
+.btn.danger:hover{background:var(--color-accent-red-fill-hover)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+/* one control shown focused (audit m10) — mimics :focus-visible statically,
+   since a static file cannot hold real browser focus */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+</defs></svg>
+
+<div class="boardhead">
+  <span class="filelabel">SCR-35</span>
+  <span class="scrid">Table Operation Dialog</span>
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+</div>
+
+<main aria-label="SCR-35 Table Operation Dialog">
+  <h1 class="sr-only">SCR-35 Table Operation Dialog</h1>
+  <div class="stage">
+    <div class="chrome"><div class="tb"></div><div class="row"><div class="sb"></div><div class="ct"></div></div></div>
+    <div class="scrim"></div>
+    <div class="dialog md" role="dialog" aria-modal="true" aria-labelledby="op-title">
+      <div class="dhead">
+        <div class="icon"><svg width="18" height="18" aria-hidden="true"><use href="#i-trash"/></svg></div>
+        <div class="opbadge">Drop table</div>
+        <h1 id="op-title">Drop public.shipments?</h1>
+      </div>
+      <div class="dbody">
+        <p class="sub">This permanently removes the table, all its rows, indexes and constraints. There is no undo. Type <b>shipments</b> to confirm.</p>
+        <label class="formrow">
+          <span>Table name</span>
+          <input class="ctl mismatch demo-focus" type="text" value="ship" placeholder="shipments" aria-describedby="mismatchhint" autofocus>
+          <span class="hint" id="mismatchhint" role="alert">Doesn&rsquo;t match &ldquo;shipments&rdquo; yet</span>
+        </label>
+      </div>
+      <div class="dfoot">
+        <button class="btn sec lg">Cancel</button>
+        <button class="btn danger lg" disabled>Drop table</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

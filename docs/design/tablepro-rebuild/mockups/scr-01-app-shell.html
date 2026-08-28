@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 mockup
+  SCR-01 App Shell — NO-CONNECTION state
+  (in situ: SCR-02 Toolbar, SCR-03 Status Bar, SCR-04 Sidebar, SCR-06 Editor Tab Bar)
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Pattern authority: design-spec.md 5.16 canonical component definitions.
+  .btn, .iconbtn and .field are the canonical rules verbatim; nothing is varied.
+
+  Mobbin refs this screen follows (design-spec.md section 7.1):
+    ref 1  Snowflake -> M6: the object tree carries its OWN filter field and refresh
+                        control in its header. Both are present here in their
+                        disconnected form, which is the point of M6: the actions are
+                        findable BEFORE you know the right-click exists (SCR-05).
+
+  What this mockup exists to prove:
+    - The shell chrome is complete and legible with no connection: toolbar identity,
+      object tree, tab bar, status bar all render, none of them collapses.
+    - M6 is visible in the disconnected state, not only once a schema loads.
+    - M4 correction: SCR-03 owns THE single filter toggle. SCR-23 no longer has one,
+      and there is no second filter entry point anywhere in this frame.
+    - Persisted tab state (tab-state.json, loaded by SCR-01 on mount) restores tabs
+      that have no live session. The app has real copy for exactly this condition —
+      toolbar.tabNotConnected — and it is used here verbatim.
+    - AUDIT M1 + M7: the shell owns the two structures 6.4 depends on and no mockup
+      had. Both are rendered below: the skip link as the first focusable element in
+      <body>, and #sr-announcer as a polite live region. The announcer rests EMPTY
+      because nothing has been announced yet — an empty live region is its correct
+      resting state, and pre-filling it would be a lie about what has happened.
+      A .scrid chip in the status bar marks where it lives so a reviewer sees it.
+
+  Deliberately NOT redrawn: SCR-08 Connection Manager fills the content region in
+  this state and is already mocked in ./scr-08-connection-manager.html. The region
+  carries a scaffolding pointer instead of a second copy of that screen.
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme on
+  <html> and syncs the `light` class, because tokens.css keys on `.light` — the
+  mechanism the app really ships (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-01 App Shell — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+/* AUDIT M7/M8 — visually-hidden utility. Removes the box from the page without
+   removing it from the accessibility tree. No token belongs here; these are
+   geometry values, not design decisions. */
+.vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;border:0}
+/* The skip link is the first focusable element in <body> and only shows on focus. */
+.skip{position:absolute;left:var(--space-md);top:var(--space-md);z-index:var(--z-modal);
+  transform:translateY(-200%);
+  padding:var(--space-sm) var(--space-lg);border-radius:var(--radius-sm);
+  background:var(--color-accent-blue-fill);color:var(--color-text-inverse);
+  font-size:var(--font-size-sm);font-weight:var(--font-weight-medium);
+  transition:transform var(--duration-fast) var(--ease-snappy)}
+.skip:focus{transform:translateY(0)}
+
+/* mockup scaffolding only — screen-ID markers and the theme toggle */
+.scrid{display:inline-flex;align-items:center;height:var(--control-h-xs);padding:0 var(--space-sm);
+  border:1px dashed var(--color-border-strong);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-family:var(--font-mono);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  letter-spacing:.04em;white-space:nowrap;flex:none}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+/* AUDIT m10 — one control per screen is shown in its focused state, so the ring
+   the spec makes mandatory is actually visible in the set. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+
+.app{display:flex;flex-direction:column;height:100vh}
+.spacer{flex:1}
+
+/* ---------- 5.16 canonical .btn ---------- */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-lg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+
+/* ---------- 5.16 canonical .iconbtn ---------- */
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);
+  display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.iconbtn.on{background:var(--color-bg-muted);color:var(--color-accent-blue)}
+.iconbtn[disabled]{opacity:.45;cursor:not-allowed}
+.iconbtn[disabled]:hover{background:none;color:var(--color-text-secondary)}
+
+/* ---------- SCR-02 Toolbar ---------- */
+.toolbar{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.nocon{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs)}
+.dot{width:6px;height:6px;border-radius:var(--radius-full);flex:none}
+
+/* ---------- body row ---------- */
+.body{flex:1;display:flex;min-height:0}
+
+/* ---------- SCR-04 Sidebar — M6 ---------- */
+.sidebar{width:var(--w-sidebar-default);flex:none;display:flex;flex-direction:column;
+  background:var(--color-bg-surface);min-height:0}
+.tree-head{display:flex;align-items:center;gap:var(--space-xs);padding:var(--space-sm) var(--space-md);
+  border-bottom:1px solid var(--color-border-subtle)}
+.tree-id{display:flex;align-items:center;padding:var(--space-xs) var(--space-md) 0}
+/* 5.16 canonical .field — the inline control wrapper. AUDIT B1: the inner input
+   carries NO outline:none; the ring moves to the wrapper via :focus-within so it
+   draws outside the border instead of inside it. */
+.field{display:flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-md);
+  border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-secondary);flex:1}
+.field:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+.field input{flex:1;min-width:0;background:none;border:0;
+  font-size:var(--font-size-sm);color:var(--color-text-primary)}
+.field input::placeholder{color:var(--color-text-secondary)}
+.field.off{opacity:.45}
+.tree{flex:1;overflow:auto;padding:var(--space-xs) 0}
+.treeempty{padding:var(--space-lg) var(--space-md);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs)}
+.resizer{width:var(--h-resizer);flex:none;background:var(--color-border-subtle);cursor:col-resize;
+  display:grid;place-items:center}
+.resizer:hover{background:var(--color-accent-blue)}
+/* Decorative grip dots — not text, not a state indicator. The one permitted
+   --color-text-muted use in this file (tokens.css: "purely decorative"). */
+.grip{display:flex;flex-direction:column;gap:3px;opacity:.4}
+.grip i{width:2px;height:2px;border-radius:var(--radius-full);background:var(--color-text-muted)}
+
+/* ---------- main ---------- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+
+/* ---------- SCR-06 Tab bar ---------- */
+.tabbar{height:var(--h-tabbar);flex:none;display:flex;align-items:stretch;
+  background:var(--color-bg-surface);border-bottom:1px solid var(--color-border-subtle)}
+.tab{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-lg);
+  color:var(--color-text-secondary);border-right:1px solid var(--color-border-subtle);
+  max-width:200px;white-space:nowrap}
+/* AUDIT M10 — a hover that changes the background must raise the text, never lower it. */
+.tab:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.tab.active{color:var(--color-text-primary);background:var(--color-bg-base);
+  box-shadow:inset 0 -2px 0 0 var(--color-accent-blue)}
+/* A restored tab whose database has no live session. AUDIT B2 removed the
+   muted-text dimming that used to be the only signal; per 6.4 "never colour
+   alone" the state now carries a glyph, which is the honest signal anyway. */
+.tab .offline{width:6px;height:6px;border-radius:var(--radius-full);
+  border:1px solid var(--color-text-secondary);flex:none}
+.tab .pin{color:var(--color-text-secondary)}
+.tab .dirty{width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-accent-yellow)}
+.tab .x{color:var(--color-text-secondary);opacity:0}
+.tab:hover .x{opacity:1}
+.tabadd{width:var(--h-tabbar);display:grid;place-items:center;color:var(--color-text-secondary)}
+.tabadd:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.tabadd[disabled]{opacity:.45;cursor:not-allowed}
+.tabadd[disabled]:hover{background:none;color:var(--color-text-secondary)}
+.tabbar .scrid{align-self:center;margin:0 var(--space-md) 0 auto}
+
+/* ---------- content region ---------- */
+.content{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+  padding:var(--space-3xl);background:var(--color-bg-base)}
+/* mockup scaffolding only — the real region here is SCR-08, mocked separately. */
+.pointer{max-width:var(--w-popover-max);display:flex;flex-direction:column;
+  align-items:center;gap:var(--space-md);text-align:center;
+  padding:var(--space-3xl) var(--space-2xl);border:1px dashed var(--color-border-strong);
+  border-radius:var(--radius-lg);background:var(--color-bg-surface)}
+.pointer h2{font-size:var(--font-size-xl);line-height:var(--line-height-xl);
+  font-weight:var(--font-weight-semibold)}
+.pointer p{color:var(--color-text-secondary);font-size:var(--font-size-md);
+  line-height:var(--line-height-md)}
+.pointer .path{font-family:var(--font-mono);font-size:var(--font-size-xs);
+  color:var(--color-accent-blue)}
+.notconnected{display:flex;align-items:flex-start;gap:var(--space-sm);text-align:left;
+  padding:var(--space-md) var(--space-lg);border-radius:var(--radius-sm);
+  background:var(--color-state-info-bg);color:var(--color-state-info-fg);
+  font-size:var(--font-size-xs);line-height:var(--line-height-xs)}
+
+/* ---------- SCR-03 Status bar ---------- */
+.status{height:var(--h-statusbar);flex:none;display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-variant-numeric:var(--font-numeric-tabular)}
+.status .grp{display:flex;align-items:center;gap:var(--space-xs)}
+.stog{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border-radius:var(--radius-xs);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.stog:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.stog.on{background:var(--color-bg-muted);color:var(--color-text-primary)}
+</style>
+</head>
+<body>
+
+<!-- AUDIT M7 — first focusable element in the document. -->
+<a class="skip" href="#workspace">Skip to workspace</a>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-panel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+<symbol id="i-panelright" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M10 3v18"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18-6-6 6-6M15 6l6 6-6 6"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 6 4 3v2H6v-2l4-3z"/><path d="M12 14v7"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13M7 8l5-5 5 5"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M9 6h6M6 13v5M4 15.5h4M15 12l1.8 4.2L21 18l-4.2 1.8L15 24l-1.8-4.2L9 18l4.2-1.8z"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="19" height="17" rx="3"/><path d="M2.5 9h19M2.5 15h19M9 9v11.5"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="app">
+
+  <!-- AUDIT M8 — the screen's own heading. Visually hidden because the shell has
+       no title bar of its own; the window chrome carries the app name. -->
+  <h1 class="vh">TablePro — no connection</h1>
+
+  <!-- ===== SCR-02 Toolbar — no-connection state =====
+       Safe Mode is hidden at level 0 and there is nothing to reconnect to or
+       disconnect from, so neither control renders. Import SQL is disabled: its
+       command requires importOpen && isConnected && sessionId (flow 3.6). -->
+  <header class="toolbar">
+    <button class="iconbtn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+Shift+E)"><svg width="15" height="15" aria-hidden="true"><use href="#i-panel"/></svg></button>
+    <span class="nocon"><span class="dot" style="background:var(--color-text-secondary)"></span>No connection</span>
+    <span class="scrid">SCR-02 Toolbar</span>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+    <button class="iconbtn" disabled aria-label="Import SQL file" title="Import SQL file (Ctrl+Shift+I) — needs a connected session"><svg width="15" height="15" aria-hidden="true"><use href="#i-upload"/></svg></button>
+    <button class="iconbtn" aria-label="Toggle query history" title="Query History (Ctrl+H)"><svg width="15" height="15" aria-hidden="true"><use href="#i-history"/></svg></button>
+    <button class="iconbtn" aria-label="Toggle AI chat" title="AI Chat (Ctrl+Shift+L)"><svg width="15" height="15" aria-hidden="true"><use href="#i-sparkles"/></svg></button>
+    <button class="iconbtn" aria-label="Open settings" title="Settings (Ctrl+,)"><svg width="15" height="15" aria-hidden="true"><use href="#i-settings"/></svg></button>
+  </header>
+
+  <div class="body">
+
+    <!-- ===== SCR-04 Sidebar — disconnected =====
+         M6: the filter field and the refresh control sit in the tree header even
+         now. They read as unavailable rather than absent, so the user learns the
+         tree owns them before a schema ever loads. The per-node right-click menu
+         (SCR-05) survives for what stays node-scoped. -->
+    <nav class="sidebar" aria-label="Schema">
+      <div class="tree-head">
+        <label class="field off">
+          <svg width="12" height="12" aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="text" placeholder="Filter objects" aria-label="Filter objects" disabled>
+        </label>
+        <button class="iconbtn" disabled aria-label="Refresh Tables" title="Refresh Tables"><svg width="14" height="14" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="tree-id"><span class="scrid">SCR-04 Sidebar</span></div>
+      <div class="tree">
+        <p class="treeempty">Connect to load schema</p>
+      </div>
+    </nav>
+    <div class="resizer" aria-hidden="true"><span class="grip"><i></i><i></i><i></i></span></div>
+
+    <main class="main" id="workspace">
+
+      <!-- ===== SCR-06 Editor Tab Bar =====
+           Tabs restored from tab-state.json by SCR-01 on mount. None of them has a
+           live session yet: each carries an offline ring glyph rather than dimmed
+           text, because AUDIT B2 removed --color-text-muted from text use and 6.4
+           forbids signalling state with colour alone. The + control is disabled;
+           the app's own sentence for this condition is quoted in the region below.
+           Pinned tabs sort first, which is why "revenue by month" leads. -->
+      <div class="tabbar" role="tablist" aria-label="Editor tabs"
+           title="This tab is not connected. Connect its database from the sidebar, or open a new tab on a connected database.">
+        <button class="tab active" role="tab" aria-selected="true"><svg class="pin" width="11" height="11" aria-hidden="true"><use href="#i-pin"/></svg><svg width="12" height="12" aria-hidden="true"><use href="#i-code"/></svg>revenue by month<span class="offline" title="No live session"></span><svg class="x" width="11" height="11" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button class="tab" role="tab" aria-selected="false"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg>orders<span class="offline" title="No live session"></span><svg class="x" width="11" height="11" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button class="tab" role="tab" aria-selected="false"><svg width="12" height="12" aria-hidden="true"><use href="#i-table"/></svg>customers<span class="offline" title="No live session"></span><svg class="x" width="11" height="11" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button class="tabadd" disabled aria-label="New query tab" title="New query tab (Ctrl+T) — needs a connected database"><svg width="14" height="14" aria-hidden="true"><use href="#i-plus"/></svg></button>
+        <span class="scrid">SCR-06 Tab Bar</span>
+      </div>
+
+      <!-- ===== content region =====
+           With no selectedConnectionId this region is SCR-08 Connection Manager.
+           SCR-08 is mocked in ./scr-08-connection-manager.html and is deliberately
+           not redrawn here; this is a scaffolding pointer, not a screen. -->
+      <div class="content">
+        <div class="pointer">
+          <span class="scrid">SCR-01 App Shell &mdash; no-connection state</span>
+          <svg width="40" height="40" aria-hidden="true" style="color:var(--color-accent-blue)"><use href="#i-logo"/></svg>
+          <h2>Connection Manager renders here</h2>
+          <p>The shell keeps its toolbar, object tree, tab bar and status bar in every state. Only this region changes.</p>
+          <span class="path">SCR-08 &rarr; scr-08-connection-manager.html</span>
+          <p class="notconnected"><svg width="13" height="13" aria-hidden="true" style="margin-top:1px"><use href="#i-info"/></svg><span>This tab is not connected. Connect its database from the sidebar, or open a new tab on a connected database.</span></p>
+          <!-- AUDIT m10 — shown focused so the mandatory ring appears in the set. -->
+          <button class="btn pri lg demo-focus"><svg width="14" height="14" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ===== SCR-03 Status bar =====
+       M4 correction: this bar owns THE single filter toggle for the whole app.
+       SCR-23 no longer carries one, so there is exactly one filter entry point.
+       Both toggles are inert without a connection but stay visible and labelled. -->
+  <footer class="status">
+    <span class="grp"><span class="dot" style="background:var(--color-text-secondary)"></span>No connection</span>
+    <span class="scrid">SCR-03 Status Bar</span>
+    <span class="spacer"></span>
+    <span>3 restored tabs</span>
+    <!-- AUDIT M1 — the live region 6.4 depends on. Rests empty: nothing has been
+         announced yet. Query completion and row counts are written here. -->
+    <div id="sr-announcer" class="vh" role="status" aria-live="polite" aria-atomic="true"></div>
+    <span class="scrid">#sr-announcer &middot; aria-live=polite</span>
+    <button class="stog" aria-pressed="false" title="Toggle Filter"><svg width="10" height="10" aria-hidden="true"><use href="#i-filter"/></svg>Filter</button>
+    <button class="stog" aria-pressed="false" title="Toggle Inspector (Ctrl+Shift+I)"><svg width="10" height="10" aria-hidden="true"><use href="#i-panelright"/></svg>Inspector</button>
+  </footer>
+</div>
+
+<script>
+/* Mockup scaffolding only — not a product feature.
+   Writes data-theme on <html> and syncs the `light` class, because tokens.css
+   keys on `.light`, matching the shipped mechanism in src/hooks/useTheme.ts. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

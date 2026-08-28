@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 pilot mockup
+  SCR-08 Connection Manager (with SCR-10 card context menu open)
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Mobbin refs this screen follows (design-spec.md section 7.1):
+    ref 10 PlanetScale   -> M8: card anatomy = identity + live status + meta line,
+                            with search on the LEFT and a "New …" split button on the
+                            RIGHT. The PlanetScale sparkline is deliberately NOT copied
+                            (rejection R7): TablePro stores no per-connection metrics,
+                            so a sparkline would be invented data. The meta line uses
+                            what the app really computes — formatConnectionUri()
+                            (connection-card.tsx:151).
+    ref 11 Replit Overview -> M8 low-density variant: sparse card grid, name + count +
+                            chevron only, used for the grouped sections.
+
+  What this mockup exists to prove:
+    - The navigational hub reads as one surface: search, tag filters, groups, cards.
+    - Card anatomy per M8 carries identity, status and destination without a table
+      and without inventing a metric.
+    - All six shipped engines are representable: PostgreSQL, MySQL/MariaDB,
+      SQL Server, SQLite, MongoDB, Redis.
+
+  Theme scaffolding only: the toggle writes data-theme on <html> and syncs the
+  `light` class, because tokens.css keys on `.light` (src/hooks/useTheme.ts).
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-08 Connection Manager — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* No custom properties are declared here. Every value is var(--token). */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+.spacer{flex:1}
+.app{display:flex;flex-direction:column;height:100vh}
+
+.toolbar{height:var(--h-toolbar);flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-bottom:1px solid var(--color-border-subtle)}
+.iconbtn{height:var(--control-h-sm);width:var(--control-h-sm);
+  display:grid;place-items:center;flex:none;
+  border-radius:var(--radius-sm);color:var(--color-text-secondary);
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.iconbtn:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.iconbtn.on{background:var(--color-bg-muted);color:var(--color-accent-blue)}
+.iconbtn[disabled]{opacity:.45;cursor:not-allowed}
+.nocon{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs)}
+.dot{width:6px;height:6px;border-radius:var(--radius-full);flex:none}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+
+/* ---------- SCR-08 ---------- */
+.pane{flex:1;overflow:auto;display:flex;justify-content:center;padding:var(--space-3xl) var(--space-xl)}
+.col{width:100%;max-width:var(--w-popover-max);display:flex;flex-direction:column;gap:var(--space-2xl)}
+.brand{display:flex;flex-direction:column;align-items:center;gap:var(--space-xs);
+  padding-top:var(--space-2xl)}
+.brand h1{font-size:var(--font-size-2xl);line-height:var(--line-height-2xl);
+  font-weight:var(--font-weight-semibold)}
+.brand p{color:var(--color-text-secondary);font-size:var(--font-size-md)}
+.brand .ver{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+
+.searchrow{display:flex;align-items:center;gap:var(--space-md)}
+.field{display:flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-md);
+  border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-secondary)}
+/* B1: the ring moves to the WRAPPER — never zeroed on the inner input. */
+.field:focus-within{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+.searchrow .field{flex:1}
+.field input{flex:1;min-width:0;background:none;border:0;font-size:var(--font-size-sm);
+  color:var(--color-text-primary)}
+.field input::placeholder{color:var(--color-text-secondary)}
+.tags{display:flex;gap:var(--space-sm);flex-wrap:wrap}
+.tag{height:var(--control-h-xs);display:inline-flex;align-items:center;gap:var(--space-xs);
+  padding:0 var(--space-md);border-radius:var(--radius-full);font-size:var(--font-size-2xs);
+  font-weight:var(--font-weight-medium);border:1px solid var(--color-border-subtle);
+  color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em}
+.tag:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.tag.on{border-color:var(--color-accent-blue);color:var(--color-accent-blue);
+  background:var(--color-accent-blue-subtle)}
+
+.group{display:flex;flex-direction:column;gap:var(--space-md)}
+.grouphead{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+  text-transform:uppercase;letter-spacing:.05em}
+.grouphead .n{margin-left:auto;font-variant-numeric:var(--font-numeric-tabular)}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md)}
+
+/* ---------- M8 card anatomy ---------- */
+.card{position:relative;display:flex;flex-direction:column;gap:var(--space-sm);
+  padding:var(--space-xl);background:var(--color-bg-elevated);
+  border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-sm);cursor:default;
+  transition:border-color var(--duration-fast) var(--ease-snappy),
+             box-shadow var(--duration-fast) var(--ease-snappy)}
+.card:hover{border-color:var(--color-border);box-shadow:var(--shadow-base)}
+.cardtop{display:flex;align-items:center;gap:var(--space-sm)}
+.cardname{font-size:var(--font-size-md);font-weight:var(--font-weight-medium);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{font-size:var(--font-size-2xs);line-height:var(--line-height-2xs);
+  font-weight:var(--font-weight-medium);padding:2px var(--space-sm);border-radius:var(--radius-xs);
+  text-transform:uppercase;letter-spacing:.04em}
+.badge.prod{color:var(--color-env-prod);border:1px solid var(--color-env-prod)}
+.badge.staging{color:var(--color-env-staging);border:1px solid var(--color-env-staging)}
+.badge.dev{color:var(--color-env-dev);border:1px solid var(--color-env-dev)}
+.badge.local{color:var(--color-env-local);border:1px solid var(--color-env-local)}
+.cardmeta{display:flex;align-items:center;gap:var(--space-sm);color:var(--color-text-secondary);
+  font-size:var(--font-size-xs);font-family:var(--font-mono);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cardfoot{display:flex;align-items:center;gap:var(--space-sm);margin-top:var(--space-xs)}
+.statustext{display:flex;align-items:center;gap:var(--space-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.statustext.up{color:var(--color-accent-green)}
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);
+  height:var(--control-h-md);padding:0 var(--space-lg);
+  border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);white-space:nowrap;
+  transition:background var(--duration-fast) var(--ease-snappy),
+             color var(--duration-fast) var(--ease-snappy)}
+.btn.lg{height:var(--control-h-lg)}
+.btn.sm{height:var(--control-h-xs);padding:0 var(--space-md);font-size:var(--font-size-2xs)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.btn.danger-ghost{color:var(--color-accent-red)}
+.btn.danger-ghost:hover{background:var(--color-accent-red-subtle);color:var(--color-accent-red)}
+.btn.danger-ghost:active{background:var(--color-accent-red-subtle);box-shadow:var(--shadow-inset)}
+
+/* ---------- SCR-10 card context menu, shown open ---------- */
+.menu{position:absolute;top:var(--space-3xl);right:var(--space-lg);z-index:var(--z-popover);
+  min-width:200px;padding:var(--space-xs) 0;background:var(--color-bg-elevated);
+  border:1px solid var(--color-border);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-popup)}
+.mi{display:flex;align-items:center;gap:var(--space-md);width:100%;height:var(--control-h-md);
+  padding:0 var(--space-lg);color:var(--color-text-primary);font-size:var(--font-size-sm);
+  text-align:left}
+.mi:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.mi.danger{color:var(--color-accent-red)}
+.mi.danger:hover{background:var(--color-accent-red-subtle)}
+.mdiv{height:1px;margin:var(--space-xs) 0;background:var(--color-border-subtle)}
+
+.actions{display:flex;align-items:center;justify-content:center;gap:var(--space-lg);
+  padding-bottom:var(--space-3xl)}
+
+.status{height:var(--h-statusbar);flex:none;display:flex;align-items:center;gap:var(--space-lg);
+  padding:0 var(--space-lg);background:var(--color-bg-surface);
+  border-top:1px solid var(--color-border-subtle);color:var(--color-text-secondary);
+  font-size:var(--font-size-2xs);line-height:var(--line-height-2xs)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* m10: one control per screen is shown in its focused state, so the
+   mandatory ring is actually visible in the set. Matches the
+   .demo-focus convention in sheet-bulk-dialogs / sheet-confirm-dialogs. */
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset:var(--focus-ring-offset)}
+
+/* ---------- M12: states the flow names, drawn so an implementer builds them.
+   Documentation appendix, clearly delimited from the live screen above. ---- */
+.states{border-top:1px solid var(--color-border-subtle);
+  margin-top:var(--space-3xl);padding-top:var(--space-2xl);
+  display:flex;flex-direction:column;gap:var(--space-xl)}
+.states > h2{font-size:var(--font-size-lg);line-height:var(--line-height-lg);
+  font-weight:var(--font-weight-semibold)}
+.states > p{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.stategrid{display:flex;flex-wrap:wrap;gap:var(--space-xl)}
+.state{flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:var(--space-sm)}
+.state > figcaption{color:var(--color-text-secondary);font-size:var(--font-size-xs)}
+.state > figcaption b{color:var(--color-text-primary);font-weight:var(--font-weight-medium)}
+.stateframe{border:1px solid var(--color-border);border-radius:var(--radius-md);
+  background:var(--color-bg-surface);overflow:hidden}
+.statepane{background:var(--color-bg-base);padding:var(--space-2xl) var(--space-xl);
+  display:flex;flex-direction:column;align-items:center;gap:var(--space-sm);
+  text-align:center;min-height:150px;justify-content:center}
+.statepane .ico{color:var(--color-text-muted)}
+.statepane h3{font-size:var(--font-size-md);font-weight:var(--font-weight-medium)}
+.statepane p{color:var(--color-text-secondary);font-size:var(--font-size-sm)}
+.errstrip{display:flex;align-items:center;gap:var(--space-md);
+  padding:var(--space-md) var(--space-lg);background:var(--color-state-danger-bg);
+  color:var(--color-state-danger-fg);font-size:var(--font-size-sm)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-panel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 16V3M7 11l5 5 5-5"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v13M7 8l5-5 5 5"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L20 8l-4-4L4 16z"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M9 6h6M6 13v5M4 15.5h4M15 12l1.8 4.2L21 18l-4.2 1.8L15 24l-1.8-4.2L9 18l4.2-1.8z"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+<symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="19" height="17" rx="3"/><path d="M2.5 9h19M2.5 15h19M9 9v11.5"/></symbol>
+</defs></svg>
+
+<div class="app">
+
+  <header class="toolbar">
+    <button class="iconbtn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+Shift+E)"><svg width="15" height="15" aria-hidden="true"><use href="#i-panel"/></svg></button>
+    <span class="nocon"><span class="dot" style="background:var(--color-text-muted)"></span>No connection</span>
+    <span class="spacer"></span>
+    <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control"><svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span></button>
+    <button class="iconbtn" aria-label="Toggle query history" title="Query History (Ctrl+H)"><svg width="15" height="15" aria-hidden="true"><use href="#i-history"/></svg></button>
+    <button class="iconbtn" aria-label="Toggle AI chat" title="AI Chat (Ctrl+Shift+L)"><svg width="15" height="15" aria-hidden="true"><use href="#i-sparkles"/></svg></button>
+    <button class="iconbtn" aria-label="Open settings" title="Settings (Ctrl+,)"><svg width="15" height="15" aria-hidden="true"><use href="#i-settings"/></svg></button>
+  </header>
+
+  <main class="pane">
+    <div class="col">
+
+      <div class="brand">
+        <svg width="44" height="44" style="color:var(--color-accent-blue)" aria-hidden="true"><use href="#i-logo"/></svg>
+        <h1>TablePro</h1>
+        <p>Connect to a database to get started</p>
+        <span class="ver">v0.7.0</span>
+      </div>
+
+      <!-- M8 / ref 10: search LEFT, "New Connection" split button RIGHT -->
+      <div class="searchrow">
+        <label class="field demo-focus">
+          <svg width="13" height="13" aria-hidden="true"><use href="#i-search"/></svg>
+          <input type="text" placeholder="Search connections" aria-label="Search connections" autofocus>
+        </label>
+        <button class="btn pri lg"><svg width="14" height="14" aria-hidden="true"><use href="#i-plus"/></svg>New Connection</button>
+      </div>
+
+      <div class="tags" role="group" aria-label="Filter by tag">
+        <button class="tag on">prod</button>
+        <button class="tag">staging</button>
+        <button class="tag">dev</button>
+        <button class="tag">local</button>
+      </div>
+
+      <section class="group">
+        <div class="grouphead"><span class="dot" style="background:var(--color-accent-red)"></span>Production<span class="n">2</span></div>
+        <div class="cards">
+
+          <!-- SCR-10 context menu shown OPEN on this card -->
+          <article class="card">
+            <div class="cardtop">
+              <span class="dot" style="background:var(--color-accent-green)"></span>
+              <span class="cardname">Analytics</span>
+              <span class="spacer"></span>
+              <span class="badge prod">prod</span>
+            </div>
+            <div class="cardmeta">postgres@db.internal:5432/analytics</div>
+            <div class="cardfoot">
+              <span class="statustext up">PostgreSQL &middot; Connected</span>
+              <span class="spacer"></span>
+              <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+            </div>
+
+            <div class="menu" role="menu" aria-label="Analytics connection actions">
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-pencil"/></svg>Edit Connection</button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg>Duplicate</button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-download"/></svg>Export</button>
+              <button class="mi" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-link"/></svg>Copy import link</button>
+              <div class="mdiv" role="separator"></div>
+              <button class="mi danger" role="menuitem"><svg width="12" height="12" aria-hidden="true"><use href="#i-trash"/></svg>Delete</button>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="cardtop">
+              <span class="dot" style="background:var(--color-text-muted)"></span>
+              <span class="cardname">Billing</span>
+              <span class="spacer"></span>
+              <span class="badge prod">prod</span>
+            </div>
+            <div class="cardmeta">billing@mysql-01.internal:3306/billing</div>
+            <div class="cardfoot">
+              <span class="statustext">MySQL / MariaDB &middot; Disconnected</span>
+              <span class="spacer"></span>
+              <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <section class="group">
+        <div class="grouphead"><span class="dot" style="background:var(--color-accent-yellow)"></span>Staging<span class="n">2</span></div>
+        <div class="cards">
+          <article class="card">
+            <div class="cardtop">
+              <span class="dot" style="background:var(--color-text-muted)"></span>
+              <span class="cardname">Analytics Staging</span>
+              <span class="spacer"></span>
+              <span class="badge staging">staging</span>
+            </div>
+            <div class="cardmeta">postgres@stg-db.internal:5432/analytics</div>
+            <div class="cardfoot">
+              <span class="statustext">PostgreSQL &middot; Disconnected</span>
+              <span class="spacer"></span>
+              <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+            </div>
+          </article>
+          <article class="card">
+            <div class="cardtop">
+              <span class="dot" style="background:var(--color-text-muted)"></span>
+              <span class="cardname">Sessions</span>
+              <span class="spacer"></span>
+              <span class="badge staging">staging</span>
+            </div>
+            <div class="cardmeta">redis://stg-cache.internal:6379/0</div>
+            <div class="cardfoot">
+              <span class="statustext">Redis &middot; Disconnected</span>
+              <span class="spacer"></span>
+              <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="group">
+        <div class="grouphead"><span class="dot" style="background:var(--color-border)"></span>Ungrouped<span class="n">3</span></div>
+        <div class="cards">
+          <article class="card">
+            <div class="cardtop">
+              <span class="dot" style="background:var(--color-text-muted)"></span>
+              <span class="cardname">Catalog</span>
+              <span class="spacer"></span>
+              <span class="badge dev">dev</span>
+            </div>
+            <div class="cardmeta">mongodb://localhost:27017/catalog</div>
+            <div class="cardfoot">
+              <span class="statustext">MongoDB &middot; Disconnected</span>
+              <span class="spacer"></span>
+              <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+            </div>
+          </article>
+          <article class="card">
+            <div class="cardtop">
+              <span class="dot" style="background:var(--color-text-muted)"></span>
+              <span class="cardname">Reporting</span>
+              <span class="spacer"></span>
+              <span class="badge dev">dev</span>
+            </div>
+            <div class="cardmeta">sa@mssql-dev.internal:1433/reporting</div>
+            <div class="cardfoot">
+              <span class="statustext">SQL Server &middot; Disconnected</span>
+              <span class="spacer"></span>
+              <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+            </div>
+          </article>
+          <article class="card">
+            <div class="cardtop">
+              <span class="dot" style="background:var(--color-text-muted)"></span>
+              <span class="cardname">Local Cache</span>
+              <span class="spacer"></span>
+              <span class="badge local">local</span>
+            </div>
+            <div class="cardmeta">%APPDATA%\TablePro\scratch.sqlite3</div>
+            <div class="cardfoot">
+              <span class="statustext">SQLite &middot; Disconnected</span>
+              <span class="spacer"></span>
+              <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-plug"/></svg>Connect</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button class="btn sec"><svg width="13" height="13" aria-hidden="true"><use href="#i-upload"/></svg>Import</button>
+        <button class="btn ghost">+ New Group</button>
+      </div>
+      <!-- ===== M12: the four states flow 3.1 names but the live view cannot show ===== -->
+      <section class="states" aria-label="Other states of this screen">
+        <h2>Other states of this screen</h2>
+        <p>Flow 3.1 names five states for SCR-08. The view above is the populated one; these are the other four. Drawn here because an implementer reading only the populated view would not build them.</p>
+        <div class="stategrid">
+
+          <figure class="state">
+            <figcaption><b>Empty</b> — no saved connections, first run after onboarding is skipped.</figcaption>
+            <div class="stateframe"><div class="statepane">
+              <span class="ico"><svg width="24" height="24" aria-hidden="true"><use href="#i-db"/></svg></span>
+              <h3>No saved connections</h3>
+              <p>Click &lsquo;New Connection&rsquo; to add your first database connection.</p>
+              <button class="btn pri" style="margin-top:var(--space-md)"><svg width="13" height="13" aria-hidden="true"><use href="#i-plus"/></svg>New Connection</button>
+            </div></div>
+          </figure>
+
+          <figure class="state">
+            <figcaption><b>No search results</b> — connections exist, the query excludes all of them.</figcaption>
+            <div class="stateframe"><div class="statepane">
+              <span class="ico"><svg width="24" height="24" aria-hidden="true"><use href="#i-search"/></svg></span>
+              <h3>No connections matching &ldquo;prod-eu&rdquo;</h3>
+              <p>7 saved connections. 1 tag filter is also active.</p>
+              <button class="btn sec" style="margin-top:var(--space-md)">Clear filters</button>
+            </div></div>
+          </figure>
+
+          <figure class="state">
+            <figcaption><b>Connecting</b> — per-card, while the handshake runs. The rest of the list stays operable.</figcaption>
+            <div class="stateframe"><div style="padding:var(--space-xl)">
+              <article class="card">
+                <div class="cardtop">
+                  <span class="dot" style="background:var(--color-accent-yellow)"></span>
+                  <span class="cardname">Analytics</span>
+                  <span class="spacer"></span>
+                  <span class="badge prod">prod</span>
+                </div>
+                <div class="cardmeta">postgres@db.internal:5432/analytics</div>
+                <div class="cardfoot">
+                  <span class="statustext">PostgreSQL &middot; Connecting&hellip;</span>
+                  <span class="spacer"></span>
+                  <button class="btn sec sm" disabled>Connect</button>
+                </div>
+              </article>
+            </div></div>
+          </figure>
+
+          <figure class="state">
+            <figcaption><b>Connect error</b> — a strip above the list, never a modal, so the cards stay actionable. Driver text verbatim.</figcaption>
+            <div class="stateframe">
+              <div class="errstrip" role="alert">
+                <svg width="14" height="14" aria-hidden="true"><use href="#i-plug"/></svg>
+                <span>connection to server at &ldquo;db.internal&rdquo; (10.0.4.18), port 5432 failed: timeout expired</span>
+              </div>
+              <div style="padding:var(--space-xl)">
+                <article class="card">
+                  <div class="cardtop">
+                    <span class="dot" style="background:var(--color-accent-red)"></span>
+                    <span class="cardname">Analytics</span>
+                    <span class="spacer"></span>
+                    <span class="badge prod">prod</span>
+                  </div>
+                  <div class="cardmeta">postgres@db.internal:5432/analytics</div>
+                  <div class="cardfoot">
+                    <span class="statustext">PostgreSQL &middot; Disconnected</span>
+                    <span class="spacer"></span>
+                    <button class="btn sec sm"><svg width="11" height="11" aria-hidden="true"><use href="#i-plug"/></svg>Retry</button>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </figure>
+
+        </div>
+      </section>
+
+
+    </div>
+  </main>
+
+  <footer class="status">
+    <span><span class="dot" style="background:var(--color-text-muted);display:inline-block;margin-right:var(--space-xs)"></span>No connection</span>
+    <span class="spacer"></span>
+    <span>7 saved connections &middot; 3 groups</span>
+  </footer>
+</div>
+
+<script>
+/* Mockup scaffolding only — see the SCR-17 file for the same note. */
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>

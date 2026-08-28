@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<!--
+  TablePro rebuild — Stage 3 fan-out mockup (partition: overlays / settings / engine panels / error surface)
+  SCR-65 Onboarding Dialog — SCR-66 Welcome, SCR-67 Add Connection, SCR-68 Quick Start
+  Authority: ../design-spec.md · ../screens.md · ../tokens.css (shared, not forked)
+
+  Content sourced verbatim from src/i18n/locales/en.json onboarding.* and from
+  src/components/onboarding/*.tsx:
+    - welcome-step.tsx: the 5 FEATURES rows (multiDb/editor/grid/secure/ai).
+    - add-connection-step.tsx + connection-form-config.ts: DB_TYPES (postgres,
+      mysql, mssql, sqlite, mongodb, redis), DEFAULT_PORTS, SSL_MODES.
+    - quick-start-step.tsx: the SHORTCUTS list is real — execute Ctrl+Enter,
+      commandPalette Ctrl+K, explain Ctrl+Shift+X (source ground truth; note
+      this differs from the informal "Ctrl+K / Ctrl+P" in design-spec.md 2.2,
+      see the fan-out final report).
+  Steps 0/1/2 shown as three labeled states in one dialog shell per the brief
+  ("Build the shell once per file and vary the content").
+
+  AUDIT REMEDIATION PHASE 2 — applied against design-spec.md 5.16 canon:
+    B2: --color-text-muted was text (SCR chip, step-of text, placeholders,
+        theme toggle) — moved to --color-text-secondary.
+    Canon .dialog: border removed; width raised to .lg (760px) — 5.16's width
+        table names SCR-65 explicitly under lg. Centered hero content (icon +
+        title + list) is capped at 460px inside the wider frame rather than
+        stretched, matching how wide onboarding modals keep narrow reading
+        columns; the Add Connection form uses the extra width instead.
+        Banded header/body/footer applied, BUT the header holds the step-dots
+        / "Step X of 3" progress strip, not the `<h1>` — 5.16 says the header
+        "holds the h1"; for a step wizard the progress strip reads as the
+        header and the icon+title+subtitle as one hero unit reads better in
+        the body. Flagged as a canon tension in the fan-out report, not
+        silently resolved.
+    M8: SCR-67 and SCR-68 skipped straight to <h2> — each of the three steps
+        is shown as its own independent dialog surface in this sheet, so each
+        now gets its own single <h1> (SCR-66 already had one).
+    m8: aria-hidden="true" on every inline icon <svg>.
+    m9: added the <kbd>Esc</kbd> footer hint (this file had none — the only
+        one of the three m9-flagged files owned by this partition).
+    m10: one control per step shown in its permanent focused state (Get
+        Started / the Name field / Done), covering both button and input.
+    Canon .btn (transition + `[disabled]`) and `.scr` chip.
+
+  Modality: role="dialog" aria-modal="true" (design-spec 5.16, audit M2).
+
+  Theme scaffolding only (not a product feature): the toggle writes data-theme
+  on <html> and syncs the `light` class, because tokens.css keys on `.light` —
+  copied verbatim from ../mockups/scr-17-table-browse.html.
+
+  Reference for a later implementation. Not for pasting into the component system.
+-->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>SCR-65 Onboarding Dialog — TablePro rebuild</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--font-sans);font-size:var(--font-size-sm);line-height:var(--line-height-sm);
+  background:var(--color-bg-base);color:var(--color-text-primary);
+  -webkit-font-smoothing:antialiased;
+}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+/* Canonical .board — design-spec 5.16 */
+.board{max-width:1400px;margin:0 auto;padding:var(--space-3xl) var(--space-xl);
+  display:flex;flex-direction:column;align-items:center;gap:var(--space-2xl);background:var(--color-bg-base)}
+.scr{color:var(--color-text-secondary);font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);
+  text-transform:uppercase;letter-spacing:.06em}
+.themetoggle{display:flex;align-items:center;gap:var(--space-xs);height:var(--control-h-xs);
+  padding:0 var(--space-sm);border:1px dashed var(--color-border);border-radius:var(--radius-xs);
+  color:var(--color-text-secondary);font-size:var(--font-size-2xs);align-self:flex-end}
+.demo-focus{outline:var(--focus-ring-width) solid var(--color-focus-ring);outline-offset:var(--focus-ring-offset)}
+
+/* ---------- Canonical .dialog — design-spec 5.16, width class .lg (760px) ---------- */
+.dialog{width:100%;max-width:760px;max-height:min(680px, calc(100vh - var(--space-3xl) * 2));
+  display:flex;flex-direction:column;background:var(--color-bg-elevated);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);overflow:hidden}
+.dhead{flex:none;padding:var(--space-lg) var(--space-2xl);border-bottom:1px solid var(--color-border-subtle)}
+.dots{display:flex;justify-content:center;gap:var(--space-sm);margin-bottom:var(--space-sm)}
+.dots span{width:6px;height:6px;border-radius:var(--radius-full);background:var(--color-border)}
+.dots span.on{background:var(--color-accent-blue);width:18px;border-radius:var(--radius-xs)}
+.stepof{text-align:center;color:var(--color-text-secondary);font-size:var(--font-size-2xs)}
+.dbody{flex:1;overflow:auto;padding:var(--space-2xl)}
+.center{max-width:460px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:var(--space-xl);text-align:center}
+.mark{height:72px;width:72px;display:grid;place-items:center;border-radius:var(--radius-lg);
+  background:var(--color-accent-blue-subtle);color:var(--color-accent-blue)}
+.mark.ok{background:var(--color-state-success-bg);color:var(--color-state-success-fg)}
+h1{font-size:var(--font-size-2xl);font-weight:var(--font-weight-semibold);color:var(--color-text-primary)}
+.sub{font-size:var(--font-size-md);color:var(--color-text-secondary);max-width:340px}
+.features{width:100%;display:flex;flex-direction:column;gap:var(--space-md);text-align:left}
+.feat{display:flex;align-items:flex-start;gap:var(--space-md)}
+.feat svg{color:var(--color-accent-blue);margin-top:2px}
+.feat .t{font-size:var(--font-size-sm);font-weight:var(--font-weight-medium);color:var(--color-text-primary)}
+.feat .d{font-size:var(--font-size-xs);color:var(--color-text-secondary)}
+.shortcuts{width:100%;display:flex;flex-direction:column;gap:var(--space-sm)}
+.srow{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--color-border-subtle);
+  border-radius:var(--radius-md);padding:var(--space-md) var(--space-lg)}
+.srow .lbl{font-size:var(--font-size-sm);color:var(--color-text-primary)}
+/* Canonical kbd — design-spec 5.16: no background */
+kbd{font-family:var(--font-mono);font-size:var(--font-size-xs);padding:0 var(--space-xs);
+  border-radius:var(--radius-xs);border:1px solid var(--color-border);color:var(--color-text-secondary)}
+
+/* form (SCR-67) — the wider frame's extra room goes here, not the hero column */
+.form{max-width:600px;margin:0 auto;text-align:left;display:flex;flex-direction:column;gap:var(--space-md)}
+.fld{display:flex;flex-direction:column;gap:var(--space-2xs)}
+.fld label{font-size:var(--font-size-xs);color:var(--color-text-secondary);font-weight:var(--font-weight-medium)}
+.ctl{height:var(--control-h-md);border-radius:var(--radius-sm);background:var(--color-bg-base);
+  border:1px solid var(--color-border);color:var(--color-text-primary);padding:0 var(--space-md);
+  font-size:var(--font-size-md)}
+.ctl::placeholder{color:var(--color-text-secondary)}
+.grid2{display:grid;grid-template-columns:1fr 100px;gap:var(--space-md)}
+.grid3{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md)}
+.testrow{display:flex;align-items:center;gap:var(--space-md)}
+.testok{display:flex;align-items:center;gap:var(--space-xs);color:var(--color-state-success-fg);
+  font-size:var(--font-size-xs)}
+
+.dfoot{flex:none;display:flex;align-items:center;gap:var(--space-md);
+  padding:var(--space-lg) var(--space-2xl);border-top:1px solid var(--color-border-subtle)}
+.esc{color:var(--color-text-secondary);font-size:var(--font-size-2xs);display:flex;align-items:center;gap:var(--space-xs)}
+/* Canonical .btn — design-spec 5.16 */
+.btn{display:inline-flex;align-items:center;gap:var(--space-sm);height:var(--control-h-lg);
+  padding:0 var(--space-xl);border-radius:var(--radius-sm);font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);
+  transition:background var(--duration-fast) var(--ease-snappy),color var(--duration-fast) var(--ease-snappy)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.ghost{color:var(--color-text-secondary)}
+.btn.ghost:hover{background:var(--color-bg-hover);color:var(--color-text-primary)}
+.btn.sec{border:1px solid var(--color-border);color:var(--color-text-primary)}
+.btn.sec:hover{background:var(--color-bg-hover)}
+.btn.pri{background:var(--color-accent-blue-fill);color:var(--color-text-inverse)}
+.btn.pri:hover{background:var(--color-accent-blue-fill-hover)}
+.fill{flex:1}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-db-multi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7"/><ellipse cx="12" cy="7" rx="8" ry="4"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18-6-6 6-6M15 6l6 6-6 6"/></symbol>
+<symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M10 3v18"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6M9 6h6M6 13v5M4 15.5h4M15 12l1.8 4.2L21 18l-4.2 1.8L15 24l-1.8-4.2L9 18l4.2-1.8z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+</defs></svg>
+
+<div class="board">
+  <button class="themetoggle" id="themebtn" title="Mockup scaffolding — not a product control">
+    <svg width="11" height="11" aria-hidden="true"><use href="#i-theme"/></svg><span id="themelabel">Dark</span>
+  </button>
+
+  <!-- ===================== SCR-66 Welcome Step ===================== -->
+  <span class="scr">SCR-65 &middot; SCR-66 &middot; Onboarding — Welcome</span>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Welcome to TablePro">
+    <div class="dhead">
+      <div class="dots"><span class="on"></span><span></span><span></span></div>
+      <div class="stepof">Step 1 of 3</div>
+    </div>
+    <div class="dbody">
+      <div class="center">
+        <div class="mark"><svg width="34" height="34" aria-hidden="true"><use href="#i-table"/></svg></div>
+        <div>
+          <h1>Welcome to TablePro</h1>
+          <p class="sub">A fast, lightweight database client for Windows</p>
+        </div>
+        <div class="features">
+          <div class="feat"><svg width="18" height="18" aria-hidden="true"><use href="#i-db-multi"/></svg>
+            <div><div class="t">PostgreSQL, MySQL, SQLite, MSSQL, MongoDB &amp; Redis</div>
+            <div class="d">Connect to popular databases with full feature support</div></div></div>
+          <div class="feat"><svg width="18" height="18" aria-hidden="true"><use href="#i-code"/></svg>
+            <div><div class="t">Smart SQL Editor</div>
+            <div class="d">Syntax highlighting, autocomplete, and multi-tab editing</div></div></div>
+          <div class="feat"><svg width="18" height="18" aria-hidden="true"><use href="#i-table"/></svg>
+            <div><div class="t">Interactive Data Grid</div>
+            <div class="d">Browse, edit, and manage your data with ease</div></div></div>
+          <div class="feat"><svg width="18" height="18" aria-hidden="true"><use href="#i-shield"/></svg>
+            <div><div class="t">Secure Connections</div>
+            <div class="d">SSH tunneling and SSL/TLS encryption support</div></div></div>
+          <div class="feat"><svg width="18" height="18" aria-hidden="true"><use href="#i-sparkles"/></svg>
+            <div><div class="t">AI-Powered Assistant</div>
+            <div class="d">Get intelligent SQL suggestions and query assistance</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="dfoot">
+      <button class="btn ghost">Skip</button>
+      <span class="fill"></span>
+      <span class="esc"><kbd>Esc</kbd>close</span>
+      <button class="btn pri demo-focus">Get Started</button>
+    </div>
+  </div>
+
+  <!-- ===================== SCR-67 Add Connection Step ===================== -->
+  <span class="scr">SCR-65 &middot; SCR-67 &middot; Onboarding — Add Connection</span>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Add Your First Connection">
+    <div class="dhead">
+      <div class="dots"><span></span><span class="on"></span><span></span></div>
+      <div class="stepof">Step 2 of 3</div>
+    </div>
+    <div class="dbody">
+      <div style="text-align:center;margin-bottom:var(--space-xl)">
+        <h1>Add Your First Connection</h1>
+        <p class="sub" style="margin:0 auto">Set up a database connection to get started</p>
+      </div>
+      <form class="form">
+        <div class="grid2">
+          <div class="fld"><label for="cname">Name</label><input id="cname" class="ctl demo-focus" placeholder="Analytics"></div>
+          <div class="fld"><label for="cengine">Engine</label>
+            <select id="cengine" class="ctl">
+              <option>postgres</option><option>mysql</option><option>mssql</option>
+              <option>sqlite</option><option>mongodb</option><option>redis</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="fld"><label for="chost">Host</label><input id="chost" class="ctl" placeholder="localhost"></div>
+          <div class="fld"><label for="cport">Port</label><input id="cport" class="ctl" value="5432"></div>
+        </div>
+        <div class="grid3">
+          <div class="fld"><label for="cuser">User</label><input id="cuser" class="ctl" placeholder="postgres"></div>
+          <div class="fld"><label for="cdb">Database</label><input id="cdb" class="ctl" placeholder="postgres"></div>
+        </div>
+        <div class="fld"><label for="cssl">SSL Mode</label>
+          <select id="cssl" class="ctl">
+            <option>disable</option><option>prefer</option><option>require</option>
+            <option>verify-ca</option><option>verify-full</option>
+          </select>
+        </div>
+        <div class="testrow">
+          <button type="button" class="btn sec">Test Connection</button>
+          <span class="testok"><svg width="13" height="13" aria-hidden="true"><use href="#i-check"/></svg>Connection test succeeded!</span>
+        </div>
+      </form>
+    </div>
+    <div class="dfoot">
+      <button class="btn ghost">Back</button>
+      <button class="btn ghost">Skip</button>
+      <span class="fill"></span>
+      <span class="esc"><kbd>Esc</kbd>close</span>
+      <button class="btn pri">Save &amp; Continue</button>
+    </div>
+  </div>
+
+  <!-- ===================== SCR-68 Quick Start Step ===================== -->
+  <span class="scr">SCR-65 &middot; SCR-68 &middot; Onboarding — Quick Start</span>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="You're All Set!">
+    <div class="dhead">
+      <div class="dots"><span></span><span></span><span class="on"></span></div>
+      <div class="stepof">Step 3 of 3</div>
+    </div>
+    <div class="dbody">
+      <div class="center">
+        <div class="mark ok"><svg width="30" height="30" aria-hidden="true"><use href="#i-check"/></svg></div>
+        <div>
+          <h1>You&rsquo;re All Set!</h1>
+          <p class="sub">Here are some shortcuts to help you get started</p>
+        </div>
+        <div class="shortcuts">
+          <div class="srow"><span class="lbl">Execute Query</span><kbd>Ctrl+Enter</kbd></div>
+          <div class="srow"><span class="lbl">Command Palette</span><kbd>Ctrl+K</kbd></div>
+          <div class="srow"><span class="lbl">Explain Query</span><kbd>Ctrl+Shift+X</kbd></div>
+        </div>
+      </div>
+    </div>
+    <div class="dfoot">
+      <button class="btn ghost">Back</button>
+      <span class="fill"></span>
+      <span class="esc"><kbd>Esc</kbd>close</span>
+      <button class="btn pri demo-focus">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, label = document.getElementById('themelabel');
+  function set(t) {
+    root.dataset.theme = t;
+    root.classList.toggle('light', t === 'light');
+    label.textContent = t === 'light' ? 'Light' : 'Dark';
+  }
+  document.getElementById('themebtn').addEventListener('click', function () {
+    set(root.dataset.theme === 'light' ? 'dark' : 'light');
+  });
+  set('dark');
+})();
+</script>
+</body>
+</html>
