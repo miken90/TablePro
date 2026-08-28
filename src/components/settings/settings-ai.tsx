@@ -253,11 +253,15 @@ export function SettingsAi() {
             const modelOptions = fetchedModels[route?.providerId ?? ""] ?? [];
             return (
               <SettingRow key={feature} label={featureLabels[feature]}>
+                {/* Two controls in one row: SettingRow's aria-labelledby lands
+                    on this wrapping div, so each control also gets its own
+                    aria-label naming which half of the row it is. */}
                 <div className="flex items-center gap-2">
                   <Select
                     value={route?.providerId ?? ""}
                     onChange={(v) => updateRoute(feature, { providerId: v, model: selectedProvider?.model ?? "" })}
                     options={[{ label: t("settings.ai.none"), value: "" }, ...providerOptions]}
+                    aria-label={`${featureLabels[feature]} ${t("settings.ai.type")}`}
                   />
                   {route?.providerId && (
                     modelOptions.length > 0 ? (
@@ -265,12 +269,14 @@ export function SettingsAi() {
                         value={route.model}
                         onChange={(v) => updateRoute(feature, { model: v })}
                         options={modelOptions.map((m) => ({ label: m, value: m }))}
+                        aria-label={`${featureLabels[feature]} ${t("settings.ai.model")}`}
                       />
                     ) : (
                       <TextInput
                         value={route?.model ?? ""}
                         onChange={(v) => updateRoute(feature, { model: v })}
                         placeholder="model"
+                        aria-label={`${featureLabels[feature]} ${t("settings.ai.model")}`}
                       />
                     )
                   )}
