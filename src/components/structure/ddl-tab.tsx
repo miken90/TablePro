@@ -40,24 +40,24 @@ export function DdlTab({ sessionId, tableName, schema }: DdlTabProps) {
   };
 
   if (loading) {
-    return <div className="p-3 text-xs text-zinc-400">Loading DDL…</div>;
+    return <div className="p-3 text-xs text-text-secondary">Loading DDL…</div>;
   }
   if (error) {
-    return <div className="p-3 text-xs text-red-500">{error}</div>;
+    return <div className="p-3 text-xs text-state-danger-fg">{error}</div>;
   }
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-700">
-        <span className="text-[10px] text-zinc-400">CREATE TABLE statement</span>
+      <div className="flex items-center justify-between border-b border-border-subtle px-3 py-1.5">
+        <span className="text-ui-2xs text-text-secondary">CREATE TABLE statement</span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 rounded px-2 py-1 text-[10px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+          className="flex items-center gap-1 rounded px-2 py-1 text-ui-2xs text-text-secondary hover:bg-surface-hover hover:text-text-primary"
         >
           {copied ? (
             <>
-              <Check size={11} className="text-green-500" />
-              <span className="text-green-500">Copied</span>
+              <Check size={11} className="text-accent-green" />
+              <span className="text-accent-green">Copied</span>
             </>
           ) : (
             <>
@@ -68,7 +68,7 @@ export function DdlTab({ sessionId, tableName, schema }: DdlTabProps) {
         </button>
       </div>
       <div className="flex-1 overflow-auto">
-        <pre className="p-3 font-mono text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
+        <pre className="p-3 font-mono text-xs leading-relaxed text-text-primary">
           {ddl}
         </pre>
       </div>

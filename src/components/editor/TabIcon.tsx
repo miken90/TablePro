@@ -13,7 +13,8 @@ interface TabIconProps {
   type: TabType;
 }
 
+/** Tab-kind glyph. Decorative: the tab's label carries the name. */
 export function TabIcon({ type }: TabIconProps) {
   const Icon = icons[type] ?? Code;
-  return <Icon size={14} className="shrink-0 text-zinc-400 dark:text-zinc-500" />;
+  return <Icon size={14} aria-hidden="true" className="shrink-0 text-text-secondary" />;
 }

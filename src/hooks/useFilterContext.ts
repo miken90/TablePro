@@ -3,6 +3,7 @@ import { useFilterStore } from "../stores/filterStore";
 import { useSchemaStore } from "../stores/schemaStore";
 import { useLayoutStore } from "../stores/layoutStore";
 import { useConnectionStore } from "../stores/connectionStore";
+import type { EditorTab } from "../stores/editorStore";
 
 function combineWhereClauses(filterClause: string, quickSearchClause: string): string {
   const parts = [filterClause, quickSearchClause].filter(Boolean);
@@ -11,21 +12,25 @@ function combineWhereClauses(filterClause: string, quickSearchClause: string): s
   return `(${parts[0]}) AND (${parts[1]})`;
 }
 
-export function useFilterContext(
-  viewMode: string,
-  activeTableContext: { tableName: string; schema?: string | null } | null,
-  activeTabId: string | null,
-) {
+/**
+ * Filter state is keyed by the active tab: `table:<name>` for a table tab
+ * (so presets and the applied clause follow the table, not the tab id) and
+ * the tab id for everything else. The columns the filter panel offers are
+ * fetched for the active table tab and published on `layoutStore`.
+ */
+export function useFilterContext(activeTab: EditorTab | null | undefined) {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
   const fetchColumns = useSchemaStore((s) => s.fetchColumns);
 
+  const tableName = activeTab?.type === "table" ? activeTab.tableName : undefined;
+  const tableSchema = activeTab?.type === "table" ? activeTab.tableSchema : undefined;
+  const activeTabId = activeTab?.id ?? null;
+
   const filterTabId = useMemo(() => {
-    if (viewMode === "table-browse" && activeTableContext?.tableName) {
-      return `table:${activeTableContext.tableName}`;
-    }
+    if (tableName) return `table:${tableName}`;
     return activeTabId ?? "default";
-  }, [viewMode, activeTableContext, activeTabId]);
+  }, [tableName, activeTabId]);
 
   const filterByTab = useFilterStore((s) => s.byTab);
   const activeWhereClause = useMemo(() => {
@@ -35,16 +40,16 @@ export function useFilterContext(
   }, [filterByTab, filterTabId]);
 
   useEffect(() => {
-    if (!activeTableContext?.tableName || !selectedConnectionId) {
+    if (!tableName || !selectedConnectionId) {
       useLayoutStore.getState().setFilterColumns([]);
       return;
     }
     const sid = getSessionId(selectedConnectionId);
     if (!sid) return;
-    fetchColumns(sid, activeTableContext.tableName, activeTableContext.schema ?? undefined)
+    fetchColumns(sid, tableName, tableSchema ?? undefined)
       .then((cols) => useLayoutStore.getState().setFilterColumns(cols))
       .catch(() => useLayoutStore.getState().setFilterColumns([]));
-  }, [activeTableContext, selectedConnectionId, getSessionId, fetchColumns]);
+  }, [tableName, tableSchema, selectedConnectionId, getSessionId, fetchColumns]);
 
   return { filterTabId, activeWhereClause };
 }

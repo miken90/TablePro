@@ -13,6 +13,13 @@ import {
 
 export type TabType = 'query' | 'table' | 'structure' | 'mongoQuery' | 'redisCommand';
 
+/** Every tab kind the app can render. `fromPersisted` validates against this list. */
+export const TAB_TYPES: readonly TabType[] = ['query', 'table', 'structure', 'mongoQuery', 'redisCommand'];
+
+export function isTabType(value: unknown): value is TabType {
+  return typeof value === 'string' && (TAB_TYPES as readonly string[]).includes(value);
+}
+
 export interface EditorTab {
   id: string;
   title: string;
@@ -41,6 +48,8 @@ interface EditorState {
   addTab: (title?: string) => string;
   addPreviewTab: (title: string) => string;
   addTableTab: (tableName: string, schema?: string | null) => string;
+  /** Create or activate the structure tab for a table (M1). */
+  addStructureTab: (tableName: string, schema?: string | null) => string;
   addMongoQueryTab: (title?: string) => string;
   addRedisCommandTab: (title?: string) => string;
   promoteTab: (id: string) => void;
@@ -83,7 +92,7 @@ function syncSelectedConnectionByTabId(tabs: EditorTab[], tabId: string | null):
 }
 
 /** Convert backend PersistedTab to frontend EditorTab. */
-function fromPersisted(p: PersistedTab): EditorTab {
+export function fromPersisted(p: PersistedTab): EditorTab {
   return {
     id: p.id,
     title: p.title,
@@ -92,14 +101,16 @@ function fromPersisted(p: PersistedTab): EditorTab {
     isPreview: false,
     isPinned: p.isPinned,
     connectionId: p.connectionId ?? undefined,
-    type: (p.tabType as TabType) || 'query',
+    // A persisted kind this build does not know degrades to a query tab
+    // instead of becoming a tab no branch can render.
+    type: isTabType(p.tabType) ? p.tabType : 'query',
     tableName: p.tableName ?? undefined,
     tableSchema: p.tableSchema ?? undefined,
   };
 }
 
 /** Convert frontend EditorTab to backend PersistedTab for saving. */
-function toPersisted(t: EditorTab): PersistedTab {
+export function toPersisted(t: EditorTab): PersistedTab {
   return {
     id: t.id,
     title: t.title,
@@ -113,13 +124,14 @@ function toPersisted(t: EditorTab): PersistedTab {
 }
 
 /** Filter tabs: drop orphaned table tabs and tabs with missing connections. */
-function filterValidTabs(
+export function filterValidTabs(
   tabs: EditorTab[],
   savedConnectionIds: Set<string>,
 ): EditorTab[] {
   return tabs.filter((t) => {
-    // Remove table tabs missing tableName (orphaned)
-    if ((t.type ?? 'query') === 'table' && !t.tableName) return false;
+    // Remove table/structure tabs missing tableName (orphaned)
+    const kind = t.type ?? 'query';
+    if ((kind === 'table' || kind === 'structure') && !t.tableName) return false;
     // Remove tabs whose saved connection no longer exists
     if (t.connectionId && !savedConnectionIds.has(t.connectionId)) return false;
     return true;
@@ -337,6 +349,37 @@ export const useEditorStore = create<EditorState>()(
           isPreview: false,
           isPinned: false,
           type: 'table',
+          connectionId: connId,
+          tableName,
+          tableSchema: schema ?? undefined,
+        };
+        set((s) => ({ tabs: [...s.tabs, newTab], activeTabId: id }));
+        return id;
+      },
+
+      /** Create or activate the structure tab for a table. Structure tabs
+       *  persist like any other tab (Q5); the schema fetch happens when the
+       *  tab body mounts, which is only while the tab is active. */
+      addStructureTab: (tableName, schema) => {
+        const connId = useConnectionStore.getState().selectedConnectionId ?? undefined;
+        const existing = get().tabs.find(
+          (t) => t.type === 'structure' && t.tableName === tableName
+            && (t.tableSchema ?? undefined) === (schema ?? undefined)
+            && t.connectionId === connId,
+        );
+        if (existing) {
+          set({ activeTabId: existing.id });
+          return existing.id;
+        }
+        const id = generateTabId();
+        const newTab: EditorTab = {
+          id,
+          title: `${tableName} · structure`,
+          content: "",
+          isDirty: false,
+          isPreview: false,
+          isPinned: false,
+          type: 'structure',
           connectionId: connId,
           tableName,
           tableSchema: schema ?? undefined,

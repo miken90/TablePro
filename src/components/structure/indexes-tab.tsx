@@ -32,49 +32,49 @@ export function IndexesTab({ sessionId, tableName, schema }: IndexesTabProps) {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   if (loading) {
-    return <div className="p-3 text-xs text-zinc-400">Loading indexes…</div>;
+    return <div className="p-3 text-xs text-text-secondary">Loading indexes…</div>;
   }
   if (error) {
-    return <div className="p-3 text-xs text-red-500">{error}</div>;
+    return <div className="p-3 text-xs text-state-danger-fg">{error}</div>;
   }
 
   return (
     <div className="overflow-auto">
       <table className="w-full border-collapse text-xs">
         <thead>
-          <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400">Name</th>
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400">Columns</th>
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400">Unique</th>
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400">Type</th>
+          <tr className="border-b border-border-subtle bg-surface">
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary">Name</th>
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary">Columns</th>
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary">Unique</th>
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary">Type</th>
           </tr>
         </thead>
         <tbody>
           {indexes.map((idx) => (
             <tr
               key={idx.name}
-              className="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+              className="border-b border-border-subtle hover:bg-surface-hover hover:text-text-primary"
             >
-              <td className="px-3 py-1.5 font-medium text-zinc-700 dark:text-zinc-200">{idx.name}</td>
-              <td className="px-3 py-1.5 font-mono text-zinc-500 dark:text-zinc-400">
+              <td className="px-3 py-1.5 font-medium text-text-primary">{idx.name}</td>
+              <td className="px-3 py-1.5 font-mono text-text-secondary">
                 {idx.columns.join(", ")}
               </td>
               <td className="px-3 py-1.5">
                 {idx.isUnique ? (
-                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+                  <span className="rounded-xs bg-accent-blue-subtle px-xs py-2xs text-ui-2xs font-medium text-accent-blue">
                     YES
                   </span>
                 ) : (
-                  <span className="text-zinc-400">NO</span>
+                  <span className="text-text-secondary">NO</span>
                 )}
               </td>
-              <td className="px-3 py-1.5 text-zinc-500 dark:text-zinc-400">{idx.indexType}</td>
+              <td className="px-3 py-1.5 text-text-secondary">{idx.indexType}</td>
             </tr>
           ))}
         </tbody>
       </table>
       {indexes.length === 0 && (
-        <div className="p-3 text-xs text-zinc-400">No indexes found</div>
+        <div className="p-3 text-xs text-text-secondary">No indexes on this table</div>
       )}
     </div>
   );

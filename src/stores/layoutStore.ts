@@ -1,9 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ColumnInfo } from "../types/query";
-import { useEditorStore } from "./editorStore";
-import { useConnectionStore } from "./connectionStore";
-import { useChangeStore } from "./changeStore";
+import { useEditorStore, type TabType } from "./editorStore";
 
 export const SIDEBAR_DEFAULT = 240;
 export const SIDEBAR_MIN = 160;
@@ -25,12 +23,11 @@ function clampSidebarWidth(value: unknown): number {
   return clamp(value, SIDEBAR_MIN, SIDEBAR_MAX);
 }
 
-interface TableReference {
-  tableName: string;
-  schema?: string | null;
+/** Kind of the active editor tab, read without a store subscription. */
+function activeTabKind(): TabType {
+  const editor = useEditorStore.getState();
+  return editor.tabs.find((t) => t.id === editor.activeTabId)?.type ?? "query";
 }
-
-type ViewMode = "query" | "table-browse";
 
 interface LayoutState {
   // Sidebar
@@ -59,12 +56,7 @@ interface LayoutState {
   /** About box (opened by the `app.about` command). */
   aboutOpen: boolean;
 
-  // View mode
-  viewMode: ViewMode;
-  activeTableContext: TableReference | null;
-  structureTarget: TableReference | null;
-
-  // Filter columns (derived from active table)
+  // Filter columns (derived from the active table tab)
   filterColumns: ColumnInfo[];
 
   // Inspector row selection
@@ -89,10 +81,13 @@ interface LayoutState {
   setAboutOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
-  openTable: (tableName: string, schema?: string | null) => void;
-  openStructure: (tableName: string, schema?: string | null) => void;
-  switchToQueryMode: () => void;
-  closeStructure: () => void;
+  /**
+   * Apply the inspector rule for a tab kind: a table tab hides the inspector
+   * (the grid owns the row detail); a structure tab leaves it alone; every
+   * editor kind restores the remembered query-tab preference. Called by
+   * `syncActiveTabContext` on every activation.
+   */
+  syncInspectorForTabKind: (kind: TabType) => void;
   setFilterColumns: (cols: ColumnInfo[]) => void;
   setSelectedRowIndex: (index: number | null) => void;
 
@@ -118,9 +113,6 @@ export const useLayoutStore = create<LayoutState>()(
       commandPaletteOpen: false,
       importOpen: false,
       aboutOpen: false,
-      viewMode: "query",
-      activeTableContext: null,
-      structureTarget: null,
       filterColumns: [],
       selectedRowIndex: null,
       queryInspectorVisible: true,
@@ -133,7 +125,7 @@ export const useLayoutStore = create<LayoutState>()(
       toggleInspector: () =>
         set((s) => {
           const nextInspectorVisible = !s.inspectorVisible;
-          if (s.viewMode === "query") {
+          if (activeTabKind() !== "table") {
             return {
               inspectorVisible: nextInspectorVisible,
               queryInspectorVisible: nextInspectorVisible,
@@ -153,32 +145,20 @@ export const useLayoutStore = create<LayoutState>()(
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
       setImportOpen: (open) => set({ importOpen: open }),
       setAboutOpen: (open) => set({ aboutOpen: open }),
-      openTable: (tableName, schema) => {
-        set((_state) => ({
-          activeTableContext: { tableName, schema },
-          viewMode: "table-browse",
-          structureTarget: null,
-          inspectorVisible: false,
-        }));
-        // Create/activate a table tab in editorStore
-        useEditorStore.getState().addTableTab(tableName, schema);
-        // Scope changeStore to this table
-        const connId = useConnectionStore.getState().selectedConnectionId;
-        if (connId) {
-          useChangeStore.getState().setActiveTable(connId, schema ?? null, tableName);
-        }
-      },
-      openStructure: (tableName, schema) =>
-        set({ structureTarget: { tableName, schema } }),
-      switchToQueryMode: () =>
-        set((state) => ({
-          viewMode: "query",
-          activeTableContext: null,
-          inspectorVisible: state.queryInspectorPreferenceSet ? state.queryInspectorVisible : true,
-          queryInspectorVisible: state.queryInspectorPreferenceSet ? state.queryInspectorVisible : true,
-          queryInspectorPreferenceSet: true,
-        })),
-      closeStructure: () => set({ structureTarget: null }),
+      syncInspectorForTabKind: (kind) =>
+        set((state) => {
+          if (kind === "table") return { inspectorVisible: false };
+          // Looking at a structure is neither a grid nor an editor: leave the
+          // inspector as it is and record no preference (the old takeover
+          // never touched it either).
+          if (kind === "structure") return {};
+          const remembered = state.queryInspectorPreferenceSet ? state.queryInspectorVisible : true;
+          return {
+            inspectorVisible: remembered,
+            queryInspectorVisible: remembered,
+            queryInspectorPreferenceSet: true,
+          };
+        }),
       setFilterColumns: (cols) => set({ filterColumns: cols }),
       setSelectedRowIndex: (index) => set({ selectedRowIndex: index }),
       selectedRowCount: 0,

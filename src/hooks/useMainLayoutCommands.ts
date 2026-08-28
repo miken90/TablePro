@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../stores/layoutStore";
 import { resolveActiveQuerySessionId, useQueryStore } from "../stores/queryStore";
 import { useEditorStore } from "../stores/editorStore";
+import { requestCloseTab } from "../stores/active-tab-sync";
 import { useConnectionStore } from "../stores/connectionStore";
 import { refreshActiveSchema } from "../stores/schemaStore";
 import { useCommandStore, getEffectiveBinding, type Command } from "./useCommandRegistry";
@@ -154,9 +155,11 @@ export function buildMainLayoutCommands(t: Translate): Command[] {
       label: "Close Tab",
       shortcut: shortcutFor("tabs.close"),
       category: "Edit" as const,
+      // Through the tab bar's guard, so Ctrl+W asks about a dirty query or
+      // staged row edits exactly like the tab's own close control does.
       action: () => {
         const { activeTabId: tid } = useEditorStore.getState();
-        if (tid) useEditorStore.getState().closeTab(tid);
+        if (tid) requestCloseTab(tid);
       },
     },
     {

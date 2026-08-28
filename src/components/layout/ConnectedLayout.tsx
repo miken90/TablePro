@@ -1,40 +1,29 @@
-import type React from "react";
 import { lazy, Suspense, useRef, type MutableRefObject } from "react";
 import { Sidebar } from "./Sidebar";
 import { EditorTabBar } from "../editor/EditorTabBar";
-import { SqlEditor } from "../editor/sql-editor";
-import { EditorStatusBar } from "../editor/editor-status-bar";
-import { ResultPanel } from "../grid/ResultPanel";
-import { ContextualBar } from "../grid/contextual-bar";
 import { WelcomeView } from "../connection/WelcomeView";
-import { TableStructureView } from "../structure/table-structure-view";
-import { FilterPanel } from "../filter/filter-panel";
 import { InspectorPanel } from "../inspector/inspector-panel";
 import { HistoryPanel } from "../history/HistoryPanel";
 import { PanelLoader } from "../shared/PanelLoader";
 import { ErrorBoundary } from "../shared/error-boundary";
+import { WorkspaceBody } from "./workspace-body";
 import { useConnectionStore } from "../../stores/connectionStore";
-import { useEditorStore } from "../../stores/editorStore";
 import { resolveActiveQuerySessionId, useQueryStore } from "../../stores/queryStore";
 import { useInspectorStore } from "../../stores/inspectorStore";
 import { refreshActiveSchema, useSchemaStore } from "../../stores/schemaStore";
+import { openStructureTab } from "../../stores/active-tab-sync";
 import {
   useLayoutStore,
   SIDEBAR_MIN,
   SIDEBAR_MAX,
-  EDITOR_MIN_PERCENT,
   INSPECTOR_MIN,
   INSPECTOR_MAX,
 } from "../../stores/layoutStore";
 import { useResizable } from "../../hooks/useResizable";
-import { useFilterContext } from "../../hooks/useFilterContext";
 import { useTableCallbacks } from "../../hooks/useTableCallbacks";
 
 const AiChatPanel = lazy(() => import("../ai/ai-chat-panel").then(m => ({ default: m.AiChatPanel })));
 const ImportDialog = lazy(() => import("../import/import-dialog").then(m => ({ default: m.ImportDialog })));
-const MongodbQueryPanel = lazy(() => import("../mongodb/mongodb-query-panel").then(m => ({ default: m.MongodbQueryPanel })));
-const RedisCommandPanel = lazy(() => import("../redis/redis-command-panel").then(m => ({ default: m.RedisCommandPanel })));
-const ExplainPanel = lazy(() => import("../editor/explain-panel").then(m => ({ default: m.ExplainPanel })));
 
 interface ConnectedLayoutProps {
   onBeforeTabSwitch: (targetTabId: string) => boolean;
@@ -43,6 +32,17 @@ interface ConnectedLayoutProps {
   pendingSaveRef: MutableRefObject<(() => Promise<void>) | null>;
   requestSaveRef: MutableRefObject<(() => void) | null>;
   addRowRef: MutableRefObject<(() => void) | null>;
+}
+
+/** Resizer grip shared by the sidebar and inspector splitters. */
+function SplitterGrip() {
+  return (
+    <div className="flex flex-col gap-1 opacity-40 group-hover:opacity-70">
+      <span className="h-1 w-1 rounded-full bg-current" />
+      <span className="h-1 w-1 rounded-full bg-current" />
+      <span className="h-1 w-1 rounded-full bg-current" />
+    </div>
+  );
 }
 
 export function ConnectedLayout({
@@ -56,10 +56,7 @@ export function ConnectedLayout({
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const deleteSelectedRef = useRef<(() => void) | null>(null);
   const clearSelectionRef = useRef<(() => void) | null>(null);
-  const selectedRowCount = useLayoutStore((s) => s.selectedRowCount);
-  const getSessionId = useConnectionStore((s) => s.getSessionId);
   const connections = useConnectionStore((s) => s.connections);
-  const activeTabId = useEditorStore((s) => s.activeTabId);
   const capabilities = useSchemaStore((s) => s.capabilities);
   const isDocumentDb = capabilities.supportsCollections && !capabilities.supportsSqlEditor;
   const activeConnection = selectedConnectionId ? connections.get(selectedConnectionId) : undefined;
@@ -67,19 +64,12 @@ export function ConnectedLayout({
 
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
   const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
-  const editorHeightPercent = useLayoutStore((s) => s.editorHeightPercent);
-  const structureTarget = useLayoutStore((s) => s.structureTarget);
-  const viewMode = useLayoutStore((s) => s.viewMode);
-  const activeTableContext = useLayoutStore((s) => s.activeTableContext);
-  const filterVisible = useLayoutStore((s) => s.filterVisible);
-  const filterColumns = useLayoutStore((s) => s.filterColumns);
   const inspectorVisible = useLayoutStore((s) => s.inspectorVisible);
   const inspectorWidth = useLayoutStore((s) => s.inspectorWidth);
   const selectedRowIndex = useLayoutStore((s) => s.selectedRowIndex);
   const historyVisible = useLayoutStore((s) => s.historyVisible);
   const aiChatVisible = useLayoutStore((s) => s.aiChatVisible);
 
-  const { filterTabId, activeWhereClause } = useFilterContext(viewMode, activeTableContext, activeTabId);
   const { handleOpenTable, handleOpenPreviewTable, handleHistorySelect } = useTableCallbacks();
 
   const { onMouseDown: handleSidebarResize } = useResizable({
@@ -88,14 +78,6 @@ export function ConnectedLayout({
     max: SIDEBAR_MAX,
     currentValue: sidebarWidth,
     onResize: useLayoutStore.getState().setSidebarWidth,
-  });
-
-  const { onMouseDown: handleEditorResize } = useResizable({
-    direction: "vertical",
-    min: EDITOR_MIN_PERCENT,
-    max: 80,
-    containerSelector: ".editor-results-container",
-    onResize: useLayoutStore.getState().setEditorHeightPercent,
   });
 
   const { onMouseDown: handleInspectorResize } = useResizable({
@@ -108,7 +90,6 @@ export function ConnectedLayout({
   });
 
   const queryResult = useQueryStore((s) => s.result);
-  const explainResult = useQueryStore((s) => s.explainResult);
   const inspectorStoreColumns = useInspectorStore((s) => s.columns);
   const inspectorStoreRow = useInspectorStore((s) => s.row);
 
@@ -128,7 +109,7 @@ export function ConnectedLayout({
           <div style={{ width: sidebarWidth }} className="flex-shrink-0 overflow-hidden">
             <ErrorBoundary name="sidebar">
               <Sidebar
-                onViewStructure={(t, s) => useLayoutStore.getState().openStructure(t, s)}
+                onViewStructure={(t, s) => openStructureTab(t, s)}
                 onOpenTable={handleOpenTable}
                 onOpenPreviewTable={handleOpenPreviewTable}
               />
@@ -139,63 +120,17 @@ export function ConnectedLayout({
             onMouseDown={handleSidebarResize}
             aria-hidden="true"
           >
-            <div className="flex flex-col gap-1 opacity-40 group-hover:opacity-70">
-              <span className="h-1 w-1 rounded-full bg-current" />
-              <span className="h-1 w-1 rounded-full bg-current" />
-              <span className="h-1 w-1 rounded-full bg-current" />
-            </div>
+            <SplitterGrip />
           </div>
         </>
       )}
 
-      {/* Main content */}
+      {/* Main content: the tab bar is always present while connected; the
+          body is whatever the active tab kind resolves to (M1). */}
       <main id="main-content" className="flex flex-1 flex-col overflow-hidden">
         <ErrorBoundary name="editor">
-          {!isDocumentDb && !isKeyValueDb && structureTarget && selectedConnectionId && getSessionId(selectedConnectionId) ? (
-            <TableStructureView
-              sessionId={getSessionId(selectedConnectionId)!}
-              tableName={structureTarget.tableName}
-              schema={structureTarget.schema ?? undefined}
-              onClose={() => useLayoutStore.getState().closeStructure()}
-            />
-          ) : !isConnected ? (
+          {!isConnected ? (
             <WelcomeView />
-          ) : viewMode === "table-browse" && activeTableContext ? (
-            <>
-              <EditorTabBar
-                onTabActivate={onTabActivated}
-                onBeforeTabSwitch={onBeforeTabSwitch}
-                onAfterClose={onAfterClose}
-              />
-              <ContextualBar
-                tabId={filterTabId}
-                tableName={activeTableContext.tableName}
-                columns={filterColumns}
-                onSave={isDocumentDb ? () => {} : () => requestSaveRef.current?.()}
-                onAddRow={isDocumentDb ? undefined : () => addRowRef.current?.()}
-                selectedRowCount={selectedRowCount}
-                onDeleteSelected={isDocumentDb ? undefined : () => deleteSelectedRef.current?.()}
-                onDeselectAll={() => clearSelectionRef.current?.()}
-              />
-              <div className="flex-1 overflow-hidden">
-                <ResultPanel
-                  tabId={filterTabId}
-                  tableName={activeTableContext.tableName}
-                  schema={activeTableContext.schema}
-                  sessionId={sessionId}
-                  activeWhereClause={activeWhereClause}
-                  quickSearchColumns={filterColumns}
-                  onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
-                  onOpenQueryEditor={() => useLayoutStore.getState().switchToQueryMode()}
-                  onSaveRef={pendingSaveRef}
-                  onRequestSaveRef={requestSaveRef}
-                  onAddRowRef={addRowRef}
-                  onDeleteSelectedRef={deleteSelectedRef}
-                  onClearSelectionRef={clearSelectionRef}
-                  hideChangeToolbar
-                />
-              </div>
-            </>
           ) : (
             <>
               <EditorTabBar
@@ -203,73 +138,14 @@ export function ConnectedLayout({
                 onBeforeTabSwitch={onBeforeTabSwitch}
                 onAfterClose={onAfterClose}
               />
-              {!isDocumentDb && !isKeyValueDb && filterVisible && (
-                <FilterPanel tabId={filterTabId} columns={filterColumns} />
-              )}
-              <div className="editor-results-container flex flex-1 flex-col overflow-hidden">
-                {isKeyValueDb ? (
-                  <>
-                    <Suspense fallback={<PanelLoader />}>
-                      <RedisCommandPanel />
-                    </Suspense>
-                    <div className="flex-1 overflow-hidden">
-                      <ResultPanel
-                        sessionId={sessionId}
-                        onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
-                      />
-                    </div>
-                  </>
-                ) : isDocumentDb ? (
-                  <>
-                    <Suspense fallback={<PanelLoader />}>
-                      <MongodbQueryPanel />
-                    </Suspense>
-                    <div className="flex-1 overflow-hidden">
-                      <ResultPanel
-                        sessionId={sessionId}
-                        onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ height: `${editorHeightPercent}%` }} className="flex flex-col overflow-hidden">
-                      <div className="flex-1 overflow-hidden">
-                        <SqlEditor />
-                      </div>
-                      <EditorStatusBar />
-                    </div>
-                    <div
-                      className="group h-1.5 cursor-row-resize bg-border-subtle hover:bg-accent-blue flex items-center justify-center"
-                      onMouseDown={handleEditorResize}
-                    >
-                      <div className="flex gap-1 opacity-40 group-hover:opacity-70">
-                        <span className="h-1 w-1 rounded-full bg-current" />
-                        <span className="h-1 w-1 rounded-full bg-current" />
-                        <span className="h-1 w-1 rounded-full bg-current" />
-                      </div>
-                    </div>
-                    <div className="flex-1 overflow-hidden flex flex-col">
-                      {explainResult && (
-                        <div className="max-h-[40%] overflow-hidden">
-                          <Suspense fallback={<PanelLoader />}>
-                            <ExplainPanel
-                              result={explainResult}
-                              onClose={() => useQueryStore.setState({ explainResult: null })}
-                            />
-                          </Suspense>
-                        </div>
-                      )}
-                      <div className="flex-1 overflow-hidden">
-                        <ResultPanel
-                          sessionId={sessionId}
-                          onRowSelect={(i) => useLayoutStore.getState().setSelectedRowIndex(i)}
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              <WorkspaceBody
+                engine={{ isConnected, sessionId, isDocumentDb, isKeyValueDb }}
+                pendingSaveRef={pendingSaveRef}
+                requestSaveRef={requestSaveRef}
+                addRowRef={addRowRef}
+                deleteSelectedRef={deleteSelectedRef}
+                clearSelectionRef={clearSelectionRef}
+              />
             </>
           )}
         </ErrorBoundary>
@@ -282,11 +158,7 @@ export function ConnectedLayout({
             className="group w-1.5 cursor-col-resize bg-border-subtle hover:bg-accent-blue flex flex-col items-center justify-center"
             onMouseDown={handleInspectorResize}
           >
-            <div className="flex flex-col gap-1 opacity-40 group-hover:opacity-70">
-              <span className="h-1 w-1 rounded-full bg-current" />
-              <span className="h-1 w-1 rounded-full bg-current" />
-              <span className="h-1 w-1 rounded-full bg-current" />
-            </div>
+            <SplitterGrip />
           </div>
           <div style={{ width: inspectorWidth }} className="flex-shrink-0 overflow-hidden">
             <ErrorBoundary name="inspector">

@@ -2,13 +2,11 @@ import { useCallback } from "react";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useEditorStore } from "../stores/editorStore";
 import { useQueryStore } from "../stores/queryStore";
-import { useLayoutStore } from "../stores/layoutStore";
+import { activateQueryTab, openTableTab, syncActiveTabContext } from "../stores/active-tab-sync";
 
 export function useTableCallbacks() {
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const getSessionId = useConnectionStore((s) => s.getSessionId);
-  const activeTabId = useEditorStore((s) => s.activeTabId);
-  const addTab = useEditorStore((s) => s.addTab);
   const addPreviewTab = useEditorStore((s) => s.addPreviewTab);
   const updateTabContent = useEditorStore((s) => s.updateTabContent);
   const setQueryText = useQueryStore((s) => s.setQueryText);
@@ -16,7 +14,7 @@ export function useTableCallbacks() {
   const handleQuickSwitcherSelect = useCallback(
     (tableName: string, schema?: string | null) => {
       if (selectedConnectionId) {
-        useLayoutStore.getState().openTable(tableName, schema);
+        openTableTab(tableName, schema);
       }
     },
     [selectedConnectionId],
@@ -25,7 +23,7 @@ export function useTableCallbacks() {
   const handleOpenTable = useCallback(
     (tableName: string, schema?: string | null) => {
       if (selectedConnectionId) {
-        useLayoutStore.getState().openTable(tableName, schema);
+        openTableTab(tableName, schema);
       }
     },
     [selectedConnectionId],
@@ -41,7 +39,7 @@ export function useTableCallbacks() {
       const tabId = addPreviewTab(tableName);
       updateTabContent(tabId, selectQuery);
       setQueryText(selectQuery);
-      useLayoutStore.getState().switchToQueryMode();
+      syncActiveTabContext(tabId);
       void useQueryStore.getState().execute(sid, selectQuery);
     },
     [selectedConnectionId, getSessionId, addPreviewTab, updateTabContent, setQueryText],
@@ -49,16 +47,14 @@ export function useTableCallbacks() {
 
   const handleHistorySelect = useCallback(
     (query: string) => {
-      if (activeTabId) {
-        updateTabContent(activeTabId, query);
-      } else {
-        const tabId = addTab("Query");
-        updateTabContent(tabId, query);
-      }
+      // A history pick lands in a query tab — the active one if it is one,
+      // else the latest query tab, else a new one — never in a table or
+      // structure tab where the SQL would be invisible.
+      const tabId = activateQueryTab();
+      updateTabContent(tabId, query);
       setQueryText(query);
-      useLayoutStore.getState().switchToQueryMode();
     },
-    [activeTabId, addTab, updateTabContent, setQueryText],
+    [updateTabContent, setQueryText],
   );
 
   return {

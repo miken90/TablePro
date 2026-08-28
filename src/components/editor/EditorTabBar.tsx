@@ -1,10 +1,12 @@
 import { Plus } from "lucide-react";
-import { useCallback, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
+import { makeTableKey, useChangeStore } from "../../stores/changeStore";
+import { registerCloseTabHandler } from "../../stores/active-tab-sync";
 import type { EditorTab } from "../../stores/editorStore";
 import { EditorTab as EditorTabComponent } from "./EditorTab";
-import { TabContextMenu } from "./TabContextMenu";
+import { TabContextMenu, type BulkCloseKind } from "./TabContextMenu";
 import { ConfirmDiscardDialog } from "../shared/confirm-discard-dialog";
 
 interface EditorTabBarProps {
@@ -34,26 +36,115 @@ export function EditorTabBar({ onTabActivate, onBeforeTabSwitch, onAfterClose }:
   const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
 
+  /** Staged row edits of a table tab, or 0 for any other tab. */
+  const stagedChangesOf = useCallback((tab: EditorTab | undefined): number => {
+    if (!tab || tab.type !== "table" || !tab.tableName) return 0;
+    const connectionId = tab.connectionId ?? useConnectionStore.getState().selectedConnectionId;
+    if (!connectionId) return 0;
+    return useChangeStore.getState().stagedChangeCount(connectionId, tab.tableSchema ?? null, tab.tableName);
+  }, []);
+
+  /** Drop a table tab's staged snapshot (the Discard half of V3). */
+  const clearStagedOf = useCallback((tab: EditorTab | undefined) => {
+    if (!tab || tab.type !== "table" || !tab.tableName) return;
+    const connectionId = tab.connectionId ?? useConnectionStore.getState().selectedConnectionId;
+    if (!connectionId) return;
+    useChangeStore.getState().clearForTable(makeTableKey(connectionId, tab.tableSchema ?? null, tab.tableName));
+  }, []);
+
+  /** Which tabs a bulk close would remove. Mirrors the editorStore actions. */
+  const bulkCloseVictims = useCallback((kind: BulkCloseKind, tabId: string): EditorTab[] => {
+    const idx = tabs.findIndex((t) => t.id === tabId);
+    // The store's closeTabsToRight no-ops on an unknown anchor; mirror that
+    // so no snapshot is cleared for a close that will not happen.
+    if (kind === "right" && idx === -1) return [];
+    return tabs.filter((t, i) => {
+      if (t.isPinned ?? false) return false;
+      if (kind === "others") return t.id !== tabId;
+      if (kind === "right") return i > idx;
+      return true;
+    });
+  }, [tabs]);
+
+  /** What a close would lose: staged row edits of a table tab, or one unsaved query. */
+  const lossOf = useCallback((tab: EditorTab | undefined): number => {
+    if (!tab) return 0;
+    if (tab.isDirty && (tab.type === "query" || !tab.type)) return 1;
+    return stagedChangesOf(tab);
+  }, [stagedChangesOf]);
+
+  const [pendingBulkClose, setPendingBulkClose] = useState<{ kind: BulkCloseKind; tabId: string } | null>(null);
+
+  const runBulkClose = useCallback((kind: BulkCloseKind, tabId: string) => {
+    const store = useEditorStore.getState();
+    if (kind === "others") store.closeOtherTabs(tabId);
+    else if (kind === "right") store.closeTabsToRight(tabId);
+    else store.closeAllTabs();
+    onAfterClose?.(useEditorStore.getState().activeTabId);
+  }, [onAfterClose]);
+
+  // Close Others / Close All / Close to the Right: one SCR-45 for every
+  // staged edit the bulk close would drop, or straight through when none.
+  const handleBulkClose = useCallback((kind: BulkCloseKind, tabId: string) => {
+    const loss = bulkCloseVictims(kind, tabId).reduce((n, t) => n + lossOf(t), 0);
+    if (loss > 0) {
+      setPendingBulkClose({ kind, tabId });
+      return;
+    }
+    runBulkClose(kind, tabId);
+  }, [bulkCloseVictims, lossOf, runBulkClose]);
+
+  const confirmBulkDiscard = useCallback(() => {
+    if (!pendingBulkClose) return;
+    bulkCloseVictims(pendingBulkClose.kind, pendingBulkClose.tabId).forEach(clearStagedOf);
+    runBulkClose(pendingBulkClose.kind, pendingBulkClose.tabId);
+    setPendingBulkClose(null);
+  }, [pendingBulkClose, bulkCloseVictims, clearStagedOf, runBulkClose]);
+
   const handleCloseTab = useCallback(
     (tabId: string) => {
       const tab = tabs.find((t) => t.id === tabId);
-      if (tab?.isDirty && (tab.type === "query" || !tab.type)) {
+      const dirtyQuery = tab?.isDirty && (tab.type === "query" || !tab.type);
+      // A table tab with staged edits prompts too: closing it silently would
+      // leave the snapshot behind to resurface on the next open (V3).
+      if (dirtyQuery || stagedChangesOf(tab) > 0) {
         setPendingCloseTabId(tabId);
         return;
       }
       closeTab(tabId);
       onAfterClose?.(useEditorStore.getState().activeTabId);
     },
-    [tabs, closeTab, onAfterClose],
+    [tabs, closeTab, onAfterClose, stagedChangesOf],
   );
 
   const confirmDiscard = useCallback(() => {
     if (pendingCloseTabId) {
+      const tab = tabs.find((t) => t.id === pendingCloseTabId);
+      if (tab?.type === "table" && tab.tableName) {
+        const connectionId = tab.connectionId ?? useConnectionStore.getState().selectedConnectionId;
+        if (connectionId) {
+          useChangeStore.getState().clearForTable(makeTableKey(connectionId, tab.tableSchema ?? null, tab.tableName));
+        }
+      }
       closeTab(pendingCloseTabId);
       setPendingCloseTabId(null);
       onAfterClose?.(useEditorStore.getState().activeTabId);
     }
-  }, [pendingCloseTabId, closeTab, onAfterClose]);
+  }, [pendingCloseTabId, tabs, closeTab, onAfterClose]);
+
+  // Commands (Ctrl+W) and vim `:q` close through this same guard.
+  useEffect(() => {
+    registerCloseTabHandler(handleCloseTab);
+    return () => registerCloseTabHandler(null);
+  }, [handleCloseTab]);
+
+  const pendingCloseChangeCount = useMemo(() => {
+    if (pendingBulkClose) {
+      return Math.max(1, bulkCloseVictims(pendingBulkClose.kind, pendingBulkClose.tabId).reduce((n, t) => n + lossOf(t), 0));
+    }
+    const tab = tabs.find((t) => t.id === pendingCloseTabId);
+    return Math.max(1, stagedChangesOf(tab));
+  }, [tabs, pendingCloseTabId, pendingBulkClose, bulkCloseVictims, lossOf, stagedChangesOf]);
 
   // Sort: pinned tabs first, then by original order
   const sortedTabs = useMemo(() => {
@@ -163,15 +254,16 @@ export function EditorTabBar({ onTabActivate, onBeforeTabSwitch, onAfterClose }:
           position={contextMenu.position}
           onClose={() => setContextMenu(null)}
           onCloseTab={handleCloseTab}
+          onBulkClose={handleBulkClose}
         />
       )}
 
       {/* Confirm discard unsaved query dialog */}
       <ConfirmDiscardDialog
-        open={pendingCloseTabId !== null}
-        changeCount={1}
-        onConfirm={confirmDiscard}
-        onCancel={() => setPendingCloseTabId(null)}
+        open={pendingCloseTabId !== null || pendingBulkClose !== null}
+        changeCount={pendingCloseChangeCount}
+        onConfirm={pendingBulkClose ? confirmBulkDiscard : confirmDiscard}
+        onCancel={() => { setPendingCloseTabId(null); setPendingBulkClose(null); }}
       />
     </div>
   );

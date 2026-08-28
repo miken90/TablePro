@@ -46,7 +46,15 @@ interface ChangeStoreState {
   readonly hasChanges: boolean;
 
   setActiveTable: (connectionId: string, schema: string | null, tableName: string) => void;
+  /**
+   * Release the active table scope without touching any table's staged
+   * edits. This is what a switch to a non-table tab must call; `clear()`
+   * wipes the active table's snapshot and `clearForTable()` deletes it.
+   */
+  clearActiveTable: () => void;
   clearForTable: (tableKey: string) => void;
+  /** Number of staged row edits a table (active or not) holds. */
+  stagedChangeCount: (connectionId: string, schema: string | null, tableName: string) => number;
 
   getChanges(): Map<number, RowChange>;
   getRowChangeType(rowIndex: number): "insert" | "update" | "delete" | null;
@@ -73,7 +81,7 @@ function getActiveState(state: { _byTable: Record<string, TableChangeState>; _ac
   return state._byTable[state._activeTableKey] ?? EMPTY_STATE;
 }
 
-function makeTableKey(connectionId: string, schema: string | null, tableName: string): string {
+export function makeTableKey(connectionId: string, schema: string | null, tableName: string): string {
   return `${connectionId}:${schema ?? ''}:${tableName}`;
 }
 
@@ -110,6 +118,15 @@ export const useChangeStore = create<ChangeStoreState>((set, get) => ({
       const byTable = s._byTable[key] ? s._byTable : { ...s._byTable, [key]: emptyTableState() };
       return buildState(byTable, key);
     });
+  },
+
+  clearActiveTable() {
+    set((s) => buildState(s._byTable, null));
+  },
+
+  stagedChangeCount(connectionId, schema, tableName) {
+    const entry = get()._byTable[makeTableKey(connectionId, schema, tableName)];
+    return entry ? Object.keys(entry.changes).length : 0;
   },
 
   clearForTable(tableKey) {

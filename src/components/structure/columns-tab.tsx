@@ -11,7 +11,12 @@ interface ColumnsTabProps {
   tableName: string;
   schema?: string;
   driverType?: string;
+  /** This table's staged-DDL bucket; read directly so the first frame never shows another table's changes. */
+  structureKey: string;
 }
+
+/** Stable empty list so an untouched table does not re-render on every store update. */
+const NO_CHANGES: never[] = [];
 
 function columnInfoToDef(col: ColumnInfo, position: number): ColumnDefinition {
   return {
@@ -74,43 +79,43 @@ function EditableRow({ col, idx, isOriginal, rowState, onModify, onDrop, onUndro
   }, [col, editName, editType, editNullable, editDefault, onModify]);
 
   const rowBg = isDroppedRow
-    ? "bg-red-50 dark:bg-red-900/10 opacity-60"
+    ? "bg-grid-row-deleted opacity-60"
     : isAddedRow
-    ? "bg-green-50 dark:bg-green-900/10"
+    ? "bg-grid-row-inserted"
     : rowState === 'modified'
-    ? "bg-yellow-50 dark:bg-yellow-900/10"
-    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50";
+    ? "bg-grid-row-updated"
+    : "hover:bg-grid-row-hover hover:text-text-primary";
 
   const borderLeft = isDroppedRow
-    ? "border-l-2 border-l-red-400"
+    ? "border-l-2 border-l-accent-red"
     : isAddedRow
-    ? "border-l-2 border-l-green-500"
+    ? "border-l-2 border-l-accent-green"
     : rowState === 'modified'
-    ? "border-l-2 border-l-yellow-400"
+    ? "border-l-2 border-l-accent-yellow"
     : "";
 
   return (
-    <tr className={`border-b border-zinc-100 dark:border-zinc-800 text-xs ${rowBg} ${borderLeft}`}>
-      <td className="px-3 py-1.5 text-zinc-400">{isAddedRow ? "+" : idx + 1}</td>
+    <tr className={`border-b border-border-subtle text-xs ${rowBg} ${borderLeft}`}>
+      <td className="px-3 py-1.5 text-text-secondary">{isAddedRow ? "+" : idx + 1}</td>
       <td className="px-2 py-1">
         <div className="flex items-center gap-1">
-          {col.isPrimaryKey && <Key size={11} className="shrink-0 text-amber-500" />}
+          {col.isPrimaryKey && <Key size={11} className="shrink-0 text-grid-pk-fg" />}
           {isDroppedRow ? (
-            <span className="line-through text-zinc-400">{col.name}</span>
+            <span className="line-through text-text-secondary">{col.name}</span>
           ) : (
             <input
               value={editName}
               onChange={e => setEditName(e.target.value)}
               onBlur={commitEdit}
               disabled={isOriginal && col.isPrimaryKey}
-              className="w-full font-medium text-zinc-700 dark:text-zinc-200 bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-blue-400 px-0 py-0 disabled:cursor-default"
+              className="w-full font-medium text-text-primary bg-transparent border-b border-transparent hover:border-border-subtle focus:border-focus-ring px-0 py-0 disabled:cursor-default"
             />
           )}
         </div>
       </td>
       <td className="px-2 py-1 w-40">
         {isDroppedRow ? (
-          <span className="font-mono text-zinc-400 line-through">{col.typeName}</span>
+          <span className="font-mono text-text-secondary line-through">{col.typeName}</span>
         ) : (
           <TypePicker
             value={editType}
@@ -126,7 +131,7 @@ function EditableRow({ col, idx, isOriginal, rowState, onModify, onDrop, onUndro
             checked={editNullable}
             onChange={e => { setEditNullable(e.target.checked); setTimeout(commitEdit, 0); }}
             disabled={col.isPrimaryKey && isOriginal}
-            className="accent-blue-500 cursor-pointer disabled:cursor-default"
+            className="accent-accent-blue cursor-pointer disabled:cursor-default"
           />
         )}
       </td>
@@ -137,7 +142,7 @@ function EditableRow({ col, idx, isOriginal, rowState, onModify, onDrop, onUndro
             onChange={e => setEditDefault(e.target.value)}
             onBlur={commitEdit}
             placeholder="NULL"
-            className="w-full font-mono text-[11px] text-zinc-500 dark:text-zinc-400 bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-blue-400 px-0 py-0"
+            className="w-full font-mono text-ui-xs text-text-secondary bg-transparent border-b border-transparent hover:border-border-subtle focus:border-focus-ring px-0 py-0"
           />
         )}
       </td>
@@ -146,7 +151,7 @@ function EditableRow({ col, idx, isOriginal, rowState, onModify, onDrop, onUndro
           <button
             type="button"
             onClick={() => onUndrop(col.name)}
-            className="text-[10px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200"
+            className="text-ui-2xs text-text-secondary hover:text-text-primary"
           >
             Undo
           </button>
@@ -155,7 +160,7 @@ function EditableRow({ col, idx, isOriginal, rowState, onModify, onDrop, onUndro
             type="button"
             onClick={() => onDrop(col)}
             title="Drop column"
-            className="text-zinc-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400"
+            className="text-text-secondary hover:text-accent-red"
           >
             <Trash2 size={12} />
           </button>
@@ -165,17 +170,17 @@ function EditableRow({ col, idx, isOriginal, rowState, onModify, onDrop, onUndro
   );
 }
 
-export function ColumnsTab({ sessionId, tableName, schema }: ColumnsTabProps) {
+export function ColumnsTab({ sessionId, tableName, schema, structureKey }: ColumnsTabProps) {
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { changes, modifyColumn, dropColumn, addColumn, discardAll } = useStructureChangeStore();
-
-  // Reset changes on table switch
-  useEffect(() => {
-    discardAll();
-  }, [sessionId, tableName, schema, discardAll]);
+  // Staged changes are kept per table by the store (the structure view
+  // points it at this table), so switching tabs never discards them.
+  const changes = useStructureChangeStore((s) => s._byTable[structureKey] ?? NO_CHANGES);
+  const modifyColumn = useStructureChangeStore((s) => s.modifyColumn);
+  const dropColumn = useStructureChangeStore((s) => s.dropColumn);
+  const addColumn = useStructureChangeStore((s) => s.addColumn);
 
   /* eslint-disable react-hooks/set-state-in-effect -- reset loading state on fetch */
   useEffect(() => {
@@ -207,16 +212,16 @@ export function ColumnsTab({ sessionId, tableName, schema }: ColumnsTabProps) {
   }, [columns.length, changes, addColumn]);
 
   const handleUndrop = useCallback((name: string) => {
-    useStructureChangeStore.setState(s => ({
-      changes: s.changes.filter(c => !(c.type === 'drop_column' && c.columnName === name)),
-    }));
+    // Through the store action: `changes` is derived from the per-table
+    // bucket, so a raw setState on it would leave the drop in place.
+    useStructureChangeStore.getState().undropColumn(name);
   }, []);
 
   if (loading) {
-    return <div className="p-3 text-xs text-zinc-400">Loading columns…</div>;
+    return <div className="p-3 text-xs text-text-secondary">Loading columns…</div>;
   }
   if (error) {
-    return <div className="p-3 text-xs text-red-500">{error}</div>;
+    return <div className="p-3 text-xs text-state-danger-fg">{error}</div>;
   }
 
   const addedCols = changes
@@ -227,12 +232,12 @@ export function ColumnsTab({ sessionId, tableName, schema }: ColumnsTabProps) {
     <div className="overflow-auto">
       <table className="w-full border-collapse text-xs">
         <thead>
-          <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400 w-8">#</th>
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400">Name</th>
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400 w-44">Type</th>
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400 w-20">Nullable</th>
-            <th className="px-3 py-1.5 text-left font-medium text-zinc-500 dark:text-zinc-400 w-28">Default</th>
+          <tr className="border-b border-border-subtle bg-surface">
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary w-8">#</th>
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary">Name</th>
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary w-44">Type</th>
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary w-20">Nullable</th>
+            <th className="px-3 py-1.5 text-left font-medium text-text-secondary w-28">Default</th>
             <th className="px-3 py-1.5 w-10" />
           </tr>
         </thead>
@@ -274,13 +279,13 @@ export function ColumnsTab({ sessionId, tableName, schema }: ColumnsTabProps) {
         </tbody>
       </table>
       {columns.length === 0 && addedCols.length === 0 && (
-        <div className="p-3 text-xs text-zinc-400">No columns found</div>
+        <div className="p-3 text-xs text-text-secondary">No columns found</div>
       )}
-      <div className="px-3 py-2 border-t border-zinc-100 dark:border-zinc-800">
+      <div className="px-3 py-2 border-t border-border-subtle">
         <button
           type="button"
           onClick={handleAddColumn}
-          className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+          className="flex items-center gap-1 text-xs text-accent-blue hover:text-text-primary"
         >
           <Plus size={13} />
           Add Column

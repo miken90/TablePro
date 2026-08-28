@@ -12,11 +12,14 @@ Every tab is an independent workspace with its own SQL content, results, paginat
 | Type | Icon | Purpose |
 |------|------|---------|
 | **Query Tab** | Document icon | Write and execute custom SQL |
-| **Table Tab** | Table icon (blue) | Browse table data with pagination and filtering |
+| **Table Tab** | Table icon | Browse table data with pagination and filtering |
+| **Structure Tab** | Boxes icon | A table's columns, indexes, foreign keys, and DDL (see [Table Structure](/features/table-structure)) |
 
 **Query tabs** start with an empty editor. Type SQL and press `Ctrl+Enter` to execute.
 
-**Table tabs** open when you click a table in the sidebar. They provide server-side pagination, inline editing with change tracking, structure view, and filter support.
+**Table tabs** open when you click a table in the sidebar. They provide server-side pagination, inline editing with change tracking, and filter support. Closing a table tab that has unsaved row edits asks first; Discard drops that table's edits.
+
+**Structure tabs** open from the sidebar's **View Structure** action (or a double-click on a table) and sit beside the other tabs.
 
 <Tip>
 Table tabs are editable by default. Query tabs are read-only unless the query is a simple `SELECT * FROM table` statement.

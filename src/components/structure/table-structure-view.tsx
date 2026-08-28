@@ -1,27 +1,49 @@
-import { useState, useCallback } from "react";
-import { X, Table2, Eye } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Table2, Eye } from "lucide-react";
 import { ColumnsTab } from "./columns-tab";
 import { IndexesTab } from "./indexes-tab";
 import { ForeignKeysTab } from "./foreign-keys-tab";
 import { DdlTab } from "./ddl-tab";
 import { SchemaPreviewDialog } from "./schema-preview-dialog";
-import { useStructureChangeStore } from "../../stores/structureChangeStore";
+import { makeStructureKey, useStructureChangeStore } from "../../stores/structureChangeStore";
+import { useConnectionStore } from "../../stores/connectionStore";
+import { Button, IconButton, TabStrip } from "../ui";
+import { X } from "lucide-react";
 import * as commands from "../../ipc/commands";
 import { extractErrorMessage } from "../../ipc/error";
 import type { AlterColumnChange } from "../../ipc/commands";
 
 type StructureTab = "columns" | "indexes" | "foreign-keys" | "ddl";
 
+/** Stable empty list so an untouched table does not re-render on every store update. */
+const NO_CHANGES: never[] = [];
+
+const TABS: { id: StructureTab; label: string }[] = [
+  { id: "columns", label: "Columns" },
+  { id: "indexes", label: "Indexes" },
+  { id: "foreign-keys", label: "Foreign Keys" },
+  { id: "ddl", label: "DDL" },
+];
+
 interface TableStructureViewProps {
   sessionId: string;
+  /** Owner of the staged-DDL bucket; falls back to the selected connection. */
+  connectionId?: string;
   tableName: string;
   schema?: string;
+  /** Only the legacy takeover host passed this; a structure tab closes via the tab bar. */
   onClose?: () => void;
   onRefresh?: () => void;
 }
 
+/**
+ * SCR-28 — a table's structure as a tab body (M1). Only the active sub-tab
+ * mounts, so each sub-tab fetches on first view and switching back does not
+ * refetch what an inactive sibling never loaded.
+ */
 export function TableStructureView({
   sessionId,
+  connectionId,
   tableName,
   schema,
   onClose,
@@ -33,42 +55,23 @@ export function TableStructureView({
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
 
-  const { changes, discardAll } = useStructureChangeStore();
-
-  const tabs: { id: StructureTab; label: string }[] = [
-    { id: "columns", label: "Columns" },
-    { id: "indexes", label: "Indexes" },
-    { id: "foreign-keys", label: "Foreign Keys" },
-    { id: "ddl", label: "DDL" },
-  ];
-
-  const tabCls = (id: StructureTab) =>
-    `px-3 py-1.5 text-xs cursor-pointer border-b-2 transition-colors ${
-      activeTab === id
-        ? "border-blue-500 text-blue-600 dark:text-blue-400"
-        : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-    }`;
+  // Staged DDL is kept per table; pointing the store here never discards.
+  // The list is read by key so the first frame of a second structure tab
+  // never shows the previous table's pending changes.
+  const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
+  const structureKey = makeStructureKey(connectionId ?? selectedConnectionId ?? sessionId, schema, tableName);
+  useEffect(() => {
+    useStructureChangeStore.getState().setActiveTable(structureKey);
+  }, [structureKey]);
+  const changes = useStructureChangeStore((s) => s._byTable[structureKey] ?? NO_CHANGES);
+  const discardAll = useStructureChangeStore((s) => s.discardAll);
 
   const buildAlterPayload = useCallback((): AlterColumnChange[] => {
     return changes.map(c => ({
       changeType: c.type,
       columnName: c.columnName,
-      before: c.before ? {
-        name: c.before.name,
-        typeName: c.before.typeName,
-        nullable: c.before.nullable,
-        defaultValue: c.before.defaultValue,
-        isPrimaryKey: c.before.isPrimaryKey,
-        position: c.before.position,
-      } : undefined,
-      after: c.after ? {
-        name: c.after.name,
-        typeName: c.after.typeName,
-        nullable: c.after.nullable,
-        defaultValue: c.after.defaultValue,
-        isPrimaryKey: c.after.isPrimaryKey,
-        position: c.after.position,
-      } : undefined,
+      before: c.before ? { ...c.before } : undefined,
+      after: c.after ? { ...c.after } : undefined,
     }));
   }, [changes]);
 
@@ -109,72 +112,56 @@ export function TableStructureView({
   const hasChanges = changes.length > 0;
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-zinc-900">
-      {/* Header */}
-      <div className="flex items-center gap-2 border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
-        <Table2 size={14} className="text-blue-500" />
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+    <div className="flex h-full flex-col bg-surface-base">
+      <div className="flex items-center gap-sm border-b border-border-subtle px-lg py-xs">
+        <Table2 size={14} aria-hidden="true" className="text-accent-blue" />
+        <h1 className="text-ui-md font-medium text-text-primary">
           {schema ? `${schema}.${tableName}` : tableName}
-        </span>
-        <span className="text-xs text-zinc-400">— Structure</span>
+        </h1>
+        <span className="text-ui-xs text-text-secondary">— Structure</span>
         {onClose && (
-          <button
+          <IconButton
+            aria-label="Close structure view"
+            icon={<X size={14} aria-hidden="true" />}
             onClick={onClose}
-            className="ml-auto rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-          >
-            <X size={14} />
-          </button>
+            className="ml-auto"
+          />
         )}
       </div>
 
-      {/* Tab bar */}
-      <div className="flex items-center border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            className={tabCls(tab.id)}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <TabStrip
+        height="sm"
+        aria-label="Structure sections"
+        tabs={TABS}
+        activeId={activeTab}
+        onSelect={(id) => setActiveTab(id as StructureTab)}
+        className="border-b border-border-subtle bg-surface"
+      />
 
-      {/* Pending changes bar */}
       {hasChanges && activeTab === "columns" && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700 text-xs">
-          <span className="flex-1 text-amber-800 dark:text-amber-300">
-            ⚠ {changes.length} pending schema {changes.length === 1 ? "change" : "changes"}
+        <div className="state-strip-warning flex items-center gap-sm border-b px-lg py-xs text-ui-xs">
+          <span className="flex-1">
+            {changes.length} pending schema {changes.length === 1 ? "change" : "changes"}
           </span>
-          <button
-            type="button"
-            onClick={discardAll}
-            className="border border-red-400 text-red-600 hover:bg-red-50 px-2 py-0.5 rounded text-xs"
-          >
+          <Button variant="danger-ghost" size="sm" onClick={discardAll}>
             Discard
-          </button>
-          <button
-            type="button"
-            onClick={handlePreview}
-            className="flex items-center gap-1 bg-blue-600 text-white hover:bg-blue-700 px-2 py-0.5 rounded text-xs"
-          >
-            <Eye size={11} />
+          </Button>
+          <Button variant="primary" size="sm" onClick={handlePreview}>
+            <Eye size={11} aria-hidden="true" />
             Preview & Apply
-          </button>
+          </Button>
         </div>
       )}
 
-      {/* Error bar */}
       {applyError && !showPreview && (
-        <div className="px-3 py-1.5 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-700">
+        <div role="alert" className="state-strip-danger border-b px-lg py-xs text-ui-xs">
           {applyError}
         </div>
       )}
 
-      {/* Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === "columns" && (
-          <ColumnsTab sessionId={sessionId} tableName={tableName} schema={schema} />
+          <ColumnsTab sessionId={sessionId} tableName={tableName} schema={schema} structureKey={structureKey} />
         )}
         {activeTab === "indexes" && (
           <IndexesTab sessionId={sessionId} tableName={tableName} schema={schema} />
@@ -187,7 +174,6 @@ export function TableStructureView({
         )}
       </div>
 
-      {/* Schema preview dialog */}
       {showPreview && (
         <SchemaPreviewDialog
           sql={previewSql}

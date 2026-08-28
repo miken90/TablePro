@@ -502,6 +502,9 @@
     "newTab": "New tab",
     "openNewTab": "Open new tab"
   },
+  "workspace": {
+    "unsupportedTab": "This tab can't be shown on this connection"
+  },
   "tabContextMenu": {
     "pinTab": "Pin Tab",
     "unpinTab": "Unpin Tab",

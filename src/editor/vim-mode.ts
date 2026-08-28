@@ -1,6 +1,7 @@
 import { type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { vim, Vim, getCM } from '@replit/codemirror-vim';
+import { requestCloseTab } from "../stores/active-tab-sync";
 import { useEditorStore } from '../stores/editorStore';
 import { resolveActiveQuerySessionId, useQueryStore } from '../stores/queryStore';
 
@@ -22,8 +23,8 @@ function registerExCommands(): void {
 
   // :q — close active tab
   Vim.defineEx('quit', 'q', () => {
-    const { activeTabId, closeTab } = useEditorStore.getState();
-    if (activeTabId) closeTab(activeTabId);
+    const { activeTabId } = useEditorStore.getState();
+    if (activeTabId) requestCloseTab(activeTabId);
   });
 
   // :e — open new tab

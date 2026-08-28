@@ -5,6 +5,7 @@ import { StatusBar } from "./StatusBar";
 import { EditorViewProvider } from "../../contexts/editor-view-context";
 import { useEditorStore } from "../../stores/editorStore";
 import { useLayoutStore } from "../../stores/layoutStore";
+import { activateQueryTab, installActiveTabSync, syncActiveTabContext } from "../../stores/active-tab-sync";
 import { useChangeStore } from "../../stores/changeStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTheme } from "../../hooks/useTheme";
@@ -21,8 +22,15 @@ export function MainLayout() {
 
   // Load persisted tab state and settings from backend on mount
   useEffect(() => {
-    void useEditorStore.getState().initFromBackend();
+    // Every change of the active tab syncs the side state, whoever wrote it.
+    const uninstall = installActiveTabSync();
+    // A restored active tab has no click behind it, so nothing else would
+    // scope the change store or apply the inspector rule for it.
+    void useEditorStore.getState().initFromBackend()
+      .then(() => syncActiveTabContext(useEditorStore.getState().activeTabId))
+      .catch((err) => console.error("Failed to restore tabs:", err));
     void useSettingsStore.getState().loadSettings();
+    return uninstall;
   }, []);
 
   const { handleQuickSwitcherSelect, handleHistorySelect } = useTableCallbacks();
@@ -36,31 +44,22 @@ export function MainLayout() {
   const handleBeforeTabSwitch = useCallback((targetTabId: string): boolean => {
     const hasChanges = useChangeStore.getState().hasChanges;
     if (!hasChanges) return true;
+    // Looking at a table's structure is read-only; the staged edits stay in
+    // their table's snapshot, so there is nothing to save or discard.
+    const target = useEditorStore.getState().tabs.find((t) => t.id === targetTabId);
+    if (target?.type === "structure") return true;
     setUnsavedDialog({ targetTabId });
     return false;
   }, []);
 
   const performTabSwitch = useCallback((tabId: string) => {
-    const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
-    if (!tab) return;
+    if (!useEditorStore.getState().tabs.some((t) => t.id === tabId)) return;
     useEditorStore.getState().setActiveTab(tabId);
-    if (tab.type === "query") {
-      useLayoutStore.getState().switchToQueryMode();
-    } else if (tab.type === "table" && tab.tableName) {
-      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
-    }
+    syncActiveTabContext(tabId);
   }, []);
 
   const handleTabActivated = useCallback(() => {
-    const tabId = useEditorStore.getState().activeTabId;
-    if (!tabId) return;
-    const tab = useEditorStore.getState().tabs.find((t) => t.id === tabId);
-    if (!tab) return;
-    if (tab.type === "query") {
-      useLayoutStore.getState().switchToQueryMode();
-    } else if (tab.type === "table" && tab.tableName) {
-      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
-    }
+    syncActiveTabContext(useEditorStore.getState().activeTabId);
   }, []);
 
   const handleUnsavedSave = useCallback(async () => {
@@ -90,14 +89,7 @@ export function MainLayout() {
   }, []);
 
   const handleAfterClose = useCallback((newActiveTabId: string | null) => {
-    if (!newActiveTabId) return;
-    const tab = useEditorStore.getState().tabs.find((t) => t.id === newActiveTabId);
-    if (!tab) return;
-    if (tab.type === "query") {
-      useLayoutStore.getState().switchToQueryMode();
-    } else if (tab.type === "table" && tab.tableName) {
-      useLayoutStore.getState().openTable(tab.tableName, tab.tableSchema);
-    }
+    syncActiveTabContext(newActiveTabId);
   }, []);
 
   return (
@@ -108,7 +100,7 @@ export function MainLayout() {
           onOpenSettings={() => useLayoutStore.getState().setSettingsOpen(true)}
           onToggleHistory={() => useLayoutStore.getState().toggleHistory()}
           onToggleAiChat={() => useLayoutStore.getState().toggleAiChat()}
-          onRunQuery={() => useLayoutStore.getState().switchToQueryMode()}
+          onRunQuery={() => activateQueryTab()}
         />
 
         <ConnectedLayout

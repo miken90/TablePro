@@ -502,6 +502,9 @@
     "newTab": "Thẻ mới",
     "openNewTab": "Mở thẻ mới"
   },
+  "workspace": {
+    "unsupportedTab": "Không thể hiển thị tab này trên kết nối hiện tại"
+  },
   "tabContextMenu": {
     "pinTab": "Ghim thẻ",
     "unpinTab": "Bỏ ghim thẻ",

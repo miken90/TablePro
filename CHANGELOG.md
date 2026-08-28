@@ -22,6 +22,12 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 - The connection form says what the selected **SSL Mode** actually does — whether the connection is encrypted, and whether the server certificate is checked — because the modes do not behave the same on every engine. `require` encrypts without verifying anything, and SQL Server encrypts in every mode.
 
+### Changed
+
+- Table structure now opens as a **tab** beside your other tabs instead of replacing the whole workspace, and it is restored on restart like query and table tabs (the schema is fetched when the tab is clicked, not at launch). Looking at a table's structure never prompts about that table's unsaved row edits — they stay staged until you return.
+
+- Closing a table tab that has staged row edits now asks before discarding them; Cancel keeps the tab, Discard closes it and drops that table's edits. Previously the tab closed silently and the edits resurfaced the next time the table was opened.
+
 ### Fixed
 
 - The truncation banner and the "N of M rows" counter never had a total to show. Serde's `rename_all` on an enum renames its variants, not the fields inside a struct variant, so the streaming chunks carried `total_estimate` while the frontend read `totalEstimate` — the banner would have crashed the result panel the first time it rendered.

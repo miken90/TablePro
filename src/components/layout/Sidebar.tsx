@@ -3,7 +3,6 @@ import { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef } f
 import { useTranslation } from "react-i18next";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useConnectionStore } from "../../stores/connectionStore";
-import { useLayoutStore } from "../../stores/layoutStore";
 import { useEditorStore } from "../../stores/editorStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -49,7 +48,6 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
   const sessionIds = useConnectionStore((s) => s.sessionIds);
   const connections = useConnectionStore((s) => s.connections);
-  const activeTableContext = useLayoutStore((s) => s.activeTableContext);
   const activeTab = useEditorStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const connectionStatuses = useConnectionStore((s) => s.connectionStatuses);
   const getStatus = useConnectionStore((s) => s.getStatus);
@@ -119,15 +117,10 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
   const isDocumentDb = capabilities.supportsCollections && !capabilities.supportsSqlEditor;
   const isKeyValueDb = dbType === "redis";
 
+  // The active tab is the only view state: a table or structure tab
+  // highlights its table in the tree.
   const activeTableIdentity = useMemo(() => {
-    if (activeTableContext) {
-      return {
-        name: activeTableContext.tableName,
-        schema: activeTableContext.schema ?? null,
-      };
-    }
-
-    if (activeTab?.type === "table" && activeTab.tableName) {
+    if ((activeTab?.type === "table" || activeTab?.type === "structure") && activeTab.tableName) {
       return {
         name: activeTab.tableName,
         schema: activeTab.tableSchema ?? null,
@@ -135,7 +128,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     }
 
     return null;
-  }, [activeTableContext, activeTab]);
+  }, [activeTab]);
 
   const isTableActive = useCallback(
     (tableName: string, schema?: string | null) => {
