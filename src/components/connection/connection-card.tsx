@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { EngineIcon } from "./engine-icon";
 import { EnvironmentBadge } from "./environment-badge";
 import { ConnectionStatusIndicator } from "./connection-status-indicator";
+import { Menu, MenuItem, MenuDivider } from "../ui";
 import type { SavedConnection, ConnectionStatus } from "../../types/connection";
 
 interface ConnectionCardProps {
@@ -59,16 +60,14 @@ export function ConnectionCard({
       role="button"
       tabIndex={0}
       aria-label={t("connection.card.connectionLabel", { name: conn.name })}
-      className={`group flex items-center gap-2.5 rounded-md border p-2.5 transition-colors ${
-        isConnecting
-          ? "border-accent-blue bg-accent-blue/10"
-          : "border-border bg-surface-elevated hover:bg-surface-muted"
+      className={`group flex items-center gap-2.5 rounded-md border border-border-subtle bg-surface-elevated p-xl shadow-sm transition-colors hover:border-border hover:shadow-base ${
+        isConnecting ? "ring-2 ring-accent-blue" : ""
       }`}
       onDoubleClick={onConnect}
       onContextMenu={handleContextMenu}
       onKeyDown={(e) => { if (e.key === "Enter") onConnect(); }}
     >
-      <EngineIcon dbType={conn.config.dbType} size={18} />
+      <EngineIcon dbType={conn.config.dbType} size={16} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -100,51 +99,46 @@ export function ConnectionCard({
       </button>
 
       {menuPos && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 min-w-[160px] rounded-md border border-border bg-surface-elevated py-1 shadow-lg"
-          style={{ left: menuPos.x, top: menuPos.y }}
-        >
-          <ContextMenuItem icon={<Plug size={12} />} label={t("common.connect")} onClick={() => { setMenuPos(null); onConnect(); }} />
-          <ContextMenuItem icon={<Pencil size={12} />} label={t("connection.card.editConnection")} onClick={() => { setMenuPos(null); onEdit(); }} />
-          {onDuplicate && (
-            <ContextMenuItem icon={<Copy size={12} />} label={t("connection.card.duplicate")} onClick={() => { setMenuPos(null); onDuplicate(); }} />
-          )}
-          {onTestConnection && (
-            <ContextMenuItem icon={<Plug size={12} />} label={t("connection.card.testConnection")} onClick={() => { setMenuPos(null); onTestConnection(); }} />
-          )}
-          <div className="my-0.5 border-t border-border" />
-          {onExport && (
-            <ContextMenuItem icon={<Upload size={12} />} label={t("connection.export.exportConnection")} onClick={() => { setMenuPos(null); onExport(); }} />
-          )}
-          {onCopyImportLink && (
-            <ContextMenuItem icon={<Link size={12} />} label={t("connection.export.copyLink")} onClick={() => { setMenuPos(null); onCopyImportLink(); }} />
-          )}
-          <div className="my-0.5 border-t border-border" />
-          <ContextMenuItem
-            icon={<Trash2 size={12} />}
-            label={t("common.delete")}
-            danger
-            onClick={() => { setMenuPos(null); onDelete(); }}
-          />
+        <div ref={menuRef} className="fixed z-popover" style={{ left: menuPos.x, top: menuPos.y }}>
+          <Menu open onClose={() => setMenuPos(null)}>
+            <MenuItem icon={<Plug size={12} />} onSelect={() => { setMenuPos(null); onConnect(); }}>
+              {t("common.connect")}
+            </MenuItem>
+            <MenuItem icon={<Pencil size={12} />} onSelect={() => { setMenuPos(null); onEdit(); }}>
+              {t("connection.card.editConnection")}
+            </MenuItem>
+            {onDuplicate && (
+              <MenuItem icon={<Copy size={12} />} onSelect={() => { setMenuPos(null); onDuplicate(); }}>
+                {t("connection.card.duplicate")}
+              </MenuItem>
+            )}
+            {onTestConnection && (
+              <MenuItem icon={<Plug size={12} />} onSelect={() => { setMenuPos(null); onTestConnection(); }}>
+                {t("connection.card.testConnection")}
+              </MenuItem>
+            )}
+            <MenuDivider />
+            {onExport && (
+              <MenuItem icon={<Upload size={12} />} onSelect={() => { setMenuPos(null); onExport(); }}>
+                {t("connection.export.exportConnection")}
+              </MenuItem>
+            )}
+            {onCopyImportLink && (
+              <MenuItem icon={<Link size={12} />} onSelect={() => { setMenuPos(null); onCopyImportLink(); }}>
+                {t("connection.export.copyLink")}
+              </MenuItem>
+            )}
+            <MenuDivider />
+            {/* Text-only red: this only opens the caller's own confirm dialog,
+                nothing is written yet — danger-ghost by construction, never
+                the filled danger variant (design-spec 5.16, AUDIT M5). */}
+            <MenuItem icon={<Trash2 size={12} />} danger onSelect={() => { setMenuPos(null); onDelete(); }}>
+              {t("common.delete")}
+            </MenuItem>
+          </Menu>
         </div>
       )}
     </div>
-  );
-}
-
-function ContextMenuItem({
-  icon, label, danger, onClick,
-}: { icon: React.ReactNode; label: string; danger?: boolean; onClick: () => void }) {
-  return (
-    <button
-      className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs ${
-        danger ? "menu-item-button-danger" : "menu-item-button"
-      }`}
-      onClick={onClick}
-    >
-      {icon} {label}
-    </button>
   );
 }
 
