@@ -30,7 +30,7 @@ export function ResultStatusBar({ logEntries }: ResultStatusBarProps) {
   return (
     <div className="h-full overflow-y-auto font-mono text-xs">
       {logEntries.length === 0 ? (
-        <p className="p-3 text-[var(--color-text-muted)]">{t("resultStatusBar.noQueries")}</p>
+        <p className="p-3 text-[var(--color-text-secondary)]">{t("resultStatusBar.noQueries")}</p>
       ) : (
         logEntries.map((entry) => (
           <div
@@ -56,12 +56,12 @@ export function ResultStatusBar({ logEntries }: ResultStatusBarProps) {
                 {' '}{entry.source}
               </span>
               {entry.durationMs !== undefined && (
-                <span className="text-[10px] text-[var(--color-text-muted)]">{entry.durationMs.toFixed(0)}ms</span>
+                <span className="text-[10px] text-[var(--color-text-secondary)]">{entry.durationMs.toFixed(0)}ms</span>
               )}
               {entry.rowCount !== undefined && (
-                <span className="text-[10px] text-[var(--color-text-muted)]">{entry.rowCount} rows</span>
+                <span className="text-[10px] text-[var(--color-text-secondary)]">{entry.rowCount} rows</span>
               )}
-              <span className="ml-auto text-[10px] text-[var(--color-text-muted)]">
+              <span className="ml-auto text-[10px] text-[var(--color-text-secondary)]">
                 {new Date(entry.timestamp).toLocaleTimeString()}
               </span>
             </div>

@@ -228,7 +228,7 @@ export function ForeignKeyCellEditor({
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full pl-8 pr-3 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded text-xs outline-none focus:border-zinc-400 dark:focus:border-zinc-500 text-zinc-800 dark:text-zinc-100"
+            className="w-full pl-8 pr-3 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded text-xs focus:border-zinc-400 dark:focus:border-zinc-500 text-zinc-800 dark:text-zinc-100"
           />
         </div>
         <button

@@ -430,7 +430,7 @@ export function ResultPanel({
               <div className="h-full w-1/3 animate-shimmer bg-accent-blue" />
             </div>
             <Loader2 size={20} className="animate-spin text-accent-blue" />
-            <span className="text-xs text-text-muted">
+            <span className="text-xs text-text-secondary">
               {isTableMode ? 'Loading...' : `Executing… ${(queryProgress.elapsedMs / 1000).toFixed(1)}s`}
             </span>
           </div>

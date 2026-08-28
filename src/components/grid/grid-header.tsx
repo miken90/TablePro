@@ -89,7 +89,7 @@ export const GridHeader = React.memo(function GridHeader({
                 <span className="truncate font-medium text-text-primary">
                   {col.name}
                 </span>
-                <span className="text-text-muted text-[10px] flex-shrink-0">
+                <span className="text-text-secondary group-hover:text-text-primary text-[10px] flex-shrink-0">
                   {col.typeName}
                 </span>
                 <SortIndicator dir={sortDir} />

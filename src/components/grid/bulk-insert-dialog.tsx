@@ -236,7 +236,7 @@ export function BulkInsertDialog({
               value={rawText}
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder={t('grid.bulk.pasteOrDrop')}
-              className="w-full h-24 resize-none bg-transparent text-xs font-mono text-zinc-700 dark:text-zinc-300 outline-none placeholder:text-zinc-400"
+              className="w-full h-24 resize-none bg-transparent text-xs font-mono text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400"
             />
             <div className="flex items-center gap-2 mt-1">
               <button

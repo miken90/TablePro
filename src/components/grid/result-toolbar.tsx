@@ -60,7 +60,7 @@ export function ResultToolbar({
     `px-3 py-1 text-xs cursor-pointer border-b-2 ${
       activeTab === tab
         ? 'border-accent-blue text-accent-blue'
-        : 'border-transparent text-text-muted hover:text-text-primary'
+        : 'border-transparent text-text-secondary hover:text-text-primary'
     }`;
 
   return (
@@ -105,7 +105,7 @@ export function ResultToolbar({
 
       <div className="ml-auto flex items-center gap-2 px-3">
         {queryProgress.statusText && (
-          <span className="flex items-center gap-1 text-[10px] text-text-muted">
+          <span className="flex items-center gap-1 text-[10px] text-text-secondary">
             {queryProgress.isRunning && <Loader2 size={10} className="animate-spin" />}
             {queryProgress.error ? `Error: ${queryProgress.error}` : queryProgress.statusText}
           </span>
@@ -113,7 +113,7 @@ export function ResultToolbar({
         {onOpenQueryEditor && (
           <button
             onClick={onOpenQueryEditor}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-muted hover:bg-surface-muted hover:text-text-primary"
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-muted hover:text-text-primary"
             title={t("resultToolbar.queryEditor")}
           >
             <Code2 size={10} />
@@ -123,7 +123,7 @@ export function ResultToolbar({
         {isTableMode && onRefresh && (
           <button
             onClick={onRefresh}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-muted hover:bg-surface-muted hover:text-text-primary"
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-muted hover:text-text-primary"
             title="Refresh (F5)"
           >
             <RefreshCw size={10} />
@@ -133,13 +133,13 @@ export function ResultToolbar({
           <>
             <button
               onClick={onExport}
-              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-muted hover:bg-surface-muted hover:text-text-primary"
+              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-muted hover:text-text-primary"
               title={t("resultToolbar.exportResults")}
             >
               <Download size={10} />
               {t("common.export")}
             </button>
-            <span className="text-[10px] text-text-muted">
+            <span className="text-[10px] text-text-secondary">
               {result.truncated && result.totalRowCount != null
                 ? t("resultToolbar.truncatedRows", { count: result.rows.length.toLocaleString(), total: result.totalRowCount.toLocaleString() })
                 : filteredTotal != null && filteredTotal !== total

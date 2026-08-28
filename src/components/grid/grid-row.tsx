@@ -75,7 +75,7 @@ function getRowClassName(
   let cls = base;
 
   if (changeType === 'deleted') {
-    cls += ' bg-red-500/10 border-l-[4px] border-l-red-500 text-text-muted';
+    cls += ' bg-red-500/10 border-l-[4px] border-l-red-500 text-text-secondary';
   } else if (changeType === 'inserted') {
     cls += ' bg-green-500/10 border-l-[4px] border-l-green-500';
   } else if (changeType === 'modified') {
@@ -140,7 +140,7 @@ function CellContent({
       {formatted}
       {fkColumns?.[col.name] && (
         <button
-          className="flex-shrink-0 text-blue-400 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 focus:outline-none"
+          className="flex-shrink-0 text-blue-400 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
           title={`Navigate to ${fkColumns[col.name].refTable}`}
           onClick={(e) => {
             e.stopPropagation();
@@ -193,7 +193,7 @@ export const GridRow = React.memo(function GridRow({
     >
       {/* Row number / checkbox */}
       <div
-        className="group/rowheader w-10 flex-shrink-0 px-1 flex items-center justify-center text-text-muted border-r border-border-subtle select-none cursor-pointer hover:bg-surface-hover"
+        className="group/rowheader w-10 flex-shrink-0 px-1 flex items-center justify-center text-text-secondary border-r border-border-subtle select-none cursor-pointer hover:bg-surface-hover hover:text-text-primary"
         onClick={(e) => { e.stopPropagation(); onRowHeaderClick?.(rowIndex, e); }}
       >
         {isTableMode ? (

@@ -135,12 +135,12 @@ export function DataGrid({
       aria-label="Query results"
       aria-rowcount={rows.length}
     >
-      <div ref={parentRef} className="h-full overflow-auto focus:outline-none" tabIndex={0} onKeyDown={handleGridKeyDown}>
+      <div ref={parentRef} className="h-full overflow-auto" tabIndex={0} onKeyDown={handleGridKeyDown}>
         <div style={{ minWidth: totalContentWidth }}>
           {/* Sticky header */}
           <div className="sticky top-0 z-20 flex border-b border-border-subtle bg-surface">
             <div
-              className="w-10 flex-shrink-0 px-1 py-1.5 flex items-center justify-center text-text-muted text-xs border-r border-border-subtle select-none"
+              className="w-10 flex-shrink-0 px-1 py-1.5 flex items-center justify-center text-text-secondary text-xs border-r border-border-subtle select-none"
             >
               {isTableMode ? (
                 <input

@@ -85,7 +85,7 @@ export function ContextualBar({
           className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
             filterVisible || activeFilterCount > 0
               ? 'bg-accent-blue/10 text-accent-blue'
-              : 'text-text-muted hover:bg-surface-muted hover:text-text-primary'
+              : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'
           }`}
           title={t("grid.contextualBar.toggleFilters")}
         >
@@ -101,7 +101,7 @@ export function ContextualBar({
         {onAddRow && (
           <button
             onClick={onAddRow}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-muted hover:bg-surface-muted hover:text-text-primary"
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
             title="Add new row (Ctrl+I)"
           >
             <Plus size={12} />
@@ -130,7 +130,7 @@ export function ContextualBar({
             {onDeselectAll && (
               <button
                 onClick={onDeselectAll}
-                className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-muted hover:bg-surface-muted hover:text-text-primary"
+                className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
                 title="Deselect all"
               >
                 <X size={12} />

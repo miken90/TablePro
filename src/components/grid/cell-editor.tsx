@@ -138,7 +138,10 @@ export function CellEditor({
     }, 0);
   };
 
-  const inlineClass = "w-full h-full border-none outline-none bg-blue-50 dark:bg-blue-900/30 text-xs px-1";
+  // Grid cells draw the "editing" indicator as a 1px inset ring, not the
+  // standard outline, which would overlap adjacent cells (design-spec 5.8).
+  const inlineClass =
+    "w-full h-full border-none bg-blue-50 dark:bg-blue-900/30 text-xs px-1 [box-shadow:inset_0_0_0_1px_var(--color-focus-ring)]";
 
   if (fkRef && sessionId) {
     return (
