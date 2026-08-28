@@ -116,7 +116,6 @@ export function WorkspaceBody({
               onAddRowRef={addRowRef}
               onDeleteSelectedRef={deleteSelectedRef}
               onClearSelectionRef={clearSelectionRef}
-              hideChangeToolbar
             />
           </div>
         </>

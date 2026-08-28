@@ -253,6 +253,23 @@ export interface SaveResult {
 export const saveChanges = (sessionId: string, payload: SavePayload): Promise<SaveResult> =>
   invoke('save_changes', { sessionId, payload });
 
+/**
+ * What `save_changes` will run for this payload: the statements themselves,
+ * whether they are wrapped, and the wrapping keywords for the connection's
+ * engine. Both come out of the backend's `plan_save`, which is also what the
+ * write path executes — the preview cannot drift from the write.
+ */
+export interface SavePlan {
+  statements: string[];
+  transactional: boolean;
+  begin: string;
+  commit: string;
+  rollback: string;
+  dialect: string;
+}
+export const previewStatements = (sessionId: string, payload: SavePayload): Promise<SavePlan> =>
+  invoke('preview_statements', { sessionId, payload });
+
 export type RowSqlFormat = 'INSERT' | 'UPDATE';
 
 export interface GenerateRowSqlPayload {

@@ -8,10 +8,11 @@ import { useLayoutStore } from '../../stores/layoutStore';
 import { useQueryProgress } from '../../hooks/useQueryProgress';
 import { useCommandStore, getEffectiveBinding } from '../../hooks/useCommandRegistry';
 import type { ColumnInfo } from '../../types/query';
+import type { SavePayload } from '../../ipc/commands';
 import { DataGrid } from './data-grid';
 import { isTextEntryTarget } from './is-text-entry-target';
 import { Pagination } from './pagination';
-import { ChangeToolbar } from './change-toolbar';
+import { PendingChangesStrip } from './pending-changes-strip';
 import { TruncationBanner } from './truncation-banner';
 import { useQueryResultStore } from '../../stores/queryResultStore';
 import { EmptyState } from '../shared/EmptyState';
@@ -26,7 +27,6 @@ import { ConfirmRefreshDialog } from './confirm-refresh-dialog';
 import { BulkInsertDialog } from './bulk-insert-dialog';
 import { BulkUpdateDialog } from './bulk-update-dialog';
 import { BulkDeleteDialog } from './bulk-delete-dialog';
-import { generatePreviewSql } from './sql-preview-popover';
 import { PanelLoader } from '../shared/PanelLoader';
 import { useTableData } from './hooks/use-table-data';
 import { useChangeTracking } from './hooks/use-change-tracking';
@@ -53,8 +53,6 @@ interface ResultPanelProps {
   onDeleteSelectedRef?: MutableRefObject<(() => void) | null>;
   /** Ref that receives the clear-selection function. */
   onClearSelectionRef?: MutableRefObject<(() => void) | null>;
-  /** Hide internal ChangeToolbar (when ContextualBar owns change actions). */
-  hideChangeToolbar?: boolean;
 }
 
 export function ResultPanel({
@@ -62,7 +60,6 @@ export function ResultPanel({
   activeWhereClause, quickSearchColumns = [],
   onRowSelect: onRowSelectProp, onOpenQueryEditor, onSaveRef, onRequestSaveRef, onAddRowRef,
   onDeleteSelectedRef, onClearSelectionRef,
-  hideChangeToolbar,
 }: ResultPanelProps) {
   const queryResult = useQueryStore((s) => s.result);
   const queryError = useQueryStore((s) => s.error);
@@ -91,6 +88,9 @@ export function ResultPanel({
   const [activeTab, setActiveTab] = useState<ActiveTab>('results');
   const lastAutoSwitchedErrorRef = React.useRef<string | null>(null);
   const [confirmExecuteOpen, setConfirmExecuteOpen] = useState(false);
+  // SCR-43 sends the very payload instance it previewed: the dialog is modal
+  // and the grid is locked behind it, so it cannot go stale.
+  const [confirmExecutePayload, setConfirmExecutePayload] = useState<SavePayload | null>(null);
   const [confirmRefreshOpen, setConfirmRefreshOpen] = useState(false);
   const [bulkInsertOpen, setBulkInsertOpen] = useState(false);
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
@@ -134,7 +134,7 @@ export function ResultPanel({
   });
   const {
     changesSnapshot, hasChanges, isSaving, saveError, dismissSaveError,
-    handleSave, getEffectiveCellValue,
+    handleSave, getEffectiveCellValue, buildSavePayload, stagedView, stagedViewMatches,
     changeMap, cellOverrides,
   } = changeTracking;
 
@@ -218,7 +218,6 @@ export function ResultPanel({
   useEffect(() => {
     if (error && !isTableMode && error !== lastAutoSwitchedErrorRef.current) {
       lastAutoSwitchedErrorRef.current = error;
-      /* eslint-disable-next-line react-hooks/set-state-in-effect -- store-sourced error, ref-guarded to fire once per distinct message */
       setActiveTab('messages');
     }
   }, [error, isTableMode]);
@@ -246,8 +245,9 @@ export function ResultPanel({
   // --- Save / Refresh / Keyboard ---
   const handleRequestSave = useCallback(() => {
     if (!hasChanges || !tableName || !result || confirmExecuteOpen) return;
+    setConfirmExecutePayload(buildSavePayload());
     setConfirmExecuteOpen(true);
-  }, [hasChanges, tableName, result, confirmExecuteOpen]);
+  }, [hasChanges, tableName, result, confirmExecuteOpen, buildSavePayload]);
 
   // Expose request-save (with confirm dialog) to parent via ref
   useEffect(() => {
@@ -293,13 +293,6 @@ export function ResultPanel({
     setConfirmExecuteOpen(false);
     await handleSave();
   }, [handleSave]);
-
-  const previewSql = useMemo(() => {
-    if (!confirmExecuteOpen || !tableName || !result) return '';
-    const columns = result.columns.map(c => c.name);
-    const primaryKeys = result.columns.filter(c => c.isPrimaryKey).map(c => c.name);
-    return generatePreviewSql(changesSnapshot, tableName, schema, columns, primaryKeys, result.rows);
-  }, [confirmExecuteOpen, changesSnapshot, tableName, schema, result]);
 
   const handleRefreshTable = useCallback(() => {
     if (!isTableMode || !sessionId || !tableName || isSaving) return;
@@ -414,16 +407,6 @@ export function ResultPanel({
           <button onClick={dismissSaveError} className="text-red-500 hover:text-red-700 dark:hover:text-red-200">Dismiss</button>
         </div>
       )}
-      {hasChanges && tableName && !hideChangeToolbar && (
-        <ChangeToolbar
-          onSave={handleRequestSave}
-          tableName={tableName}
-          schema={schema}
-          columns={result?.columns.map(c => c.name)}
-          primaryKeys={result?.columns.filter(c => c.isPrimaryKey).map(c => c.name)}
-          rows={result?.rows}
-        />
-      )}
       {isSaving && (
         <div className="px-3 py-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-700">
           Saving changes...
@@ -511,6 +494,13 @@ export function ResultPanel({
                 <EmptyState icon={<Database size={24} />} message="Run a query to see results" description="Press Ctrl+Enter to execute the current statement" />
               )}
             </div>
+            <PendingChangesStrip
+              sessionId={sessionId}
+              buildSavePayload={buildSavePayload}
+              stagedViewMatches={stagedViewMatches}
+              stagedPage={stagedView?.page}
+              onExecute={handleRequestSave}
+            />
             {displayResult && (
               <Pagination
                 total={total}
@@ -567,11 +557,11 @@ export function ResultPanel({
       )}
       <ConfirmExecuteDialog
         open={confirmExecuteOpen}
-        sql={previewSql}
-        statementCount={Object.keys(changesSnapshot).length}
+        sessionId={sessionId}
+        payload={confirmExecutePayload}
         isSaving={isSaving}
         onExecute={handleConfirmExecute}
-        onCancel={() => setConfirmExecuteOpen(false)}
+        onCancel={() => { setConfirmExecuteOpen(false); setConfirmExecutePayload(null); }}
       />
       <ConfirmRefreshDialog
         open={confirmRefreshOpen}

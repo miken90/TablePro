@@ -1,38 +1,42 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Dialog } from '../ui';
+import type { SavePayload } from '../../ipc/commands';
+import { formatSavePlan, useSavePlan } from './use-save-plan';
 
 interface ConfirmExecuteDialogProps {
   open: boolean;
-  sql: string;
-  statementCount: number;
+  sessionId: string | undefined;
+  /** The payload instance the caller will send on Confirm. */
+  payload: SavePayload | null;
   isSaving: boolean;
   onExecute: () => void;
   onCancel: () => void;
 }
 
+/**
+ * SCR-43 — the commitment point for a grid save.
+ *
+ * The dialog fetches its own plan from the backend and keeps Execute disabled
+ * until it arrives: the write cannot be authorised without the user having
+ * seen the statements it will run.
+ */
 export function ConfirmExecuteDialog({
   open,
-  sql,
-  statementCount,
+  sessionId,
+  payload,
   isSaving,
   onExecute,
   onCancel,
 }: ConfirmExecuteDialogProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const { plan, loading, error, retry } = useSavePlan(sessionId, payload, open);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, onCancel]);
+  const sql = plan ? formatSavePlan(plan) : '';
+  const statementCount = plan?.statements.length ?? 0;
+  const stmtLabel = statementCount === 1 ? t('confirmExecute.statement') : t('confirmExecute.statements');
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(sql);
@@ -40,71 +44,63 @@ export function ConfirmExecuteDialog({
     setTimeout(() => setCopied(false), 1500);
   }, [sql]);
 
-  if (!open) return null;
-
-  const stmtLabel = statementCount === 1 ? t("confirmExecute.statement") : t("confirmExecute.statements");
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      title={t('confirmExecute.title')}
+      size="md"
+      destructive
+      cancelLabel={t('common.cancel')}
+      actions={[
+        {
+          label: isSaving ? t('confirmExecute.executing') : t('common.execute'),
+          onClick: onExecute,
+          variant: 'danger',
+          loading: isSaving,
+          disabled: isSaving || !plan,
+        },
+      ]}
     >
-      <div
-        className="w-[560px] max-w-[90vw] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="px-5 pt-5 pb-3">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            {t("confirmExecute.title")}
-          </h2>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            {t("confirmExecute.subtitle")}
-          </p>
-        </div>
+      <p className="mb-lg text-ui-sm text-text-secondary">{t('confirmExecute.subtitle')}</p>
 
-        {/* SQL preview */}
-        <div className="mx-5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
-          <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-200 dark:border-zinc-700">
-            <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-              {t("confirmExecute.statementCount", { count: statementCount, label: stmtLabel })}
+      {loading && (
+        <p className="text-ui-sm text-text-secondary">Generating preview…</p>
+      )}
+
+      {error && (
+        <div className="state-strip-danger flex items-center gap-md rounded px-lg py-md text-ui-sm">
+          <span className="flex-1">{error}</span>
+          <button
+            type="button"
+            onClick={retry}
+            className="focus-ring rounded px-sm py-xs font-medium underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {plan && (
+        <div className="rounded-md border border-border-subtle bg-surface-muted">
+          <div className="flex items-center justify-between border-b border-border-subtle px-lg py-md">
+            <span className="text-ui-sm font-medium text-text-secondary">
+              {t('confirmExecute.statementCount', { count: statementCount, label: stmtLabel })}
             </span>
             <button
               type="button"
               onClick={handleCopy}
-              className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 px-1.5 py-0.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700"
+              className="focus-ring flex items-center gap-xs rounded px-sm py-xs text-ui-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
             >
-              <Copy size={11} />
-              {copied ? t("common.copied") : t("confirmExecute.copySql")}
+              <Copy size={11} aria-hidden="true" />
+              {copied ? t('common.copied') : t('confirmExecute.copySql')}
             </button>
           </div>
-          <pre className="p-3 text-[11px] font-mono text-zinc-700 dark:text-zinc-300 overflow-auto max-h-[40vh] whitespace-pre-wrap break-all">
+          <pre className="max-h-[40vh] overflow-auto whitespace-pre-wrap break-all p-lg font-mono text-ui-sm text-text-primary">
             {sql}
           </pre>
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-3 py-1.5 rounded text-xs font-medium border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={onExecute}
-            disabled={isSaving}
-            autoFocus
-            className="px-3 py-1.5 rounded text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving ? t("confirmExecute.executing") : t("common.execute")}
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </Dialog>
   );
 }

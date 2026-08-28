@@ -82,6 +82,12 @@ export interface PendingSafeCheck {
   params?: string[];
   level: number;
   dangerType: string;
+  /**
+   * Set by the grid save path. Safe Mode there holds a write that is not a
+   * query — confirming has to resume the save, not run the previewed SQL as
+   * if the user had typed it into the editor.
+   */
+  onConfirm?: () => Promise<void>;
 }
 
 interface QueryState {
@@ -502,6 +508,10 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     const pending = get().pendingSafeCheck;
     if (!pending) return;
     set({ pendingSafeCheck: null });
+    if (pending.onConfirm) {
+      await pending.onConfirm();
+      return;
+    }
     await runQuery(set, pending.sessionId, pending.sql, pending.params);
   },
 
