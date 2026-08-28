@@ -16,17 +16,12 @@ import { PendingChangesStrip } from './pending-changes-strip';
 import { TruncationBanner } from './truncation-banner';
 import { useQueryResultStore } from '../../stores/queryResultStore';
 import { EmptyState } from '../shared/EmptyState';
-import { ExportDialog } from '../export/export-dialog';
 import { Database, Loader2 } from 'lucide-react';
 import { ResultToolbar } from './result-toolbar';
 import type { ActiveTab } from './result-toolbar';
 import { ResultStatusBar } from './result-status-bar';
 import { GridContextMenu } from './grid-context-menu';
-import { ConfirmExecuteDialog } from './confirm-execute-dialog';
-import { ConfirmRefreshDialog } from './confirm-refresh-dialog';
-import { BulkInsertDialog } from './bulk-insert-dialog';
-import { BulkUpdateDialog } from './bulk-update-dialog';
-import { BulkDeleteDialog } from './bulk-delete-dialog';
+import { ResultPanelDialogs } from './result-panel-dialogs';
 import { PanelLoader } from '../shared/PanelLoader';
 import { useTableData } from './hooks/use-table-data';
 import { useChangeTracking } from './hooks/use-change-tracking';
@@ -547,61 +542,35 @@ export function ResultPanel({
           selectedRowCount={selectedRows.has(contextMenu.rowIndex) ? selectedRows.size : 1}
         />
       )}
-      {showExport && displayResult && (sessionId || activeConnectionId) && (
-        <ExportDialog
-          sessionId={(sessionId || activeConnectionId)!}
-          sql={exportSql}
-          result={displayResult}
-          onClose={() => setShowExport(false)}
-        />
-      )}
-      <ConfirmExecuteDialog
-        open={confirmExecuteOpen}
+      <ResultPanelDialogs
         sessionId={sessionId}
-        payload={confirmExecutePayload}
+        activeConnectionId={activeConnectionId}
+        tableName={tableName}
+        schema={schema}
+        isTableMode={isTableMode}
+        result={result}
+        displayResult={displayResult}
+        exportSql={exportSql}
         isSaving={isSaving}
-        onExecute={handleConfirmExecute}
-        onCancel={() => { setConfirmExecuteOpen(false); setConfirmExecutePayload(null); }}
-      />
-      <ConfirmRefreshDialog
-        open={confirmRefreshOpen}
         changeCount={Object.keys(changesSnapshot).length}
+        showExport={showExport}
+        onCloseExport={() => setShowExport(false)}
+        confirmExecuteOpen={confirmExecuteOpen}
+        confirmExecutePayload={confirmExecutePayload}
+        onConfirmExecute={handleConfirmExecute}
+        onCancelExecute={() => { setConfirmExecuteOpen(false); setConfirmExecutePayload(null); }}
+        confirmRefreshOpen={confirmRefreshOpen}
         onSaveAndRefresh={handleSaveAndRefresh}
         onDiscardAndRefresh={handleDiscardAndRefresh}
-        onCancel={() => setConfirmRefreshOpen(false)}
-        isSaving={isSaving}
+        onCancelRefresh={() => setConfirmRefreshOpen(false)}
+        bulkInsertOpen={bulkInsertOpen}
+        bulkUpdateOpen={bulkUpdateOpen}
+        bulkDeleteOpen={bulkDeleteOpen}
+        onCloseBulkInsert={() => setBulkInsertOpen(false)}
+        onCloseBulkUpdate={() => setBulkUpdateOpen(false)}
+        onCloseBulkDelete={() => setBulkDeleteOpen(false)}
+        onBulkSuccess={handleBulkSuccess}
       />
-      {isTableMode && sessionId && tableName && result && (
-        <>
-          <BulkInsertDialog
-            open={bulkInsertOpen}
-            sessionId={sessionId}
-            table={tableName}
-            schema={schema ?? null}
-            columns={result.columns}
-            onClose={() => setBulkInsertOpen(false)}
-            onSuccess={handleBulkSuccess}
-          />
-          <BulkUpdateDialog
-            open={bulkUpdateOpen}
-            sessionId={sessionId}
-            table={tableName}
-            schema={schema ?? null}
-            columns={result.columns}
-            onClose={() => setBulkUpdateOpen(false)}
-            onSuccess={handleBulkSuccess}
-          />
-          <BulkDeleteDialog
-            open={bulkDeleteOpen}
-            sessionId={sessionId}
-            table={tableName}
-            schema={schema ?? null}
-            columns={result.columns}
-            onClose={() => setBulkDeleteOpen(false)}
-            onSuccess={handleBulkSuccess}
-          />
-        </>
-      )}
     </div>
   );
 }

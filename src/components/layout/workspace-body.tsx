@@ -5,6 +5,7 @@ import { SqlEditor } from "../editor/sql-editor";
 import { EditorStatusBar } from "../editor/editor-status-bar";
 import { ResultPanel } from "../grid/ResultPanel";
 import { ContextualBar } from "../grid/contextual-bar";
+import { useUndoRedoShortcuts } from "../grid/hooks/use-undo-redo-shortcuts";
 import { TableStructureView } from "../structure/table-structure-view";
 import { FilterPanel } from "../filter/filter-panel";
 import { PanelLoader } from "../shared/PanelLoader";
@@ -43,6 +44,10 @@ export function WorkspaceBody({
   clearSelectionRef,
 }: WorkspaceBodyProps) {
   const { t } = useTranslation();
+  // Above the tab-kind switch: the result panel unmounts on a structure tab,
+  // and the pending-changes strip unmounts the moment the last change is
+  // undone, so neither can host the only undo listener (RT-12).
+  useUndoRedoShortcuts();
   const activeTab = useEditorStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const view = resolveWorkspaceView(activeTab, engine);
 
@@ -95,7 +100,6 @@ export function WorkspaceBody({
             tabId={filterTabId}
             tableName={view.tableName!}
             columns={filterColumns}
-            onSave={engine.isDocumentDb ? () => {} : () => requestSaveRef.current?.()}
             onAddRow={engine.isDocumentDb ? undefined : () => addRowRef.current?.()}
             selectedRowCount={selectedRowCount}
             onDeleteSelected={engine.isDocumentDb ? undefined : () => deleteSelectedRef.current?.()}

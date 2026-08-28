@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Filter, Plus, Trash2, Undo2, Redo2, X } from 'lucide-react';
+import { useCallback } from 'react';
+import { Filter, Plus, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ColumnInfo } from '../../types/query';
-import { useChangeStore } from '../../stores/changeStore';
 import { useFilterStore } from '../../stores/filterStore';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { FilterPanel } from '../filter/filter-panel';
-import { ConfirmDiscardDialog } from '../shared/confirm-discard-dialog';
 
+/**
+ * SCR-23 — row actions only. Staged-change actions moved to the
+ * pending-changes strip at the bottom of the results region, where they sit
+ * next to the data they describe instead of above it (Q2).
+ */
 interface ContextualBarProps {
   tabId: string;
   tableName: string;
   columns: ColumnInfo[];
-  onSave: () => void;
   onAddRow?: () => void;
   /** Number of currently selected rows. */
   selectedRowCount?: number;
@@ -23,22 +25,13 @@ interface ContextualBarProps {
 }
 
 export function ContextualBar({
-  tabId, tableName, columns, onSave, onAddRow,
+  tabId, tableName, columns, onAddRow,
   selectedRowCount = 0, onDeleteSelected, onDeselectAll,
 }: ContextualBarProps) {
   const { t } = useTranslation();
-  const hasChanges = useChangeStore((s) => Object.keys(s._changes).length > 0);
-  const changeCount = useChangeStore((s) => Object.keys(s._changes).length);
-  const undo = useChangeStore((s) => s.undo);
-  const redo = useChangeStore((s) => s.redo);
-  const clear = useChangeStore((s) => s.clear);
-  const undoStackLen = useChangeStore((s) => s._undoStack.length);
-  const redoStackLen = useChangeStore((s) => s._redoStack.length);
 
   const filterVisible = useLayoutStore((s) => s.filterVisible);
   const toggleFilter = useLayoutStore((s) => s.toggleFilter);
-
-  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
 
   const activeFilterCount = useFilterStore((s) => {
     const tab = s.byTab[tabId];
@@ -49,32 +42,6 @@ export function ContextualBar({
   const handleToggleFilter = useCallback(() => {
     toggleFilter();
   }, [toggleFilter]);
-
-  const handleDiscard = useCallback(() => {
-    setConfirmDiscardOpen(true);
-  }, []);
-
-  const handleConfirmDiscard = useCallback(() => {
-    setConfirmDiscardOpen(false);
-    clear();
-  }, [clear]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        redo();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo]);
-
-  const changeLabel = changeCount === 1 ? t("grid.changeToolbar.change") : t("grid.changeToolbar.changes");
 
   return (
     <div className="border-b border-border-subtle bg-surface">
@@ -151,54 +118,6 @@ export function ContextualBar({
         />
       )}
 
-      {/* Row 3: Change actions */}
-      {hasChanges && (
-        <div className="state-strip-warning flex items-center gap-2 border-t px-3 py-1 text-xs">
-          <span className="text-accent-yellow">
-            {t("grid.changeToolbar.unsavedChanges", { count: changeCount, label: changeLabel })}
-          </span>
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              onClick={undo}
-              disabled={undoStackLen === 0}
-              className="menu-item-button flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs disabled:opacity-40"
-              title="Undo (Ctrl+Z)"
-            >
-              <Undo2 size={12} />
-              {t("common.undo")}
-            </button>
-            <button
-              onClick={redo}
-              disabled={redoStackLen === 0}
-              className="menu-item-button flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs disabled:opacity-40"
-              title="Redo (Ctrl+Y)"
-            >
-              <Redo2 size={12} />
-              {t("common.redo")}
-            </button>
-            <button
-              onClick={handleDiscard}
-              className="menu-item-button-danger rounded border border-accent-red px-2 py-0.5 text-xs"
-            >
-              {t("common.discard")}
-            </button>
-            <button
-              onClick={onSave}
-              className="button-success px-3 py-1 text-xs font-semibold shadow-sm"
-              title={t("grid.changeToolbar.saveChanges")}
-            >
-              {t("grid.changeToolbar.executeCount", { count: changeCount })}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <ConfirmDiscardDialog
-        open={confirmDiscardOpen}
-        changeCount={changeCount}
-        onConfirm={handleConfirmDiscard}
-        onCancel={() => setConfirmDiscardOpen(false)}
-      />
     </div>
   );
 }
