@@ -6,6 +6,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // Vitest stubs every CSS import to '' by default, regardless of a `?raw`
+    // query — src/styles/token-names.test.ts needs the real file text to
+    // check the design token layer. No other test imports CSS today.
+    css: true,
   },
   resolve: {
     alias: {

@@ -65,7 +65,7 @@ export function createEditorTheme(): Extension {
       backgroundColor: "var(--gutter-bg)",
       color: "var(--gutter-fg)",
       border: "none",
-      borderRight: "1px solid var(--border)",
+      borderRight: "1px solid var(--color-border)",
       userSelect: "none",
     },
     ".cm-gutter": {
@@ -92,20 +92,20 @@ export function createEditorTheme(): Extension {
     },
     ".cm-selectionMatch": {
       backgroundColor: "var(--selection-match-bg)",
-      outline: "1px solid var(--border)",
+      outline: "1px solid var(--color-border)",
     },
     // Search panel
     ".cm-panels": {
       backgroundColor: "var(--gutter-bg)",
       color: "var(--editor-fg)",
-      borderTop: "1px solid var(--border)",
+      borderTop: "1px solid var(--color-border)",
     },
     ".cm-panels.cm-panels-top": {
-      borderBottom: "1px solid var(--border)",
+      borderBottom: "1px solid var(--color-border)",
     },
     ".cm-searchMatch": {
       backgroundColor: "var(--selection-match-bg)",
-      outline: "1px solid var(--border)",
+      outline: "1px solid var(--color-border)",
     },
     ".cm-searchMatch.cm-searchMatch-selected": {
       backgroundColor: "var(--active-line-bg)",
@@ -126,7 +126,7 @@ export function createEditorTheme(): Extension {
     // Tooltip (autocomplete)
     ".cm-tooltip": {
       backgroundColor: "var(--gutter-bg)",
-      border: "1px solid var(--border)",
+      border: "1px solid var(--color-border)",
       borderRadius: "4px",
     },
     ".cm-tooltip.cm-tooltip-autocomplete > ul": {

@@ -13,14 +13,18 @@ export default {
           base: 'var(--color-bg-base)',
           hover: 'var(--color-bg-hover)',
         },
+        scrim: 'var(--color-scrim)',
         border: {
           DEFAULT: 'var(--color-border)',
           subtle: 'var(--color-border-subtle)',
+          strong: 'var(--color-border-strong)',
         },
         // ── Text colors ──
         'text-primary':   'var(--color-text-primary)',
         'text-secondary': 'var(--color-text-secondary)',
         'text-muted':     'var(--color-text-muted)',
+        'text-inverse':   'var(--color-text-inverse)',
+        'focus-ring':     'var(--color-focus-ring)',
         // ── Accent colors ──
         accent: {
           blue:   'var(--color-accent-blue)',
@@ -29,6 +33,27 @@ export default {
           red:    'var(--color-accent-red)',
           orange: 'var(--color-accent-orange)',
           indigo: 'var(--color-accent-indigo)',
+          'blue-fill':        'var(--color-accent-blue-fill)',
+          'blue-fill-hover':  'var(--color-accent-blue-fill-hover)',
+          'blue-subtle':      'var(--color-accent-blue-subtle)',
+          'green-fill':       'var(--color-accent-green-fill)',
+          'red-fill':         'var(--color-accent-red-fill)',
+          'red-fill-hover':   'var(--color-accent-red-fill-hover)',
+          'red-subtle':       'var(--color-accent-red-subtle)',
+          'yellow-subtle':    'var(--color-accent-yellow-subtle)',
+        },
+        // ── State strip colors ──
+        state: {
+          'success-bg': 'var(--color-state-success-bg)',
+          'success-fg': 'var(--color-state-success-fg)',
+          'warning-bg': 'var(--color-state-warning-bg)',
+          'warning-fg': 'var(--color-state-warning-fg)',
+          'danger-bg':  'var(--color-state-danger-bg)',
+          'danger-fg':  'var(--color-state-danger-fg)',
+          'info-bg':    'var(--color-state-info-bg)',
+          'info-fg':    'var(--color-state-info-fg)',
+          'severe-bg':  'var(--color-state-severe-bg)',
+          'severe-fg':  'var(--color-state-severe-fg)',
         },
         // ── Environment tag colors ──
         env: {
@@ -37,21 +62,116 @@ export default {
           dev:     'var(--color-env-dev)',
           local:   'var(--color-env-local)',
         },
+        // ── Data grid colors ──
+        grid: {
+          'header-bg':    'var(--color-grid-header-bg)',
+          'row-alt':      'var(--color-grid-row-alt)',
+          'row-hover':    'var(--color-grid-row-hover)',
+          'row-selected': 'var(--color-grid-row-selected)',
+          'cell-editing': 'var(--color-grid-cell-editing)',
+          'row-inserted': 'var(--color-grid-row-inserted)',
+          'row-updated':  'var(--color-grid-row-updated)',
+          'row-deleted':  'var(--color-grid-row-deleted)',
+          'null-fg':      'var(--color-grid-null-fg)',
+          'pk-fg':        'var(--color-grid-pk-fg)',
+        },
+        // ── Connection identity swatches (theme-invariant) ──
+        conn: {
+          red:     'var(--color-conn-red)',
+          orange:  'var(--color-conn-orange)',
+          amber:   'var(--color-conn-amber)',
+          yellow:  'var(--color-conn-yellow)',
+          green:   'var(--color-conn-green)',
+          emerald: 'var(--color-conn-emerald)',
+          blue:    'var(--color-conn-blue)',
+          indigo:  'var(--color-conn-indigo)',
+          purple:  'var(--color-conn-purple)',
+          pink:    'var(--color-conn-pink)',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'Cascadia Code', 'ui-monospace', 'monospace'],
       },
+      // Namespaced `ui-*` keys — the bare token suffixes (xs, sm, lg, xl, 2xl)
+      // collide with Tailwind's own default fontSize scale, which is already
+      // used by hundreds of existing classNames at different pixel values;
+      // extending those keys directly would silently resize all of them.
+      fontSize: {
+        'ui-2xs': ['var(--font-size-2xs)', { lineHeight: 'var(--line-height-2xs)' }],
+        'ui-xs':  ['var(--font-size-xs)',  { lineHeight: 'var(--line-height-xs)' }],
+        'ui-sm':  ['var(--font-size-sm)',  { lineHeight: 'var(--line-height-sm)' }],
+        'ui-md':  ['var(--font-size-md)',  { lineHeight: 'var(--line-height-md)' }],
+        'ui-lg':  ['var(--font-size-lg)',  { lineHeight: 'var(--line-height-lg)' }],
+        'ui-xl':  ['var(--font-size-xl)',  { lineHeight: 'var(--line-height-xl)' }],
+        'ui-2xl': ['var(--font-size-2xl)', { lineHeight: 'var(--line-height-2xl)' }],
+      },
       spacing: {
         '4.5': '1.125rem',  // 18px
         '13':  '3.25rem',   // 52px
+        '0':   'var(--space-0)',
+        '2xs': 'var(--space-2xs)',
+        'xs':  'var(--space-xs)',
+        'sm':  'var(--space-sm)',
+        'md':  'var(--space-md)',
+        'lg':  'var(--space-lg)',
+        'xl':  'var(--space-xl)',
+        '2xl': 'var(--space-2xl)',
+        '3xl': 'var(--space-3xl)',
+      },
+      borderRadius: {
+        xs: 'var(--radius-xs)',
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        full: 'var(--radius-full)',
+      },
+      height: {
+        'control-xs': 'var(--control-h-xs)',
+        'control-sm': 'var(--control-h-sm)',
+        'control-md': 'var(--control-h-md)',
+        'control-lg': 'var(--control-h-lg)',
+        'row-grid': 'var(--row-h-grid)',
+        'row-tree': 'var(--row-h-tree)',
+        toolbar: 'var(--h-toolbar)',
+        tabbar: 'var(--h-tabbar)',
+        statusbar: 'var(--h-statusbar)',
+        resizer: 'var(--h-resizer)',
+        'popover-max': 'var(--h-popover-max)',
+        'editor-min': 'var(--h-editor-min)',
+      },
+      width: {
+        'popover-max': 'var(--w-popover-max)',
+        'sidebar-min': 'var(--w-sidebar-min)',
+        'sidebar-default': 'var(--w-sidebar-default)',
+        'sidebar-max': 'var(--w-sidebar-max)',
+        'inspector-min': 'var(--w-inspector-min)',
+        'inspector-default': 'var(--w-inspector-default)',
+        'inspector-max': 'var(--w-inspector-max)',
+        'dock-min': 'var(--w-dock-min)',
+        'dock-default': 'var(--w-dock-default)',
+        'dock-max': 'var(--w-dock-max)',
+      },
+      zIndex: {
+        base: 'var(--z-base)',
+        sticky: 'var(--z-sticky)',
+        dock: 'var(--z-dock)',
+        'dock-content': 'var(--z-dock-content)',
+        popover: 'var(--z-popover)',
+        'modal-scrim': 'var(--z-modal-scrim)',
+        modal: 'var(--z-modal)',
       },
       boxShadow: {
         sm:    'var(--shadow-sm)',
         base:  'var(--shadow-base)',
+        md:    'var(--shadow-md)',
+        lg:    'var(--shadow-lg)',
+        xl:    'var(--shadow-xl)',
+        '2xl': 'var(--shadow-2xl)',
         panel: 'var(--shadow-panel)',
         modal: 'var(--shadow-modal)',
         popup: 'var(--shadow-popup)',
+        inset: 'var(--shadow-inset)',
       },
       transitionDuration: {
         fast:     '100ms',
@@ -62,6 +182,8 @@ export default {
       transitionTimingFunction: {
         spring:  'cubic-bezier(0.34, 1.56, 0.64, 1)',
         snappy:  'cubic-bezier(0.2, 0, 0, 1)',
+        out:     'var(--ease-out)',
+        in:      'var(--ease-in)',
       },
       keyframes: {
         fadeIn: {

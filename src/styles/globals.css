@@ -2,57 +2,127 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─────────────────────────────────────────
-   DESIGN TOKENS — dark mode (default)
-   ───────────────────────────────────────── */
+/* ============================================================================
+   TablePro — Design Tokens
+   ----------------------------------------------------------------------------
+   Mirrors docs/design/tablepro-rebuild/tokens.css exactly (154 names). That
+   file is the design authority; if the two disagree, THAT FILE WINS.
+
+   Theme mechanism: dark is the :root default, `.light` on <html> overrides
+   (src/hooks/useTheme.ts). Do not invert this.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   DARK THEME (default)
+   ------------------------------------------------------------------------ */
 :root {
-  /* Editor legacy vars (CodeMirror) */
-  --editor-bg: #1e1e1e;
-  --editor-fg: #d4d4d4;
-  --gutter-bg: #252526;
-  --gutter-fg: #858585;
-  --sidebar-bg: #252526;
-  --border: #3e3e42;
-  --active-line-bg: #2a2d2e;
-  --selection-match-bg: #264f7880;
-  --editor-font: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  --editor-font-size: 13px;
+  /* AUDIT M6. Windows is the only supported platform, and without this the
+     native <select> popup and the scrollbars render light-on-light inside the
+     dark theme. Must stay paired with the .light override below. */
+  color-scheme: dark;
 
-  /* Editor enhancements */
-  --active-statement-bg: #58a6ff10;
-  --active-statement-border: #58a6ff30;
+  /* -- Surface (6) -------------------------------------------------------- */
+  --color-bg-base:      #0f1419;            /* app background            */
+  --color-bg-surface:   #151b23;            /* toolbar, status bar, tree */
+  --color-bg-elevated:  #1c2431;            /* dialogs, popovers, cards  */
+  --color-bg-muted:     #252d3a;            /* inset wells, active chip  */
+  --color-bg-hover:     #2a3344;            /* hover state layer         */
+  --color-scrim:        rgba(0, 0, 0, 0.60);/* modal backdrop only       */
 
-  /* ── Background ── */
-  --color-bg-base:     #0f1419;
-  --color-bg-surface:  #151b23;
-  --color-bg-elevated: #1c2431;
-  --color-bg-muted:    #252d3a;
-  --color-bg-hover:    #2a3344;
-
-  /* ── Text ── */
+  /* -- Text (4) ----------------------------------------------------------- */
   --color-text-primary:   #e6edf3;
   --color-text-secondary: #8b949e;
-  --color-text-muted:     #6e7681;
+  /* AUDIT B2 — DEMOTED, NOT RE-PICKED. This token is NOT for content text.
+     It fails AA on every surface in both themes (dark 4.03 base -> 2.76 hover;
+     light 3.04 -> 2.56). It cannot be re-picked either: --color-text-secondary
+     already sits AT the 4.5 floor (4.51 dark on bg-muted), so a dimmer third
+     text tier cannot exist in this palette without inverting the hierarchy.
+     Permitted uses only: disabled control text and glyphs (WCAG 1.4.3 exempts
+     inactive components) and purely decorative icons. Everything that is
+     content -- status bar, placeholders, counts, meta, NULL -- uses
+     --color-text-secondary. See design-spec 5.2 and 6.4. */
+  --color-text-muted:     #6e7681;          /* non-text only            */
+  --color-text-inverse:   #ffffff;          /* text on *-fill surfaces   */
 
-  /* ── Border ── */
-  --color-border-subtle:  #2d3848;
-  --color-border:         #3d4a5c;
+  /* -- Border (3) --------------------------------------------------------- */
+  --color-border-subtle: #2d3848;           /* hairlines, dividers       */
+  /* AUDIT M4. Was #3d4a5c = 2.06:1 on bg-base. An input boundary is a UI
+     component under WCAG 1.4.11 and needs >=3:1. Now >=3:1 on all four
+     resting surfaces: 4.24 base / 3.96 surface / 3.57 elevated / 3.17 muted. */
+  --color-border:        #6a7a91;           /* inputs, cards, popovers   */
+  --color-border-strong: #4d5b6e;           /* resizers, drag handles    */
 
-  /* ── Accent ── */
-  --color-accent-blue:   #58a6ff;
-  --color-accent-green:  #3fb950;
-  --color-accent-yellow: #d29922;
-  --color-accent-red:    #f85149;
-  --color-accent-orange: #fb923c;
-  --color-accent-indigo: #818cf8;
+  /* -- Focus (1) ---------------------------------------------------------- */
+  --color-focus-ring:    #58a6ff;
 
-  /* ── Environment tags ── */
+  /* -- Accent, foreground use (6) ------------------------------------------ */
+  --color-accent-blue:   #58a6ff;           /* links, active tab, icons  */
+  --color-accent-green:  #3fb950;           /* success text/icon         */
+  --color-accent-yellow: #d29922;           /* warning text/icon, PK     */
+  --color-accent-red:    #f85149;           /* error text/icon           */
+  --color-accent-orange: #fb923c;           /* Safe Mode "Alert" level   */
+  --color-accent-indigo: #818cf8;           /* AI surfaces               */
+
+  /* -- Accent, fills & tints (8) -------------------------------------------- */
+  /* --color-accent-blue is 2.55:1 on white and MUST NOT back white text.     */
+  --color-accent-blue-fill:        #1f6feb; /* 4.63:1 vs #ffffff        */
+  --color-accent-blue-fill-hover:  #1a63d8; /* 5.50:1 vs #ffffff — AUDIT B3
+                                                was #388bfd = 3.34:1        */
+  --color-accent-blue-subtle:      #172d4d; /* selected row/tab tint    */
+  --color-accent-green-fill:       #238636; /* 4.57:1 vs #ffffff        */
+  --color-accent-red-fill:         #da3633; /* 4.69:1 vs #ffffff        */
+  --color-accent-red-fill-hover:   #c62f2c; /* 5.46:1 vs #ffffff — AUDIT B3
+                                                was #f85149 = 3.35:1        */
+  --color-accent-red-subtle:       #2d1618; /* destructive-hover tint   */
+  --color-accent-yellow-subtle:    #2a2410; /* pending-change tint      */
+
+  /* -- State strips (8) ----------------------------------------------------- */
+  --color-state-success-bg: #122117;
+  --color-state-success-fg: #3fb950;
+  --color-state-warning-bg: #221a09;
+  --color-state-warning-fg: #d29922;        /* 6.82:1 on warning-bg     */
+  --color-state-danger-bg:  #251314;
+  --color-state-danger-fg:  #f85149;
+  --color-state-info-bg:    #0f1d2e;
+  --color-state-info-fg:    #58a6ff;
+  /* Severity tier between warning (yellow) and danger (red), for Safe Mode
+     levels 3-4. See design-spec 5.6. */
+  --color-state-severe-bg:  #251806;
+  --color-state-severe-fg:  #fb923c;        /* 7.60:1 on severe-bg      */
+
+  /* -- Environment tags (4) -------------------------------------------------- */
   --color-env-prod:    #f85149;
   --color-env-staging: #d29922;
   --color-env-dev:     #3fb950;
   --color-env-local:   #58a6ff;
 
-  /* ── Shadows ── */
+  /* -- Data grid (10) --------------------------------------------------------- */
+  --color-grid-header-bg:    #1c2431;       /* sticky header row         */
+  --color-grid-row-alt:      #141a22;       /* zebra stripe              */
+  --color-grid-row-hover:    #1f2833;
+  --color-grid-row-selected: #1b3a5c;
+  --color-grid-cell-editing: #1e3a5f;       /* SCR-20 active cell        */
+  --color-grid-row-inserted: #12261a;       /* staged INSERT             */
+  --color-grid-row-updated:  #2a2410;       /* staged UPDATE             */
+  --color-grid-row-deleted:  #2d1618;       /* staged DELETE             */
+  /* AUDIT m4. NULL is meaningful content under M7, so it carries text duty
+     and can no longer share the demoted --color-text-muted hex. Verified
+     against all 8 row backgrounds; worst case 4.88:1 (cell-editing). */
+  --color-grid-null-fg:      #a0aab5;       /* >=4.88:1 on every row bg  */
+  --color-grid-pk-fg:        #d29922;       /* primary-key key glyph     */
+
+  /* -- CodeMirror editor (8) ---------------------------------------------------- */
+  --editor-bg:               #1e1e1e;
+  --editor-fg:               #d4d4d4;
+  --gutter-bg:                #252526;
+  --gutter-fg:                #929292;      /* 4.92:1 on gutter-bg —
+                                                AUDIT m1, was #858585 = 4.15:1 */
+  --active-line-bg:          #2a2d2e;
+  --selection-match-bg:      #264f7880;
+  --active-statement-bg:     #58a6ff10;
+  --active-statement-border: #58a6ff30;
+
+  /* -- Elevation (10) ------------------------------------------------------------ */
   --shadow-sm:    0 1px 2px 0 rgba(0, 0, 0, 0.4);
   --shadow-base:  0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.4);
   --shadow-md:    0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
@@ -65,41 +135,38 @@
   --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* ─────────────────────────────────────────
-   LIGHT MODE OVERRIDES
-   ───────────────────────────────────────── */
+/* ---------------------------------------------------------------------------
+   LIGHT THEME — `.light` on <html>, applied by src/hooks/useTheme.ts
+   Only the theme-varying tokens are redeclared here.
+   ------------------------------------------------------------------------ */
 .light {
-  /* Editor legacy vars (CodeMirror light) */
-  --editor-bg: #ffffff;
-  --editor-fg: #1e1e1e;
-  --gutter-bg: #f5f5f5;
-  --gutter-fg: #999999;
-  --sidebar-bg: #f8f8f8;
-  --border: #e0e0e0;
-  --active-line-bg: #f0f0f0;
-  --selection-match-bg: #add6ff80;
+  color-scheme: light;                      /* AUDIT M6 — see :root */
 
-  /* Editor enhancements (light) */
-  --active-statement-bg: #0969da08;
-  --active-statement-border: #0969da20;
+  /* -- Surface (6) -------------------------------------------------------- */
+  --color-bg-base:      #ffffff;
+  --color-bg-surface:   #f6f8fa;
+  --color-bg-elevated:  #ffffff;
+  --color-bg-muted:     #f0f2f5;
+  --color-bg-hover:     #e8ecf0;
+  --color-scrim:        rgba(15, 20, 25, 0.40);
 
-  /* ── Background ── */
-  --color-bg-base:     #ffffff;
-  --color-bg-surface:  #f6f8fa;
-  --color-bg-elevated: #ffffff;
-  --color-bg-muted:    #f0f2f5;
-  --color-bg-hover:    #e8ecf0;
-
-  /* ── Text ── */
+  /* -- Text (4) ----------------------------------------------------------- */
   --color-text-primary:   #1f2328;
   --color-text-secondary: #656d76;
-  --color-text-muted:     #8c959f;
+  --color-text-muted:     #8c959f;          /* non-text only — see :root */
+  --color-text-inverse:   #ffffff;
 
-  /* ── Border ── */
+  /* -- Border (3) --------------------------------------------------------- */
   --color-border-subtle: #d8dee4;
-  --color-border:        #c8d0d8;
+  /* AUDIT M4. Was #c8d0d8 = 1.56:1 on bg-base.
+     Now 3.45 base / 3.24 surface / 3.45 elevated / 3.08 muted. */
+  --color-border:        #828b96;
+  --color-border-strong: #afb8c1;
 
-  /* ── Accent ── */
+  /* -- Focus (1) ---------------------------------------------------------- */
+  --color-focus-ring:    #0969da;
+
+  /* -- Accent, foreground use (6) ------------------------------------------ */
   --color-accent-blue:   #0969da;
   --color-accent-green:  #1a7f37;
   --color-accent-yellow: #9a6700;
@@ -107,13 +174,59 @@
   --color-accent-orange: #bc4c00;
   --color-accent-indigo: #4f46e5;
 
-  /* ── Environment tags ── */
+  /* -- Accent, fills & tints (8) -------------------------------------------- */
+  --color-accent-blue-fill:        #0969da; /* 5.27:1 vs #ffffff        */
+  --color-accent-blue-fill-hover:  #0860ca; /* 5.94:1 vs #ffffff        */
+  --color-accent-blue-subtle:      #ddf4ff;
+  --color-accent-green-fill:       #1a7f37; /* 5.02:1 vs #ffffff        */
+  --color-accent-red-fill:         #cf222e; /* 5.44:1 vs #ffffff        */
+  --color-accent-red-fill-hover:   #a40e26; /* 7.87:1 vs #ffffff        */
+  --color-accent-red-subtle:       #ffebe9;
+  --color-accent-yellow-subtle:    #fff8c5;
+
+  /* -- State strips (8) ----------------------------------------------------- */
+  --color-state-success-bg: #e8f5ec;
+  --color-state-success-fg: #1a7f37;
+  --color-state-warning-bg: #fdf5e3;
+  --color-state-warning-fg: #8f5f00;        /* 5.08:1 on warning-bg —
+                                                AUDIT m3, was #9a6700 = 4.48:1 */
+  --color-state-danger-bg:  #fdeceb;
+  --color-state-danger-fg:  #d1242f;
+  --color-state-info-bg:    #e8f1fc;
+  --color-state-info-fg:    #0969da;
+  --color-state-severe-bg:  #fff1e5;
+  --color-state-severe-fg:  #bc4c00;        /* 4.55:1 on severe-bg      */
+
+  /* -- Environment tags (4) -------------------------------------------------- */
   --color-env-prod:    #d1242f;
   --color-env-staging: #9a6700;
   --color-env-dev:     #1a7f37;
   --color-env-local:   #0969da;
 
-  /* ── Shadows ── */
+  /* -- Data grid (10) --------------------------------------------------------- */
+  --color-grid-header-bg:    #f0f2f5;
+  --color-grid-row-alt:      #fbfcfd;
+  --color-grid-row-hover:    #f2f5f8;
+  --color-grid-row-selected: #dbeafe;
+  --color-grid-cell-editing: #e0edff;
+  --color-grid-row-inserted: #e6f4ea;
+  --color-grid-row-updated:  #fdf6e3;
+  --color-grid-row-deleted:  #fdecec;
+  --color-grid-null-fg:      #5a636e;       /* >=5.00:1 on every row bg  */
+  --color-grid-pk-fg:        #9a6700;
+
+  /* -- CodeMirror editor (8) ---------------------------------------------------- */
+  --editor-bg:               #ffffff;
+  --editor-fg:               #1e1e1e;
+  --gutter-bg:               #f5f5f5;
+  --gutter-fg:               #6f6f6f;       /* 4.61:1 on gutter-bg —
+                                                AUDIT m1, was #999999 = 2.61:1 */
+  --active-line-bg:          #f0f0f0;
+  --selection-match-bg:      #add6ff80;
+  --active-statement-bg:     #0969da08;
+  --active-statement-border: #0969da20;
+
+  /* -- Elevation (10) ------------------------------------------------------------ */
   --shadow-sm:    0 1px 2px 0 rgba(0, 0, 0, 0.06);
   --shadow-base:  0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
   --shadow-md:    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
@@ -124,6 +237,151 @@
   --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.18);
   --shadow-popup: 0 2px 8px rgba(0, 0, 0, 0.1);
   --shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------------------------------------------------------------------------
+   THEME-INVARIANT TOKENS
+   ------------------------------------------------------------------------ */
+:root {
+  /* -- Connection identity swatches (10) -----------------------------------
+     The ten fixed presets shipped by connection-color-picker.tsx:6-17. These
+     are USER DATA, not theme chrome: a connection the user painted red must
+     stay the same red in both themes, so they are theme-invariant by design.
+     Decorative only — every swatch is paired with the connection name, so
+     colour is never the sole carrier of identity (design-spec 6.4).
+     Contrast is therefore held to the >=3:1 UI-glyph floor, not 4.5:1. */
+  --color-conn-red:     #ef4444;
+  --color-conn-orange:  #f97316;
+  --color-conn-amber:   #f59e0b;
+  --color-conn-yellow:  #eab308;
+  --color-conn-green:   #22c55e;
+  --color-conn-emerald: #10b981;
+  --color-conn-blue:    #3b82f6;
+  --color-conn-indigo:  #6366f1;
+  --color-conn-purple:  #a855f7;
+  --color-conn-pink:    #ec4899;
+
+  /* -- Typography: families (2) --------------------------------------------- */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system,
+               BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Cascadia Code',
+               ui-monospace, monospace;
+
+  /* Editor typeface (kept, legacy) — useTheme.ts writes this at runtime from
+     the user's Settings > Editor font choice (SCR-56); default below matches
+     the shipped font. Distinct from --font-mono, which is the chrome font. */
+  --editor-font: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* -- Typography: size / line-height pairs (7) ------------------------------ */
+  --font-size-2xs: 10px;  --line-height-2xs: 14px;   /* status bar, badges  */
+  --font-size-xs:  11px;  --line-height-xs:  15px;   /* dense chrome labels */
+  --font-size-sm:  12px;  --line-height-sm:  16px;   /* DEFAULT UI text     */
+  --font-size-md:  13px;  --line-height-md:  18px;   /* body, form inputs   */
+  --font-size-lg:  14px;  --line-height-lg:  20px;   /* panel/section title */
+  --font-size-xl:  16px;  --line-height-xl:  22px;   /* dialog title        */
+  --font-size-2xl: 20px;  --line-height-2xl: 28px;   /* welcome/onboarding  */
+
+  /* Editor size is user-owned (Settings > Editor, SCR-56); useTheme.ts writes
+     --editor-font-size at runtime. 13px is the shipped default.              */
+  --editor-font-size: 13px;
+
+  /* -- Typography: weights (3) ------------------------------------------------ */
+  --font-weight-regular:  400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+
+  /* -- Typography: numerals (1) ------------------------------------------------ */
+  --font-numeric-tabular: tabular-nums;   /* grid, status bar, pagination */
+
+  /* -- Spacing: 2px base, 8 steps + zero (9) ------------------------------------ */
+  --space-0:   0px;
+  --space-2xs: 2px;
+  --space-xs:  4px;
+  --space-sm:  6px;
+  --space-md:  8px;
+  --space-lg:  12px;
+  --space-xl:  16px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+
+  /* -- Radius (5) ---------------------------------------------------------------- */
+  --radius-xs:   2px;   /* chips, badges, scrollbar thumb              */
+  --radius-sm:   4px;   /* buttons, inputs, menu items                 */
+  --radius-md:   6px;   /* popovers, cards                             */
+  --radius-lg:   8px;   /* dialogs, docked panels                      */
+  --radius-full: 9999px;/* status dots, pills, tag chips               */
+
+  /* -- Density: control heights (4) ----------------------------------------------- */
+  /* Desktop utility. The 44x44px mobile touch minimum is deliberately NOT
+     applied here — see design-spec.md section 8, rejection R2.              */
+  --control-h-xs: 20px; /* status-bar toggles, inline chips            */
+  --control-h-sm: 24px; /* toolbar icon buttons, editor tabs           */
+  --control-h-md: 28px; /* inputs, selects, menu items                 */
+  --control-h-lg: 32px; /* primary dialog buttons                      */
+
+  /* -- Density: row heights (2) ------------------------------------------------------ */
+  --row-h-grid: 24px;   /* data grid row (SCR-17)                      */
+  --row-h-tree: 22px;   /* sidebar tree node (SCR-04)                  */
+
+  /* -- Layout: fixed chrome (4) -------------------------------------------------------- */
+  --h-toolbar:   40px;  /* SCR-02                                      */
+  --h-tabbar:    32px;  /* SCR-06                                      */
+  --h-statusbar: 24px;  /* source: StatusBar.tsx `h-6`                 */
+  --h-resizer:    6px;  /* source: ConnectedLayout `w-1.5` / `h-1.5`   */
+
+  /* -- Layout: anchored popover geometry (2) --------------------------------------------- */
+  --w-popover-max: 560px; /* SCR-25 max width                          */
+  --h-popover-max: 320px; /* SCR-25 max height, then internal scroll   */
+
+  /* -- Layout: resizable regions (10) ------------------------------------------------------ */
+  /* Source of truth is src/stores/layoutStore.ts:8-14 — these mirror it.     */
+  --w-sidebar-min:       160px;
+  --w-sidebar-default:   240px;
+  --w-sidebar-max:       480px;
+  --w-inspector-min:     200px;
+  --w-inspector-default: 280px;
+  --w-inspector-max:     500px;
+  --w-dock-min:          280px;  /* unified right dock                */
+  --w-dock-default:      360px;  /* value: History slide-over w-[360px] */
+  --w-dock-max:          520px;  /* was AI 400px, widened for chat     */
+  --h-editor-min:        20%;    /* EDITOR_MIN_PERCENT = 20            */
+
+  /* -- Z-index (7) ---------------------------------------------------------------------------- */
+  --z-base:         0;   /* Tab body                                   */
+  --z-sticky:      10;   /* grid header, pending-changes strip         */
+  --z-dock:        20;   /* right dock column                          */
+  --z-dock-content:21;
+  --z-popover:     50;   /* menus, anchored popovers (SCR-25)          */
+  --z-modal-scrim:100;
+  --z-modal:      101;
+
+  /* -- Motion: duration (4) -------------------------------------------------------------------- */
+  --duration-fast:     100ms;
+  --duration-normal:   150ms;
+  --duration-moderate: 200ms;
+  --duration-slow:     300ms;
+
+  /* -- Motion: easing (4) ---------------------------------------------------------------------- */
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out:    cubic-bezier(0, 0, 0.2, 1);
+  --ease-in:     cubic-bezier(0.4, 0, 1, 1);
+
+  /* -- Focus ring geometry (2) ------------------------------------------------------------------ */
+  --focus-ring-width:  2px;   /* source: globals.css *:focus-visible   */
+  --focus-ring-offset: 2px;   /* source: globals.css *:focus-visible   */
+}
+
+/* ---------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ─────────────────────────────────────────
@@ -151,31 +409,36 @@
   }
 
   .button-primary {
-    @apply bg-accent-blue text-white transition-opacity hover:opacity-90;
+    @apply bg-accent-blue-fill text-text-inverse transition-opacity hover:opacity-90;
   }
 
   .button-success {
-    @apply rounded bg-accent-green text-white transition-opacity hover:opacity-90;
+    @apply rounded bg-accent-green-fill text-text-inverse transition-opacity hover:opacity-90;
+  }
+
+  .state-strip-success {
+    background-color: var(--color-state-success-bg);
+    color: var(--color-state-success-fg);
+  }
+
+  .state-strip-info {
+    background-color: var(--color-state-info-bg);
+    color: var(--color-state-info-fg);
   }
 
   .state-strip-warning {
-    background-color: color-mix(in srgb, var(--color-accent-yellow) 18%, transparent);
-    border-color: color-mix(in srgb, var(--color-accent-yellow) 45%, var(--color-border-subtle));
+    background-color: var(--color-state-warning-bg);
+    color: var(--color-state-warning-fg);
   }
 
   .state-strip-danger {
-    background-color: color-mix(in srgb, var(--color-accent-red) 16%, transparent);
-    color: var(--color-accent-red);
+    background-color: var(--color-state-danger-bg);
+    color: var(--color-state-danger-fg);
   }
-}
 
-/* Suppress animations for users who prefer reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  .state-strip-severe {
+    background-color: var(--color-state-severe-bg);
+    color: var(--color-state-severe-fg);
   }
 }
 
@@ -190,11 +453,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: var(--color-border-strong);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: var(--color-text-secondary);
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
