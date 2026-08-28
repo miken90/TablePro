@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,9 @@ use tokio::sync::Mutex;
 use crate::drivers::DatabaseDriver;
 use crate::models::AppError;
 use crate::services::{
-    sql_generator::{generate_insert_sql, generate_statements, generate_update_sql, Dialect, SavePayload},
+    sql_generator::{
+        generate_insert_sql, generate_update_sql, plan_save, Dialect, SavePayload, SavePlan,
+    },
     ConnectionManager,
 };
 use crate::storage::history_store::HistoryStore;
@@ -31,20 +34,30 @@ pub struct SaveResult {
     pub statements_executed: usize,
 }
 
-/// `(BEGIN, COMMIT, ROLLBACK)` for a dialect.
+/// What a save or a preview needs from the session: the driver to run on, the
+/// database name history rows are filed under, and the dialect to generate in.
+type SaveSession = (Arc<dyn DatabaseDriver>, Option<String>, Dialect);
+
+/// Driver, database name and dialect for a save or a preview on `session_id`.
 ///
-/// All drivers hold a single connection behind a mutex, so these land on the
-/// same session as the statements they wrap.
-fn transaction_keywords(dialect: Dialect) -> (&'static str, &'static str, &'static str) {
-    match dialect {
-        Dialect::Mssql => (
-            "BEGIN TRANSACTION",
-            "COMMIT TRANSACTION",
-            "ROLLBACK TRANSACTION",
-        ),
-        Dialect::MySql => ("START TRANSACTION", "COMMIT", "ROLLBACK"),
-        _ => ("BEGIN", "COMMIT", "ROLLBACK"),
-    }
+/// Both commands resolve through here, so the `Postgres` fallback for a
+/// session whose config has gone and the driver that answers
+/// `supports_transactions()` are decided once for the pair.
+fn resolve_save_session(
+    mgr: &ConnectionManager,
+    session_id: &str,
+) -> Result<SaveSession, AppError> {
+    let driver = mgr.get_driver(session_id)?;
+    let config = mgr.get_config(session_id).ok();
+    let database_name = config
+        .as_ref()
+        .map(|cfg| cfg.database.clone())
+        .filter(|name| !name.trim().is_empty());
+    let dialect = config
+        .as_ref()
+        .map(|cfg| Dialect::from_db_type(&cfg.db_type))
+        .unwrap_or(Dialect::Postgres);
+    Ok((driver, database_name, dialect))
 }
 
 #[tauri::command]
@@ -56,41 +69,41 @@ pub async fn save_changes(
 ) -> Result<SaveResult, AppError> {
     let (driver, database_name, dialect) = {
         let mgr = manager.lock().await;
-        let driver = mgr.get_driver(&session_id)?;
-        let config = mgr.get_config(&session_id).ok();
-        let database_name = config
-            .as_ref()
-            .map(|cfg| cfg.database.clone())
-            .filter(|name| !name.trim().is_empty());
-        let dialect = config
-            .as_ref()
-            .map(|cfg| Dialect::from_db_type(&cfg.db_type))
-            .unwrap_or(Dialect::Postgres);
-        (driver, database_name, dialect)
+        resolve_save_session(&mgr, &session_id)?
     };
 
-    let statements = generate_statements(&payload, dialect);
-
-    // A grid save is one edit as far as the user is concerned. Executed one
-    // statement at a time in autocommit, a bulk delete that failed on row 30
-    // left the first 29 rows permanently gone with no way back.
-    //
-    // Engines that report `supports_transactions() == false` (MongoDB, Redis)
-    // keep the sequential behavior — they have no SQL transaction to open, and
-    // the grid save path does not reach them.
-    let transactional = statements.len() > 1 && driver.supports_transactions();
-    let (begin, commit, rollback) = transaction_keywords(dialect);
+    let plan = plan_save(&payload, dialect, driver.supports_transactions())?;
 
     execute_plan(
         driver.as_ref(),
-        &statements,
-        transactional,
-        (begin, commit, rollback),
+        &plan.statements,
+        plan.transactional,
+        (plan.begin, plan.commit, plan.rollback),
         &history_store,
         &database_name,
         &session_id,
     )
     .await
+}
+
+/// The statements `save_changes` would run for this payload, and nothing else
+/// — no execution, no history row.
+///
+/// Preview and execute share `plan_save`, so a preview that shows three
+/// statements wrapped in `BEGIN TRANSACTION` is the literal thing the driver
+/// will be handed.
+#[tauri::command]
+pub async fn preview_statements(
+    session_id: String,
+    payload: SavePayload,
+    manager: State<'_, Mutex<ConnectionManager>>,
+) -> Result<SavePlan, AppError> {
+    let (driver, _database_name, dialect) = {
+        let mgr = manager.lock().await;
+        resolve_save_session(&mgr, &session_id)?
+    };
+
+    plan_save(&payload, dialect, driver.supports_transactions())
 }
 
 /// Run a prepared statement list on `driver`, wrapping it in a transaction
@@ -217,12 +230,11 @@ pub async fn generate_row_sql(
 
 #[cfg(test)]
 mod tests {
-    use super::{execute_plan, transaction_keywords};
+    use super::execute_plan;
     use crate::drivers::DatabaseDriver;
     use crate::models::{
         AppError, ColumnInfo, ForeignKeyInfo, IndexInfo, QueryResult, TableInfo,
     };
-    use crate::services::sql_generator::Dialect;
     use crate::storage::history_store::HistoryStore;
     use async_trait::async_trait;
     use std::sync::Mutex as StdMutex;
@@ -343,6 +355,11 @@ mod tests {
     }
 
     const PG: (&str, &str, &str) = ("BEGIN", "COMMIT", "ROLLBACK");
+    const MSSQL: (&str, &str, &str) = (
+        "BEGIN TRANSACTION",
+        "COMMIT TRANSACTION",
+        "ROLLBACK TRANSACTION",
+    );
 
     /// One statement is not worth a transaction: it runs in autocommit and no
     /// BEGIN or COMMIT reaches the driver.
@@ -388,9 +405,8 @@ mod tests {
         let driver = FakeDriver::new();
         let store = history();
         let stmts = statements(&["UPDATE t SET a=1", "UPDATE t SET a=2"]);
-        let mssql = transaction_keywords(Dialect::Mssql);
 
-        execute_plan(&driver, &stmts, true, mssql, &store, &None, "s1")
+        execute_plan(&driver, &stmts, true, MSSQL, &store, &None, "s1")
             .await
             .expect("save");
 
@@ -491,27 +507,5 @@ mod tests {
 
         assert_eq!(result.rows_affected, 12);
         assert_eq!(result.statements_executed, 3);
-    }
-
-    #[test]
-    fn transaction_keywords_match_each_engine() {
-        assert_eq!(
-            transaction_keywords(Dialect::Postgres),
-            ("BEGIN", "COMMIT", "ROLLBACK")
-        );
-        assert_eq!(
-            transaction_keywords(Dialect::Sqlite),
-            ("BEGIN", "COMMIT", "ROLLBACK")
-        );
-        // MySQL's BEGIN is a label statement in stored programs; START
-        // TRANSACTION is the unambiguous spelling.
-        assert_eq!(
-            transaction_keywords(Dialect::MySql),
-            ("START TRANSACTION", "COMMIT", "ROLLBACK")
-        );
-        assert_eq!(
-            transaction_keywords(Dialect::Mssql),
-            ("BEGIN TRANSACTION", "COMMIT TRANSACTION", "ROLLBACK TRANSACTION")
-        );
     }
 }

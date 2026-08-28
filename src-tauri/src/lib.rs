@@ -15,7 +15,7 @@ use commands::connection::{
 use commands::connection_export::{
     build_import_link, confirm_import, export_connections, import_connections_preview,
 };
-use commands::data::{generate_row_sql, save_changes};
+use commands::data::{generate_row_sql, preview_statements, save_changes};
 use commands::export::export_to_file;
 use commands::filter::{delete_filter_preset, load_filter_presets, save_filter_preset};
 use commands::history::{
@@ -251,6 +251,7 @@ pub fn run() {
             delete_group,
             // data mutation
             save_changes,
+            preview_statements,
             generate_row_sql,
             // export
             export_to_file,

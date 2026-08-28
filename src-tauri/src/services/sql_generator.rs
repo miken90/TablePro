@@ -4,7 +4,8 @@ use serde_json::Value;
 use crate::models::AppError;
 
 use super::sql_generator_ops::{
-    build_delete_statement, build_insert_statement, build_update_statement, qualified_table,
+    build_delete_statement, build_insert_statement, build_update_statement, build_where_clause,
+    qualified_table,
 };
 use super::sql_value_kind::{classify_column_type, ValueKind};
 use crate::services::sql_quoting::quote_identifier;
@@ -13,7 +14,8 @@ use crate::services::sql_quoting::quote_identifier;
 ///
 /// Maps to the host `db_type` string via [`Dialect::from_db_type`]. Used to
 /// pick correct boolean literals and identifier quoting per engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Dialect {
     Postgres,
     MySql,
@@ -121,7 +123,89 @@ impl SavePayload {
     }
 }
 
-pub fn generate_statements(payload: &SavePayload, dialect: Dialect) -> Vec<String> {
+/// The complete decision about a grid save: what to run, whether to wrap it,
+/// and in which dialect's words.
+///
+/// Preview and execute both read this one value, so the statements the user
+/// approves are the statements that run — the two cannot drift apart the way
+/// a separate preview generator did.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavePlan {
+    pub statements: Vec<String>,
+    pub transactional: bool,
+    pub begin: &'static str,
+    pub commit: &'static str,
+    pub rollback: &'static str,
+    pub dialect: Dialect,
+}
+
+/// `(BEGIN, COMMIT, ROLLBACK)` for a dialect.
+///
+/// All drivers hold a single connection behind a mutex, so these land on the
+/// same session as the statements they wrap.
+fn transaction_keywords(dialect: Dialect) -> (&'static str, &'static str, &'static str) {
+    match dialect {
+        Dialect::Mssql => (
+            "BEGIN TRANSACTION",
+            "COMMIT TRANSACTION",
+            "ROLLBACK TRANSACTION",
+        ),
+        Dialect::MySql => ("START TRANSACTION", "COMMIT", "ROLLBACK"),
+        _ => ("BEGIN", "COMMIT", "ROLLBACK"),
+    }
+}
+
+/// Plan a grid save. The single public entry to statement generation.
+///
+/// Refuses a payload whose UPDATE or DELETE cannot be given a WHERE clause.
+/// The grid substitutes every column as the key set when a table has no
+/// primary key, so this is unreachable from the app — it exists so that a
+/// caller that gets it wrong is told, rather than silently rewriting a table.
+pub fn plan_save(
+    payload: &SavePayload,
+    dialect: Dialect,
+    supports_transactions: bool,
+) -> Result<SavePlan, AppError> {
+    for change in &payload.changes {
+        match change.change_type {
+            ChangeType::Insert => {}
+            ChangeType::Update | ChangeType::Delete => {
+                if build_where_clause(payload, &change.original_row, dialect).is_empty() {
+                    return Err(AppError::Other(
+                        "no key columns: refusing to plan an unconditioned UPDATE/DELETE"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+    }
+
+    let statements = generate_statements(payload, dialect);
+    let (begin, commit, rollback) = transaction_keywords(dialect);
+
+    // A grid save is one edit as far as the user is concerned. Executed one
+    // statement at a time in autocommit, a bulk delete that failed on row 30
+    // left the first 29 rows permanently gone with no way back.
+    //
+    // Engines that report `supports_transactions() == false` (MongoDB, Redis)
+    // keep the sequential behavior — they have no SQL transaction to open, and
+    // the grid save path does not reach them.
+    let transactional = statements.len() > 1 && supports_transactions;
+
+    Ok(SavePlan {
+        statements,
+        transactional,
+        begin,
+        commit,
+        rollback,
+        dialect,
+    })
+}
+
+/// Private on purpose: `plan_save` is the only way in, so a second generation
+/// route in a command module is a compile error rather than a review finding.
+fn generate_statements(payload: &SavePayload, dialect: Dialect) -> Vec<String> {
     let table = qualified_table(&payload.table, &payload.schema, dialect);
 
     payload
@@ -1276,5 +1360,151 @@ mod golden_masters {
             generate_statements(&p, Dialect::Postgres),
             vec![r#"DELETE FROM "users" WHERE "id"=7"#]
         );
+    }
+}
+
+/// `plan_save` — the one entry to statement generation and to the transaction
+/// rule the write path obeys.
+#[cfg(test)]
+mod plan_tests {
+    use super::*;
+
+    fn payload(changes: Vec<RowChange>) -> SavePayload {
+        SavePayload {
+            table: "users".to_string(),
+            schema: None,
+            columns: vec!["id".to_string(), "name".to_string()],
+            column_types: vec![Some("int4".to_string()), Some("varchar".to_string())],
+            primary_keys: vec!["id".to_string()],
+            changes,
+        }
+    }
+
+    fn update(id: &str, name: &str) -> RowChange {
+        RowChange {
+            change_type: ChangeType::Update,
+            original_row: vec![Some(id.to_string()), Some("old".to_string())],
+            cell_changes: vec![CellChange {
+                column_name: "name".to_string(),
+                old_value: Some("old".to_string()),
+                new_value: Some(name.to_string()),
+            }],
+        }
+    }
+
+    fn delete(id: &str) -> RowChange {
+        RowChange {
+            change_type: ChangeType::Delete,
+            original_row: vec![Some(id.to_string()), Some("old".to_string())],
+            cell_changes: vec![],
+        }
+    }
+
+    #[test]
+    fn several_statements_are_wrapped() {
+        let p = payload(vec![update("1", "a"), update("2", "b"), delete("3")]);
+        let plan = plan_save(&p, Dialect::Postgres, true).expect("plan");
+        assert_eq!(plan.statements.len(), 3);
+        assert!(plan.transactional);
+    }
+
+    #[test]
+    fn a_single_statement_is_not_wrapped() {
+        let p = payload(vec![update("1", "a")]);
+        let plan = plan_save(&p, Dialect::Postgres, true).expect("plan");
+        assert_eq!(plan.statements.len(), 1);
+        assert!(!plan.transactional);
+    }
+
+    /// MongoDB and Redis answer `false`; there is no transaction to open, so
+    /// the statements run sequentially however many there are.
+    #[test]
+    fn an_engine_without_transactions_is_never_wrapped() {
+        let p = payload(vec![update("1", "a"), update("2", "b")]);
+        let plan = plan_save(&p, Dialect::Postgres, false).expect("plan");
+        assert_eq!(plan.statements.len(), 2);
+        assert!(!plan.transactional);
+    }
+
+    #[test]
+    fn the_plan_carries_the_dialect_keyword_triple() {
+        let p = payload(vec![update("1", "a")]);
+
+        let pg = plan_save(&p, Dialect::Postgres, true).expect("plan");
+        assert_eq!((pg.begin, pg.commit, pg.rollback), ("BEGIN", "COMMIT", "ROLLBACK"));
+
+        let sqlite = plan_save(&p, Dialect::Sqlite, true).expect("plan");
+        assert_eq!(
+            (sqlite.begin, sqlite.commit, sqlite.rollback),
+            ("BEGIN", "COMMIT", "ROLLBACK")
+        );
+
+        // MySQL's BEGIN is a label statement in stored programs; START
+        // TRANSACTION is the unambiguous spelling.
+        let mysql = plan_save(&p, Dialect::MySql, true).expect("plan");
+        assert_eq!(
+            (mysql.begin, mysql.commit, mysql.rollback),
+            ("START TRANSACTION", "COMMIT", "ROLLBACK")
+        );
+
+        let mssql = plan_save(&p, Dialect::Mssql, true).expect("plan");
+        assert_eq!(
+            (mssql.begin, mssql.commit, mssql.rollback),
+            (
+                "BEGIN TRANSACTION",
+                "COMMIT TRANSACTION",
+                "ROLLBACK TRANSACTION"
+            )
+        );
+    }
+
+    #[test]
+    fn the_same_payload_quotes_per_dialect() {
+        let p = payload(vec![update("1", "a")]);
+        assert_eq!(
+            plan_save(&p, Dialect::Postgres, true).expect("plan").statements,
+            vec![r#"UPDATE "users" SET "name"='a' WHERE "id"=1"#]
+        );
+        assert_eq!(
+            plan_save(&p, Dialect::MySql, true).expect("plan").statements,
+            vec!["UPDATE `users` SET `name`='a' WHERE `id`=1"]
+        );
+        assert_eq!(
+            plan_save(&p, Dialect::Mssql, true).expect("plan").statements,
+            vec!["UPDATE [users] SET [name]='a' WHERE [id]=1"]
+        );
+    }
+
+    #[test]
+    fn an_unconditioned_update_is_refused() {
+        let mut p = payload(vec![update("1", "a")]);
+        p.primary_keys = vec![];
+        let error = plan_save(&p, Dialect::Postgres, true).expect_err("must refuse");
+        assert!(error.to_string().contains("no key columns"));
+    }
+
+    #[test]
+    fn an_unconditioned_delete_is_refused() {
+        let mut p = payload(vec![delete("1")]);
+        p.primary_keys = vec![];
+        let error = plan_save(&p, Dialect::Postgres, true).expect_err("must refuse");
+        assert!(error.to_string().contains("no key columns"));
+    }
+
+    /// An INSERT has no WHERE to lose, so the key-set guard leaves it alone.
+    #[test]
+    fn an_insert_needs_no_key_columns() {
+        let mut p = payload(vec![RowChange {
+            change_type: ChangeType::Insert,
+            original_row: vec![],
+            cell_changes: vec![CellChange {
+                column_name: "name".to_string(),
+                old_value: None,
+                new_value: Some("a".to_string()),
+            }],
+        }]);
+        p.primary_keys = vec![];
+        let plan = plan_save(&p, Dialect::Postgres, true).expect("plan");
+        assert_eq!(plan.statements, vec![r#"INSERT INTO "users" ("name") VALUES ('a')"#]);
     }
 }
