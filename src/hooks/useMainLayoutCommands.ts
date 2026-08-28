@@ -47,7 +47,11 @@ export function buildMainLayoutCommands(t: Translate): Command[] {
       label: "Quick Switcher",
       shortcut: shortcutFor("nav.quickSwitcher"),
       category: "Navigation" as const,
-      action: () => useLayoutStore.getState().setQuickSwitcherOpen(!useLayoutStore.getState().quickSwitcherOpen),
+      // [RT-4] While SCR-47 (Safe Mode confirm) is open, opening the palette
+      // is refused — a second `execute` must not overwrite the statement
+      // the user is confirming.
+      when: () => !useQueryStore.getState().pendingSafeCheck,
+      action: () => useLayoutStore.getState().openPalette("objects"),
     },
     {
       id: "nav.toggleHistory",
@@ -75,7 +79,9 @@ export function buildMainLayoutCommands(t: Translate): Command[] {
       label: "Command Palette",
       shortcut: shortcutFor("nav.commandPalette"),
       category: "Navigation" as const,
-      action: () => useLayoutStore.getState().setCommandPaletteOpen(!useLayoutStore.getState().commandPaletteOpen),
+      // [RT-4] Same guard as nav.quickSwitcher — both seed the same overlay.
+      when: () => !useQueryStore.getState().pendingSafeCheck,
+      action: () => useLayoutStore.getState().openPalette("commands"),
     },
     {
       id: "editor.run",

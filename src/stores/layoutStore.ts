@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ColumnInfo } from "../types/query";
+import type { PaletteMode } from "../components/palette/palette-modes";
 
 export const SIDEBAR_DEFAULT = 240;
 export const SIDEBAR_MIN = 160;
@@ -31,10 +32,12 @@ interface LayoutState {
   filterVisible: boolean;
 
   // Overlays
-  quickSwitcherOpen: boolean;
+  /** M5: the unified palette (SCR-52 objects / SCR-53 commands). Neither
+   *  flag is persisted — a reload never reopens it. */
+  paletteOpen: boolean;
+  paletteSeedMode: PaletteMode;
   settingsOpen: boolean;
   helpOpen: boolean;
-  commandPaletteOpen: boolean;
   /** SQL file import dialog (opened by the `data.importSql` command). */
   importOpen: boolean;
   /** About box (opened by the `app.about` command). */
@@ -51,11 +54,12 @@ interface LayoutState {
   toggleSidebar: () => void;
   setEditorHeightPercent: (pct: number) => void;
   toggleFilter: () => void;
-  setQuickSwitcherOpen: (open: boolean) => void;
+  /** Opens the palette seeded to `mode`, or closes it if already open on that mode. */
+  openPalette: (mode: PaletteMode) => void;
+  closePalette: () => void;
   setSettingsOpen: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
   setAboutOpen: (open: boolean) => void;
-  setCommandPaletteOpen: (open: boolean) => void;
   setImportOpen: (open: boolean) => void;
   setFilterColumns: (cols: ColumnInfo[]) => void;
   setSelectedRowIndex: (index: number | null) => void;
@@ -72,10 +76,10 @@ export const useLayoutStore = create<LayoutState>()(
       sidebarCollapsed: false,
       editorHeightPercent: 45,
       filterVisible: false,
-      quickSwitcherOpen: false,
+      paletteOpen: false,
+      paletteSeedMode: "objects",
       settingsOpen: false,
       helpOpen: false,
-      commandPaletteOpen: false,
       importOpen: false,
       aboutOpen: false,
       filterColumns: [],
@@ -86,10 +90,14 @@ export const useLayoutStore = create<LayoutState>()(
       setEditorHeightPercent: (pct) =>
         set({ editorHeightPercent: clamp(pct, EDITOR_MIN_PERCENT, 80) }),
       toggleFilter: () => set((s) => ({ filterVisible: !s.filterVisible })),
-      setQuickSwitcherOpen: (open) => set({ quickSwitcherOpen: open }),
+      openPalette: (mode) =>
+        set((s) => {
+          if (s.paletteOpen && s.paletteSeedMode === mode) return { paletteOpen: false };
+          return { paletteOpen: true, paletteSeedMode: mode };
+        }),
+      closePalette: () => set({ paletteOpen: false }),
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setHelpOpen: (open) => set({ helpOpen: open }),
-      setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
       setImportOpen: (open) => set({ importOpen: open }),
       setAboutOpen: (open) => set({ aboutOpen: open }),
       setFilterColumns: (cols) => set({ filterColumns: cols }),

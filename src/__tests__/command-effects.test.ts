@@ -122,8 +122,8 @@ beforeEach(() => {
     settingsOpen: false,
     helpOpen: false,
     importOpen: false,
-    commandPaletteOpen: false,
-    quickSwitcherOpen: false,
+    paletteOpen: false,
+    paletteSeedMode: "objects",
   });
   useDockStore.setState({
     dockOpen: false,

@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState, useCallback, useEffect } from "react";
-import { QuickSwitcher } from "./quick-switcher";
-import { CommandPalette } from "../shared/command-palette";
+import { Palette } from "../palette/palette";
 import { QueryAnnouncer } from "../shared/query-announcer";
 import { UnsavedChangesDialog } from "../shared/unsaved-changes-dialog";
 import { PanelLoader } from "../shared/PanelLoader";
@@ -29,10 +28,8 @@ export function OverlayRegion({
   onUnsavedCancel,
   onQuickSwitcherSelect,
 }: OverlayRegionProps) {
-  const quickSwitcherOpen = useLayoutStore((s) => s.quickSwitcherOpen);
   const settingsOpen = useLayoutStore((s) => s.settingsOpen);
   const helpOpen = useLayoutStore((s) => s.helpOpen);
-  const commandPaletteOpen = useLayoutStore((s) => s.commandPaletteOpen);
   const aboutOpen = useLayoutStore((s) => s.aboutOpen);
 
   // Onboarding
@@ -55,11 +52,7 @@ export function OverlayRegion({
 
   return (
     <ErrorBoundary name="overlays">
-      <QuickSwitcher
-        open={quickSwitcherOpen}
-        onClose={() => useLayoutStore.getState().setQuickSwitcherOpen(false)}
-        onSelectTable={onQuickSwitcherSelect}
-      />
+      <Palette onSelectTable={onQuickSwitcherSelect} />
 
       {settingsOpen && (
         <Suspense fallback={<PanelLoader />}>
@@ -82,11 +75,6 @@ export function OverlayRegion({
           />
         </Suspense>
       )}
-
-      <CommandPalette
-        open={commandPaletteOpen}
-        onOpenChange={(open) => useLayoutStore.getState().setCommandPaletteOpen(open)}
-      />
 
       <QueryAnnouncer />
 

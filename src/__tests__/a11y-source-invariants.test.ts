@@ -86,7 +86,6 @@ describe('B2 — text-muted is content-free', () => {
     { file: '../components/procedures/sidebar-routine-node.tsx', line: 75, reason: 'decorative routine-kind glyph' },
     { file: '../components/procedures/procedure-source-panel.tsx', line: 123, reason: 'icon-only close button' },
     { file: '../components/shared/about-dialog.tsx', line: 50, reason: 'icon-only close button' },
-    { file: '../components/shared/command-palette/command-palette.tsx', line: 61, reason: 'decorative search icon (inline svg)' },
   ];
 
   it('every remaining text-muted line is disabled, decorative, or explicitly allowed', () => {

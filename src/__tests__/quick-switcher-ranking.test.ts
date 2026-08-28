@@ -1,24 +1,5 @@
 import { describe, it, expect } from "vitest";
-
-/**
- * Quick switcher scoring function — extracted for testability.
- * Must match the implementation in quick-switcher.tsx.
- */
-function scoreMatch(text: string, query: string): number {
-  const tLower = text.toLowerCase();
-  const qLower = query.toLowerCase();
-  if (tLower === qLower) return 100; // exact
-  if (tLower.startsWith(qLower)) return 80; // prefix
-  if (tLower.includes(qLower)) return 60; // substring
-  // Simple fuzzy: all query chars appear in order
-  let ti = 0;
-  for (let qi = 0; qi < qLower.length; qi++) {
-    const found = tLower.indexOf(qLower[qi], ti);
-    if (found === -1) return 0;
-    ti = found + 1;
-  }
-  return 30; // fuzzy
-}
+import { scoreMatch, KIND_ORDER } from "../components/palette/palette-modes";
 
 describe("Quick Switcher scoreMatch", () => {
   it("returns 100 for exact match", () => {
@@ -86,8 +67,6 @@ describe("Quick Switcher scoreMatch", () => {
 });
 
 describe("Quick Switcher result grouping order", () => {
-  const KIND_ORDER = ['table', 'view', 'collection', 'database', 'schema', 'query'] as const;
-
   it("tables appear before views", () => {
     expect(KIND_ORDER.indexOf('table')).toBeLessThan(KIND_ORDER.indexOf('view'));
   });
