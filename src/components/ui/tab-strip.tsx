@@ -78,7 +78,7 @@ export function TabStrip({
             tabIndex={active ? 0 : -1}
             onClick={() => onSelect(tab.id)}
             className={[
-              "group flex items-center gap-sm border-b-2 px-lg text-ui-sm transition-colors duration-fast ease-snappy hover:bg-surface-hover",
+              "group flex items-center gap-sm border-b-2 px-lg text-ui-sm transition-colors duration-fast ease-snappy hover:bg-surface-hover hover:text-text-primary",
               active ? "border-accent-blue text-text-primary" : "border-transparent text-text-secondary",
             ].join(" ")}
           >

@@ -36,7 +36,7 @@ export function EditorStatusBar() {
   const dialectLabel = dbType ? (DIALECT_LABELS[dbType.toLowerCase()] ?? dbType) : "SQL";
 
   return (
-    <div className="flex items-center gap-3 border-t border-border-subtle bg-surface px-3 py-0.5 text-[10px] text-text-muted">
+    <div className="flex items-center gap-3 border-t border-border-subtle bg-surface px-3 py-0.5 text-[10px] text-text-secondary">
       {statementCount > 0 && (
         <span>{t("editorStatusBar.stmt", { current: statementIndex, total: statementCount })}</span>
       )}

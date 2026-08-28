@@ -112,7 +112,7 @@ export function ProcedureSourcePanel({
             <h2 className="text-sm font-semibold text-text-primary">
               {t("procedures.sourceOf", { name: routine.name })}
             </h2>
-            <p className="mt-0.5 text-xs text-text-muted">
+            <p className="mt-0.5 text-xs text-text-secondary">
               {routine.kind === "procedure" ? "Procedure" : "Function"}
               {routine.schema ? ` · ${routine.schema}` : ""}
               {routine.returnType ? ` → ${routine.returnType}` : ""}
@@ -129,7 +129,7 @@ export function ProcedureSourcePanel({
         {/* Source code */}
         <div className="flex-1 overflow-hidden px-5 pb-2">
           {loading && (
-            <div className="flex items-center justify-center py-8 text-xs text-text-muted">
+            <div className="flex items-center justify-center py-8 text-xs text-text-secondary">
               Loading…
             </div>
           )}
@@ -156,7 +156,7 @@ export function ProcedureSourcePanel({
             <div className="mt-2 flex gap-2">
               <button
                 onClick={() => setDropConfirm(false)}
-                className="rounded border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-muted"
+                className="rounded border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
               >
                 {t("procedures.cancel")}
               </button>
@@ -185,7 +185,7 @@ export function ProcedureSourcePanel({
             <button
               onClick={() => void handleCopy()}
               disabled={!source}
-              className="flex items-center gap-1 rounded border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted disabled:opacity-50"
+              className="flex items-center gap-1 rounded border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary disabled:opacity-50"
             >
               <Copy size={12} />
               {copied ? t("procedures.copied") : t("procedures.copy")}

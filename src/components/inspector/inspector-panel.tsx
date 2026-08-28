@@ -21,7 +21,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
     `flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors ${
       active
         ? "bg-surface-muted text-text-primary"
-        : "text-text-muted hover:text-text-secondary hover:bg-surface-muted"
+        : "text-text-secondary hover:text-text-primary hover:bg-surface-muted"
     }`;
 
   return (
@@ -65,7 +65,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
 
       {/* Body */}
       {row === null ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-text-muted">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-text-secondary">
           <Rows3 size={24} />
           <span className="text-xs">{t("inspector.selectRow")}</span>
         </div>
@@ -87,7 +87,7 @@ export function InspectorPanel({ columns, row, onClose }: InspectorPanelProps) {
 
       {/* Footer with column count */}
       {row !== null && (
-        <div className="border-t border-border px-3 py-1 text-[10px] text-text-muted">
+        <div className="border-t border-border px-3 py-1 text-[10px] text-text-secondary">
           {t("inspector.columnCount", { count: columns.length })}
         </div>
       )}

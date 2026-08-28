@@ -58,8 +58,8 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
           <p className="text-sm text-text-secondary">
             {t("about.version", { version: __APP_VERSION__ })}
           </p>
-          <p className="text-center text-xs text-text-muted">{t("about.description")}</p>
-          <p className="w-full border-t border-border-subtle pt-3 text-center text-xs text-text-muted">
+          <p className="text-center text-xs text-text-secondary">{t("about.description")}</p>
+          <p className="w-full border-t border-border-subtle pt-3 text-center text-xs text-text-secondary">
             {t("about.platform")}: {navigator.platform}
           </p>
         </div>

@@ -103,7 +103,7 @@ function EditableRow({ col, idx, isOriginal, rowState, onModify, onDrop, onUndro
               onChange={e => setEditName(e.target.value)}
               onBlur={commitEdit}
               disabled={isOriginal && col.isPrimaryKey}
-              className="w-full font-medium text-zinc-700 dark:text-zinc-200 bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-blue-400 focus:outline-none px-0 py-0 disabled:cursor-default"
+              className="w-full font-medium text-zinc-700 dark:text-zinc-200 bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-blue-400 px-0 py-0 disabled:cursor-default"
             />
           )}
         </div>
@@ -137,7 +137,7 @@ function EditableRow({ col, idx, isOriginal, rowState, onModify, onDrop, onUndro
             onChange={e => setEditDefault(e.target.value)}
             onBlur={commitEdit}
             placeholder="NULL"
-            className="w-full font-mono text-[11px] text-zinc-500 dark:text-zinc-400 bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-blue-400 focus:outline-none px-0 py-0"
+            className="w-full font-mono text-[11px] text-zinc-500 dark:text-zinc-400 bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-blue-400 px-0 py-0"
           />
         )}
       </td>

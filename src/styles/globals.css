@@ -397,7 +397,7 @@
 /* Tailwind utility: use @apply for components that need focus ring */
 @layer utilities {
   .focus-ring {
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)];
+    @apply focus-visible:[outline:var(--focus-ring-width)_solid_var(--color-focus-ring)] focus-visible:[outline-offset:var(--focus-ring-offset)];
   }
 
   .menu-item-button {

@@ -57,7 +57,7 @@ export function TypePicker({ value, onChange, disabled }: TypePickerProps) {
         type="button"
         disabled={disabled}
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1 w-full text-left font-mono text-[11px] px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-blue-400 focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center gap-1 w-full text-left font-mono text-[11px] px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-blue-400 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <span className="flex-1 truncate">{value || "Select type…"}</span>
         <ChevronDown size={10} className="flex-shrink-0 text-zinc-400" />
@@ -72,7 +72,7 @@ export function TypePicker({ value, onChange, disabled }: TypePickerProps) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search types…"
-              className="flex-1 text-[11px] bg-transparent outline-none text-zinc-700 dark:text-zinc-300 placeholder-zinc-400"
+              className="flex-1 text-[11px] bg-transparent text-zinc-700 dark:text-zinc-300 placeholder-zinc-400"
             />
           </div>
           <div className="overflow-auto max-h-52">
@@ -127,7 +127,7 @@ export function TypePicker({ value, onChange, disabled }: TypePickerProps) {
                 }
               }}
               placeholder="Or type custom…"
-              className="w-full text-[11px] font-mono px-1 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 outline-none focus:border-blue-500"
+              className="w-full text-[11px] font-mono px-1 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:border-blue-500"
             />
           </div>
         </div>

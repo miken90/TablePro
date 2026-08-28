@@ -53,7 +53,7 @@ export function AiConversationList({
                 onNew();
                 setOpen(false);
               }}
-              className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-xs text-text-secondary hover:bg-surface-muted"
+              className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
             >
               <Plus size={12} aria-hidden="true" />
               New Conversation
@@ -61,12 +61,12 @@ export function AiConversationList({
           </div>
           <div className="max-h-48 overflow-y-auto">
             {conversations.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-text-muted">No conversations yet</p>
+              <p className="px-3 py-2 text-xs text-text-secondary">No conversations yet</p>
             ) : (
               conversations.map((c) => (
                 <div
                   key={c.id}
-                  className={`group flex items-center justify-between px-3 py-1.5 text-xs cursor-pointer hover:bg-surface-muted ${
+                  className={`group flex items-center justify-between px-3 py-1.5 text-xs cursor-pointer hover:bg-surface-muted hover:text-text-primary ${
                     c.id === activeConversationId ? "bg-surface-hover text-text-primary" : "text-text-secondary"
                   }`}
                   onClick={() => {

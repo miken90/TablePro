@@ -50,7 +50,7 @@ export function AiChatInput({ onSend, onCancel, isStreaming, disabled }: AiChatI
           placeholder="Ask about your database…"
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none rounded-md border border-border-subtle bg-surface-muted px-3 py-2 text-xs text-text-primary outline-none placeholder:text-text-muted focus:border-accent-blue disabled:opacity-50"
+          className="flex-1 resize-none rounded-md border border-border-subtle bg-surface-muted px-3 py-2 text-xs text-text-primary placeholder:text-text-secondary focus:border-accent-blue disabled:opacity-50"
           aria-label="AI chat input"
         />
         {isStreaming ? (
@@ -74,7 +74,7 @@ export function AiChatInput({ onSend, onCancel, isStreaming, disabled }: AiChatI
           </button>
         )}
       </div>
-      <p className="mt-1 text-[10px] text-text-muted">
+      <p className="mt-1 text-[10px] text-text-secondary">
         Enter to send · Shift+Enter for newline
       </p>
     </div>

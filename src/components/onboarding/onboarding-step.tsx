@@ -71,7 +71,7 @@ export function OnboardingStep({
             <button
               type="button"
               onClick={onBack}
-              className="rounded border border-border-subtle px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover transition-colors"
+              className="rounded border border-border-subtle px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
             >
               {t("onboarding.steps.back")}
             </button>

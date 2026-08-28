@@ -70,7 +70,7 @@ export function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+      className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
@@ -103,7 +103,7 @@ export function NumberInput({
       max={max}
       step={step}
       onChange={(e) => onChange(Number(e.target.value))}
-      className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+      className="w-20 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
     />
   );
 }
@@ -126,7 +126,7 @@ export function TextInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className={`rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 ${extraClass ?? "w-32"}`}
+      className={`rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 ${extraClass ?? "w-32"}`}
     />
   );
 }
@@ -147,7 +147,7 @@ export function PasswordInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-40 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+      className="w-40 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:border-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
     />
   );
 }

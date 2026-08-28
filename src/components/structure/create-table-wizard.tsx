@@ -32,7 +32,7 @@ const COMMON_TYPES = [
 ];
 
 const inputClassName =
-  'w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700 outline-none focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200';
+  'w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700 focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200';
 
 function buildPreviewDdl(definition: CreateTableDefinition, driverType: string): string {
   const dbType = driverType.toLowerCase();

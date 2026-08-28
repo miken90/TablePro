@@ -10,7 +10,7 @@ interface ColumnDefinitionRowProps {
 }
 
 const inputClassName =
-  'w-full rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 outline-none focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200';
+  'w-full rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200';
 
 export function ColumnDefinitionRow({
   index,

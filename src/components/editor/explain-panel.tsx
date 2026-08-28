@@ -37,7 +37,7 @@ export function ExplainPanel({ result, onClose }: ExplainPanelProps) {
     `px-3 py-1 text-xs font-medium rounded-t border-b-2 ${
       viewMode === mode
         ? "border-accent-blue text-accent-blue"
-        : "border-transparent text-text-muted hover:text-text-primary"
+        : "border-transparent text-text-secondary hover:text-text-primary"
     }`;
 
   return (
@@ -57,7 +57,7 @@ export function ExplainPanel({ result, onClose }: ExplainPanelProps) {
         {viewMode === "tree" && result.nodes.length > 0 && (
           <button
             onClick={() => setExpandAll((v) => !v)}
-            className="ml-2 rounded px-2 py-0.5 text-[10px] text-text-muted hover:bg-surface-muted hover:text-text-primary"
+            className="ml-2 rounded px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-muted hover:text-text-primary"
           >
             {expandAll ? t("explain.collapseAll") : t("explain.expandAll")}
           </button>
@@ -77,7 +77,7 @@ export function ExplainPanel({ result, onClose }: ExplainPanelProps) {
           result.nodes.length > 0 ? (
             <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-border bg-surface-elevated text-[10px] uppercase text-text-muted">
+                <tr className="border-b border-border bg-surface-elevated text-[10px] uppercase text-text-secondary">
                   <th className="px-2 py-1 font-medium">{t("explain.operation")}</th>
                   <th className="px-2 py-1 font-medium">{t("explain.detail")}</th>
                   <th className="px-2 py-1 text-right font-medium">{t("explain.cost")}</th>
@@ -97,7 +97,7 @@ export function ExplainPanel({ result, onClose }: ExplainPanelProps) {
               </tbody>
             </table>
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-text-muted">
+            <div className="flex h-full items-center justify-center text-xs text-text-secondary">
               {t("explain.noResult")}
             </div>
           )

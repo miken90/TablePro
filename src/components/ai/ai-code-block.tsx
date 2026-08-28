@@ -23,7 +23,7 @@ export function AiCodeBlock({ code, language, onInsertToEditor }: AiCodeBlockPro
     <div className="group relative my-2 rounded-md border border-border-subtle bg-surface-base overflow-hidden">
       {/* Header bar */}
       <div className="flex items-center justify-between border-b border-border-subtle bg-surface-muted px-3 py-1">
-        <span className="text-[10px] font-medium uppercase text-text-muted">
+        <span className="text-[10px] font-medium uppercase text-text-secondary">
           {language || "sql"}
         </span>
         <div className="flex items-center gap-1">

@@ -95,14 +95,14 @@ export function AiChatMessage({ message, isLast, isStreaming, onInsertToEditor, 
         {isLast && !isStreaming && message.content && (
           <div className="mt-1 flex items-center gap-2">
             {message.tokenCount != null && (
-              <span className="text-[10px] text-text-muted">
+              <span className="text-[10px] text-text-secondary">
                 {message.tokenCount} tokens
               </span>
             )}
             {onRetry && (
               <button
                 onClick={onRetry}
-                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-text-muted transition hover:bg-surface hover:text-text-primary"
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-text-secondary transition hover:bg-surface hover:text-text-primary"
                 title="Regenerate response"
                 aria-label="Regenerate AI response"
               >

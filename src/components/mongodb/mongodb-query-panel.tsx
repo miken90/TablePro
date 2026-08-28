@@ -54,12 +54,12 @@ export function MongodbQueryPanel() {
   }, [collection, filter, sort, limit, execute, safeModeLevel]);
 
   const inputCls =
-    "rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 font-mono outline-none focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200";
+    "rounded border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 font-mono focus:border-blue-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200";
 
   return (
     <div className="flex flex-col gap-2 border-b border-border bg-surface p-3">
       <div className="flex items-center gap-2">
-        <label className="text-[11px] font-medium text-text-muted">Collection</label>
+        <label className="text-[11px] font-medium text-text-secondary">Collection</label>
         <select
           value={collection}
           onChange={(e) => setCollection(e.target.value)}
@@ -89,7 +89,7 @@ export function MongodbQueryPanel() {
 
       <div className="grid grid-cols-3 gap-2">
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-medium text-text-muted">Filter (JSON)</label>
+          <label className="text-[10px] font-medium text-text-secondary">Filter (JSON)</label>
           <textarea
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -99,7 +99,7 @@ export function MongodbQueryPanel() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-medium text-text-muted">Sort (JSON)</label>
+          <label className="text-[10px] font-medium text-text-secondary">Sort (JSON)</label>
           <textarea
             value={sort}
             onChange={(e) => setSort(e.target.value)}
@@ -109,7 +109,7 @@ export function MongodbQueryPanel() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-medium text-text-muted">Limit</label>
+          <label className="text-[10px] font-medium text-text-secondary">Limit</label>
           <input
             type="number"
             value={limit}

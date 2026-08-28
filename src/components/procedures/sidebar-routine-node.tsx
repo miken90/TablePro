@@ -69,7 +69,7 @@ export function SidebarRoutineNode({
       <div
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
-        className="flex cursor-pointer items-center gap-1.5 px-6 py-1 text-xs text-text-secondary hover:bg-surface-muted"
+        className="flex cursor-pointer items-center gap-1.5 px-6 py-1 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
         title={routine.signature ? `${routine.name}(${routine.signature})` : routine.name}
       >
         <span className="w-3 shrink-0 text-center text-[10px] text-text-muted">{icon}</span>

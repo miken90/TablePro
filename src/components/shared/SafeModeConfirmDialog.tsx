@@ -113,7 +113,7 @@ export function SafeModeConfirmDialog({
                 if (e.key === "Escape") handleCancel();
               }}
               placeholder={tableHint || "table name"}
-              className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-100 focus:border-orange-500 focus:outline-none"
+              className="w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-100 focus:border-orange-500"
             />
           </div>
         )}

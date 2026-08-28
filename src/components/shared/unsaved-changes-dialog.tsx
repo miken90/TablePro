@@ -46,7 +46,7 @@ export function UnsavedChangesDialog({ open, onSave, onDiscard, onCancel }: Unsa
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-medium text-text-primary">{t("unsavedChanges.title")}</h3>
-            <p className="mt-1 text-xs text-text-muted">
+            <p className="mt-1 text-xs text-text-secondary">
               {t("unsavedChanges.message")}
             </p>
           </div>
@@ -55,7 +55,7 @@ export function UnsavedChangesDialog({ open, onSave, onDiscard, onCancel }: Unsa
         <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onCancel}
-            className="rounded px-3 py-1.5 text-xs text-text-muted hover:bg-surface-muted"
+            className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
           >
             {t("common.cancel")}
           </button>

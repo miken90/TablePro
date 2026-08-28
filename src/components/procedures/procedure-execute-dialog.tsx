@@ -166,7 +166,7 @@ export function ProcedureExecuteDialog({
           <h2 className="text-sm font-semibold text-text-primary">
             {t("procedures.executeRoutine")}
           </h2>
-          <p className="mt-0.5 text-xs text-text-muted">
+          <p className="mt-0.5 text-xs text-text-secondary">
             {routine.schema ? `${routine.schema}.` : ""}{routine.name}
             {routine.returnType ? ` → ${routine.returnType}` : ""}
           </p>
@@ -186,7 +186,7 @@ export function ProcedureExecuteDialog({
                     <span className="w-24 shrink-0 truncate text-xs text-text-secondary" title={p.name}>
                       {p.name}
                     </span>
-                    <span className="w-20 shrink-0 truncate text-[10px] text-text-muted" title={p.paramType}>
+                    <span className="w-20 shrink-0 truncate text-[10px] text-text-secondary" title={p.paramType}>
                       {p.paramType}
                     </span>
                     <input
@@ -195,9 +195,9 @@ export function ProcedureExecuteDialog({
                       disabled={p.isNull}
                       onChange={(e) => updateParam(i, "value", e.target.value)}
                       placeholder={p.isNull ? "NULL" : t("procedures.paramValue")}
-                      className="flex-1 rounded border border-border bg-surface px-2 py-1 text-xs text-text-primary placeholder:text-text-muted disabled:opacity-50"
+                      className="flex-1 rounded border border-border bg-surface px-2 py-1 text-xs text-text-primary placeholder:text-text-secondary disabled:opacity-50"
                     />
-                    <label className="flex items-center gap-1 text-[10px] text-text-muted">
+                    <label className="flex items-center gap-1 text-[10px] text-text-secondary">
                       <input
                         type="checkbox"
                         checked={p.isNull}
@@ -211,20 +211,20 @@ export function ProcedureExecuteDialog({
               </div>
             </div>
           ) : (
-            <p className="mb-3 text-xs text-text-muted">{t("procedures.noParameters")}</p>
+            <p className="mb-3 text-xs text-text-secondary">{t("procedures.noParameters")}</p>
           )}
 
           {/* SQL Preview */}
           {sqlPreview && (
             <div className="mb-3 rounded border border-border bg-surface">
               <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-                <span className="text-[11px] font-medium text-text-muted">
+                <span className="text-[11px] font-medium text-text-secondary">
                   {t("procedures.sqlPreview")}
                 </span>
                 <button
                   type="button"
                   onClick={() => void handleCopySql()}
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-text-muted hover:bg-surface-muted hover:text-text-primary"
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
                 >
                   <Copy size={11} />
                   {copied ? t("procedures.copied") : t("procedures.copy")}
@@ -253,7 +253,7 @@ export function ProcedureExecuteDialog({
                 <button
                   type="button"
                   onClick={() => void handleCopyTsv()}
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-text-muted hover:bg-surface-muted hover:text-text-primary"
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
                 >
                   <Copy size={11} />
                   {copiedTsv ? t("procedures.copied") : "Copy as TSV"}
@@ -274,7 +274,7 @@ export function ProcedureExecuteDialog({
                     {rs.rows.map((row, ri) => (
                       <tr key={ri} className="border-b border-border last:border-b-0">
                         {row.map((cell, ci) => (
-                          <td key={ci} className={`whitespace-nowrap px-2 py-1 ${cell === null ? "italic text-text-muted" : "text-text-primary"}`}>
+                          <td key={ci} className={`whitespace-nowrap px-2 py-1 ${cell === null ? "italic text-grid-null-fg" : "text-text-primary"}`}>
                             {cell ?? "NULL"}
                           </td>
                         ))}
@@ -299,7 +299,7 @@ export function ProcedureExecuteDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted"
+            className="rounded border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted hover:text-text-primary"
           >
             {result ? t("procedures.close") : t("procedures.cancel")}
           </button>
@@ -307,7 +307,7 @@ export function ProcedureExecuteDialog({
             <button
               type="button"
               onClick={() => void handlePreview()}
-              className="rounded border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted"
+              className="rounded border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted hover:text-text-primary"
             >
               {t("procedures.generatePreview")}
             </button>

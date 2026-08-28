@@ -81,7 +81,7 @@ export function AiChatPanel({ onClose }: AiChatPanelProps) {
         {messages.length === 0 && !error ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
             <Sparkles size={24} className="text-text-muted" />
-            <p className="text-xs text-text-muted">
+            <p className="text-xs text-text-secondary">
               {t("aiChat.emptyMessage")}
             </p>
           </div>

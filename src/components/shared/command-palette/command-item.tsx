@@ -13,7 +13,7 @@ export function CommandItem({ command, onSelect }: CommandItemProps) {
       value={`${command.id} ${command.label}`}
       onSelect={onSelect}
       className="group flex cursor-pointer items-center gap-3 rounded px-3 py-2 text-sm
-        text-[var(--color-text-primary)] outline-none
+        text-[var(--color-text-primary)]
         aria-selected:bg-[var(--color-accent-blue)] aria-selected:text-white
         data-[selected=true]:bg-[var(--color-accent-blue)] data-[selected=true]:text-white"
     >
