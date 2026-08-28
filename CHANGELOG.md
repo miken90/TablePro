@@ -32,6 +32,8 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- The Inspector shortcut now works in packaged builds (rebound to **Ctrl+Shift+O**). `Ctrl+Shift+I` collided with the DevTools block, which always saw the key first in a packaged build and silently ate it.
+
 - The truncation banner and the "N of M rows" counter never had a total to show. Serde's `rename_all` on an enum renames its variants, not the fields inside a struct variant, so the streaming chunks carried `total_estimate` while the frontend read `totalEstimate` — the banner would have crashed the result panel the first time it rendered.
 
 - A large result no longer risks taking the app down. The streaming query path had no row cap anywhere in Rust, so a wide `SELECT *` was materialized about three times in the backend and shipped across IPC in full, even though the frontend store dropped everything past its own limit; with `panic = "abort"` an allocation failure ends the process. The result is now truncated to the **Store max rows** setting before any copy is made, and the truncation banner reports the real total the query produced.
