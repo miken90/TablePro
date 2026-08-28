@@ -84,9 +84,9 @@ Standard grid navigation applies: arrow keys move between cells, `Tab`/`Shift+Ta
 
 When Vim mode is enabled (**Settings** > **Editor** > **Vim mode**), the SQL editor uses modal Vim keybindings. Vim mode only applies inside the SQL editor — it does not affect the data grid or other panels, and the shortcuts above still work.
 
-## Quick Switcher
+## Quick Switcher and Command Palette
 
-The Quick Switcher (`Ctrl+K`) searches and jumps to tables, views, databases, schemas, and recent queries with fuzzy matching. Results are grouped by type and ranked by match quality; the top match is pre-selected and updates as you type.
+Quick Switcher and Command Palette are two modes of the same overlay. `Ctrl+K` opens it searching tables, views, databases, schemas, and recent queries with fuzzy matching — results are grouped by type and ranked by match quality, and the top match is pre-selected and updates as you type. `Ctrl+Shift+P` opens the same overlay in command mode, shown as a removable `>` chip in the input; typing `>` while searching objects switches to command mode the same way, and Backspace on an empty input drops the chip back to object search.
 
 ## Customizing Shortcuts
 
