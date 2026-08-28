@@ -24,6 +24,8 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Changed
 
+- Inspector, query history and AI chat now share one resizable right dock instead of two panels that dimmed the editor; each remembers its own width.
+
 - Table structure now opens as a **tab** beside your other tabs instead of replacing the whole workspace, and it is restored on restart like query and table tabs (the schema is fetched when the tab is clicked, not at launch). Looking at a table's structure never prompts about that table's unsaved row edits — they stay staged until you return.
 
 - Closing a table tab that has staged row edits now asks before discarding them; Cancel keeps the tab, Discard closes it and drops that table's edits. Previously the tab closed silently and the edits resurfaced the next time the table was opened.
