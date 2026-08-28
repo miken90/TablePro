@@ -1050,3 +1050,231 @@ mod tests {
         .is_err());
     }
 }
+
+/// Golden masters for [`generate_statements`].
+///
+/// Written before the save path was refactored to run through a single
+/// generation seam, against the generator exactly as it stood. Every expected
+/// value here is a snapshot of what the app was already writing to real
+/// databases — a diff in any of them is a behaviour change, not a test to
+/// update.
+#[cfg(test)]
+mod golden_masters {
+    use super::*;
+
+    fn cell(column: &str, new: Option<&str>) -> CellChange {
+        CellChange {
+            column_name: column.to_string(),
+            old_value: None,
+            new_value: new.map(str::to_string),
+        }
+    }
+
+    fn row(values: &[Option<&str>]) -> Vec<Option<String>> {
+        values.iter().map(|v| v.map(str::to_string)).collect()
+    }
+
+    /// `id int4` (PK), `name varchar(20)`, `score numeric`, `active bool`.
+    fn payload(primary_keys: &[&str], changes: Vec<RowChange>) -> SavePayload {
+        SavePayload {
+            table: "users".to_string(),
+            schema: Some("public".to_string()),
+            columns: vec![
+                "id".to_string(),
+                "name".to_string(),
+                "score".to_string(),
+                "active".to_string(),
+            ],
+            column_types: vec![
+                Some("int4".to_string()),
+                Some("varchar(20)".to_string()),
+                Some("numeric".to_string()),
+                Some("bool".to_string()),
+            ],
+            primary_keys: primary_keys.iter().map(|k| k.to_string()).collect(),
+            changes,
+        }
+    }
+
+    fn update(original: &[Option<&str>], cells: Vec<CellChange>) -> RowChange {
+        RowChange {
+            change_type: ChangeType::Update,
+            original_row: row(original),
+            cell_changes: cells,
+        }
+    }
+
+    fn delete(original: &[Option<&str>]) -> RowChange {
+        RowChange {
+            change_type: ChangeType::Delete,
+            original_row: row(original),
+            cell_changes: vec![],
+        }
+    }
+
+    fn insert(cells: Vec<CellChange>) -> RowChange {
+        RowChange {
+            change_type: ChangeType::Insert,
+            original_row: vec![],
+            cell_changes: cells,
+        }
+    }
+
+    const ORIGINAL: &[Option<&str>] = &[Some("7"), Some("ann"), Some("1.5"), Some("true")];
+
+    #[test]
+    fn golden_update_on_primary_key() {
+        let p = payload(&["id"], vec![update(ORIGINAL, vec![cell("name", Some("bea"))])]);
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![r#"UPDATE "public"."users" SET "name"='bea' WHERE "id"=7"#]
+        );
+    }
+
+    #[test]
+    fn golden_update_value_with_quote_is_doubled() {
+        let p = payload(
+            &["id"],
+            vec![update(ORIGINAL, vec![cell("name", Some("o'brien"))])],
+        );
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![r#"UPDATE "public"."users" SET "name"='o''brien' WHERE "id"=7"#]
+        );
+    }
+
+    #[test]
+    fn golden_update_to_null() {
+        let p = payload(&["id"], vec![update(ORIGINAL, vec![cell("score", None)])]);
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![r#"UPDATE "public"."users" SET "score"=NULL WHERE "id"=7"#]
+        );
+    }
+
+    #[test]
+    fn golden_update_numeric_and_boolean_columns() {
+        let p = payload(
+            &["id"],
+            vec![update(
+                ORIGINAL,
+                vec![cell("score", Some("2.25")), cell("active", Some("false"))],
+            )],
+        );
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![r#"UPDATE "public"."users" SET "score"=2.25, "active"=FALSE WHERE "id"=7"#]
+        );
+    }
+
+    #[test]
+    fn golden_delete_on_primary_key() {
+        let p = payload(&["id"], vec![delete(ORIGINAL)]);
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![r#"DELETE FROM "public"."users" WHERE "id"=7"#]
+        );
+    }
+
+    #[test]
+    fn golden_insert_writes_only_the_supplied_cells() {
+        let p = payload(
+            &["id"],
+            vec![insert(vec![
+                cell("id", Some("9")),
+                cell("name", Some("cyd")),
+                cell("score", None),
+            ])],
+        );
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![r#"INSERT INTO "public"."users" ("id","name","score") VALUES (9,'cyd',NULL)"#]
+        );
+    }
+
+    /// No primary key detected: the frontend substitutes every column as the
+    /// key set, so the WHERE names all four and a NULL original becomes
+    /// `IS NULL`.
+    #[test]
+    fn golden_pk_less_table_keys_on_all_columns() {
+        let p = payload(
+            &["id", "name", "score", "active"],
+            vec![delete(&[Some("7"), Some("ann"), None, Some("true")])],
+        );
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![
+                r#"DELETE FROM "public"."users" WHERE "id"=7 AND "name"='ann' AND "score" IS NULL AND "active"=TRUE"#
+            ]
+        );
+    }
+
+    #[test]
+    fn golden_statement_order_follows_the_payload() {
+        let p = payload(
+            &["id"],
+            vec![
+                update(ORIGINAL, vec![cell("name", Some("bea"))]),
+                update(
+                    &[Some("8"), Some("cyd"), Some("0"), Some("false")],
+                    vec![cell("score", Some("3"))],
+                ),
+                delete(&[Some("9"), Some("dee"), Some("1"), Some("true")]),
+            ],
+        );
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![
+                r#"UPDATE "public"."users" SET "name"='bea' WHERE "id"=7"#,
+                r#"UPDATE "public"."users" SET "score"=3 WHERE "id"=8"#,
+                r#"DELETE FROM "public"."users" WHERE "id"=9"#,
+            ]
+        );
+    }
+
+    #[test]
+    fn golden_mysql_backticks_and_bit_booleans() {
+        let p = payload(
+            &["id"],
+            vec![update(ORIGINAL, vec![cell("active", Some("false"))])],
+        );
+        assert_eq!(
+            generate_statements(&p, Dialect::MySql),
+            vec!["UPDATE `public`.`users` SET `active`=0 WHERE `id`=7"]
+        );
+    }
+
+    #[test]
+    fn golden_mssql_brackets_and_bit_booleans() {
+        let p = payload(
+            &["id"],
+            vec![update(ORIGINAL, vec![cell("active", Some("true"))])],
+        );
+        assert_eq!(
+            generate_statements(&p, Dialect::Mssql),
+            vec!["UPDATE [public].[users] SET [active]=1 WHERE [id]=7"]
+        );
+    }
+
+    #[test]
+    fn golden_sqlite_uses_ansi_quotes_and_word_booleans() {
+        let p = payload(
+            &["id"],
+            vec![update(ORIGINAL, vec![cell("active", Some("true"))])],
+        );
+        assert_eq!(
+            generate_statements(&p, Dialect::Sqlite),
+            vec![r#"UPDATE "public"."users" SET "active"=TRUE WHERE "id"=7"#]
+        );
+    }
+
+    #[test]
+    fn golden_unschemad_table_is_not_qualified() {
+        let mut p = payload(&["id"], vec![delete(ORIGINAL)]);
+        p.schema = None;
+        assert_eq!(
+            generate_statements(&p, Dialect::Postgres),
+            vec![r#"DELETE FROM "users" WHERE "id"=7"#]
+        );
+    }
+}

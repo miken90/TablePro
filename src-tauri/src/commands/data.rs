@@ -5,6 +5,7 @@ use serde_json::Value;
 use tauri::State;
 use tokio::sync::Mutex;
 
+use crate::drivers::DatabaseDriver;
 use crate::models::AppError;
 use crate::services::{
     sql_generator::{generate_insert_sql, generate_statements, generate_update_sql, Dialect, SavePayload},
@@ -69,9 +70,6 @@ pub async fn save_changes(
     };
 
     let statements = generate_statements(&payload, dialect);
-    let mut total_affected = 0i64;
-    let started_at = Instant::now();
-    let mut executed_statements: Vec<&str> = Vec::with_capacity(statements.len());
 
     // A grid save is one edit as far as the user is concerned. Executed one
     // statement at a time in autocommit, a bulk delete that failed on row 30
@@ -82,11 +80,42 @@ pub async fn save_changes(
     // the grid save path does not reach them.
     let transactional = statements.len() > 1 && driver.supports_transactions();
     let (begin, commit, rollback) = transaction_keywords(dialect);
+
+    execute_plan(
+        driver.as_ref(),
+        &statements,
+        transactional,
+        (begin, commit, rollback),
+        &history_store,
+        &database_name,
+        &session_id,
+    )
+    .await
+}
+
+/// Run a prepared statement list on `driver`, wrapping it in a transaction
+/// when `transactional`, and record the attempt in query history.
+///
+/// Executes exactly `statements`, in order, and nothing else.
+async fn execute_plan(
+    driver: &dyn DatabaseDriver,
+    statements: &[String],
+    transactional: bool,
+    keywords: (&'static str, &'static str, &'static str),
+    history_store: &Mutex<HistoryStore>,
+    database_name: &Option<String>,
+    session_id: &str,
+) -> Result<SaveResult, AppError> {
+    let mut total_affected = 0i64;
+    let started_at = Instant::now();
+    let mut executed_statements: Vec<&str> = Vec::with_capacity(statements.len());
+
+    let (begin, commit, rollback) = keywords;
     if transactional {
         driver.execute(begin).await?;
     }
 
-    for sql in &statements {
+    for sql in statements {
         tracing::info!(session_id = %session_id, "save_changes: {}", sql);
         executed_statements.push(sql.as_str());
 
@@ -188,8 +217,281 @@ pub async fn generate_row_sql(
 
 #[cfg(test)]
 mod tests {
-    use super::transaction_keywords;
+    use super::{execute_plan, transaction_keywords};
+    use crate::drivers::DatabaseDriver;
+    use crate::models::{
+        AppError, ColumnInfo, ForeignKeyInfo, IndexInfo, QueryResult, TableInfo,
+    };
     use crate::services::sql_generator::Dialect;
+    use crate::storage::history_store::HistoryStore;
+    use async_trait::async_trait;
+    use std::sync::Mutex as StdMutex;
+    use tokio::sync::Mutex;
+
+    /// Records every `execute` it is handed and can fail on one exact
+    /// statement. The recorded list is the whole point: it is the only way to
+    /// see what the save path actually sent, as opposed to what it planned.
+    struct FakeDriver {
+        executed: StdMutex<Vec<String>>,
+        fail_on: Option<String>,
+        affected_per_statement: i64,
+        supports_transactions: bool,
+    }
+
+    impl FakeDriver {
+        fn new() -> Self {
+            Self {
+                executed: StdMutex::new(Vec::new()),
+                fail_on: None,
+                affected_per_statement: 0,
+                supports_transactions: true,
+            }
+        }
+
+        fn failing_on(sql: &str) -> Self {
+            Self {
+                fail_on: Some(sql.to_string()),
+                ..Self::new()
+            }
+        }
+
+        fn affecting(rows: i64) -> Self {
+            Self {
+                affected_per_statement: rows,
+                ..Self::new()
+            }
+        }
+
+        fn recorded(&self) -> Vec<String> {
+            self.executed.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait]
+    impl DatabaseDriver for FakeDriver {
+        async fn connect(&self) -> Result<(), AppError> {
+            Ok(())
+        }
+        fn disconnect(&self) {}
+        async fn ping(&self) -> Result<(), AppError> {
+            Ok(())
+        }
+        async fn execute(&self, query: &str) -> Result<QueryResult, AppError> {
+            self.executed.lock().unwrap().push(query.to_string());
+            if self.fail_on.as_deref() == Some(query) {
+                return Err(AppError::DatabaseError("boom".to_string()));
+            }
+            Ok(QueryResult {
+                columns: vec![],
+                rows: vec![],
+                affected_rows: self.affected_per_statement,
+                execution_time_ms: 0.0,
+                truncated: false,
+                total_row_count: None,
+            })
+        }
+        async fn fetch_tables(&self) -> Result<Vec<TableInfo>, AppError> {
+            Ok(vec![])
+        }
+        async fn fetch_columns(
+            &self,
+            _table: &str,
+            _schema: Option<&str>,
+        ) -> Result<Vec<ColumnInfo>, AppError> {
+            Ok(vec![])
+        }
+        async fn fetch_indexes(
+            &self,
+            _table: &str,
+            _schema: Option<&str>,
+        ) -> Result<Vec<IndexInfo>, AppError> {
+            Ok(vec![])
+        }
+        async fn fetch_foreign_keys(
+            &self,
+            _table: &str,
+            _schema: Option<&str>,
+        ) -> Result<Vec<ForeignKeyInfo>, AppError> {
+            Ok(vec![])
+        }
+        async fn fetch_databases(&self) -> Result<Vec<String>, AppError> {
+            Ok(vec![])
+        }
+        async fn fetch_ddl(&self, _table: &str, _schema: Option<&str>) -> Result<String, AppError> {
+            Ok(String::new())
+        }
+        async fn cancel_query(&self) -> Result<(), AppError> {
+            Ok(())
+        }
+        fn supports_schemas(&self) -> bool {
+            true
+        }
+        fn supports_transactions(&self) -> bool {
+            self.supports_transactions
+        }
+        fn database_type_id(&self) -> &str {
+            "fake"
+        }
+    }
+
+    fn history() -> Mutex<HistoryStore> {
+        Mutex::new(HistoryStore::new_in_memory().expect("in-memory history store"))
+    }
+
+    fn statements(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    const PG: (&str, &str, &str) = ("BEGIN", "COMMIT", "ROLLBACK");
+
+    /// One statement is not worth a transaction: it runs in autocommit and no
+    /// BEGIN or COMMIT reaches the driver.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn single_statement_runs_in_autocommit() {
+        let driver = FakeDriver::new();
+        let store = history();
+        let stmts = statements(&["UPDATE t SET a=1 WHERE id=1"]);
+
+        execute_plan(&driver, &stmts, false, PG, &store, &None, "s1")
+            .await
+            .expect("save");
+
+        assert_eq!(driver.recorded(), vec!["UPDATE t SET a=1 WHERE id=1"]);
+    }
+
+    /// The tripwire: what the driver saw is the begin keyword, then exactly
+    /// the planned statements in order, then the commit keyword — nothing
+    /// added, filtered or reordered between the plan and the wire.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn multi_statement_wraps_the_plan_exactly() {
+        let driver = FakeDriver::new();
+        let store = history();
+        let stmts = statements(&[
+            "UPDATE t SET a=1 WHERE id=1",
+            "UPDATE t SET a=2 WHERE id=2",
+            "DELETE FROM t WHERE id=3",
+        ]);
+
+        execute_plan(&driver, &stmts, true, PG, &store, &None, "s1")
+            .await
+            .expect("save");
+
+        let mut expected = vec![PG.0.to_string()];
+        expected.extend(stmts.iter().cloned());
+        expected.push(PG.1.to_string());
+        assert_eq!(driver.recorded(), expected);
+    }
+
+    /// The dialect's own keywords are the ones that reach the driver.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_wrapper_uses_the_dialect_keywords() {
+        let driver = FakeDriver::new();
+        let store = history();
+        let stmts = statements(&["UPDATE t SET a=1", "UPDATE t SET a=2"]);
+        let mssql = transaction_keywords(Dialect::Mssql);
+
+        execute_plan(&driver, &stmts, true, mssql, &store, &None, "s1")
+            .await
+            .expect("save");
+
+        assert_eq!(
+            driver.recorded(),
+            vec![
+                "BEGIN TRANSACTION",
+                "UPDATE t SET a=1",
+                "UPDATE t SET a=2",
+                "COMMIT TRANSACTION",
+            ]
+        );
+    }
+
+    /// A failure rolls back and returns the driver's own error, not a
+    /// rewritten one, and the statements after the failure never run.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_failure_rolls_back_and_returns_the_original_error() {
+        let driver = FakeDriver::failing_on("UPDATE t SET a=2 WHERE id=2");
+        let store = history();
+        let stmts = statements(&[
+            "UPDATE t SET a=1 WHERE id=1",
+            "UPDATE t SET a=2 WHERE id=2",
+            "DELETE FROM t WHERE id=3",
+        ]);
+
+        let error = execute_plan(&driver, &stmts, true, PG, &store, &None, "s1")
+            .await
+            .expect_err("must fail");
+
+        assert!(matches!(error, AppError::DatabaseError(ref m) if m == "boom"));
+        assert_eq!(
+            driver.recorded(),
+            vec![
+                "BEGIN",
+                "UPDATE t SET a=1 WHERE id=1",
+                "UPDATE t SET a=2 WHERE id=2",
+                "ROLLBACK",
+            ]
+        );
+    }
+
+    /// History carries what was attempted, joined, under `failed`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_failure_writes_a_failed_history_row() {
+        let driver = FakeDriver::failing_on("UPDATE t SET a=2");
+        let store = history();
+        let stmts = statements(&["UPDATE t SET a=1", "UPDATE t SET a=2"]);
+
+        execute_plan(
+            &driver,
+            &stmts,
+            true,
+            PG,
+            &store,
+            &Some("shop".to_string()),
+            "s1",
+        )
+        .await
+        .expect_err("must fail");
+
+        let entries = store.lock().await.fetch_recent(10).expect("history");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].status, "failed");
+        assert_eq!(entries[0].query, "UPDATE t SET a=1;\nUPDATE t SET a=2");
+        assert_eq!(entries[0].database.as_deref(), Some("shop"));
+    }
+
+    /// A completed save writes one `success` row carrying the joined SQL.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_completed_save_writes_a_success_history_row() {
+        let driver = FakeDriver::new();
+        let store = history();
+        let stmts = statements(&["UPDATE t SET a=1", "UPDATE t SET a=2"]);
+
+        execute_plan(&driver, &stmts, true, PG, &store, &None, "s1")
+            .await
+            .expect("save");
+
+        let entries = store.lock().await.fetch_recent(10).expect("history");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].status, "success");
+        assert_eq!(entries[0].query, "UPDATE t SET a=1;\nUPDATE t SET a=2");
+    }
+
+    /// `rows_affected` sums the statements only — the BEGIN and COMMIT the
+    /// driver also executed contribute nothing — and `statements_executed`
+    /// counts the plan.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_result_sums_affected_rows_and_counts_statements() {
+        let driver = FakeDriver::affecting(4);
+        let store = history();
+        let stmts = statements(&["UPDATE t SET a=1", "UPDATE t SET a=2", "UPDATE t SET a=3"]);
+
+        let result = execute_plan(&driver, &stmts, true, PG, &store, &None, "s1")
+            .await
+            .expect("save");
+
+        assert_eq!(result.rows_affected, 12);
+        assert_eq!(result.statements_executed, 3);
+    }
 
     #[test]
     fn transaction_keywords_match_each_engine() {
