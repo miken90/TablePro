@@ -304,8 +304,7 @@
       "previewSql": "Preview SQL"
     },
     "contextualBar": {
-      "addRow": "Add Row",
-      "toggleFilters": "Toggle filters (Ctrl+Shift+F)"
+      "addRow": "Add Row"
     },
     "pagination": {
       "showing": "{{start}}–{{end}} of {{total}} rows",
@@ -367,7 +366,7 @@
     "tableCountPlural": "{{count}} tables",
     "inspector": "Inspector",
     "toggleInspector": "Toggle Inspector ({{shortcut}})",
-    "toggleFilter": "Toggle Filter (Ctrl+Shift+L)",
+    "toggleFilter": "Toggle Filter ({{shortcut}})",
     "rowsAffected": "{{count}} affected",
     "rowCount": "{{count}} row",
     "rowCountPlural": "{{count}} rows"

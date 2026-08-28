@@ -44,6 +44,7 @@ export function StatusBar() {
   const inspectorPaneOpen = useDockStore((s) => s.dockOpen && s.dockPane === "inspector");
   const filterVisible = useLayoutStore((s) => s.filterVisible);
   const inspectorShortcut = (useEffectiveBinding("nav.toggleInspector") ?? []).join("+");
+  const filterShortcut = (useEffectiveBinding("nav.toggleFilter") ?? []).join("+");
 
   const activeConnection = selectedConnectionId
     ? connections.get(selectedConnectionId)
@@ -131,7 +132,7 @@ export function StatusBar() {
             aria-pressed={filterVisible}
             onClick={() => useLayoutStore.getState().toggleFilter()}
             className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${filterVisible ? "bg-surface-muted text-text-primary" : "hover:bg-surface-muted"}`}
-            title={t("statusBar.toggleFilter")}
+            title={t("statusBar.toggleFilter", { shortcut: filterShortcut })}
           >
             <Filter size={10} />
             <span>{t("common.filter")}</span>

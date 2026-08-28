@@ -54,6 +54,10 @@ export const COMMAND_DEFINITIONS: CommandDefinition[] = [
   { id: "nav.toggleInspector",  label: "Toggle Inspector",     defaultBinding: ["Ctrl", "Shift", "O"],  category: "Navigation" },
   { id: "nav.toggleHistory",    label: "Toggle History",       defaultBinding: ["Ctrl", "H"],           category: "Navigation" },
   { id: "nav.commandPalette",   label: "Command Palette",      defaultBinding: ["Ctrl", "Shift", "P"],  category: "Navigation" },
+  // D2/Q8: the status-bar tooltip advertised Ctrl+Shift+L, which is actually
+  // nav.toggleAiChat's binding — no filter command existed in the registry at
+  // all. Ctrl+Alt+F is free (no Alt binding exists anywhere in this file).
+  { id: "nav.toggleFilter",     label: "Toggle Filter",        defaultBinding: ["Ctrl", "Alt", "F"],    category: "Navigation" },
 
   // -- General --
   { id: "app.settings",         label: "Settings",             defaultBinding: ["Ctrl", ","],           category: "Settings" },

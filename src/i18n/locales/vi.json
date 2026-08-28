@@ -304,8 +304,7 @@
       "previewSql": "Xem trước SQL"
     },
     "contextualBar": {
-      "addRow": "Thêm hàng",
-      "toggleFilters": "Bật/tắt bộ lọc (Ctrl+Shift+F)"
+      "addRow": "Thêm hàng"
     },
     "pagination": {
       "showing": "{{start}}–{{end}} / {{total}} hàng",
@@ -367,7 +366,7 @@
     "tableCountPlural": "{{count}} bảng",
     "inspector": "Thanh tra",
     "toggleInspector": "Bật/tắt thanh tra ({{shortcut}})",
-    "toggleFilter": "Bật/tắt bộ lọc (Ctrl+Shift+L)",
+    "toggleFilter": "Bật/tắt bộ lọc ({{shortcut}})",
     "rowsAffected": "{{count}} bị ảnh hưởng",
     "rowCount": "{{count}} hàng",
     "rowCountPlural": "{{count}} hàng"

@@ -75,6 +75,13 @@ export function buildMainLayoutCommands(t: Translate): Command[] {
       action: () => useDockStore.getState().toggleDockPane("inspector"),
     },
     {
+      id: "nav.toggleFilter",
+      label: "Toggle Filter",
+      shortcut: shortcutFor("nav.toggleFilter"),
+      category: "Navigation" as const,
+      action: () => useLayoutStore.getState().toggleFilter(),
+    },
+    {
       id: "nav.commandPalette",
       label: "Command Palette",
       shortcut: shortcutFor("nav.commandPalette"),
