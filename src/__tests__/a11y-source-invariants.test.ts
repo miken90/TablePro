@@ -81,7 +81,7 @@ describe('B2 — text-muted is content-free', () => {
     { file: '../components/layout/run-split-button.tsx', line: 194, reason: 'decorative leading icon' },
     { file: '../components/layout/sidebar-table-node.tsx', line: 160, reason: 'decorative chevron icon' },
     { file: '../components/layout/sidebar-table-node.tsx', line: 162, reason: 'decorative chevron icon' },
-    { file: '../components/layout/StatusBar.tsx', line: 64, reason: 'status dot background fill, not text' },
+    { file: '../components/layout/StatusBar.tsx', line: 65, reason: 'status dot background fill, not text' },
     { file: '../components/layout/Toolbar.tsx', line: 215, reason: 'icon-only disconnect button, hover to accent-red (semantic danger)' },
     { file: '../components/procedures/sidebar-routine-node.tsx', line: 75, reason: 'decorative routine-kind glyph' },
     { file: '../components/procedures/procedure-source-panel.tsx', line: 123, reason: 'icon-only close button' },

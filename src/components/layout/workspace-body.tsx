@@ -97,14 +97,18 @@ export function WorkspaceBody({
       return (
         <>
           <ContextualBar
-            tabId={filterTabId}
-            tableName={view.tableName!}
-            columns={filterColumns}
             onAddRow={engine.isDocumentDb ? undefined : () => addRowRef.current?.()}
             selectedRowCount={selectedRowCount}
             onDeleteSelected={engine.isDocumentDb ? undefined : () => deleteSelectedRef.current?.()}
             onDeselectAll={() => clearSelectionRef.current?.()}
           />
+          {filterVisible && (
+            <FilterPanel
+              tabId={filterTabId}
+              tableName={view.tableName!}
+              columns={filterColumns}
+            />
+          )}
           <div className="flex-1 overflow-hidden">
             <ResultPanel
               tabId={filterTabId}

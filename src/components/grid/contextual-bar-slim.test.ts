@@ -6,9 +6,8 @@
  * two undo listeners. They now belong to the pending-changes strip, and this
  * pins them there.
  *
- * The FilterPanel host and the filter toggle stay in this phase: the only
- * other mount is query-mode, so removing them here would leave a table tab
- * with no filter panel at all until P8 lands the single-mount replacement.
+ * P8 (Q9) moved the FilterPanel host and filter toggle out of this bar and
+ * into the single workspace-level mount, toggled only from the status bar.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -48,7 +47,7 @@ describe('contextual bar', () => {
     expect(text).toContain('onDeselectAll');
   });
 
-  it('keeps the filter host until P8 provides the single mount', () => {
-    expect(bar()).toContain('<FilterPanel');
+  it('no longer hosts a FilterPanel — that moved to the single workspace mount', () => {
+    expect(bar()).not.toContain('<FilterPanel');
   });
 });

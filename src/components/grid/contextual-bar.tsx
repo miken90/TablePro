@@ -1,10 +1,5 @@
-import { useCallback } from 'react';
-import { Filter, Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { ColumnInfo } from '../../types/query';
-import { useFilterStore } from '../../stores/filterStore';
-import { useLayoutStore } from '../../stores/layoutStore';
-import { FilterPanel } from '../filter/filter-panel';
 
 /**
  * SCR-23 — row actions only. Staged-change actions moved to the
@@ -12,9 +7,6 @@ import { FilterPanel } from '../filter/filter-panel';
  * next to the data they describe instead of above it (Q2).
  */
 interface ContextualBarProps {
-  tabId: string;
-  tableName: string;
-  columns: ColumnInfo[];
   onAddRow?: () => void;
   /** Number of currently selected rows. */
   selectedRowCount?: number;
@@ -25,46 +17,15 @@ interface ContextualBarProps {
 }
 
 export function ContextualBar({
-  tabId, tableName, columns, onAddRow,
+  onAddRow,
   selectedRowCount = 0, onDeleteSelected, onDeselectAll,
 }: ContextualBarProps) {
   const { t } = useTranslation();
-
-  const filterVisible = useLayoutStore((s) => s.filterVisible);
-  const toggleFilter = useLayoutStore((s) => s.toggleFilter);
-
-  const activeFilterCount = useFilterStore((s) => {
-    const tab = s.byTab[tabId];
-    if (!tab?.appliedFilterClause) return 0;
-    return tab.conditions.filter((c) => c.column && c.operator).length;
-  });
-
-  const handleToggleFilter = useCallback(() => {
-    toggleFilter();
-  }, [toggleFilter]);
 
   return (
     <div className="border-b border-border-subtle bg-surface">
       {/* Row 1: Action strip */}
       <div className="flex items-center gap-2 px-3 py-1">
-        <button
-          onClick={handleToggleFilter}
-          className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
-            filterVisible || activeFilterCount > 0
-              ? 'bg-accent-blue/10 text-accent-blue'
-              : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'
-          }`}
-          title={t("grid.contextualBar.toggleFilters")}
-        >
-          <Filter size={12} />
-          {t("common.filter")}
-          {activeFilterCount > 0 && (
-            <span className="ml-0.5 rounded-full bg-accent-blue px-1 text-[10px] text-white">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-
         {onAddRow && (
           <button
             onClick={onAddRow}
@@ -107,17 +68,6 @@ export function ContextualBar({
           </div>
         </div>
       )}
-
-      {/* Row 2: Expanded filter (compact mode) */}
-      {filterVisible && (
-        <FilterPanel
-          tabId={tabId}
-          tableName={tableName}
-          columns={columns}
-          compact
-        />
-      )}
-
     </div>
   );
 }
