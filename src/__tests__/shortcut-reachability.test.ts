@@ -154,6 +154,19 @@ describe('dispatch behaviour', () => {
     expect(action).toHaveBeenCalledTimes(1);
   });
 
+  it('dispatches nothing when the event arrives with defaultPrevented already true', () => {
+    // Simulates a kit surface's Esc handler (Dialog/Popover/Menu) having
+    // already claimed the event before it reaches this dispatcher. [RT-9]
+    const action = vi.fn();
+    register({ id: 'nav.toggleHistory', action });
+    const dispatch = createShortcutHandler({});
+
+    const e = keyEvent(['Ctrl', 'H']);
+    e.preventDefault();
+    expect(dispatch(e)).toBeNull();
+    expect(action).not.toHaveBeenCalled();
+  });
+
   it('never dispatches an editor-owned command globally', () => {
     const action = vi.fn();
     register({ id: 'editor.run', action });

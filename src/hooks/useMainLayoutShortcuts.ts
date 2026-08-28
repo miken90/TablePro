@@ -43,6 +43,7 @@ export interface ShortcutKeyEvent {
   shiftKey: boolean;
   altKey: boolean;
   metaKey: boolean;
+  defaultPrevented: boolean;
   preventDefault: () => void;
 }
 
@@ -96,6 +97,11 @@ export function createShortcutHandler(
 
   /** Returns the command id it dispatched, or null if the key was left alone. */
   return (e: ShortcutKeyEvent): string | null => {
+    // A kit surface (Dialog/Popover/Menu Esc handler) already claimed this
+    // event — most such handlers also stopPropagation, but this guard is the
+    // one that does not depend on listener order or DOM structure. [RT-9]
+    if (e.defaultPrevented) return null;
+
     const commandId = bindingMap.get(eventToBindingKey(e));
     if (!commandId) return null;
 
