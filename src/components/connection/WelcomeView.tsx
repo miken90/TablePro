@@ -6,6 +6,7 @@ import { ConnectionList } from "./connection-list";
 import { ConnectionSearch } from "./connection-search";
 import { ConnectionExportDialog } from "./connection-export-dialog";
 import { ConnectionImportDialog } from "./connection-import-dialog";
+import { ConnectionNewSplitButton } from "./connection-new-split-button";
 import { EmptyState } from "../shared/EmptyState";
 import { filterConnections } from "./connection-filter";
 import { buildImportLink } from "../../ipc/commands";
@@ -140,8 +141,15 @@ export function WelcomeView() {
         </div>
 
         {hasConnections && (
-          <div className="w-full">
-            <ConnectionSearch value={search} onChange={setSearch} connections={connList} />
+          <div className="flex w-full items-start gap-3">
+            <div className="flex-1">
+              <ConnectionSearch value={search} onChange={setSearch} connections={connList} />
+            </div>
+            <ConnectionNewSplitButton
+              onNewConnection={() => { setEditingConn(undefined); setShowForm(true); }}
+              onImport={() => setShowImport(true)}
+              onNewGroup={() => void handleNewGroup()}
+            />
           </div>
         )}
 
@@ -193,28 +201,24 @@ export function WelcomeView() {
           </div>
         )}
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => { setEditingConn(undefined); setShowForm(true); }}
-            className="button-primary flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium"
-          >
-            <Plus size={14} />
-            New Connection
-          </button>
-          <button
-            onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs text-text-secondary transition-colors hover:bg-surface-muted hover:text-text-primary"
-          >
-            <Download size={12} />
-            Import
-          </button>
-          <button
-            onClick={() => void handleNewGroup()}
-            className="text-xs text-text-secondary transition-colors hover:text-text-primary"
-          >
-            + New Group
-          </button>
-        </div>
+        {!hasConnections && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setEditingConn(undefined); setShowForm(true); }}
+              className="button-primary flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium"
+            >
+              <Plus size={14} />
+              New Connection
+            </button>
+            <button
+              onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs text-text-secondary transition-colors hover:bg-surface-muted hover:text-text-primary"
+            >
+              <Download size={12} />
+              Import
+            </button>
+          </div>
+        )}
 
         <div className="h-8" />
       </div>
