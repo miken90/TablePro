@@ -47,7 +47,11 @@ export const COMMAND_DEFINITIONS: CommandDefinition[] = [
   { id: "nav.quickSwitcher",    label: "Quick Switcher",       defaultBinding: ["Ctrl", "K"],           category: "Navigation" },
   { id: "nav.toggleSidebar",    label: "Toggle Sidebar",       defaultBinding: ["Ctrl", "Shift", "E"],  category: "Navigation" },
   { id: "nav.toggleAiChat",     label: "Toggle AI Chat",       defaultBinding: ["Ctrl", "Shift", "L"],  category: "Navigation" },
-  { id: "nav.toggleInspector",  label: "Toggle Inspector",     defaultBinding: ["Ctrl", "Shift", "I"],  category: "Navigation" },
+  // D1: Ctrl+Shift+I collides with the PROD devtools blocker (main.tsx) —
+  // that document-level listener runs before this dispatcher (RT-9's
+  // `defaultPrevented` guard) and swallows the key first. Rebound, not the
+  // blocker narrowed; see docs/development/upstream-parity-notes.md.
+  { id: "nav.toggleInspector",  label: "Toggle Inspector",     defaultBinding: ["Ctrl", "Shift", "O"],  category: "Navigation" },
   { id: "nav.toggleHistory",    label: "Toggle History",       defaultBinding: ["Ctrl", "H"],           category: "Navigation" },
   { id: "nav.commandPalette",   label: "Command Palette",      defaultBinding: ["Ctrl", "Shift", "P"],  category: "Navigation" },
 

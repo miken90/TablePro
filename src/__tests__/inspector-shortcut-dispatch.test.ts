@@ -1,23 +1,30 @@
 // @vitest-environment jsdom
 /**
- * D1 — locks the JS semantics of Ctrl+Shift+I versus the PROD devtools
- * blocker, independent of what a real WebView2 build reports.
+ * D1 — locks the JS semantics of the Inspector shortcut versus the PROD
+ * devtools blocker, independent of what a real WebView2 build reports.
  *
- * The blocker (`main.tsx:14-21`) is a `document`-level listener; it is
- * mirrored here rather than imported, since importing `main.tsx` would also
- * boot the React root. `createShortcutHandler` (`useMainLayoutShortcuts.ts`)
- * is the real, unmodified window-level dispatcher.
+ * D1 turned out to be a real code defect, not the documentation defect the
+ * plan predicted: `useMainLayoutShortcuts.ts`'s `createShortcutHandler`
+ * checks `e.defaultPrevented` (added by RT-9 in the phase 2 kit — commit
+ * `451cf297`, end of phase 1, has zero occurrences of `defaultPrevented` in
+ * that file). The blocker (`main.tsx:14-21`) is a `document`-level listener
+ * that calls `preventDefault()` on `Ctrl+Shift+I/J/C`; a keydown bubbles
+ * target → … → document → window (DOM Events "event path"), so the
+ * `document` blocker always runs before the `window` dispatcher and the
+ * dispatcher then sees `defaultPrevented === true` and bails — for any
+ * binding on I, J, or C, regardless of which command owns it. That is why
+ * `nav.toggleInspector` was rebound to Ctrl+Shift+O (`useCommandRegistry.ts`)
+ * rather than narrowing the blocker, which is a deliberate, out-of-scope
+ * product decision.
  *
- * A keydown dispatched inside `document` bubbles target → … → document →
- * window (DOM Events §"event path"), so a `document` listener always runs
- * before a `window` listener for the same event. That ordering — not
- * registration order — is what this test pins down.
+ * The blocker is mirrored here rather than imported from `main.tsx`, since
+ * importing it would also boot the React root. `createShortcutHandler` is
+ * the real, unmodified window-level dispatcher.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createShortcutHandler } from '../hooks/useMainLayoutShortcuts';
-import { useShortcutStore } from '../hooks/useCommandRegistry';
-import { useCommandStore, type Command } from '../hooks/useCommandRegistry';
+import { useShortcutStore, useCommandStore, getEffectiveBinding, type Command } from '../hooks/useCommandRegistry';
 
 /** Mirrors main.tsx:14-21's PROD-only document listener. */
 function installProdDevtoolsBlocker(): () => void {
@@ -30,11 +37,16 @@ function installProdDevtoolsBlocker(): () => void {
   return () => document.removeEventListener('keydown', handler);
 }
 
-function ctrlShiftI(): KeyboardEvent {
+/** Build a synthetic keydown for a binding like ["Ctrl","Shift","O"]. */
+function keyEventFor(binding: string[]): KeyboardEvent {
+  const mods = binding.map((b) => b.toLowerCase());
+  const main = binding.find((b) => !['ctrl', 'shift', 'alt', 'meta'].includes(b.toLowerCase()));
   return new KeyboardEvent('keydown', {
-    key: 'I',
-    ctrlKey: true,
-    shiftKey: true,
+    key: main ?? '',
+    ctrlKey: mods.includes('ctrl'),
+    shiftKey: mods.includes('shift'),
+    altKey: mods.includes('alt'),
+    metaKey: mods.includes('meta'),
     bubbles: true,
     cancelable: true,
   });
@@ -52,7 +64,11 @@ describe('D1: Inspector shortcut vs. the PROD devtools blocker', () => {
     } as Command);
   });
 
-  it('the document-level PROD blocker runs first and suppresses the window dispatcher', () => {
+  afterEach(() => {
+    useCommandStore.setState({ commands: [], recentCommandIds: [] });
+  });
+
+  it('historical regression: the blocker still swallows the old Ctrl+Shift+I combo', () => {
     const uninstallBlocker = installProdDevtoolsBlocker();
     let dispatchedId: string | null = null;
     const dispatch = createShortcutHandler({});
@@ -62,10 +78,12 @@ describe('D1: Inspector shortcut vs. the PROD devtools blocker', () => {
     window.addEventListener('keydown', windowHandler);
 
     try {
-      const event = ctrlShiftI();
+      const event = keyEventFor(['Ctrl', 'Shift', 'I']);
       document.body.dispatchEvent(event);
 
-      // The blocker already claimed it by the time the dispatcher runs.
+      // The blocker already claimed it by the time the dispatcher runs —
+      // this key is dead for any command bound to it, which is exactly why
+      // Inspector moved off it rather than the blocker being narrowed.
       expect(event.defaultPrevented).toBe(true);
       expect(dispatchedId).toBeNull();
     } finally {
@@ -74,7 +92,8 @@ describe('D1: Inspector shortcut vs. the PROD devtools blocker', () => {
     }
   });
 
-  it('without the blocker (dev build), the same key reaches the dispatcher', () => {
+  it("the Inspector's actual effective binding reaches the dispatcher through the PROD blocker", () => {
+    const uninstallBlocker = installProdDevtoolsBlocker();
     let dispatchedId: string | null = null;
     const dispatch = createShortcutHandler({});
     const windowHandler = (e: KeyboardEvent) => {
@@ -83,16 +102,15 @@ describe('D1: Inspector shortcut vs. the PROD devtools blocker', () => {
     window.addEventListener('keydown', windowHandler);
 
     try {
-      const event = ctrlShiftI();
+      const binding = getEffectiveBinding('nav.toggleInspector');
+      expect(binding).toBeDefined();
+      const event = keyEventFor(binding as string[]);
       document.body.dispatchEvent(event);
 
       expect(dispatchedId).toBe('nav.toggleInspector');
     } finally {
       window.removeEventListener('keydown', windowHandler);
+      uninstallBlocker();
     }
-  });
-
-  afterEach(() => {
-    useCommandStore.setState({ commands: [], recentCommandIds: [] });
   });
 });

@@ -44,6 +44,42 @@ Verified by direct code reading, not inferred from upstream history.
    MongoDB/Redis are excluded via `supportsImportExport: false` in their own
    sidecars, so they don't hit this path.
 
+4. **D1 — the Inspector keyboard shortcut was dead in packaged builds, and
+   this fork caused it, not upstream.** `src/main.tsx:14-21` installs a
+   `document`-level `keydown` listener under `import.meta.env.PROD` that
+   calls `preventDefault()` on `F12` and `Ctrl+Shift+I/J/C`, to block
+   DevTools — that part is a deliberate, unchanged product decision. The UI
+   rebuild's blueprint (`docs/design/tablepro-rebuild/design-spec.md` §8.3)
+   predicted this correctly at the time it was written. But the
+   `260828-1409-ui-rebuild-implementation` plan's own phase 5 file
+   *re-diagnosed* it as "very likely a documentation defect" — reasoning that
+   the window-level dispatcher (`useMainLayoutShortcuts.ts`) never checked
+   `defaultPrevented`, so the `document` blocker's `preventDefault()` couldn't
+   stop it. That reasoning was correct **only** against the codebase as it
+   stood before this rebuild's own phase 2: commit `451cf297` (end of phase
+   1) has zero occurrences of `defaultPrevented` in
+   `useMainLayoutShortcuts.ts`. Phase 2 (the canonical component kit) added
+   the `defaultPrevented` guard at `useMainLayoutShortcuts.ts:103` as part of
+   RT-9 (keeping a kit dialog's own Esc handling from also firing
+   `editor.cancel`). That guard is correct for its own purpose, but it has a
+   side effect nobody re-checked against the PROD devtools blocker: a keydown
+   bubbles target → … → `document` → `window`, so the `document`-level
+   blocker always runs first, and by the time the `window`-level dispatcher
+   runs, `e.defaultPrevented` is already `true` for any binding on I, J, or
+   C — killing the Inspector shortcut specifically, and any *other* command
+   that might ever be bound to one of those three keys. **This fork's own
+   phase 2 introduced the regression the blueprint had predicted for a
+   different reason, and the implementation plan's own re-diagnosis got the
+   cause wrong** (it assumed the guard didn't exist, when by phase 5 it
+   already did). Fixed in the `260828-1409-ui-rebuild-implementation` D1
+   follow-up: `nav.toggleInspector` rebound to `Ctrl+Shift+O`
+   (`useCommandRegistry.ts`) — the blocker itself was deliberately left
+   untouched, since narrowing what it blocks is a separate product decision.
+   `src/__tests__/inspector-shortcut-dispatch.test.ts` locks the ordering
+   argument in jsdom (a `document` listener always precedes a `window`
+   listener for the same bubbling event) so this class of regression fails a
+   test instead of shipping again.
+
 ## Query execution & cancellation
 
 ### Report a failed query instead of settling its claim first
