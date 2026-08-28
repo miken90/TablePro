@@ -1,4 +1,4 @@
-import { Search, Database, Plus, RefreshCw, Table2, Eye, Braces, ScrollText, FolderOpen } from "lucide-react";
+import { Database, Table2, Eye, Braces, ScrollText, FolderOpen } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useSchemaStore } from "../../stores/schemaStore";
@@ -8,6 +8,7 @@ import { useQueryStore } from "../../stores/queryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { SidebarTableNode } from "./sidebar-table-node";
 import { SidebarObjectGroup } from "./sidebar-object-group";
+import { SidebarTreeHeader } from "./sidebar-tree-header";
 import { CreateTableWizard } from "../structure/create-table-wizard";
 import { EnvironmentBadge } from "../connection/environment-badge";
 import { ConnectionStatusIndicator } from "../connection/connection-status-indicator";
@@ -17,7 +18,7 @@ import { ProcedureExecuteDialog } from "../procedures/procedure-execute-dialog";
 import { ProcedureSourcePanel } from "../procedures/procedure-source-panel";
 import { TableOperationDialog, type TableOperationType } from "./table-operation-dialog";
 import type { RoutineInfo } from "../../types/schema";
-import { Field } from "../ui";
+import { Menu, MenuItem } from "../ui";
 import * as commands from "../../ipc/commands";
 import { extractErrorMessage } from "../../ipc/error";
 
@@ -338,39 +339,18 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
       )}
 
       {/* Search */}
-      <div className="border-b border-border p-2">
-        <Field>
-          <Search size={12} className="text-text-muted" aria-hidden="true" />
-          <input
-            type="text"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder={isKeyValueDb ? "Filter keys\u2026" : isDocumentDb ? "Filter collections\u2026" : "Filter tables\u2026"}
-            aria-label={isKeyValueDb ? "Filter keys" : isDocumentDb ? "Filter collections" : "Filter tables"}
-            className="flex-1 bg-transparent text-xs text-text-primary placeholder:text-text-secondary"
-          />
-        </Field>
-        <div className="mt-2 flex gap-1.5">
-          {capabilities.supportsDdl && (
-            <button
-              onClick={() => setWizardOpen(true)}
-              disabled={!sessionId}
-              className="flex flex-1 items-center justify-center gap-1 rounded border border-border bg-surface-elevated px-2 py-1 text-xs text-text-primary hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus size={12} aria-hidden="true" />
-              New Table
-            </button>
-          )}
-          <button
-            onClick={() => { if (sessionId) fetchSchema(sessionId); }}
-            disabled={!sessionId || isLoading}
-            title="Refresh schema (reload tables)"
-            className="flex items-center justify-center rounded border border-border bg-surface-elevated px-2 py-1 text-xs text-text-primary hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
+      <SidebarTreeHeader
+        filter={filter}
+        onFilterChange={setFilter}
+        placeholder={isKeyValueDb ? "Filter keys\u2026" : isDocumentDb ? "Filter collections\u2026" : "Filter tables\u2026"}
+        searchLabel={isKeyValueDb ? "Filter keys" : isDocumentDb ? "Filter collections" : "Filter tables"}
+        showNewTable={capabilities.supportsDdl}
+        onNewTable={() => setWizardOpen(true)}
+        newTableDisabled={!sessionId}
+        onRefresh={() => { if (sessionId) fetchSchema(sessionId); }}
+        refreshDisabled={!sessionId || isLoading}
+        refreshing={isLoading}
+      />
 
       {/* Database selector */}
       {databases.length > 0 && (
@@ -598,27 +578,27 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
       {dbContextMenu && (
         <div
           ref={dbContextRef}
-          style={{ top: dbContextMenu.y, left: dbContextMenu.x }}
-          className="fixed z-50 min-w-[160px] overflow-hidden rounded border border-border bg-surface-elevated py-0.5 shadow-lg"
+          style={{ position: "fixed", top: dbContextMenu.y, left: dbContextMenu.x }}
+          className="z-50"
         >
-          <button
-            onClick={() => {
-              if (sessionId) void fetchSchema(sessionId);
-              setDbContextMenu(null);
-            }}
-            className="menu-item-button w-full px-3 py-1.5 text-left text-xs font-medium text-text-primary"
-          >
-            {t("sidebar.refreshTables")}
-          </button>
-          <button
-            onClick={() => {
-              if (sessionId) void fetchDatabases(sessionId);
-              setDbContextMenu(null);
-            }}
-            className="menu-item-button w-full px-3 py-1.5 text-left text-xs text-text-primary"
-          >
-            {t("sidebar.refreshDatabases")}
-          </button>
+          <Menu open onClose={() => setDbContextMenu(null)}>
+            <MenuItem
+              onSelect={() => {
+                if (sessionId) void fetchSchema(sessionId);
+                setDbContextMenu(null);
+              }}
+            >
+              {t("sidebar.refreshTables")}
+            </MenuItem>
+            <MenuItem
+              onSelect={() => {
+                if (sessionId) void fetchDatabases(sessionId);
+                setDbContextMenu(null);
+              }}
+            >
+              {t("sidebar.refreshDatabases")}
+            </MenuItem>
+          </Menu>
         </div>
       )}
     </nav>
