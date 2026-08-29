@@ -182,6 +182,11 @@ so there is exactly one place where pending changes live. Per the binding Q2
 resolution, SCR-23 is slimmed to **row actions only**: add row, delete selected,
 deselect all. The filter toggle it used to own is not lost — SCR-03 already
 ships one (`StatusBar.tsx:129`), which becomes the single filter entry point.
+**Q9 resolution (2026-08-28):** `FilterPanel` mounts from exactly one of two
+mutually exclusive branches in `workspace-body.tsx`'s `switch (view.kind)` —
+under the row-action bar for a `table` tab, under the tab bar for a `query`
+tab — never two simultaneously, driven solely by `layoutStore.filterVisible`
+and toggled only from SCR-03.
 
 **Preview SQL** opens SCR-25 as a **popover anchored beneath that button** —
 not a floating toolbar, not a modal — showing the generated INSERT / UPDATE /
@@ -1639,19 +1644,21 @@ grid's selection appearance and that is a design decision, not a defect repair.
 
 ### 8.5 Open questions — consolidated, final
 
-Everything above that is still genuinely undecided, in one place. The blueprint
-is otherwise complete: inventory frozen and verified, spec written, 29 mockups
-built and audit-remediated. Nothing on this list blocks a reader from
-understanding the design; each blocks one specific implementation choice.
+Everything below was genuinely undecided when this section was written, in one
+place. The blueprint is otherwise complete: inventory frozen and verified,
+spec written, 29 mockups built and audit-remediated. **All six were ratified
+by the user on 2026-08-28** (see the Decision column) and delivered in the UI
+rebuild's implementation phases; the questions are kept in this table for
+traceability against 8.2, which narrates each one in full.
 
 | # | Question | Decision needed | From whom |
 |---|---|---|---|
-| **Q3** | Dock width. `--w-dock-default` is 360px, inherited from the old History slide-over. AI chat shipped at 400px and reads better wide; Inspector is comfortable at 280px. | Per-pane remembered width (three persisted numbers) or one width for all three panes? | User — it is a persistence and preference call, not a visual one. |
-| **Q4** | Legacy CSS aliases. `globals.css` still defines `--sidebar-bg` and a bare `--border` that duplicate `--color-bg-surface` and `--color-border`; the CodeMirror theme still reads them. `tokens.css` does not carry them forward. | Retire them during the rebuild — which means touching the editor theme — or keep them as aliases indefinitely? | User, as a scope call. Not blocking; pure cleanup. |
-| **Q5** | Structure-tab persistence. Tab state persists to `%APPDATA%/TablePro/tab-state.json`. Now that structure is a tab kind (M1), a structure tab could survive a restart the way query and table tabs do. | Persist it — which means restoring a schema fetch on launch — or not, accepting that one tab kind behaves differently from the other two? | User. |
-| **Q7** | SQL-import partial-failure dismissibility. Flow 3.6 requires a partial import to report what actually ran, implying SCR-39 survives the failure. Flow 3.7 says a write must not be dismissible mid-write. The two are compatible *during* the write and contradictory *after* it. | Confirm the reading: SCR-39 is non-dismissible while importing, then stays open on failure showing the partial-state report with Retry and Close? | User. If it should instead close and surface the report elsewhere, that surface does not exist and is new scope. |
-| **Q8** | The filter shortcut. Defect D2: the tooltip advertises `Ctrl+Shift+L`, which belongs to `nav.toggleAiChat`; a second string advertises `Ctrl+Shift+F`; and **no filter command exists in the registry at all**. M4 makes SCR-03 the single filter entry point, so the one tooltip a user reads is the one that lies. | Register a real command and bind it — to `Ctrl+Shift+F` as one string already claims, or to something else? | User. It spends a keybinding, so it is not a maintainer call. |
-| **Q9** | SCR-26's mount point. `screens.md` records two render sites, one of them inside SCR-23 (`contextual-bar.tsx:145`). The binding Q2 resolution slimmed SCR-23 to row actions and moved the filter toggle to SCR-03, so that host no longer exists. `mockups/scr-26-filter-panel.html` draws the coherent consequence — one panel, mounted under the row-action bar, driven by `filterVisible`, toggled from SCR-03 in both modes — but section 2.3 M4 has not been amended to say so. | Ratify the single mount point (M4 gains one sentence) or reject it (the mockup needs redrawing). | User. |
+| **Q3** | Dock width. `--w-dock-default` is 360px, inherited from the old History slide-over. AI chat shipped at 400px and reads better wide; Inspector is comfortable at 280px. | **RESOLVED (2026-08-28).** Per-pane persisted width: Inspector 280px, History 360px, AI chat 400px; clamp 280–520px. | User — it is a persistence and preference call, not a visual one. |
+| **Q4** | Legacy CSS aliases. `globals.css` still defines `--sidebar-bg` and a bare `--border` that duplicate `--color-bg-surface` and `--color-border`; the CodeMirror theme still reads them. `tokens.css` does not carry them forward. | **RESOLVED (2026-08-28).** Retired both aliases; repointed the 6 `var(--border)` reads in `editor-theme.ts` to `--color-border`. | User, as a scope call. Not blocking; pure cleanup. |
+| **Q5** | Structure-tab persistence. Tab state persists to `%APPDATA%/TablePro/tab-state.json`. Now that structure is a tab kind (M1), a structure tab could survive a restart the way query and table tabs do. | **RESOLVED (2026-08-28).** Structure tabs persist; the schema fetch is lazy, firing on tab activation rather than at launch. | User. |
+| **Q7** | SQL-import partial-failure dismissibility. Flow 3.6 requires a partial import to report what actually ran, implying SCR-39 survives the failure. Flow 3.7 says a write must not be dismissible mid-write. The two are compatible *during* the write and contradictory *after* it. | **RESOLVED (2026-08-28).** Confirmed: SCR-39 is non-dismissible while importing (no overlay click, no Escape), and stays open on failure with the honest partial-state report, Retry (relabelled "Re-run entire file" with a duplicate-write warning when applicable), and Close. | User. If it should instead close and surface the report elsewhere, that surface does not exist and is new scope. |
+| **Q8** | The filter shortcut. Defect D2: the tooltip advertises `Ctrl+Shift+L`, which belongs to `nav.toggleAiChat`; a second string advertises `Ctrl+Shift+F`; and **no filter command exists in the registry at all**. M4 makes SCR-03 the single filter entry point, so the one tooltip a user reads is the one that lies. | **RESOLVED (2026-08-28).** Registered `nav.toggleFilter`, bound `Ctrl+Alt+F` (verified free of collision); tooltips print the live binding via `useEffectiveBinding`, never a hardcoded string. | User. It spends a keybinding, so it is not a maintainer call. |
+| **Q9** | SCR-26's mount point. `screens.md` records two render sites, one of them inside SCR-23 (`contextual-bar.tsx:145`). The binding Q2 resolution slimmed SCR-23 to row actions and moved the filter toggle to SCR-03, so that host no longer exists. `mockups/scr-26-filter-panel.html` draws the coherent consequence — one panel, mounted under the row-action bar, driven by `filterVisible`, toggled from SCR-03 in both modes — but section 2.3 M4 has not been amended to say so. | **RESOLVED (2026-08-28).** Single mount point ratified; M4 gained the sentence (§2.3). Implementation detail found during the build: the mount is one `FilterPanel` call site per branch of `workspace-body.tsx`'s `switch (view.kind)` (table / query), mutually exclusive by construction — never two simultaneously, which is what this question actually guards against. | User. |
 
 **Not questions — two known residuals, recorded so they are not rediscovered as
 surprises.** Neither needs a decision; both need an owner.

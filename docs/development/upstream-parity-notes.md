@@ -80,6 +80,20 @@ Verified by direct code reading, not inferred from upstream history.
    listener for the same bubbling event) so this class of regression fails a
    test instead of shipping again.
 
+5. **PK-less tables save by matching on every column, not just a primary
+   key.** `src/components/grid/hooks/use-change-tracking.ts:117-118`:
+   `const primaryKeys = detectedPks.length > 0 ? detectedPks : columns;` — when
+   no column carries `isPrimaryKey`, the generated UPDATE/DELETE `WHERE`
+   clause matches on the full row (every column's current value) instead of
+   refusing to save. This is a deliberate residual, not an oversight: the
+   `260828-1409-ui-rebuild-implementation` plan's Session 2 spec proposed
+   disabling Execute/Preview for PK-less tables, and Session 3 withdrew that
+   rule once this fallback was found already covering the case — a table with
+   duplicate rows can still match and update/delete more than one row for a
+   single edit, which the all-columns WHERE clause cannot distinguish. Known
+   and accepted, not fixed here; recorded so it isn't rediscovered as a
+   surprise.
+
 ## Query execution & cancellation
 
 ### Report a failed query instead of settling its claim first
