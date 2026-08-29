@@ -1,5 +1,6 @@
-import React from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Menu, MenuItem, MenuDivider } from '../ui';
 
 interface GridContextMenuProps {
   x: number;
@@ -26,27 +27,6 @@ interface GridContextMenuProps {
   selectedRowCount?: number;
 }
 
-function Item({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      className={`w-full text-left px-3 py-1.5 text-xs ${
-        disabled
-          ? 'text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
-          : 'hover:bg-zinc-100 dark:hover:bg-zinc-700'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function Separator() {
-  return <div className="my-1 border-t border-zinc-200 dark:border-zinc-700" />;
-}
-
 export function GridContextMenu({
   x, y, onClose,
   onCopyAsInsert, onCopyAsUpdate, onCopyRowTsv, onCopyCell, onCopyAsJson,
@@ -55,54 +35,63 @@ export function GridContextMenu({
   onBulkInsert, onBulkUpdate, onBulkDelete, selectedRowCount,
 }: GridContextMenuProps) {
   const { t } = useTranslation();
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // A context menu closes on a click anywhere else; the kit Menu only owns Esc.
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [onClose]);
+
+  const run = (action: () => void) => () => {
+    action();
+    onClose();
+  };
+
   return (
-    <>
-      <button
-        type="button"
-        aria-label="Close context menu"
-        className="fixed inset-0 z-40 cursor-default"
-        onClick={onClose}
-      />
-      <div
-        className="fixed z-50 min-w-[180px] rounded border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
-        style={{ left: x, top: y }}
-      >
-        <Item label="Copy Cell" onClick={onCopyCell} />
+    <div ref={rootRef} style={{ position: 'fixed', top: y, left: x }} className="z-popover" onContextMenu={(e) => e.preventDefault()}>
+      <Menu open onClose={onClose}>
+        <MenuItem onSelect={run(onCopyCell)}>Copy Cell</MenuItem>
         {onCopySelection && selectionMode && selectionMode !== 'cell' && (
-          <Item label="Copy Selection" onClick={onCopySelection} />
+          <MenuItem onSelect={run(onCopySelection)}>Copy Selection</MenuItem>
         )}
-        <Item label="Copy Row (Tab-separated)" onClick={onCopyRowTsv} />
-        {onCopyAsJson && <Item label="Copy Row (JSON)" onClick={onCopyAsJson} />}
-        <Item label="Copy as INSERT" onClick={onCopyAsInsert} />
-        {isTableMode && <Item label="Copy as UPDATE" onClick={onCopyAsUpdate} />}
+        <MenuItem onSelect={run(onCopyRowTsv)}>Copy Row (Tab-separated)</MenuItem>
+        {onCopyAsJson && <MenuItem onSelect={run(onCopyAsJson)}>Copy Row (JSON)</MenuItem>}
+        <MenuItem onSelect={run(onCopyAsInsert)}>Copy as INSERT</MenuItem>
+        {isTableMode && <MenuItem onSelect={run(onCopyAsUpdate)}>Copy as UPDATE</MenuItem>}
 
         {isTableMode && (
           <>
-            <Separator />
+            <MenuDivider />
             {onEditValue && (
-              <Item label="Edit Value" onClick={onEditValue} disabled={isDeletedRow} />
+              <MenuItem onSelect={run(onEditValue)} disabled={isDeletedRow}>Edit Value</MenuItem>
             )}
             {onSetNull && (
-              <Item label="Set NULL" onClick={onSetNull} disabled={isDeletedRow || isPkColumn} />
+              <MenuItem onSelect={run(onSetNull)} disabled={isDeletedRow || isPkColumn}>Set NULL</MenuItem>
             )}
-            <Separator />
+            <MenuDivider />
             {onDuplicateRow && (
-              <Item label="Duplicate Row" onClick={onDuplicateRow} disabled={isDeletedRow} />
+              <MenuItem onSelect={run(onDuplicateRow)} disabled={isDeletedRow}>Duplicate Row</MenuItem>
             )}
             {onDeleteRow && (
-              <Item label={(selectedRowCount ?? 0) > 1 ? `Delete ${selectedRowCount} Rows` : 'Delete Row'} onClick={onDeleteRow} />
+              <MenuItem onSelect={run(onDeleteRow)} danger>
+                {(selectedRowCount ?? 0) > 1 ? `Delete ${selectedRowCount} Rows` : 'Delete Row'}
+              </MenuItem>
             )}
             {(onBulkInsert || onBulkUpdate || onBulkDelete) && (
               <>
-                <Separator />
+                <MenuDivider />
                 {onBulkInsert && (
-                  <Item label={t('grid.bulk.insertRows')} onClick={onBulkInsert} />
+                  <MenuItem onSelect={run(onBulkInsert)}>{t('grid.bulk.insertRows')}</MenuItem>
                 )}
                 {onBulkUpdate && (
-                  <Item label={t('grid.bulk.updateColumn')} onClick={onBulkUpdate} />
+                  <MenuItem onSelect={run(onBulkUpdate)}>{t('grid.bulk.updateColumn')}</MenuItem>
                 )}
                 {onBulkDelete && (
-                  <Item label={t('grid.bulk.deleteRows')} onClick={onBulkDelete} />
+                  <MenuItem onSelect={run(onBulkDelete)} danger>{t('grid.bulk.deleteRows')}</MenuItem>
                 )}
               </>
             )}
@@ -111,11 +100,11 @@ export function GridContextMenu({
 
         {!isTableMode && (
           <>
-            <Separator />
-            <Item label="Copy as UPDATE" onClick={onCopyAsUpdate} />
+            <MenuDivider />
+            <MenuItem onSelect={run(onCopyAsUpdate)}>Copy as UPDATE</MenuItem>
           </>
         )}
-      </div>
-    </>
+      </Menu>
+    </div>
   );
 }

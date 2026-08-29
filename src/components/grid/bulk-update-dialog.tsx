@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { bulkUpdate, bulkUpdatePreview } from '../../ipc/commands';
 import type { FilterCondition, ColumnUpdate } from '../../ipc/commands';
 import type { ColumnInfo } from '../../types/query';
+import { Dialog } from '../ui';
 
 interface BulkUpdateDialogProps {
   open: boolean;
@@ -150,32 +151,22 @@ export function BulkUpdateDialog({
     }
   }, [filtersValid, setEntriesValid, setEntries, sessionId, table, schema, filterConditions, t, onSuccess, onClose]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={t('grid.bulk.updateTitle')}
+      size="md"
+      cancelLabel={t('grid.bulk.cancel')}
+      actions={[{
+        label: isUpdating ? t('grid.bulk.updating') : t('grid.bulk.update'),
+        onClick: () => void handleUpdate(),
+        disabled: isUpdating || !filtersValid || !setEntriesValid,
+        loading: isUpdating,
+      }]}
     >
-      <div
-        className="w-[600px] max-w-[90vw] max-h-[85vh] flex flex-col rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {t('grid.bulk.updateTitle')}
-            </h2>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{table}</p>
-          </div>
-          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700">
-            <X size={16} className="text-zinc-500" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 pb-3 space-y-4">
+      <p className="-mt-2 mb-4 text-xs text-text-secondary">{table}</p>
+      <div className="space-y-4">
           {/* SET entries */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -310,27 +301,7 @@ export function BulkUpdateDialog({
               </span>
             )}
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-zinc-200 dark:border-zinc-700">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 rounded text-xs font-medium border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-          >
-            {t('grid.bulk.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={handleUpdate}
-            disabled={isUpdating || !filtersValid || !setEntriesValid}
-            className="px-3 py-1.5 rounded text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isUpdating ? t('grid.bulk.updating') : t('grid.bulk.update')}
-          </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
