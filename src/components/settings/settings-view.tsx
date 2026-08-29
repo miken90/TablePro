@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { DEFAULT_SETTINGS } from "../../types/settings";
@@ -11,6 +10,7 @@ import { SettingsAi } from "./settings-ai";
 import { SettingsShortcuts } from "./settings-shortcuts";
 import { SettingsPerformance } from "./settings-performance";
 import { SettingsDiagnostics } from "./settings-diagnostics";
+import { Dialog } from "../ui";
 
 const SECTION_KEYS = ["general", "editor", "appearance", "connection", "ai", "performance", "diagnostics", "shortcuts"] as const;
 type SectionKey = (typeof SECTION_KEYS)[number];
@@ -24,17 +24,6 @@ export function SettingsView({ initialSection = "general", onClose }: SettingsVi
   const { t } = useTranslation();
   const [section, setSection] = useState<SectionKey>(initialSection);
   const { saveSettings } = useSettingsStore();
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) onClose();
-  };
 
   const handleReset = async () => {
     await saveSettings(DEFAULT_SETTINGS);
@@ -52,31 +41,16 @@ export function SettingsView({ initialSection = "general", onClose }: SettingsVi
   };
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={handleOverlayClick}
+    <Dialog
+      open
+      onClose={onClose}
+      title={t("settings.title")}
+      size="lg"
+      cancelLabel={t("common.done")}
+      actions={[{ label: t("settings.resetToDefaults"), onClick: () => void handleReset(), variant: 'secondary' }]}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("settings.title")}
-        className="flex h-[600px] w-[760px] max-w-[95vw] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{t("settings.title")}</span>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-            aria-label={t("settings.closeSettings")}
-          >
-            <X size={15} aria-hidden="true" />
-          </button>
-        </div>
-
         {/* Body */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="-m-2xl flex h-[500px] overflow-hidden">
           {/* Sidebar nav */}
           <nav className="flex w-40 flex-shrink-0 flex-col gap-0.5 border-r border-zinc-200 p-2 dark:border-zinc-700">
             {SECTION_KEYS.map((s) => (
@@ -106,23 +80,6 @@ export function SettingsView({ initialSection = "general", onClose }: SettingsVi
             {section === "shortcuts" && <SettingsShortcuts />}
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-zinc-200 px-4 py-2 dark:border-zinc-700">
-          <button
-            onClick={handleReset}
-            className="rounded px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-          >
-            {t("settings.resetToDefaults")}
-          </button>
-          <button
-            onClick={onClose}
-            className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
-          >
-            {t("common.done")}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

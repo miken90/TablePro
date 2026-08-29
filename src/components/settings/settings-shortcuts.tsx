@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -9,6 +9,7 @@ import {
   findBindingConflict,
   bindingToKey,
 } from "../../hooks/useCommandRegistry";
+import { Dialog } from "../ui";
 
 const DISPLAY_SECTIONS: { category: CommandCategory; labelKey: string }[] = [
   { category: "Query", labelKey: "settings.shortcuts.sections.editor" },
@@ -60,7 +61,6 @@ function KeyCaptureOverlay({ commandId, commandLabel, onSave, onCancel }: KeyCap
   const [captured, setCaptured] = useState<string[] | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const userBindings = useShortcutStore((s) => s.userBindings);
-  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -97,62 +97,44 @@ function KeyCaptureOverlay({ commandId, commandLabel, onSave, onCancel }: KeyCap
   };
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
-      onClick={onCancel}
+    <Dialog
+      open
+      onClose={onCancel}
+      title={`${t("settings.shortcuts.setShortcutFor")} "${commandLabel}"`}
+      size="sm"
+      actions={[{
+        label: conflict ? t("settings.shortcuts.saveAnyway") : t("common.save"),
+        onClick: handleSave,
+        disabled: !captured,
+      }]}
     >
-      <div
-        className="w-[380px] rounded-lg border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h4 className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-          {t("settings.shortcuts.setShortcutFor")} &ldquo;{commandLabel}&rdquo;
-        </h4>
-        <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-          {t("settings.shortcuts.pressKeyCombo")}
-        </p>
+      <p className="-mt-2 mb-4 text-xs text-text-secondary">
+        {t("settings.shortcuts.pressKeyCombo")}
+      </p>
 
-        <div className="mt-4 flex min-h-[40px] items-center justify-center rounded border border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800">
-          {captured ? (
-            <span className="flex items-center gap-1">
-              {captured.map((key, i) => (
-                <kbd
-                  key={i}
-                  className="rounded border border-zinc-300 bg-white px-2 py-1 font-mono text-xs text-zinc-700 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200"
-                >
-                  {key}
-                </kbd>
-              ))}
-            </span>
-          ) : (
-            <span className="text-xs text-zinc-400">{t("settings.shortcuts.waitingForKeypress")}</span>
-          )}
-        </div>
-
-        {conflict && (
-          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-            {t("settings.shortcuts.conflictsWith")} &ldquo;{conflict}&rdquo;. {t("settings.shortcuts.conflictOverride")}
-          </p>
+      <div className="flex min-h-[40px] items-center justify-center rounded border border-dashed border-border bg-surface">
+        {captured ? (
+          <span className="flex items-center gap-1">
+            {captured.map((key, i) => (
+              <kbd
+                key={i}
+                className="rounded border border-border bg-surface-elevated px-2 py-1 font-mono text-xs text-text-primary"
+              >
+                {key}
+              </kbd>
+            ))}
+          </span>
+        ) : (
+          <span className="text-xs text-text-secondary">{t("settings.shortcuts.waitingForKeypress")}</span>
         )}
-
-        <div className="mt-4 flex items-center justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="rounded px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!captured}
-            className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {conflict ? t("settings.shortcuts.saveAnyway") : t("common.save")}
-          </button>
-        </div>
       </div>
-    </div>
+
+      {conflict && (
+        <p className="mt-2 text-xs text-state-warning-fg">
+          {t("settings.shortcuts.conflictsWith")} &ldquo;{conflict}&rdquo;. {t("settings.shortcuts.conflictOverride")}
+        </p>
+      )}
+    </Dialog>
   );
 }
 

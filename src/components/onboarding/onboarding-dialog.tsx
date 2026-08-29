@@ -33,13 +33,13 @@ export function OnboardingDialog({ onComplete }: OnboardingDialogProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-modal-scrim flex items-center justify-center bg-scrim backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Onboarding"
     >
       <div
-        className="relative h-[560px] w-[520px] overflow-hidden rounded-xl border border-border-subtle bg-surface-base shadow-2xl onboarding-slide-in"
+        className="relative h-[560px] w-[520px] overflow-hidden rounded-xl border border-border-subtle bg-surface-base shadow-modal onboarding-slide-in"
       >
         <div
           key={step}
