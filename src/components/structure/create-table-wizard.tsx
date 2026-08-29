@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Table2, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   createTable,
   type CreateTableColumnDefinition,
@@ -7,6 +7,7 @@ import {
 } from '../../ipc/commands';
 import { extractErrorMessage } from '../../ipc/error';
 import { ColumnDefinitionRow } from './column-definition-row';
+import { Dialog } from '../ui';
 
 interface CreateTableWizardProps {
   open: boolean;
@@ -183,25 +184,19 @@ export function CreateTableWizard({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
-      <div
-        className="w-[820px] max-w-[95vw] rounded-lg border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <div className="flex items-center gap-2">
-            <Table2 size={15} className="text-blue-500" />
-            <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Create Table</h2>
-          </div>
-          <button
-            onClick={handleClose}
-            className="rounded p-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        <div className="space-y-4 p-4">
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      title="Create Table"
+      size="lg"
+      actions={[{
+        label: isSubmitting ? 'Creating…' : 'Create Table',
+        onClick: () => void handleCreate(),
+        disabled: isSubmitting,
+        loading: isSubmitting,
+      }]}
+    >
+      <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">Table name</label>
@@ -277,24 +272,7 @@ export function CreateTableWizard({
               {error}
             </div>
           )}
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <button
-            onClick={handleClose}
-            className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => void handleCreate()}
-            disabled={isSubmitting}
-            className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? 'Creating...' : 'Create Table'}
-          </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

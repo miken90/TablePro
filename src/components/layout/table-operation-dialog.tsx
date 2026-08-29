@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { AlertTriangle } from "lucide-react";
+import { Dialog } from "../ui";
 
 export type TableOperationType = "truncate" | "delete-all" | "drop" | "drop-view";
 
@@ -65,28 +65,22 @@ export function TableOperationDialog({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") handleConfirm();
-      if (e.key === "Escape") onCancel();
     },
-    [handleConfirm, onCancel],
+    [handleConfirm],
   );
-
-  if (!open) return null;
 
   const canConfirm = confirmText === tableName;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-      <div
-        className="w-[400px] rounded-lg border border-border bg-surface-primary p-5 shadow-xl"
-        onKeyDown={handleKeyDown}
-      >
-        <div className="mb-3 flex items-center gap-2">
-          <AlertTriangle size={18} className="shrink-0 text-accent-red" />
-          <h3 className="text-sm font-semibold text-text-primary">
-            {config.title}
-          </h3>
-        </div>
-
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      title={config.title}
+      size="sm"
+      destructive
+      actions={[{ label: config.buttonLabel, onClick: handleConfirm, disabled: !canConfirm, variant: 'danger' }]}
+    >
+      <div onKeyDown={handleKeyDown}>
         <p className="mb-2 text-xs text-text-secondary">
           {config.description}
         </p>
@@ -97,7 +91,7 @@ export function TableOperationDialog({
           </span>
         </div>
 
-        <div className="mb-4">
+        <div>
           <label className="mb-1 block text-xs text-text-secondary">
             Type <strong>{tableName}</strong> to confirm:
           </label>
@@ -110,23 +104,7 @@ export function TableOperationDialog({
             className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary focus:border-accent-blue"
           />
         </div>
-
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="rounded border border-border px-3 py-1.5 text-xs text-text-primary hover:bg-surface-muted"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!canConfirm}
-            className="rounded bg-accent-red px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {config.buttonLabel}
-          </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
