@@ -8,7 +8,7 @@ description: Queue cell edits, row inserts, and deletions locally before committ
 Changes in TablePro are queued in memory, not applied immediately. Edit cells, insert rows, delete rows, then review everything before committing. Nothing touches the database until you say so.
 
 <Tip>
-Change tracking is per-tab. Switching tabs preserves your edits.
+Change tracking is scoped to the table (connection + schema + table name), not the tab. Switching tabs preserves your edits; two tabs open on the same table share one set of staged edits.
 </Tip>
 
 ## Data Changes
@@ -24,7 +24,9 @@ To edit an existing cell:
 3. Press `Enter` to confirm or `Escape` to cancel
 
 <Note>
-Changing a value back to its original automatically removes it from the queue.
+Retyping a cell's original (unedited) value skips staging a no-op edit. It does
+not clear an edit already staged for that cell — use `Ctrl+Z` or Discard to
+remove a staged change.
 </Note>
 
 ### Adding Rows
@@ -56,7 +58,7 @@ Batch deletion of multiple rows is tracked as a single undo action. Undoing a ba
 
 ### Committing Changes
 
-Click **Commit** or press `Ctrl+S`. TablePro generates SQL with values inlined as escaped literals (not parameterized placeholders), executes one statement per changed row, clears the queue, and refreshes the grid.
+Click **Execute** in the pending-changes strip, or press `Ctrl+S`. TablePro generates SQL with values inlined as escaped literals (not parameterized placeholders), executes one statement per changed row, clears the queue, and refreshes the grid.
 
 Generated SQL shape:
 
@@ -91,7 +93,7 @@ The statements come from the backend's `preview_statements` command, which share
 Context-aware: `Ctrl+Z` undoes text edits when the SQL editor is focused, data changes when the grid is focused.
 </Tip>
 
-Stacks are per-tab. Committing or discarding clears both stacks.
+Stacks are scoped to the table being edited, not the tab. Committing or discarding clears both stacks.
 
 ## Schema Changes
 
@@ -123,8 +125,8 @@ Before applying schema changes, preview the generated SQL:
   <Step title="Make Changes">
     Add, modify, or delete columns, indexes, or foreign keys in the Structure tab
   </Step>
-  <Step title="Click Commit">
-    Click the Commit button or press `Ctrl+S`
+  <Step title="Preview & Apply">
+    Click **Preview & Apply** above the column list
   </Step>
   <Step title="Review SQL">
     A preview sheet shows all ALTER TABLE statements that will execute
@@ -135,7 +137,7 @@ Before applying schema changes, preview the generated SQL:
 </Steps>
 
 <Tip>
-Copy individual SQL statements from the preview sheet using the copy button next to each statement.
+Click **Copy SQL** in the preview sheet to copy all pending statements to the clipboard at once.
 </Tip>
 
 ## SQL Generation

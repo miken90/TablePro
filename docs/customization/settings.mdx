@@ -51,7 +51,7 @@ Changing the language requires restarting TablePro.
 
 ### Page Size
 
-Rows loaded per page for query/table results. Choices: 25, 50, 100, 500, 1,000. Default is 500.
+Rows loaded per page for query/table results. Choices: 25, 50, 100, 500, 1,000. Default is 100.
 
 ### NULL Display
 
@@ -123,7 +123,7 @@ Customize keyboard shortcuts for commands. See [Keyboard Shortcuts](/features/ke
 
 ### Conflict Detection
 
-Assigning a shortcut already in use shows an inline warning naming the conflicting command; saving anyway reassigns that shortcut away from the other command.
+Assigning a shortcut already in use shows an inline warning naming the conflicting command. **Save Anyway** applies the new binding regardless: if the conflicting command already has a customized binding, that binding is swapped back onto the current command's previous shortcut; if the conflicting command is still on its default, both commands end up bound to the same key.
 
 ### Reset
 

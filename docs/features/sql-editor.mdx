@@ -28,9 +28,7 @@ Line numbers are on by default. Useful for:
 - Navigating large queries
 - Referencing code in conversations
 
-<Tip>
-Toggle line numbers in **Settings** > **Editor** > **Show Line Numbers**.
-</Tip>
+Line numbers and current-line highlighting are always on; there is no setting to turn them off.
 
 ### Current Line Highlighting
 
@@ -167,16 +165,19 @@ View the execution plan for your query to spot missing indexes or inefficient jo
 
 To explain a query:
 
-- Click the **Explain** button in the editor toolbar, or
 - Press `Ctrl+Shift+X`, or
-- Use the menu: **Query** > **Explain Query**
+- Click the chevron on the **Run** button and choose **Explain Plan**
+
+The **Explain Plan** menu item is only enabled for PostgreSQL and MySQL/MariaDB
+connections; `Ctrl+Shift+X` also works on SQL Server and SQLite connections.
 
 TablePro automatically uses the correct syntax for your database:
 
 | Database | Syntax Used |
 |----------|-------------|
-| MySQL / MariaDB | `EXPLAIN <query>` |
-| PostgreSQL | `EXPLAIN <query>` |
+| MySQL / MariaDB | `EXPLAIN FORMAT=JSON <query>` |
+| PostgreSQL | `EXPLAIN (FORMAT JSON) <query>` |
+| SQL Server | `SET SHOWPLAN_XML ON`, then the query |
 | SQLite | `EXPLAIN QUERY PLAN <query>` |
 
 The plan opens as an **Explain** tab in the results strip, beside Results and
@@ -190,15 +191,14 @@ Run Explain before executing expensive queries to verify they use the expected i
 
 ## SQL Formatting
 
-Built-in SQL formatter that restructures queries for readability. Dialect-aware: it adapts output to MySQL, PostgreSQL, or SQLite syntax.
+Built-in SQL formatter that restructures queries for readability. Dialect-aware: it adapts output to MySQL, PostgreSQL, SQL Server, or SQLite syntax.
 
 ### Format Query
 
 To format the current query:
 
 - Press `Ctrl+Shift+F`, or
-- Click the **Format** button in the editor toolbar, or
-- Use the menu: **Query** > **Format Query**
+- Open the Command Palette (`Ctrl+Shift+P`) and run **Format SQL**
 
 The formatter applies these transformations:
 
@@ -219,6 +219,7 @@ The formatter detects your connected database and applies dialect-specific rules
 |----------|---------------------|
 | MySQL / MariaDB | Backtick-quoted identifiers preserved, MySQL-specific syntax handled |
 | PostgreSQL | Double-quoted identifiers preserved, PostgreSQL-specific syntax handled |
+| SQL Server | Formatted as T-SQL |
 | SQLite | SQLite-specific keywords and syntax handled |
 
 ### Before & After Example
@@ -265,7 +266,7 @@ Optional Vim keybindings for modal editing. Normal, Insert, Visual, and Command-
 
 ### Enabling Vim Mode
 
-Toggle in **Settings** > **Editor** > **Editing** > **Vim mode**. A mode indicator badge appears in the editor toolbar when active.
+Toggle in **Settings** > **Editor** > **Vim Mode**. A mode indicator badge appears in the editor toolbar when active.
 
 ### Modes
 
@@ -323,6 +324,7 @@ Press `:` in Normal mode to enter command-line mode:
 |---------|--------|
 | `:w` | Execute the current query (equivalent to `Ctrl+Enter`) |
 | `:q` | Close the current tab |
+| `:e` | Open a new tab |
 
 ### Count Prefixes
 
@@ -344,16 +346,16 @@ Customize the editor in **Settings** > **Editor**. Changes apply instantly witho
 
 | Setting | Options | Default |
 |---------|---------|---------|
-| **Font Family** | Consolas, JetBrains Mono, Fira Code, Monaco, monospace | JetBrains Mono |
-| **Font Size** | — | 14 pt |
+| **Font Family** | Consolas, JetBrains Mono, Fira Code, Monaco, monospace | Consolas |
+| **Font Size** | 10-24 pt | 14 pt |
 
 ### Display Settings
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| **Show Line Numbers** | Display line numbers | On |
-| **Highlight Current Line** | Subtle highlight on cursor line | On |
 | **Word Wrap** | Wrap long lines | Off |
+
+Line numbers and current-line highlighting are always on and have no setting.
 
 ### Editing Settings
 
@@ -366,7 +368,8 @@ Customize the editor in **Settings** > **Editor**. Changes apply instantly witho
 | Setting | Options | Default |
 |---------|---------|---------|
 | **Tab Width** | 2, 4, 8 spaces | 4 |
-| **Auto Indent** | Automatic indentation | On |
+
+Auto-indent is always on and has no setting.
 
 ## Tips and Tricks
 

@@ -19,6 +19,12 @@ Click a table in the sidebar or run a `SELECT` query to load data into the grid.
 - Double-click a border to auto-fit column width
 - Column widths are remembered per table
 
+### Column Header
+
+Each header cell prints the column name on its own line above the column
+type, so a narrowed column truncates the name but never hides the type. A
+primary-key column carries a key glyph next to its name.
+
 ### Sorting Data
 
 Click a column header to sort:
@@ -108,16 +114,16 @@ Editing is available for simple `SELECT * FROM table` queries. Complex queries w
 
 ### Adding and Deleting Rows
 
-Click the **+** button to add a new row, or select row(s) and press `Delete` to remove them. Changes are queued until you click **Commit**.
+Click the **+** button (row-action bar) to add a new row, or select row(s) and press `Delete`/`Backspace`, or use the row-action bar's delete control, to stage them for removal. Nothing writes until you click **Execute N changes** in the pending-changes strip.
 
 ## Change Indicators
 
-Pending changes get visual feedback:
+Pending changes never rely on color alone:
 
-- **Modified cells** are highlighted with a distinct background color
-- **New rows** display an insertion indicator
-- **Deleted rows** display a deletion indicator
-- The **toolbar** shows the count of pending changes
+- **Inserted rows** get a tinted background, a left border, and a `+` glyph in the row-number gutter
+- **Updated rows** get a tinted background, a left border, and a `~` glyph in the row-number gutter
+- **Deleted rows** get a tinted background, a left border, and strikethrough text
+- The pending-changes strip shows the running count of staged changes
 
 Review all modifications before committing them to the database. See [Change Tracking](/features/change-tracking) for details.
 
@@ -145,7 +151,7 @@ Use arrow keys to move between cells. Press `Enter` to edit, `Escape` to cancel.
 
 Click a cell to select it. Drag to select a range, or Shift+click to select a range. Click row numbers to select entire rows, or Ctrl+click for multiple non-contiguous rows.
 
-Select cells and press `Ctrl+C` to copy — a single selected cell copies its raw value; a range copies as tab-separated (TSV) with a header row. CSV, JSON, and SQL copy formats are available from the right-click context menu (no keyboard shortcut).
+Select cells and press `Ctrl+C` to copy — a single selected cell copies its raw value; a range copies as tab-separated (TSV) with a header row. The right-click context menu adds Copy Selection, Copy Row (TSV), Copy Row (JSON), Copy as INSERT, and (in table mode) Copy as UPDATE — none of these have a keyboard shortcut of their own.
 
 ## Pagination
 
@@ -153,7 +159,7 @@ Large result sets are paginated. Configure page size in **Settings** > **General
 
 ## NULL Values and Display
 
-NULL values show as customizable text (default `"NULL"`) — set in **Settings** > **General**, alongside date format.
+NULL values render as a dimmed, italic `NULL` in every row state. Settings → General has a "NULL display text" field, but the grid does not currently read it — the cell always shows the literal string `NULL` regardless of what's configured there.
 
 ## MongoDB Collections
 

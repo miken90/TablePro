@@ -15,13 +15,13 @@ Available monospace fonts:
 
 | Font | Description |
 |------|-------------|
-| **Consolas** | Classic Windows monospace |
-| **JetBrains Mono** | Default |
+| **Consolas** | Classic Windows monospace (default) |
+| **JetBrains Mono** | -- |
 | **Fira Code** | Ligature-friendly monospace |
 | **Monaco** | Traditional Mac programming font (also installable on Windows) |
 | **monospace** | Generic OS monospace fallback |
 
-If a selected font isn't installed, TablePro falls back to the browser's generic `monospace`.
+The editor's font CSS stack is `<selected font>, Consolas, 'Courier New', monospace`, so if a selected font isn't installed, TablePro falls back to Consolas, then Courier New, then the browser's generic `monospace`.
 
 ### Font Size
 
@@ -33,10 +33,7 @@ If a selected font isn't installed, TablePro falls back to the browser's generic
 
 ### Word Wrap
 
-| Option | Description |
-|--------|-------------|
-| **Off** | Long lines scroll horizontally (default) |
-| **On** | Long lines wrap to next line |
+A toggle exists in **Settings** > **Editor** (default off) and the value persists, but it is not currently wired to the SQL editor -- toggling it does not change line-wrap behavior in the editor.
 
 ### Vim Mode
 
@@ -49,9 +46,7 @@ If a selected font isn't installed, TablePro falls back to the browser's generic
 
 ### Tab Width
 
-| Setting | Options | Default |
-|---------|---------|---------|
-| Tab Width | 2, 4, or 8 spaces | 4 |
+A selector exists in **Settings** > **Editor** for 2, 4, or 8 spaces (default 4) and the value persists, but it is not currently wired to the SQL editor -- changing it does not change indentation behavior in the editor.
 
 ## Editor Behavior
 
@@ -59,7 +54,7 @@ If a selected font isn't installed, TablePro falls back to the browser's generic
 
 Autocomplete is always on. See [Autocomplete](/features/autocomplete) for details.
 
-All editor settings apply immediately. No restart required.
+Font, font size, and Vim mode apply immediately with no restart required.
 
 ## Keyboard Shortcuts
 

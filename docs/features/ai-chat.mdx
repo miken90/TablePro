@@ -13,11 +13,11 @@ Press `Ctrl+Shift+L`, click the AI toolbar button, or run **Toggle AI Chat** fro
 
 ## Chatting with AI
 
-Type a question and press Enter (`Shift+Enter` for a newline). When a connection is active, the AI receives your database type and schema (table/column names, primary keys, foreign keys) as context. Responses render as markdown with fenced code blocks in plain monospace text (no syntax highlighting). Each code block has a **Copy** button. Token counts appear below each response when the provider returns usage data.
+Type a question and press Enter (`Shift+Enter` for a newline). When a connection is active, the AI receives your database type and schema (table/column names, primary keys, foreign keys) as context. Responses render as markdown with fenced code blocks in plain monospace text (no syntax highlighting). Each code block has a **Copy** button; SQL code blocks also get an **Insert to editor** button. Token counts appear below each response when the provider returns usage data.
 
 Conversations auto-save and auto-title from your first message. Browse history, start new conversations, or delete old ones from the panel.
 
-Every response shows a **Retry** button that removes it and resends the last user message. Responses stream in real-time -- click **Stop** to cancel.
+The most recent response shows a **Retry** button (while nothing is streaming) that removes it and resends the last user message. Responses stream in real-time -- click **Stop** to cancel.
 
 ## Configuring AI Providers
 
@@ -25,7 +25,7 @@ Configure providers in **Settings** (`Ctrl+,`) > **AI**.
 
 ### Adding a Provider
 
-Click **Add Provider**, choose a type, enter your API key, specify a model (or click **Fetch Models** to list available models), then **Test** to verify.
+Click **Add**, choose a type, enter your API key, specify a model (or click **Fetch Models** to list available models), then **Test Connection** to verify.
 
 API keys are DPAPI-encrypted at rest, never in plain text.
 

@@ -24,8 +24,16 @@ Then:
 
 The schema tree refreshes when the import finishes, so tables created by the script appear without reconnecting.
 
+While an import is running, the dialog cannot be dismissed — no backdrop click, no Escape. If the import fails partway through, the dialog stays open (it never auto-closes) and shows:
+
+- the driver's error message
+- how many statements ran before the failure — or, if no progress event ever arrived, an explicit "no progress reported" notice rather than claiming 0 statements ran
+- whether the run can be trusted: with **Wrap in transaction** on, a note that a rollback was requested but completion can't be confirmed; with it off, a note that the statements that did run were committed
+
+The retry action always re-runs the entire file — there is no resume point — so it's labeled **Re-run entire file** (with a warning) whenever the transaction option was off and some statements already committed, to flag the risk of duplicate writes.
+
 <Note>
-The toolbar button is hidden for engines that do not support import/export (MongoDB and Redis), which is the same capability check the export command enforces.
+The toolbar button is hidden for engines that do not support import/export (MongoDB, Redis, and SQLite), which is the same capability check the export command enforces.
 </Note>
 
 ## Export Data
@@ -94,6 +102,6 @@ identifies each row — a primary key is ideal — or narrow the query with
 
 For the text formats (CSV, JSON, SQL) the dialog shows a live preview of the first 5 rows and offers a **Copy** action to copy the full export text without saving a file.
 
-## Clipboard Paste (CSV/TSV)
+## Clipboard Paste (Tab-Separated)
 
-Paste tabular data directly into the data grid. Press `Ctrl+V` after selecting a row. Format is auto-detected: tabs parse as TSV, commas as CSV.
+Paste tabular data directly into the data grid. Select one or more rows, then press `Ctrl+V`. The clipboard text is split into lines, and each line into cells on tab characters — matching what the grid's own copy actions produce. There is no comma/CSV parsing: a comma-delimited clipboard is pasted as a single value per line. Each pasted line fills one selected row in order; primary-key columns are skipped, and empty values are written as NULL.

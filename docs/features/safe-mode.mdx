@@ -5,7 +5,7 @@ description: Global query execution controls - from no restrictions to full read
 
 # Safe Mode
 
-Safe Mode is a global setting that controls how TablePro handles query execution before it reaches the database. Click the level badge in the toolbar to cycle through levels.
+Safe Mode is a global setting that controls how TablePro handles query execution before it reaches the database. The toolbar shows a level badge whenever Safe Mode is above **Off**; clicking it quick-cycles **Off → Alert → Read-Only → Off**. To reach **Silent**, **Alert+**, or **Safe Mode** specifically, set the level from Settings → Connection → Safe Mode instead.
 
 ## Levels
 
@@ -49,11 +49,11 @@ Same trigger as Alert+, but confirming requires typing the affected table's name
 Any write statement (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER`, `CREATE`) is blocked outright — no dialog, no override.
 
 <Note>
-Safe Mode covers the SQL editor, the MongoDB and Redis panels, and the sidebar's **Truncate** / **Delete All Records** / **Drop** operations, which all execute through the same store. Grid cell edits and other structure commands use their own backend commands and are not classified by Safe Mode.
+Safe Mode covers the SQL editor, the MongoDB and Redis panels, the sidebar's **Truncate** / **Delete All Records** / **Drop** operations, and saving edited grid rows — all of them classify the statements they are about to run with the same check before executing. The visual table structure editor (column add/modify/drop) runs its own `ALTER TABLE` commands directly and is not classified by Safe Mode.
 </Note>
 
 <Note>
 Safe Mode classification is regex-based on the SQL text (destructive: `DELETE|DROP|TRUNCATE|ALTER`; DML: `INSERT|UPDATE|DELETE`). It does not parse the query, so it can't distinguish schema-qualified statements or detect writes hidden inside stored procedure calls.
 </Note>
 
-The current level shows as a badge in the toolbar; click it to cycle to the next level.
+The current level shows as a badge in the toolbar (hidden at Off); click it to quick-cycle Off → Alert → Read-Only → Off, or use Settings → Connection → Safe Mode to jump straight to any of the 6 levels.
