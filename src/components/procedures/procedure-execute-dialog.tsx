@@ -5,6 +5,7 @@ import type { RoutineInfo } from "../../types/schema";
 import type { RoutineParam, RoutineResult } from "../../ipc/commands";
 import * as commands from "../../ipc/commands";
 import { classifyError } from "../../ipc/error";
+import { Dialog, type DialogAction } from "../ui";
 
 interface ProcedureExecuteDialogProps {
   open: boolean;
@@ -58,18 +59,6 @@ export function ProcedureExecuteDialog({
       setExecuting(false);
     }
   }, [open, routine]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
 
   const buildParams = useCallback((): RoutineParam[] => {
     return params.map((p) => ({
@@ -146,34 +135,36 @@ export function ProcedureExecuteDialog({
     );
   };
 
-  if (!open) return null;
-
   const rs = result?.resultSet;
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col rounded-lg border border-border bg-surface-elevated shadow-xl"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="px-5 pt-5 pb-3">
-          <h2 className="text-sm font-semibold text-text-primary">
-            {t("procedures.executeRoutine")}
-          </h2>
-          <p className="mt-0.5 text-xs text-text-secondary">
-            {routine.schema ? `${routine.schema}.` : ""}{routine.name}
-            {routine.returnType ? ` → ${routine.returnType}` : ""}
-          </p>
-        </div>
+  const actions: DialogAction[] = [
+    ...(!result ? [{ label: t("procedures.generatePreview"), onClick: () => void handlePreview(), variant: 'secondary' as const }] : []),
+    {
+      label: executing
+        ? t("procedures.executing")
+        : result
+          ? t("procedures.reExecute", "Re-execute")
+          : t("procedures.confirm"),
+      onClick: () => void (result ? handleReExecute() : handleExecute()),
+      disabled: executing,
+      loading: executing,
+    },
+  ];
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5">
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={t("procedures.executeRoutine")}
+      size="lg"
+      cancelLabel={result ? t("procedures.close") : t("procedures.cancel")}
+      actions={actions}
+    >
+      <p className="-mt-2 mb-3 text-xs text-text-secondary">
+        {routine.schema ? `${routine.schema}.` : ""}{routine.name}
+        {routine.returnType ? ` → ${routine.returnType}` : ""}
+      </p>
+      <div>
           {/* Parameters */}
           {params.length > 0 ? (
             <div className="mb-3">
@@ -292,40 +283,7 @@ export function ProcedureExecuteDialog({
               {t("procedures.noResults")}
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-          >
-            {result ? t("procedures.close") : t("procedures.cancel")}
-          </button>
-          {!result && (
-            <button
-              type="button"
-              onClick={() => void handlePreview()}
-              className="rounded border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-            >
-              {t("procedures.generatePreview")}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => void (result ? handleReExecute() : handleExecute())}
-            disabled={executing}
-            className="rounded bg-accent-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-blue/90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {executing
-              ? t("procedures.executing")
-              : result
-                ? t("procedures.reExecute", "Re-execute")
-                : t("procedures.confirm")}
-          </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,6 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { save as dialogSave } from '@tauri-apps/plugin-dialog';
-import { Download, X, Copy } from 'lucide-react';
 import type { ExportOptions } from '../../ipc/commands';
 import { exportToFile } from '../../ipc/commands';
 import { extractErrorMessage } from '../../ipc/error';
@@ -8,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { ExportProgress } from './export-progress';
 import type { QueryResult } from '../../types/query';
+import { Dialog, type DialogAction } from '../ui';
 
 type ExportFormat = 'csv' | 'json' | 'sql' | 'xlsx';
 
@@ -228,24 +228,18 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
         : 'border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-200'
     }`;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div
-        className="w-[480px] rounded-lg border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <div className="flex items-center gap-2">
-            <Download size={14} className="text-zinc-500" />
-            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Export Results</span>
-          </div>
-          <button onClick={onClose} className="rounded p-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
-            <X size={14} />
-          </button>
-        </div>
+  const actions: DialogAction[] = isExporting
+    ? []
+    : [
+        ...(TEXT_FORMATS.has(format)
+          ? [{ label: copied ? 'Copied!' : 'Copy', onClick: () => void handleCopy(), variant: 'secondary' as const }]
+          : []),
+        { label: 'Export', onClick: () => void handleExport() },
+      ];
 
-        <div className="p-4 space-y-4">
+  return (
+    <Dialog open onClose={onClose} title="Export Results" size="md" actions={actions}>
+        <div className="space-y-4">
           {/* Format selector */}
           <div>
             <label className="mb-1.5 block text-xs text-zinc-500 dark:text-zinc-400">Format</label>
@@ -372,35 +366,6 @@ export function ExportDialog({ sessionId, sql, result, onClose }: ExportDialogPr
             </p>
           )}
         </div>
-
-        {/* Footer */}
-        {!isExporting && (
-          <div className="flex justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-700">
-            <button
-              onClick={onClose}
-              className="rounded px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            >
-              Cancel
-            </button>
-            {TEXT_FORMATS.has(format) && (
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/50"
-            >
-              <Copy size={12} />
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-            )}
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
-            >
-              <Download size={12} />
-              Export
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+    </Dialog>
   );
 }

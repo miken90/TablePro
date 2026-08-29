@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
-import { X, AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   importConnectionsPreview,
@@ -12,6 +12,7 @@ import type {
   ImportResolutionEntry,
 } from "../../ipc/commands";
 import { extractErrorMessage } from "../../ipc/error";
+import { Dialog, type DialogAction } from "../ui";
 
 interface ConnectionImportDialogProps {
   onClose: () => void;
@@ -35,14 +36,6 @@ export function ConnectionImportDialog({
   );
   const [importing, setImporting] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   // Auto-open file picker on mount
   useEffect(() => {
@@ -165,126 +158,87 @@ export function ConnectionImportDialog({
     (a) => a !== "skip",
   ).length;
 
+  const actions: DialogAction[] =
+    step === "passphrase"
+      ? [{
+          label: loading ? t("common.loading") : t("common.ok"),
+          onClick: () => void handlePassphraseSubmit(),
+          disabled: !passphrase || loading,
+          loading,
+        }]
+      : step === "preview" && preview
+        ? [{
+            label: importing ? t("common.loading") : `${t("common.import")} (${importCount})`,
+            onClick: () => void handleImport(),
+            disabled: importCount === 0 || importing,
+            loading: importing,
+          }]
+        : [];
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="w-[520px] rounded-lg border border-border bg-surface-base shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-text-primary">
-            {t("connection.import.title")}
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-text-muted hover:bg-surface-muted hover:text-text-primary"
-          >
-            <X size={14} />
-          </button>
+    <Dialog open onClose={onClose} title={t("connection.import.title")} size="md" actions={actions}>
+      {/* Passphrase step */}
+      {step === "passphrase" && (
+        <div>
+          <p className="mb-3 text-xs text-text-secondary">
+            {t("connection.import.needsPassphrase")}
+          </p>
+          <input
+            type="password"
+            autoFocus
+            value={passphrase}
+            onChange={(e) => setPassphrase(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && passphrase) void handlePassphraseSubmit();
+            }}
+            className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-secondary"
+            placeholder={t("connection.export.passphrase")}
+          />
+          {passphraseError && (
+            <p className="mt-1 text-xs text-red-400">{passphraseError}</p>
+          )}
         </div>
+      )}
 
-        {/* Passphrase step */}
-        {step === "passphrase" && (
-          <div className="px-4 py-6">
-            <p className="mb-3 text-xs text-text-secondary">
-              {t("connection.import.needsPassphrase")}
-            </p>
-            <input
-              type="password"
-              autoFocus
-              value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && passphrase) void handlePassphraseSubmit();
-              }}
-              className="w-full rounded border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-secondary"
-              placeholder={t("connection.export.passphrase")}
-            />
-            {passphraseError && (
-              <p className="mt-1 text-xs text-red-400">{passphraseError}</p>
-            )}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={onClose}
-                className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={handlePassphraseSubmit}
-                disabled={!passphrase || loading}
-                className="rounded bg-accent-blue px-3 py-1.5 text-xs text-white hover:bg-accent-blue/90 disabled:opacity-50"
-              >
-                {loading ? t("common.loading") : t("common.ok")}
-              </button>
-            </div>
-          </div>
-        )}
+      {/* Loading step */}
+      {step === "file" && loading && (
+        <div className="py-4 text-center">
+          <p className="text-xs text-text-secondary">{t("common.loading")}</p>
+        </div>
+      )}
 
-        {/* Loading step */}
-        {step === "file" && loading && (
-          <div className="px-4 py-8 text-center">
-            <p className="text-xs text-text-secondary">{t("common.loading")}</p>
-          </div>
-        )}
-
-        {/* Preview step */}
-        {step === "preview" && preview && (
-          <>
-            <div className="max-h-[360px] overflow-y-auto px-4 py-3">
-              <p className="mb-2 text-xs text-text-secondary">
-                {preview.items.length} connection(s) from v{preview.appVersion}
-              </p>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border text-left text-text-secondary">
-                    <th className="pb-1 pr-2">Name</th>
-                    <th className="pb-1 pr-2">Host</th>
-                    <th className="pb-1 pr-2">Type</th>
-                    <th className="pb-1 pr-2">Status</th>
-                    <th className="pb-1">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.items.map((item) => (
-                    <PreviewRow
-                      key={item.index}
-                      item={item}
-                      resolution={resolutions.get(item.index) ?? "skip"}
-                      onChangeResolution={(a) =>
-                        setResolution(item.index, a)
-                      }
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-              <button
-                onClick={onClose}
-                className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={importCount === 0 || importing}
-                className="rounded bg-accent-blue px-3 py-1.5 text-xs text-white hover:bg-accent-blue/90 disabled:opacity-50"
-              >
-                {importing
-                  ? t("common.loading")
-                  : `${t("common.import")} (${importCount})`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+      {/* Preview step */}
+      {step === "preview" && preview && (
+        <div className="max-h-[360px] overflow-y-auto">
+          <p className="mb-2 text-xs text-text-secondary">
+            {preview.items.length} connection(s) from v{preview.appVersion}
+          </p>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border text-left text-text-secondary">
+                <th className="pb-1 pr-2">Name</th>
+                <th className="pb-1 pr-2">Host</th>
+                <th className="pb-1 pr-2">Type</th>
+                <th className="pb-1 pr-2">Status</th>
+                <th className="pb-1">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.items.map((item) => (
+                <PreviewRow
+                  key={item.index}
+                  item={item}
+                  resolution={resolutions.get(item.index) ?? "skip"}
+                  onChangeResolution={(a) =>
+                    setResolution(item.index, a)
+                  }
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Dialog>
   );
 }
 

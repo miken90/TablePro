@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { save as dialogSave } from "@tauri-apps/plugin-dialog";
-import { X, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { exportConnections } from "../../ipc/commands";
 import { extractErrorMessage } from "../../ipc/error";
 import type { SavedConnection } from "../../types/connection";
+import { Dialog } from "../ui";
 
 interface ConnectionExportDialogProps {
   connections: SavedConnection[];
@@ -25,14 +26,6 @@ export function ConnectionExportDialog({
   const [passphrase, setPassphrase] = useState("");
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [exporting, setExporting] = useState(false);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   const toggleId = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -81,29 +74,21 @@ export function ConnectionExportDialog({
   }, [selectedIds, includeCredentials, passphrase, onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      title={t("connection.export.title")}
+      size="sm"
+      actions={[{
+        label: exporting ? t("common.loading") : t("common.export"),
+        onClick: () => void handleExport(),
+        disabled: !canExport,
+        loading: exporting,
+      }]}
     >
-      <div
-        className="w-[440px] rounded-lg border border-border bg-surface-base shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-text-primary">
-            {t("connection.export.title")}
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-text-muted hover:bg-surface-muted hover:text-text-primary"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
+      <div className="space-y-3">
         {/* Connection list */}
-        <div className="max-h-[280px] overflow-y-auto px-4 py-3">
+        <div className="max-h-[280px] overflow-y-auto">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs text-text-secondary">
               {selectedIds.size} / {connections.length} selected
@@ -141,7 +126,7 @@ export function ConnectionExportDialog({
         </div>
 
         {/* Credentials option */}
-        <div className="border-t border-border px-4 py-3">
+        <div className="border-t border-border-subtle pt-3">
           <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
@@ -187,24 +172,7 @@ export function ConnectionExportDialog({
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-          <button
-            onClick={onClose}
-            className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={!canExport}
-            className="rounded bg-accent-blue px-3 py-1.5 text-xs text-white hover:bg-accent-blue/90 disabled:opacity-50"
-          >
-            {exporting ? t("common.loading") : t("common.export")}
-          </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
