@@ -62,9 +62,7 @@ describe('B2 — text-muted is content-free', () => {
     { file: '../components/ai/ai-code-block.tsx', line: 33, reason: 'icon-only copy button, hover to accent-blue (semantic)' },
     { file: '../components/ai/ai-code-block.tsx', line: 42, reason: 'icon-only insert button' },
     { file: '../components/connection/connection-status-indicator.tsx', line: 6, reason: 'status dot background fill for the disconnected state, not text' },
-    { file: '../components/connection/connection-export-dialog.tsx', line: 99, reason: 'icon-only close button' },
-    { file: '../components/connection/connection-export-dialog.tsx', line: 152, reason: 'decorative Lock icon' },
-    { file: '../components/connection/connection-import-dialog.tsx', line: 184, reason: 'icon-only close button' },
+    { file: '../components/connection/connection-export-dialog.tsx', line: 137, reason: 'decorative Lock icon' },
     { file: '../components/connection/ConnectionGroupSection.tsx', line: 77, reason: 'icon-only expand/collapse chevron button' },
     { file: '../components/connection/ConnectionGroupSection.tsx', line: 109, reason: 'icon-only menu-trigger button' },
     { file: '../components/editor/EditorTabBar.tsx', line: 243, reason: 'icon-only new-tab button' },
@@ -84,8 +82,6 @@ describe('B2 — text-muted is content-free', () => {
     { file: '../components/layout/StatusBar.tsx', line: 65, reason: 'status dot background fill, not text' },
     { file: '../components/layout/Toolbar.tsx', line: 215, reason: 'icon-only disconnect button, hover to accent-red (semantic danger)' },
     { file: '../components/procedures/sidebar-routine-node.tsx', line: 75, reason: 'decorative routine-kind glyph' },
-    { file: '../components/procedures/procedure-source-panel.tsx', line: 123, reason: 'icon-only close button' },
-    { file: '../components/shared/about-dialog.tsx', line: 50, reason: 'icon-only close button' },
   ];
 
   it('every remaining text-muted line is disabled, decorative, or explicitly allowed', () => {
@@ -126,7 +122,7 @@ describe('M10 — hover:bg-surface-hover / hover:bg-surface-muted pair with prim
   const ALLOWED: Array<{ file: string; line: number; reason: string }> = [
     { file: '../components/grid/grid-header.tsx', line: 82, reason: 'header cell container; name is already primary, type carries its own group-hover:text-primary' },
     { file: '../components/history/HistoryPanel.tsx', line: 129, reason: 'entry row container; query text already renders at text-primary' },
-    { file: '../components/connection/connection-export-dialog.tsx', line: 124, reason: 'row container; name already primary, host:port carries group-hover:text-primary' },
+    { file: '../components/connection/connection-export-dialog.tsx', line: 109, reason: 'row container; name already primary, host:port carries group-hover:text-primary' },
     { file: '../components/connection/ConnectionGroupSection.tsx', line: 74, reason: 'group header container; name already primary, count carries group-hover:text-primary' },
     { file: '../components/editor/explain-node.tsx', line: 24, reason: 'row container; operation name already primary, detail at text-secondary (AA-compliant on bg-muted)' },
     { file: '../components/history/HistoryPanel.tsx', line: 92, reason: 'icon-only clear-all button, hover to red (semantic danger), not primary' },
@@ -135,6 +131,7 @@ describe('M10 — hover:bg-surface-hover / hover:bg-surface-muted pair with prim
     { file: '../components/layout/Sidebar.tsx', line: 328, reason: 'row container; connection name already renders at text-primary' },
     { file: '../components/layout/Toolbar.tsx', line: 202, reason: 'icon-only reconnect button, hover to accent-yellow (semantic warning), not primary' },
     { file: '../components/layout/Toolbar.tsx', line: 215, reason: 'icon-only disconnect button, hover to accent-red (semantic danger), not primary' },
+    { file: '../components/grid/bulk-delete-dialog.tsx', line: 181, reason: 'icon-only remove-filter button, hover to accent-red (semantic danger), not primary' },
   ];
 
   it('every remaining hover-bg line pairs with primary text or is explicitly allowed', () => {
