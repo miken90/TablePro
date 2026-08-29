@@ -159,7 +159,7 @@ Large result sets are paginated. Configure page size in **Settings** > **General
 
 ## NULL Values and Display
 
-NULL values render as a dimmed, italic `NULL` in every row state. Settings → General has a "NULL display text" field, but the grid does not currently read it — the cell always shows the literal string `NULL` regardless of what's configured there.
+NULL values render as a dimmed, italic label in every row state, using the "NULL display text" configured in **Settings** > **General**. Leaving that field blank falls back to the default `NULL` — the cell never renders empty, since an empty NULL cell would be indistinguishable from an empty-string value.
 
 ## MongoDB Collections
 

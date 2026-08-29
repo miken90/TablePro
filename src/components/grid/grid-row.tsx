@@ -111,18 +111,20 @@ function CellContent({
   fkColumns,
   onFkNavigate,
   changeType,
+  nullDisplay,
 }: {
   cellValue: string | null;
   col: ColumnInfo;
   fkColumns?: Record<string, FkRef>;
   onFkNavigate?: GridRowProps['onFkNavigate'];
   changeType?: 'modified' | 'inserted' | 'deleted';
+  nullDisplay: string;
 }) {
   if (cellValue === null) {
     if (changeType === 'inserted' && col.isPrimaryKey) {
       return <span className="text-[10px] font-mono text-green-500 bg-green-500/10 px-1 rounded select-none">(auto)</span>;
     }
-    return <NullBadge />;
+    return <NullBadge text={nullDisplay} />;
   }
 
   // A single cell can hold a multi-megabyte value (BLOB, large JSON). The
@@ -180,7 +182,7 @@ export const GridRow = React.memo(function GridRow({
   changeType,
   cellOverrideValues,
   editingCell,
-  nullDisplay: _nullDisplay,
+  nullDisplay,
   virtualTop,
   enumValuesByColumn,
   fkColumns,
@@ -284,6 +286,7 @@ export const GridRow = React.memo(function GridRow({
                 fkColumns={fkColumns}
                 onFkNavigate={onFkNavigate}
                 changeType={changeType}
+                nullDisplay={nullDisplay}
               />
             )}
           </div>
