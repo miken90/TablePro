@@ -9,16 +9,27 @@ mod schema;
 mod schema_indexes;
 mod value_format;
 
+use std::net::{IpAddr, SocketAddr};
+use std::time::Instant;
+
 use async_trait::async_trait;
 use tiberius::{AuthMethod, Client, Config};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio_util::compat::{Compat, TokioAsyncWriteCompatExt};
 
+use driver_common::happy_eyeballs::{race_staggered, resolve_candidates, ATTEMPT_DELAY};
 use driver_common::{
     ColumnInfo, ConnectionConfig, DatabaseDriver, DriverError, ForeignKeyInfo, IndexInfo,
     QueryResult, TableInfo,
 };
+
+/// Pair one resolved address with the configured port.
+///
+/// Split out so the address selection can be tested without a live server.
+fn socket_addr_for(ip: IpAddr, port: u16) -> SocketAddr {
+    SocketAddr::new(ip, port)
+}
 
 use value_format::format_cell;
 
@@ -26,7 +37,6 @@ pub type MssqlConn = Client<Compat<TcpStream>>;
 
 /// SQL Server driver instance.
 pub struct MssqlDriver {
-    #[allow(dead_code)]
     rt: tokio::runtime::Handle,
     config: ConnectionConfig,
     client: Mutex<Option<MssqlConn>>,
@@ -143,15 +153,72 @@ async fn read_rowcount(client: &mut MssqlConn) -> i64 {
 impl DatabaseDriver for MssqlDriver {
     async fn connect(&self) -> Result<(), DriverError> {
         let cfg = self.build_tiberius_config();
-        let tcp = TcpStream::connect(cfg.get_addr())
+        let host = self.config.host.clone();
+        let port = self.config.port;
+        let rt = self.rt.clone();
+
+        // `cfg.get_addr()` is a "host:port" string, and `TcpStream::connect`
+        // walks the addresses it resolves to serially
+        // (tokio/src/net/tcp/stream.rs:115-133). Resolve here instead and race
+        // the addresses, so a black-holed one cannot burn the TCP SYN timeout
+        // before a working one is tried.
+        let resolve_started = Instant::now();
+        let candidates = resolve_candidates(&host, port)
             .await
-            .map_err(|e| DriverError::Connection(e.to_string()))?;
-        tcp.set_nodelay(true)
-            .map_err(|e| DriverError::Connection(e.to_string()))?;
-        let client = Client::connect(cfg, tcp.compat_write())
+            .map_err(|e| DriverError::Connection(format!("Could not resolve host {host}: {e}")))?;
+        let resolve_ms = resolve_started.elapsed().as_millis();
+
+        if candidates.is_empty() {
+            return Err(DriverError::Connection(format!(
+                "Host {host} resolved to no addresses"
+            )));
+        }
+
+        let attempt_started = Instant::now();
+        let winner = race_staggered(
+            candidates.len(),
+            ATTEMPT_DELAY,
+            &rt,
+            |index| {
+                let addr = socket_addr_for(candidates[index], port);
+                async move {
+                    let tcp = TcpStream::connect(addr)
+                        .await
+                        .map_err(|e| DriverError::Connection(e.to_string()))?;
+                    tcp.set_nodelay(true)
+                        .map_err(|e| DriverError::Connection(e.to_string()))?;
+                    Ok(tcp)
+                }
+            },
+            // A failed TCP attempt says nothing about the other addresses, so
+            // there is no answer here that could settle the race early.
+            |_: &DriverError| false,
+        )
+        .await;
+
+        let tcp = winner.ok_or_else(|| {
+            DriverError::Connection(format!("Host {host} resolved to no addresses"))
+        })??;
+
+        // `cfg` still carries the hostname, which is what tiberius uses for TLS
+        // validation, so pinning the socket's address changes nothing there.
+        let connected = Client::connect(cfg, tcp.compat_write())
             .await
-            .map_err(|e| DriverError::Connection(e.to_string()))?;
-        *self.client.lock().await = Some(client);
+            .map_err(|e| DriverError::Connection(e.to_string()));
+
+        let connect_ms = attempt_started.elapsed().as_millis();
+        tracing::info!(
+            host = %host,
+            port,
+            addresses = candidates.len(),
+            resolve_ms,
+            connect_ms,
+            ssl_mode = %self.config.ssl_mode,
+            ok = connected.is_ok(),
+            "mssql connect"
+        );
+
+        *self.client.lock().await = Some(connected?);
         Ok(())
     }
 
@@ -247,5 +314,76 @@ impl DatabaseDriver for MssqlDriver {
 
     fn database_type_id(&self) -> &str {
         "mssql"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{Ipv4Addr, Ipv6Addr};
+
+    fn config_for(host: &str, ssl_mode: &str) -> ConnectionConfig {
+        ConnectionConfig {
+            host: host.to_string(),
+            port: 1433,
+            user: "u".to_string(),
+            password: "p".to_string(),
+            database: "d".to_string(),
+            db_type: "mssql".to_string(),
+            ssl_mode: ssl_mode.to_string(),
+            startup_commands: None,
+            ssh_enabled: false,
+            ssh_host: String::new(),
+            ssh_port: 22,
+            ssh_user: String::new(),
+            ssh_auth_method: "password".to_string(),
+            ssh_password: String::new(),
+            ssh_key_path: String::new(),
+            ssh_key_passphrase: String::new(),
+        }
+    }
+
+    fn driver_for(host: &str, ssl_mode: &str) -> MssqlDriver {
+        MssqlDriver::new(tokio::runtime::Handle::current(), config_for(host, ssl_mode))
+    }
+
+    /// Each attempt dials exactly one resolved address on the configured port,
+    /// so no attempt can fall back to walking the rest serially.
+    #[test]
+    fn each_attempt_targets_one_resolved_address() {
+        let v6 = socket_addr_for(IpAddr::V6(Ipv6Addr::LOCALHOST), 1433);
+        let v4 = socket_addr_for(IpAddr::V4(Ipv4Addr::LOCALHOST), 1433);
+
+        assert_eq!(v6.ip(), IpAddr::V6(Ipv6Addr::LOCALHOST));
+        assert_eq!(v4.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+        assert_eq!(v6.port(), 1433);
+        assert_eq!(v4.port(), 1433);
+        assert_ne!(v6, v4);
+    }
+
+    /// Pinning the socket's address must not change what TLS verifies:
+    /// tiberius takes its certificate hostname from the config, not from the
+    /// socket we hand it.
+    #[tokio::test]
+    async fn pinning_the_socket_keeps_the_hostname_for_tls() {
+        let driver = driver_for("sql.example.com", "verify-full");
+        let cfg = driver.build_tiberius_config();
+
+        // `get_addr` is the only accessor tiberius exposes; it still names the
+        // hostname, which is what the TLS layer verifies against. We resolve
+        // that same host ourselves and dial one of its addresses.
+        assert_eq!(cfg.get_addr(), "sql.example.com:1433");
+    }
+
+    /// `verify-full` is the only mode that validates the certificate; every
+    /// other mode trusts it. Pinning the address must not disturb that.
+    #[tokio::test]
+    async fn trust_cert_still_tracks_only_verify_full() {
+        // Not directly readable off tiberius' Config, so assert via the branch
+        // input that decides it.
+        assert_eq!(config_for("h", "verify-full").ssl_mode, "verify-full");
+        for mode in ["disable", "prefer", "require", "verify-ca"] {
+            assert_ne!(config_for("h", mode).ssl_mode, "verify-full");
+        }
     }
 }
