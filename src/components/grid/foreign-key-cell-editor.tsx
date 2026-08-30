@@ -152,10 +152,13 @@ export function ForeignKeyCellEditor({
     setActiveIndex(0);
   }, [searchText]);
 
-  // Autofocus input
+  // Autofocus input. `preventScroll` for the same reason as the plain cell
+  // editor: this popover sits in the grid's horizontal scroll container and is
+  // wider than the cell it replaces, so letting the browser scroll it into
+  // view drags the grid sideways.
   useEffect(() => {
     if (!isLoading && searchInputRef.current) {
-      searchInputRef.current.focus();
+      searchInputRef.current.focus({ preventScroll: true });
     }
   }, [isLoading]);
 

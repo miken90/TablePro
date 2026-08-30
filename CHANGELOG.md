@@ -28,6 +28,8 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- Double-clicking a cell no longer slides the results grid sideways. Opening the inline editor focuses its input, and the browser scrolls a newly focused element into view — so on a table wider than the viewport, editing a cell near the edge dragged the whole grid across. The editor now takes focus without scrolling. Keyboard navigation still scrolls the active cell into view; it always did that itself, and unlike the browser it accounts for the pinned row-number column.
+
 - Connecting to a PostgreSQL server by hostname no longer stalls for around 21 seconds when the host resolves to more than one address and the first one does not answer. On Windows `localhost` resolves to `::1` before `127.0.0.1`, and a server reachable only over IPv4 — a WSL2 or Docker port proxy, typically — drops the IPv6 connection silently rather than refusing it, so the driver waited out the operating system's full TCP SYN timeout before trying the address that works. Addresses are now tried 250 ms apart and the first to answer wins: the same connection that took 21.1 s takes 0.3 s. A server that answers and rejects the credentials reports that immediately instead of waiting for the dead address to time out.
 
 - MySQL and SQL Server connections get the same protection against a hostname whose first address does not answer. Both handed the hostname to a connect call that walks the resolved addresses one at a time; they now resolve first and race the addresses 250 ms apart, as PostgreSQL does. MongoDB and Redis already raced addresses inside their own client libraries and are unchanged. SQLite opens a file, not a socket.

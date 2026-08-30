@@ -80,7 +80,13 @@ export function CellEditor({
 
   useEffect(() => {
     if (autoFocus && inputRef.current) {
-      inputRef.current.focus();
+      // The grid scrolls horizontally, and focusing an element makes the
+      // browser scroll it into view. A cell clipped by the viewport edge would
+      // therefore drag the whole grid sideways the moment its editor mounted.
+      // The grid does its own scroll-into-view for keyboard navigation
+      // (`use-grid-keyboard`), which — unlike the browser — accounts for the
+      // sticky row-number columns, so this must not scroll at all.
+      inputRef.current.focus({ preventScroll: true });
       if (trigger !== 'click' && "select" in inputRef.current && typeof inputRef.current.select === "function") {
         inputRef.current.select();
       }
