@@ -81,7 +81,7 @@ Verified by direct code reading, not inferred from upstream history.
    test instead of shipping again.
 
 5. **PK-less tables save by matching on every column, not just a primary
-   key.** `src/components/grid/hooks/use-change-tracking.ts:117-118`:
+   key.** `src/components/grid/hooks/use-change-tracking.ts:119-120`:
    `const primaryKeys = detectedPks.length > 0 ? detectedPks : columns;` — when
    no column carries `isPrimaryKey`, the generated UPDATE/DELETE `WHERE`
    clause matches on the full row (every column's current value) instead of
