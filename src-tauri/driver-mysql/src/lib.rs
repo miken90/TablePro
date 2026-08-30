@@ -10,16 +10,37 @@ mod schema_indexes;
 mod schema_tables;
 
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Instant;
 
 use async_trait::async_trait;
 use mysql_async::prelude::Queryable;
 use mysql_async::{Conn, OptsBuilder, SslOpts};
 use tokio::sync::Mutex;
 
+use driver_common::happy_eyeballs::{race_staggered, resolve_candidates, ATTEMPT_DELAY};
 use driver_common::{
     ColumnInfo, ConnectionConfig, DatabaseDriver, DriverError, ForeignKeyInfo, IndexInfo,
     QueryResult, TableInfo,
 };
+
+/// One address's failure, plus whether a server answered before it.
+struct AttemptError {
+    error: DriverError,
+    /// True when the MySQL server replied and rejected us. Such an answer is
+    /// final, so the remaining addresses need not be waited on.
+    answered: bool,
+}
+
+impl AttemptError {
+    fn from_mysql(e: mysql_async::Error) -> Self {
+        Self {
+            // `Error::Server` is the server's own error packet: it proves this
+            // address reached a real MySQL server.
+            answered: matches!(e, mysql_async::Error::Server(_)),
+            error: DriverError::Connection(e.to_string()),
+        }
+    }
+}
 
 /// MySQL driver instance.
 ///
@@ -27,7 +48,6 @@ use driver_common::{
 /// `tokio::sync::Mutex`. `mysql_async::Conn` requires `&mut` access for
 /// queries, so the `with_conn!` macro locks mutably.
 pub struct MysqlDriver {
-    #[allow(dead_code)]
     rt: tokio::runtime::Handle,
     pub(crate) config: ConnectionConfig,
     conn: Mutex<Option<Conn>>,
@@ -111,10 +131,62 @@ impl DatabaseDriver for MysqlDriver {
         // mysql_async speaks TLS through rustls; without an installed crypto
         // provider the handshake panics instead of returning an error.
         driver_common::ensure_crypto_provider();
-        let opts = self.build_opts();
-        let conn = Conn::new(opts)
+
+        let host = self.config.host.clone();
+        let port = self.config.port;
+        let rt = self.rt.clone();
+        let base = self.build_opts();
+
+        // Resolve first, then race the addresses. `mysql_async` hands the
+        // hostname to `TcpStream::connect`, which walks the resolved addresses
+        // serially, so a black-holed address costs the full TCP SYN timeout
+        // before a working one is tried.
+        let resolve_started = Instant::now();
+        let candidates = resolve_candidates(&host, port)
             .await
-            .map_err(|e| DriverError::Connection(e.to_string()))?;
+            .map_err(|e| DriverError::Connection(format!("Could not resolve host {host}: {e}")))?;
+        let resolve_ms = resolve_started.elapsed().as_millis();
+
+        if candidates.is_empty() {
+            return Err(DriverError::Connection(format!(
+                "Host {host} resolved to no addresses"
+            )));
+        }
+
+        let attempt_started = Instant::now();
+        let outcome = race_staggered(
+            candidates.len(),
+            ATTEMPT_DELAY,
+            &rt,
+            |index| {
+                // `resolved_ips` pins which address this attempt dials.
+                // `ip_or_hostname` is left alone, and that is what supplies the
+                // TLS hostname, so the verification posture is unchanged.
+                let opts = base.clone().resolved_ips(Some(vec![candidates[index]]));
+                async move { Conn::new(opts).await.map_err(AttemptError::from_mysql) }
+            },
+            |attempt| attempt.answered,
+        )
+        .await;
+
+        let connect_ms = attempt_started.elapsed().as_millis();
+        tracing::info!(
+            host = %host,
+            port,
+            addresses = candidates.len(),
+            resolve_ms,
+            connect_ms,
+            ssl_mode = %self.config.ssl_mode,
+            ok = outcome.as_ref().is_some_and(|r| r.is_ok()),
+            "mysql connect"
+        );
+
+        let conn = outcome
+            .ok_or_else(|| {
+                DriverError::Connection(format!("Host {host} resolved to no addresses"))
+            })?
+            .map_err(|attempt| attempt.error)?;
+
         self.connection_id.store(conn.id(), Ordering::SeqCst);
         *self.conn.lock().await = Some(conn);
         Ok(())
@@ -198,6 +270,73 @@ impl DatabaseDriver for MysqlDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+    fn config_for(host: &str, ssl_mode: &str) -> ConnectionConfig {
+        ConnectionConfig {
+            host: host.to_string(),
+            port: 3306,
+            user: "u".to_string(),
+            password: "p".to_string(),
+            database: "d".to_string(),
+            db_type: "mysql".to_string(),
+            ssl_mode: ssl_mode.to_string(),
+            startup_commands: None,
+            ssh_enabled: false,
+            ssh_host: String::new(),
+            ssh_port: 22,
+            ssh_user: String::new(),
+            ssh_auth_method: "password".to_string(),
+            ssh_password: String::new(),
+            ssh_key_path: String::new(),
+            ssh_key_passphrase: String::new(),
+        }
+    }
+
+    fn driver_for(host: &str, ssl_mode: &str) -> MysqlDriver {
+        MysqlDriver::new(tokio::runtime::Handle::current(), config_for(host, ssl_mode))
+    }
+
+    /// Pinning the address must not change what the TLS layer verifies:
+    /// `mysql_async` takes its TLS hostname from `ip_or_hostname`, not from
+    /// `resolved_ips` (`mysql_async/src/conn/mod.rs:554-557`).
+    #[tokio::test]
+    async fn pinning_an_address_keeps_the_hostname_for_tls() {
+        let driver = driver_for("db.example.com", "verify-full");
+        let pinned = driver
+            .build_opts()
+            .resolved_ips(Some(vec![IpAddr::V4(Ipv4Addr::new(10, 0, 0, 7))]));
+        let opts: mysql_async::Opts = pinned.into();
+
+        assert_eq!(opts.ip_or_hostname(), "db.example.com");
+        assert_eq!(
+            opts.resolved_ips(),
+            &Some(vec![IpAddr::V4(Ipv4Addr::new(10, 0, 0, 7))])
+        );
+        let ssl = opts.ssl_opts().expect("verify-full must use TLS");
+        assert!(!ssl.accept_invalid_certs());
+        assert!(!ssl.skip_domain_validation());
+    }
+
+    /// One attempt per address, each pinned to exactly one address, so no
+    /// attempt can fall back to serially walking the rest.
+    #[tokio::test]
+    async fn each_attempt_is_pinned_to_a_single_address() {
+        let driver = driver_for("localhost", "disable");
+        let candidates = [
+            IpAddr::V6(Ipv6Addr::LOCALHOST),
+            IpAddr::V4(Ipv4Addr::LOCALHOST),
+        ];
+
+        for candidate in candidates {
+            let opts: mysql_async::Opts = driver
+                .build_opts()
+                .resolved_ips(Some(vec![candidate]))
+                .into();
+            assert_eq!(opts.resolved_ips(), &Some(vec![candidate]));
+            assert_eq!(opts.ip_or_hostname(), "localhost");
+        }
+    }
 
     #[test]
     fn ssl_mode_disable_uses_no_tls() {
