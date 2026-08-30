@@ -38,6 +38,8 @@ interface ResultPanelProps {
   quickSearchColumns?: ColumnInfo[];
   onRowSelect?: (rowIndex: number | null) => void;
   onOpenQueryEditor?: () => void;
+  /** Mongo/document engines can't stage a bulk row delete the way SQL tables can. */
+  isDocumentDb?: boolean;
   /** Ref that receives the direct save function (bypasses confirm dialog). */
   onSaveRef?: MutableRefObject<(() => Promise<void>) | null>;
   /** Ref that receives the save-with-confirmation function. */
@@ -53,7 +55,7 @@ interface ResultPanelProps {
 export function ResultPanel({
   tabId, tableName, schema, sessionId,
   activeWhereClause, quickSearchColumns = [],
-  onRowSelect: onRowSelectProp, onOpenQueryEditor, onSaveRef, onRequestSaveRef, onAddRowRef,
+  onRowSelect: onRowSelectProp, onOpenQueryEditor, isDocumentDb = false, onSaveRef, onRequestSaveRef, onAddRowRef,
   onDeleteSelectedRef, onClearSelectionRef,
 }: ResultPanelProps) {
   const queryResult = useQueryStore((s) => s.result);
@@ -425,6 +427,9 @@ export function ResultPanel({
         onExport={() => setShowExport(true)}
         onOpenQueryEditor={onOpenQueryEditor}
         onRefresh={isTableMode ? handleRefreshTable : undefined}
+        selectedRowCount={isTableMode ? selectedRows.size : 0}
+        onDeleteSelected={isTableMode && !isDocumentDb ? deleteContextRows : undefined}
+        onDeselectAll={isTableMode ? resetSelection : undefined}
       />
       <div className="flex-1 overflow-hidden flex flex-col">
         {loading && (

@@ -51,7 +51,6 @@ export function WorkspaceBody({
   const activeTab = useEditorStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const view = resolveWorkspaceView(activeTab, engine);
 
-  const selectedRowCount = useLayoutStore((s) => s.selectedRowCount);
   const editorHeightPercent = useLayoutStore((s) => s.editorHeightPercent);
   const filterVisible = useLayoutStore((s) => s.filterVisible);
   const filterColumns = useLayoutStore((s) => s.filterColumns);
@@ -98,9 +97,6 @@ export function WorkspaceBody({
         <>
           <ContextualBar
             onAddRow={engine.isDocumentDb ? undefined : () => addRowRef.current?.()}
-            selectedRowCount={selectedRowCount}
-            onDeleteSelected={engine.isDocumentDb ? undefined : () => deleteSelectedRef.current?.()}
-            onDeselectAll={() => clearSelectionRef.current?.()}
           />
           {filterVisible && (
             <FilterPanel
@@ -119,6 +115,7 @@ export function WorkspaceBody({
               quickSearchColumns={filterColumns}
               onRowSelect={onRowSelect}
               onOpenQueryEditor={() => activateQueryTab()}
+              isDocumentDb={engine.isDocumentDb}
               onSaveRef={pendingSaveRef}
               onRequestSaveRef={requestSaveRef}
               onAddRowRef={addRowRef}

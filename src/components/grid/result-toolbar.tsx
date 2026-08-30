@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Code2, Loader2, RefreshCw } from 'lucide-react';
+import { Download, Code2, Loader2, RefreshCw, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ColumnInfo, QueryResult } from '../../types/query';
 import { useConnectionStore } from '../../stores/connectionStore';
@@ -27,6 +27,13 @@ interface ResultToolbarProps {
   onExport: () => void;
   onOpenQueryEditor?: () => void;
   onRefresh?: () => void;
+  /** Number of currently selected rows. Renders inline in this row — never a
+   *  new sibling row — so selecting/deselecting never shifts the grid. */
+  selectedRowCount?: number;
+  /** Callback to delete the selected rows (stages them as pending changes). */
+  onDeleteSelected?: () => void;
+  /** Callback to clear current row selection. */
+  onDeselectAll?: () => void;
 }
 
 export function ResultToolbar({
@@ -46,6 +53,9 @@ export function ResultToolbar({
   onExport,
   onOpenQueryEditor,
   onRefresh,
+  selectedRowCount = 0,
+  onDeleteSelected,
+  onDeselectAll,
 }: ResultToolbarProps) {
   const { t } = useTranslation();
   const selectedConnectionId = useConnectionStore((s) => s.selectedConnectionId);
@@ -114,6 +124,12 @@ export function ResultToolbar({
         </button>
       )}
 
+      {selectedRowCount > 0 && (
+        <span className="ml-2 text-[10px] font-medium text-accent-blue">
+          {selectedRowCount} {selectedRowCount === 1 ? 'row' : 'rows'} selected
+        </span>
+      )}
+
       {onQuickSearch && onQuickSearchClear && (
         <QuickSearchBar
           columns={quickSearchColumns}
@@ -148,6 +164,30 @@ export function ResultToolbar({
           >
             <RefreshCw size={10} />
           </button>
+        )}
+        {selectedRowCount > 0 && (
+          <>
+            {onDeleteSelected && (
+              <button
+                onClick={onDeleteSelected}
+                className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-red-200 dark:border-red-700"
+                title={`Delete ${selectedRowCount} selected row${selectedRowCount > 1 ? 's' : ''}`}
+              >
+                <Trash2 size={10} />
+                Delete
+              </button>
+            )}
+            {onDeselectAll && (
+              <button
+                onClick={onDeselectAll}
+                className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-muted hover:text-text-primary"
+                title="Deselect all"
+              >
+                <X size={10} />
+                Deselect
+              </button>
+            )}
+          </>
         )}
         {result && (
           <>

@@ -8,6 +8,13 @@
  *
  * P8 (Q9) moved the FilterPanel host and filter toggle out of this bar and
  * into the single workspace-level mount, toggled only from the status bar.
+ *
+ * Selected-row actions (count, delete selected, deselect all) used to render
+ * as a second, conditional row here that appeared/disappeared with
+ * `selectedRowCount`, shifting every grid row below it by one row height on
+ * every select/deselect. They now live inline in the always-present
+ * `ResultToolbar` row instead, so this bar can never grow a conditional
+ * sibling above the grid again.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -40,14 +47,29 @@ describe('contextual bar', () => {
     expect(source('components/layout/workspace-body.tsx')).not.toContain('onSave={');
   });
 
-  it('keeps add row, delete selected and deselect all', () => {
-    const text = bar();
-    expect(text).toContain('onAddRow');
-    expect(text).toContain('onDeleteSelected');
-    expect(text).toContain('onDeselectAll');
+  it('keeps add row', () => {
+    expect(bar()).toContain('onAddRow');
   });
 
   it('no longer hosts a FilterPanel — that moved to the single workspace mount', () => {
     expect(bar()).not.toContain('<FilterPanel');
+  });
+
+  it('never renders a conditional row that could shift the grid below it', () => {
+    const text = bar();
+    expect(text).not.toContain('selectedRowCount');
+    expect(text).not.toContain('onDeleteSelected');
+    expect(text).not.toContain('onDeselectAll');
+    expect(text).not.toMatch(/rows? selected/i);
+  });
+
+  it('carries the selected-row actions inside the always-present result toolbar row instead', () => {
+    const toolbar = source('components/grid/result-toolbar.tsx');
+    expect(toolbar).toContain('selectedRowCount');
+    expect(toolbar).toContain('onDeleteSelected');
+    expect(toolbar).toContain('onDeselectAll');
+    // Exactly one root element (`role="tablist"`) is returned — the selection
+    // controls sit inside it rather than a second returned sibling.
+    expect(toolbar.match(/role="tablist"/g)).toHaveLength(1);
   });
 });
