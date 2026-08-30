@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, Key } from 'lucide-react';
+import { NullBadge } from '../grid/cell-formatters/null-badge';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 interface FieldRowProps {
   name: string;
@@ -18,6 +20,9 @@ function isBoolType(typeName: string): boolean {
 }
 
 export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps) {
+  // Same setting the grid renders NULL cells with — the Inspector shows the
+  // same values and must not disagree with the cell the user clicked.
+  const nullDisplay = useSettingsStore((s) => s.settings.nullDisplay);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const isLong = value !== null && value.length > 100;
@@ -26,12 +31,12 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
 
   const renderValue = () => {
     if (value === null) {
-      return <span className="italic text-zinc-400 dark:text-zinc-500">NULL</span>;
+      return <NullBadge text={nullDisplay} />;
     }
     if (isBool) {
       const checked = value === 'true' || value === '1' || value === 't';
       return (
-        <span className="flex items-center gap-1 text-xs text-zinc-700 dark:text-zinc-300">
+        <span className="flex items-center gap-1 text-ui-xs text-text-primary">
           <input type="checkbox" checked={checked} readOnly className="pointer-events-none h-3 w-3" />
           {value}
         </span>
@@ -42,7 +47,7 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
       return (
         <button
           onClick={() => isLong && setExpanded((v) => !v)}
-          className={`text-left font-mono text-xs text-zinc-700 dark:text-zinc-300 ${isLong ? 'cursor-pointer hover:text-blue-600 dark:hover:text-blue-400' : 'cursor-default'}`}
+          className={`text-left font-mono text-ui-xs text-text-primary ${isLong ? 'cursor-pointer hover:text-accent-blue' : 'cursor-default'}`}
         >
           {display}
         </button>
@@ -52,10 +57,10 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
       return (
         <button
           onClick={() => setExpanded(true)}
-          className="text-left text-xs text-zinc-700 hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400"
+          className="text-left text-ui-xs text-text-primary hover:text-accent-blue"
         >
           {value.slice(0, 100)}
-          <span className="text-zinc-400">...</span>
+          <span className="text-text-muted">...</span>
         </button>
       );
     }
@@ -63,30 +68,30 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
       return (
         <button
           onClick={() => setExpanded(false)}
-          className="text-left text-xs text-zinc-700 hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400 break-all"
+          className="text-left text-ui-xs text-text-primary hover:text-accent-blue break-all"
         >
           {value}
         </button>
       );
     }
-    return <span className="text-xs text-zinc-700 dark:text-zinc-300">{value}</span>;
+    return <span className="text-ui-xs text-text-primary">{value}</span>;
   };
 
   return (
-    <div className="group flex items-start gap-2 border-b border-zinc-100 px-3 py-1.5 dark:border-zinc-800">
+    <div className="group flex items-start gap-2 border-b border-border-subtle px-3 py-1.5">
       <div className="flex min-w-0 shrink-0 items-center gap-1" style={{ width: '40%' }}>
-        {isPrimaryKey && <Key size={10} className="shrink-0 text-amber-500" />}
-        <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-400" title={name}>
+        {isPrimaryKey && <Key size={10} className="shrink-0 text-grid-pk-fg" />}
+        <span className="truncate text-ui-xs font-medium text-text-secondary" title={name}>
           {name}
         </span>
-        <span className="shrink-0 rounded bg-zinc-100 px-1 py-px text-[10px] text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
+        <span className="shrink-0 rounded bg-surface-muted px-1 py-px text-ui-2xs text-text-muted">
           {typeName}
         </span>
       </div>
-      <div className="min-w-0 flex-1 overflow-hidden text-xs flex items-start gap-1">
+      <div className="min-w-0 flex-1 overflow-hidden text-ui-xs flex items-start gap-1">
         <div className="flex-1 min-w-0">{renderValue()}</div>
         <button
-          className="opacity-0 group-hover:opacity-100 p-0.5 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 shrink-0"
+          className="opacity-0 group-hover:opacity-100 p-0.5 text-text-muted hover:text-text-primary shrink-0"
           onClick={(e) => {
             e.stopPropagation();
             navigator.clipboard.writeText(value === null ? 'NULL' : value);
@@ -95,7 +100,7 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
           }}
           title="Copy value"
         >
-          {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+          {copied ? <Check size={12} className="text-accent-green" /> : <Copy size={12} />}
         </button>
       </div>
     </div>

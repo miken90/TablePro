@@ -6,6 +6,7 @@ import type { RoutineParam, RoutineResult } from "../../ipc/commands";
 import * as commands from "../../ipc/commands";
 import { classifyError } from "../../ipc/error";
 import { Dialog, type DialogAction } from "../ui";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 interface ProcedureExecuteDialogProps {
   open: boolean;
@@ -49,6 +50,9 @@ export function ProcedureExecuteDialog({
   const [executing, setExecuting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedTsv, setCopiedTsv] = useState(false);
+  // The result table renders NULL the way the grid does, from the
+  // Settings > General "NULL display" text.
+  const nullDisplay = useSettingsStore((s) => s.settings.nullDisplay);
 
   useEffect(() => {
     if (open) {
@@ -123,11 +127,11 @@ export function ProcedureExecuteDialog({
     const rs = result?.resultSet;
     if (!rs || rs.columns.length === 0) return;
     const header = rs.columns.map((c) => c.name).join("\t");
-    const rows = rs.rows.map((row) => row.map((cell) => cell ?? "NULL").join("\t"));
+    const rows = rs.rows.map((row) => row.map((cell) => cell ?? nullDisplay).join("\t"));
     await navigator.clipboard.writeText([header, ...rows].join("\n"));
     setCopiedTsv(true);
     setTimeout(() => setCopiedTsv(false), 1500);
-  }, [result]);
+  }, [result, nullDisplay]);
 
   const updateParam = (index: number, field: "value" | "isNull", val: string | boolean) => {
     setParams((prev) =>
@@ -266,7 +270,7 @@ export function ProcedureExecuteDialog({
                       <tr key={ri} className="border-b border-border last:border-b-0">
                         {row.map((cell, ci) => (
                           <td key={ci} className={`whitespace-nowrap px-2 py-1 ${cell === null ? "italic text-grid-null-fg" : "text-text-primary"}`}>
-                            {cell ?? "NULL"}
+                            {cell ?? nullDisplay}
                           </td>
                         ))}
                       </tr>
