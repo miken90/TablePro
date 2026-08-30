@@ -213,6 +213,7 @@ export function ResultPanel({
   useEffect(() => {
     if (error && !isTableMode && error !== lastAutoSwitchedErrorRef.current) {
       lastAutoSwitchedErrorRef.current = error;
+      /* eslint-disable-next-line react-hooks/set-state-in-effect -- store-sourced error, ref-guarded so it fires once per distinct error */
       setActiveTab('messages');
     }
   }, [error, isTableMode]);
