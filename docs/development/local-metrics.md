@@ -69,7 +69,7 @@ UTF-8, one JSON object per line, newest last. Every record carries:
 |---|---|
 | `v` | Schema version. Currently `1`. Bumped when a field changes meaning. |
 | `ts` | ISO-8601 UTC timestamp of the write. |
-| `event` | `session`, `query`, or `query.paint`. |
+| `event` | `session`, `query`, `query.paint`, or `metadata`. |
 
 Source: `src/metrics/local-metrics.ts` (record assembly),
 `src-tauri/src/commands/metrics.rs` (append + rotation).
@@ -123,6 +123,22 @@ after the frame that painted it.
 
 Split from the `query` record because the value cannot be known until a frame
 later, and holding the whole record back would delay every other field.
+
+### `event: "metadata"`
+
+Written once per post-connect metadata load — tables, routines, and schemas,
+fetched concurrently as soon as a session has a database selected (initial
+connect, or switching database). No `connectionId`, matching every other
+record here.
+
+| Field | Meaning |
+|---|---|
+| `engine` | Driver id, or `null` when it cannot be resolved. |
+| `tablesMs` | Wall clock for `fetch_tables`. |
+| `routinesMs` | Wall clock for `fetch_routines`. `null` when the driver doesn't support routines — not measured, not skipped-as-zero. |
+| `schemasMs` | Wall clock for `fetch_schemas`. `null` when the driver doesn't support schemas. |
+| `totalMs` | Wall clock for the whole load — tables, routines, and schemas together, since they run concurrently rather than one after another. |
+| `parallel` | Always `true`. Distinguishes this record from a future sequential fallback, if one is ever reintroduced. |
 
 ## Keeping the cost low
 

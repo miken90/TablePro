@@ -164,6 +164,42 @@ export function recordFirstPaint(gen: number, startedAtMs: number): void {
   });
 }
 
+export interface MetadataLoadMetricsInput {
+  /** Driver id (`postgres`, `mysql`, …), or null when it cannot be resolved. */
+  engine: string | null;
+  tablesMs: number;
+  /** `null` when the driver doesn't support routines — not measured, not skipped-as-zero. */
+  routinesMs: number | null;
+  /** `null` when the driver doesn't support schemas — not measured, not skipped-as-zero. */
+  schemasMs: number | null;
+  /** Wall clock for the whole load: tables, routines, and schemas together. */
+  totalMs: number;
+}
+
+/**
+ * Record one post-connect metadata load — tables, routines, and schemas,
+ * fetched concurrently once a session has a database selected. No
+ * `connectionId`: only the engine and timings, matching every other record
+ * in this file.
+ */
+export function recordMetadataLoad(input: MetadataLoadMetricsInput): void {
+  try {
+    emit({
+      v: SCHEMA_VERSION,
+      ts: new Date().toISOString(),
+      event: "metadata",
+      engine: input.engine,
+      tablesMs: Math.round(input.tablesMs),
+      routinesMs: input.routinesMs === null ? null : Math.round(input.routinesMs),
+      schemasMs: input.schemasMs === null ? null : Math.round(input.schemasMs),
+      totalMs: Math.round(input.totalMs),
+      parallel: true,
+    });
+  } catch {
+    // Instrumentation failure must stay invisible to the user.
+  }
+}
+
 /**
  * Record session startup. Called after `createRoot().render()`; the value is
  * captured on the second animation frame, i.e. after the first painted frame.

@@ -64,7 +64,7 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     capabilities,
     fetchDatabases,
     fetchSchema,
-    fetchSchemas,
+    loadInitialMetadata,
     selectDatabase,
     setCurrentSchema,
     setCapabilities,
@@ -156,13 +156,17 @@ export function Sidebar({ onViewStructure, onOpenTable, onOpenPreviewTable }: Si
     }
   }, [sessionId, fetchDatabases]);
 
-  // Auto-select the initially connected database and load its tables + schemas
+  // Auto-select the initially connected database and load its tables,
+  // routines, and schemas — concurrently (`loadInitialMetadata`), as soon as
+  // the session and the connection's configured database are known. None of
+  // the three actually needs the *database list* fetched by the effect
+  // above, so this no longer waits for it to resolve and re-render first.
   useEffect(() => {
-    if (sessionId && databases.length > 0 && !selectedDatabase && configDatabase) {
+    if (sessionId && configDatabase && !selectedDatabase) {
       useSchemaStore.setState({ selectedDatabase: configDatabase });
-      fetchSchema(sessionId).then(() => fetchSchemas(sessionId));
+      void loadInitialMetadata(sessionId, dbType ?? null);
     }
-  }, [sessionId, databases, selectedDatabase, configDatabase, fetchSchema, fetchSchemas]);
+  }, [sessionId, configDatabase, selectedDatabase, dbType, loadInitialMetadata]);
 
   // When schema changes, clear expanded tables
   useEffect(() => {
