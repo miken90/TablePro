@@ -60,7 +60,7 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
           className="text-left text-ui-xs text-text-primary hover:text-accent-blue"
         >
           {value.slice(0, 100)}
-          <span className="text-text-muted">...</span>
+          <span className="text-text-muted" aria-hidden="true">...</span>
         </button>
       );
     }
@@ -84,7 +84,7 @@ export function FieldRow({ name, typeName, value, isPrimaryKey }: FieldRowProps)
         <span className="truncate text-ui-xs font-medium text-text-secondary" title={name}>
           {name}
         </span>
-        <span className="shrink-0 rounded bg-surface-muted px-1 py-px text-ui-2xs text-text-muted">
+        <span className="shrink-0 rounded bg-surface-muted px-1 py-px text-ui-2xs text-text-secondary">
           {typeName}
         </span>
       </div>

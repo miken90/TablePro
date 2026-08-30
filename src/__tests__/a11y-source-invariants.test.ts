@@ -72,6 +72,7 @@ describe('B2 — text-muted is content-free', () => {
     { file: '../components/history/HistoryPanel.tsx', line: 87, reason: 'decorative Clock icon' },
     { file: '../components/history/HistoryPanel.tsx', line: 92, reason: 'icon-only clear-all button, hover to red (semantic danger)' },
     { file: '../components/history/HistoryPanel.tsx', line: 138, reason: 'icon-only copy button, hover to blue (semantic)' },
+    { file: '../components/inspector/field-row.tsx', line: 94, reason: 'icon-only copy button, hover to primary; named by its title attribute' },
     { file: '../components/history/HistoryPanel.tsx', line: 152, reason: 'icon-only delete button, hover to red (semantic danger)' },
     { file: '../components/layout/sidebar-object-group.tsx', line: 29, reason: 'decorative chevron icon' },
     { file: '../components/layout/sidebar-object-group.tsx', line: 31, reason: 'decorative chevron icon' },
