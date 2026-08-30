@@ -47,6 +47,8 @@ export interface UseChangeTrackingReturn {
   handleSave: () => Promise<void>;
   /** The exact payload the write sends — the preview is built from this too. */
   buildSavePayload: () => SavePayload | null;
+  /** Whether `buildSavePayload` would return a payload, without building one. */
+  canSave: boolean;
   /** The page and sort the staged edits were made on, or null when nothing is staged. */
   stagedView: StagedView | null;
   /** False while the grid shows a different page or sort than the edits were staged on. */
@@ -150,6 +152,10 @@ export function useChangeTracking({
     };
   }, [tableName, schema, result, changesSnapshot]);
 
+  // Exactly `buildSavePayload`'s three null conditions, answered without
+  // materializing the payload — the strip asks this on every render.
+  const canSave = !!tableName && !!result && hasChanges;
+
   const handleSave = useCallback(async () => {
     if (!sessionId) return;
     const payload = buildSavePayload();
@@ -243,6 +249,7 @@ export function useChangeTracking({
     dismissSaveError,
     handleSave,
     buildSavePayload,
+    canSave,
     stagedView,
     stagedViewMatches,
     recordCellChange,

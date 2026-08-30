@@ -40,6 +40,7 @@ function mount(props: Partial<Parameters<typeof PendingChangesStrip>[0]> = {}) {
       createElement(PendingChangesStrip, {
         sessionId: 'sess-1',
         buildSavePayload: () => PAYLOAD,
+        canSave: true,
         stagedViewMatches: true,
         stagedPage: 1,
         onExecute: () => {},
@@ -109,6 +110,13 @@ describe('pending-changes strip', () => {
   it('disables Execute when there is no session to write to', () => {
     stageOneEdit();
     const el = mount({ sessionId: undefined });
+    const execute = Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes('Execute'));
+    expect(execute?.disabled).toBe(true);
+  });
+
+  it('disables Execute when there is no payload to write', () => {
+    stageOneEdit();
+    const el = mount({ canSave: false });
     const execute = Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes('Execute'));
     expect(execute?.disabled).toBe(true);
   });

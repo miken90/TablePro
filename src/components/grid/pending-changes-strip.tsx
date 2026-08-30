@@ -9,8 +9,11 @@ import type { SavePayload } from '../../ipc/commands';
 
 interface PendingChangesStripProps {
   sessionId?: string;
-  /** Builds the payload the write will send; also what the preview describes. */
+  /** Builds the payload the write will send; also what the preview describes.
+   *  Only called when the preview opens — never per render. */
   buildSavePayload: () => SavePayload | null;
+  /** Whether a payload exists to execute. Answered without building one. */
+  canSave: boolean;
   /** False while the grid shows a different page or sort than the edits were staged on. */
   stagedViewMatches: boolean;
   /** The page the edits were staged on, for the disabled-Execute reason. */
@@ -29,6 +32,7 @@ interface PendingChangesStripProps {
 export function PendingChangesStrip({
   sessionId,
   buildSavePayload,
+  canSave,
   stagedViewMatches,
   stagedPage,
   onExecute,
@@ -70,7 +74,7 @@ export function PendingChangesStrip({
   const changeLabel = changeCount === 1 ? t('grid.changeToolbar.change') : t('grid.changeToolbar.changes');
   // Row ids are page-local, so executing from a different page or sort would
   // write to whichever rows now sit at those indices.
-  const executable = stagedViewMatches && !!sessionId && !!buildSavePayload();
+  const executable = stagedViewMatches && !!sessionId && canSave;
   const staleReason = stagedViewMatches
     ? undefined
     : `Staged on page ${stagedPage ?? '?'} / a different sort — return there to execute`;

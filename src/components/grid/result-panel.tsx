@@ -129,7 +129,7 @@ export function ResultPanel({
   });
   const {
     changesSnapshot, hasChanges, isSaving, saveError, dismissSaveError,
-    handleSave, getEffectiveCellValue, buildSavePayload, stagedView, stagedViewMatches,
+    handleSave, getEffectiveCellValue, buildSavePayload, canSave, stagedView, stagedViewMatches,
     changeMap, cellOverrides,
   } = changeTracking;
 
@@ -492,6 +492,7 @@ export function ResultPanel({
             <PendingChangesStrip
               sessionId={sessionId}
               buildSavePayload={buildSavePayload}
+              canSave={canSave}
               stagedViewMatches={stagedViewMatches}
               stagedPage={stagedView?.page}
               onExecute={handleRequestSave}
