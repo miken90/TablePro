@@ -54,6 +54,10 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- `Escape` cancels a running query again. The right dock claimed every `Escape` while it was open — which it is by default — so the key never reached Cancel Query, and the dock closed instead. The dock now takes `Escape` only when focus is inside it.
+
+- The Inspector and the procedure-execute result table render NULL using the Settings → General "NULL display" text, like the grid does, instead of a hardcoded `NULL`.
+
 - The pending-changes bar and the SQL preview it carries were unreachable; they now appear whenever there are staged edits, at the bottom of the results region.
 
 - Undo/redo for staged row edits fired twice when both bars that owned a listener were mounted, and undoing the last change used to take Redo away with the bar that hosted it.
