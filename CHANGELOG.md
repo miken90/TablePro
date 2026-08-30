@@ -10,6 +10,8 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-30
+
 ### Added
 
 - Backend logs now exist in release builds. The subscriber wrote to stderr, and a release build has no console, so every log line the app produced was discarded in exactly the build people run. Logs go to `%LOCALAPPDATA%\TablePro\logs\`, rotated daily with 7 days kept; debug builds still print to the console as well.
@@ -673,7 +675,8 @@ Versions recorded only here: 0.5.0, 0.3.3, 0.3.2, 0.3.1. Recorded only above: 0.
 - Shortcut drift between ShortcutsHelp and runtime bindings
 - Health monitor stale session entries blocking reconnect monitoring
 
-[Unreleased]: https://github.com/TableProApp/tablepro-windows/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/TableProApp/tablepro-windows/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/TableProApp/tablepro-windows/compare/v0.7.0...v0.7.1
 [0.5.0]: https://github.com/TableProApp/tablepro-windows/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/TableProApp/tablepro-windows/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/TableProApp/tablepro-windows/compare/v0.3.2...v0.3.3
