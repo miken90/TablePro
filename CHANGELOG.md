@@ -54,6 +54,8 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- Settings → Editor's **Word wrap** and **Tab width** now do something. Both values were saved and read back by the Settings pane, and no editor code consumed either one. Word wrap soft-wraps long lines; tab width sets both how wide a tab renders and how far `Tab` and auto-indent step. Each applies to the open editor immediately, without losing your text or cursor.
+
 - `Escape` cancels a running query again. The right dock claimed every `Escape` while it was open — which it is by default — so the key never reached Cancel Query, and the dock closed instead. The dock now takes `Escape` only when focus is inside it.
 
 - The Inspector and the procedure-execute result table render NULL using the Settings → General "NULL display" text, like the grid does, instead of a hardcoded `NULL`.

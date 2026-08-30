@@ -33,7 +33,7 @@ The editor's font CSS stack is `<selected font>, Consolas, 'Courier New', monosp
 
 ### Word Wrap
 
-A toggle exists in **Settings** > **Editor** (default off) and the value persists, but it is not currently wired to the SQL editor -- toggling it does not change line-wrap behavior in the editor.
+Off by default. When on, a long line soft-wraps at the width of the editor instead of scrolling horizontally; the line is not altered, only how it is drawn. Toggling applies to the open editor immediately, keeping your text and cursor position.
 
 ### Vim Mode
 
@@ -46,7 +46,7 @@ A toggle exists in **Settings** > **Editor** (default off) and the value persist
 
 ### Tab Width
 
-A selector exists in **Settings** > **Editor** for 2, 4, or 8 spaces (default 4) and the value persists, but it is not currently wired to the SQL editor -- changing it does not change indentation behavior in the editor.
+2, 4, or 8 spaces (default 4). This sets both how wide an existing tab character is drawn and how much whitespace an indent inserts, so `Tab` and auto-indent-on-typing both step by the width you pick. The editor indents with spaces, not tab characters. Changing it applies to the open editor immediately.
 
 ## Editor Behavior
 
@@ -54,7 +54,7 @@ A selector exists in **Settings** > **Editor** for 2, 4, or 8 spaces (default 4)
 
 Autocomplete is always on. See [Autocomplete](/features/autocomplete) for details.
 
-Font, font size, and Vim mode apply immediately with no restart required.
+Font, font size, Vim mode, word wrap, and tab width all apply immediately with no restart required.
 
 ## Keyboard Shortcuts
 
