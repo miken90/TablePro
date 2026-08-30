@@ -14,6 +14,8 @@ export const vimCompartment = new Compartment();
 export const dialectCompartment = new Compartment();
 export const highlightCompartment = new Compartment();
 export const aiSuggestionCompartment = new Compartment();
+export const wordWrapCompartment = new Compartment();
+export const indentCompartment = new Compartment();
 
 /** Reconfigure font family and size in-place (preserves undo history). */
 export function reconfigureFont(
@@ -62,5 +64,25 @@ export function reconfigureAiSuggestion(
 ): void {
   view.dispatch({
     effects: aiSuggestionCompartment.reconfigure(aiExtension),
+  });
+}
+
+/** Reconfigure soft line wrapping on/off in-place. */
+export function reconfigureWordWrap(
+  view: EditorView,
+  wordWrapExtension: Extension,
+): void {
+  view.dispatch({
+    effects: wordWrapCompartment.reconfigure(wordWrapExtension),
+  });
+}
+
+/** Reconfigure indentation width in-place. */
+export function reconfigureIndent(
+  view: EditorView,
+  indentExtension: Extension,
+): void {
+  view.dispatch({
+    effects: indentCompartment.reconfigure(indentExtension),
   });
 }

@@ -19,11 +19,16 @@ import {
   dialectCompartment,
   highlightCompartment,
   aiSuggestionCompartment,
+  wordWrapCompartment,
+  indentCompartment,
   reconfigureFont,
   reconfigureVim,
   reconfigureDialect,
   reconfigureHighlight,
+  reconfigureWordWrap,
+  reconfigureIndent,
 } from "../../editor/editor-compartments";
+import { buildIndentExtension, buildWordWrapExtension } from "../../editor/editor-indent-wrap";
 import { createEditorTheme, createEditorFontTheme, createSyntaxHighlighting } from "./editor-theme";
 import { sqlCompletionSource } from "../../editor/sql-completion-source";
 import { createVimExtension } from "../../editor/vim-mode";
@@ -177,6 +182,11 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         fontCompartment.of(
           runtime.createEditorFontTheme(settings.editorFont, settings.editorFontSize),
         ),
+        // Configurable: soft line wrapping (in compartment)
+        wordWrapCompartment.of(buildWordWrapExtension(settings.wordWrap)),
+        // Configurable: indentation width (in compartment) — read by
+        // indentOnInput and the indentWithTab keymap below.
+        indentCompartment.of(buildIndentExtension(settings.tabSize)),
         // Editor features
         runtime.lineNumbers(),
         runtime.highlightActiveLineGutter(),
@@ -259,7 +269,7 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
         updateListener,
       ];
     },
-    [dialect, settings.editorFont, settings.editorFontSize, settings.vimMode, settings.ai.enableInlineSuggestions, settings.ai.providers, updateTabContent, setQueryText, execute],
+    [dialect, settings.editorFont, settings.editorFontSize, settings.vimMode, settings.wordWrap, settings.tabSize, settings.ai.enableInlineSuggestions, settings.ai.providers, updateTabContent, setQueryText, execute],
   );
 
   // Create EditorView once after runtime lazy-load completes
@@ -351,6 +361,8 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
     const currentSettings = useSettingsStore.getState().settings;
     reconfigureFont(view, runtime.createEditorFontTheme(currentSettings.editorFont, currentSettings.editorFontSize));
     reconfigureVim(view, currentSettings.vimMode ? runtime.createVimExtension() : []);
+    reconfigureWordWrap(view, buildWordWrapExtension(currentSettings.wordWrap));
+    reconfigureIndent(view, buildIndentExtension(currentSettings.tabSize));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId, editorRuntime]);
 
@@ -362,7 +374,9 @@ export function SqlEditor({ dialect }: SqlEditorProps) {
 
     reconfigureFont(view, runtime.createEditorFontTheme(settings.editorFont, settings.editorFontSize));
     reconfigureVim(view, settings.vimMode ? runtime.createVimExtension() : []);
-  }, [editorRuntime, settings.editorFont, settings.editorFontSize, settings.vimMode]);
+    reconfigureWordWrap(view, buildWordWrapExtension(settings.wordWrap));
+    reconfigureIndent(view, buildIndentExtension(settings.tabSize));
+  }, [editorRuntime, settings.editorFont, settings.editorFontSize, settings.vimMode, settings.wordWrap, settings.tabSize]);
 
   // Reconfigure dialect via compartment when it changes
   useEffect(() => {
