@@ -18,11 +18,18 @@ use crate::pg_error::pg_query_error;
 /// The join keeps `information_schema.tables` as the source of truth so the
 /// privilege filtering baked into that view is preserved — `pg_class` alone
 /// would expose relations the connected user cannot read.
+///
+/// `pg_namespace` is joined before `pg_class` so that the schema is resolved to
+/// an oid first and the relation is then matched on `(relnamespace, relname)`
+/// together. That pair is `pg_class`'s unique key, so a table can only ever
+/// match the row for its own schema; matching on `relname` alone first would
+/// pair every same-named relation in the database — indexes and sequences
+/// included — before any schema predicate narrowed it back down.
 pub async fn fetch_tables(client: &Client) -> Result<Vec<TableInfo>, DriverError> {
     let sql = "SELECT t.table_name, t.table_type, t.table_schema \
                FROM information_schema.tables t \
-               JOIN pg_class c ON c.relname = t.table_name \
-               JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.table_schema \
+               JOIN pg_namespace n ON n.nspname = t.table_schema \
+               JOIN pg_class c ON c.relnamespace = n.oid AND c.relname = t.table_name \
                WHERE t.table_schema NOT IN ('pg_catalog','information_schema') \
                  AND NOT c.relispartition \
                ORDER BY t.table_schema, t.table_name";
