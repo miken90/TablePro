@@ -20,7 +20,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createDockEscapeHandler } from '../components/layout/right-dock';
+import { createDockEscapeHandler } from '../components/layout/dock-escape-handler';
 import { createShortcutHandler } from '../hooks/useMainLayoutShortcuts';
 import { useShortcutStore, useCommandStore, type Command } from '../hooks/useCommandRegistry';
 
