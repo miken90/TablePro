@@ -18,6 +18,16 @@ pub fn pg_conn_error(e: tokio_postgres::Error) -> DriverError {
     DriverError::Connection(pg_error_message(&e))
 }
 
+/// Whether a PostgreSQL server actually answered before this error.
+///
+/// A server-side error (authentication rejected, unknown database, too many
+/// connections) proves the address reached a real server and that the answer
+/// is final. Anything else — a refused or silently dropped connection — says
+/// nothing about the other addresses the host resolved to.
+pub fn server_answered(e: &tokio_postgres::Error) -> bool {
+    e.as_db_error().is_some()
+}
+
 /// Extract a detailed error message from a `tokio_postgres::Error`.
 ///
 /// If the error wraps a `DbError` (i.e. a server-side PostgreSQL error),

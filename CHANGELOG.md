@@ -28,6 +28,8 @@ Upstream release history (pre-v0.2.0 fork line, and any `v0.9.x`-`v0.65.x` upstr
 
 ### Fixed
 
+- Connecting to a PostgreSQL server by hostname no longer stalls for around 21 seconds when the host resolves to more than one address and the first one does not answer. On Windows `localhost` resolves to `::1` before `127.0.0.1`, and a server reachable only over IPv4 — a WSL2 or Docker port proxy, typically — drops the IPv6 connection silently rather than refusing it, so the driver waited out the operating system's full TCP SYN timeout before trying the address that works. Addresses are now tried 250 ms apart and the first to answer wins: the same connection that took 21.1 s takes 0.3 s. A server that answers and rejects the credentials reports that immediately instead of waiting for the dead address to time out.
+
 - Selecting rows in the table Results view no longer shifts the grid. The selection bar ("N rows selected", Delete, Deselect) used to render as a second, conditional row above the results toolbar, appearing and disappearing with the selection and pushing every row below it down or up by one row height — so the row under the cursor changed and a click could select the wrong record. The selection controls now render inline inside the always-present results toolbar row instead.
 
 ### Changed

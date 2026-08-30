@@ -6,6 +6,7 @@
 
 pub mod driver;
 pub mod error;
+pub mod happy_eyeballs;
 pub mod tls;
 pub mod types;
 

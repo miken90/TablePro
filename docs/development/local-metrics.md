@@ -22,6 +22,31 @@ console. The file layer is what makes backend logs exist at all in a shipped
 build; stderr is only added in debug builds. `RUST_LOG` still overrides the
 `info` default in both.
 
+### Connect timings in the backend log
+
+Opening a PostgreSQL connection logs one `postgres connect` line at `INFO`
+(`driver-postgres/src/lib.rs`), so a slow connect can be attributed without
+adding instrumentation after the fact:
+
+```text
+2026-08-30T02:19:15.7Z  INFO driver_postgres: postgres connect
+  host=localhost port=5432 addresses=2 resolve_ms=0 connect_ms=310
+  ssl_mode=prefer ok=true
+```
+
+| Field | Meaning |
+|---|---|
+| `addresses` | How many addresses the host resolved to. More than one means the attempts were raced (see below). |
+| `resolve_ms` | Name resolution only. An address literal skips the resolver and reports `0`. |
+| `connect_ms` | TCP, TLS negotiation, and authentication for the attempt that won. |
+
+`addresses` is the field worth reading first. A host resolving to several
+addresses where only some accept connections used to cost the operating
+system's full TCP SYN timeout — about 21 s on Windows for `localhost`, which
+resolves to `::1` before `127.0.0.1`. The attempts are now staggered by 250 ms
+and the first to answer wins, so `connect_ms` lands near 250 ms rather than
+21 000 ms when the first address is a black hole.
+
 ## metrics.jsonl
 
 UTF-8, one JSON object per line, newest last. Every record carries:
