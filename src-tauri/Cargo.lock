@@ -1553,6 +1553,7 @@ dependencies = [
  "tiberius",
  "tokio",
  "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -1563,6 +1564,7 @@ dependencies = [
  "driver-common",
  "mysql_async",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -24,9 +24,8 @@ build; stderr is only added in debug builds. `RUST_LOG` still overrides the
 
 ### Connect timings in the backend log
 
-Opening a PostgreSQL connection logs one `postgres connect` line at `INFO`
-(`driver-postgres/src/lib.rs`), so a slow connect can be attributed without
-adding instrumentation after the fact:
+Opening a connection logs one `<engine> connect` line at `INFO`, so a slow
+connect can be attributed without adding instrumentation after the fact:
 
 ```text
 2026-08-30T02:19:15.7Z  INFO driver_postgres: postgres connect
@@ -39,6 +38,21 @@ adding instrumentation after the fact:
 | `addresses` | How many addresses the host resolved to. More than one means the attempts were raced (see below). |
 | `resolve_ms` | Name resolution only. An address literal skips the resolver and reports `0`. |
 | `connect_ms` | TCP, TLS negotiation, and authentication for the attempt that won. |
+
+Three drivers emit it, each resolving and racing addresses itself:
+
+| Line | Source |
+|---|---|
+| `postgres connect` | `driver-postgres/src/lib.rs` |
+| `mysql connect` | `driver-mysql/src/lib.rs` |
+| `mssql connect` | `driver-mssql/src/lib.rs` |
+
+MongoDB and Redis have no such line: their client libraries already race the
+resolved addresses themselves, so TablePro never sees the individual attempts.
+MongoDB implements the same staggered race (`mongodb/src/runtime/stream.rs`,
+`tcp_connect`); Redis starts every address at once via `select_ok`
+(`redis/src/aio/connection.rs`, `connect_simple`). SQLite is a local file and
+never opens a socket.
 
 `addresses` is the field worth reading first. A host resolving to several
 addresses where only some accept connections used to cost the operating
