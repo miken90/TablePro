@@ -27,8 +27,8 @@ const HARDCODED_SHORTCUT = /(title|aria-label)=(["'])[^"'`]*\b(Ctrl|Alt|Cmd|Meta
 
 const ALLOWED: Array<{ file: string; line: number; reason: string }> = [
   { file: '../components/grid/contextual-bar.tsx', line: 33, reason: 'data.insertRow — not yet wired to the registry; pre-existing, out of D1 scope' },
-  { file: '../components/grid/pending-changes-strip.tsx', line: 84, reason: 'grid Undo — not a COMMAND_DEFINITIONS entry; pre-existing debt, moved here with the controls' },
-  { file: '../components/grid/pending-changes-strip.tsx', line: 88, reason: 'grid Redo — not a COMMAND_DEFINITIONS entry; pre-existing debt, moved here with the controls' },
+  { file: '../components/grid/pending-changes-strip.tsx', line: 88, reason: 'grid Undo — not a COMMAND_DEFINITIONS entry; pre-existing debt, moved here with the controls' },
+  { file: '../components/grid/pending-changes-strip.tsx', line: 92, reason: 'grid Redo — not a COMMAND_DEFINITIONS entry; pre-existing debt, moved here with the controls' },
   { file: '../components/layout/run-split-button.tsx', line: 109, reason: 'editor.run — matches the registry today but reads a literal; pre-existing, out of D1 scope' },
   { file: '../components/layout/Toolbar.tsx', line: 173, reason: 'nav.toggleSidebar — matches the registry today but reads a literal; pre-existing, out of D1 scope' },
   { file: '../components/layout/Toolbar.tsx', line: 289, reason: 'app.settings — matches the registry today but reads a literal; pre-existing, out of D1 scope' },
